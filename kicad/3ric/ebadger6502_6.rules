@@ -1,0 +1,199 @@
+
+(rules PCB ebadger6502_6
+  (snap_angle 
+    fortyfive_degree
+  )
+  (autoroute_settings
+    (fanout off)
+    (autoroute on)
+    (postroute on)
+    (vias on)
+    (via_costs 50)
+    (plane_via_costs 5)
+    (start_ripup_costs 100)
+    (start_pass_no 212)
+    (layer_rule F.Cu
+      (active on)
+      (preferred_direction horizontal)
+      (preferred_direction_trace_costs 1.6)
+      (against_preferred_direction_trace_costs 2.6)
+    )
+    (layer_rule In1.Cu
+      (active on)
+      (preferred_direction vertical)
+      (preferred_direction_trace_costs 1.0)
+      (against_preferred_direction_trace_costs 2.0)
+    )
+    (layer_rule In2.Cu
+      (active off)
+      (preferred_direction vertical)
+      (preferred_direction_trace_costs 1.0)
+      (against_preferred_direction_trace_costs 2.0)
+    )
+    (layer_rule B.Cu
+      (active on)
+      (preferred_direction horizontal)
+      (preferred_direction_trace_costs 1.6)
+      (against_preferred_direction_trace_costs 2.6)
+    )
+  )
+  (rule
+    (width 250.0)
+    (clear 200.0)
+    (clear 125.0 (type smd_to_turn_gap))
+    (clear 50.0 (type smd-smd))
+  )
+  (padstack "Via[0-3]_800:400_um"
+    (shape
+      (circle F.Cu 800.0 0.0 0.0)
+    )
+    (shape
+      (circle In1.Cu 800.0 0.0 0.0)
+    )
+    (shape
+      (circle In2.Cu 800.0 0.0 0.0)
+    )
+    (shape
+      (circle B.Cu 800.0 0.0 0.0)
+    )
+    (attach off)
+  )
+  (padstack "Via[0-3]_800:500_um"
+    (shape
+      (circle F.Cu 800.0 0.0 0.0)
+    )
+    (shape
+      (circle In1.Cu 800.0 0.0 0.0)
+    )
+    (shape
+      (circle In2.Cu 800.0 0.0 0.0)
+    )
+    (shape
+      (circle B.Cu 800.0 0.0 0.0)
+    )
+    (attach off)
+  )
+  (via 
+    "Via[0-3]_800:400_um" "Via[0-3]_800:400_um" default
+  )
+  (via 
+    "Via[0-3]_800:500_um" "Via[0-3]_800:500_um" default
+  )
+  (via 
+    "Via[0-3]_800:400_um-kicad_default" "Via[0-3]_800:400_um" "kicad_default"
+  )
+  (via 
+    "Via[0-3]_800:500_um-kicad_default" "Via[0-3]_800:500_um" "kicad_default"
+  )
+  (via 
+    "Via[0-3]_800:400_um-Ground" "Via[0-3]_800:400_um" Ground
+  )
+  (via 
+    "Via[0-3]_800:500_um-Ground" "Via[0-3]_800:500_um" Ground
+  )
+  (via 
+    "Via[0-3]_800:400_um-Vcc" "Via[0-3]_800:400_um" Vcc
+  )
+  (via 
+    "Via[0-3]_800:500_um-Vcc" "Via[0-3]_800:500_um" Vcc
+  )
+  (via_rule
+    default "Via[0-3]_800:400_um"
+  )
+  (via_rule
+    "kicad_default" "Via[0-3]_800:400_um-kicad_default"
+  )
+  (via_rule
+    Ground "Via[0-3]_800:500_um-Ground"
+  )
+  (via_rule
+    Vcc "Via[0-3]_800:500_um-Vcc"
+  )
+  (class default
+    RA0 "Net-(D1-Pad2)" RA1 "Net-(D2-Pad2)" RA2 "Net-(D3-Pad2)" RA3 "Net-(D4-Pad2)"
+    RA4 "Net-(D5-Pad2)" RA5 "Net-(D6-Pad2)" RA6 "Net-(D7-Pad2)" RA7 "Net-(D8-Pad2)"
+    RA8 "Net-(D9-Pad2)" RA9 "Net-(D10-Pad2)" RA10 "Net-(D11-Pad2)" RA11 "Net-(D12-Pad2)"
+    RA12 "Net-(D13-Pad2)" RA13 "Net-(D14-Pad2)" RA14 "Net-(D15-Pad2)" RA15 "Net-(D16-Pad2)"
+    RA16 "Net-(D17-Pad2)" RA17 "Net-(D18-Pad2)" RA18 "Net-(D19-Pad2)" ~{WE} PHI2
+    ~{RESET} ~{OE} ~{RTS} ~{CTS} RXD TXD "PHI_ACIA" "CLK_KB"
+    CA0 CD0 CA1 CD1 CA2 CD2 CA3 CD3
+    CA4 CD4 CA5 CD5 CA6 CD6 CA7 CD7
+    R~{W} CA8 CA9 CA10 ~{IRQEXT} CA11 CA12 CA13
+    CA14 CA15 VA0 VD0 VA1 VD1 VA2 VD2
+    VA3 VD3 VA4 VD4 VA5 VD5 VA6 VD6
+    VA7 VD7 RGB VA8 VA9 VA10 VA11 VA12
+    VA13 VA14 VA15 "DATA_KB" "VIA1_CA1" "VIA1_CB1" "VIA1_CB2" "VIA1_PA1"
+    "VIA1_PA2" "VIA1_PA3" "VIA1_PA4" "VIA1_PA5" "VIA1_PA6" "VIA1_PA7" VB0 VB1
+    VB2 VB3 VB4 VB5 VB6 VB7 "Net-(R1-Pad1)" "Net-(R2-Pad1)"
+    "Net-(R3-Pad1)" "~{CS_ACIA}" "~{CS_VIA1}" "~{CS_ROMDISK}" "unconnected-(U1-Pad8)" "unconnected-(U1-Pad9)" "unconnected-(U1-Pad10)" "unconnected-(U1-Pad11)"
+    "unconnected-(U1-Pad13)" "unconnected-(U1-Pad14)" "unconnected-(U1-Pad15)" "unconnected-(U1-Pad16)" "unconnected-(U1-Pad17)" ~{Device} "unconnected-(U2-Pad1)" "unconnected-(U2-Pad3)"
+    ~{IRQ} "unconnected-(U2-Pad5)" ~{NMI} "unconnected-(U2-Pad7)" "unconnected-(U2-Pad35)" "unconnected-(U2-Pad39)" "~{CS_ROM}" "~{CS_RAM}"
+    "unconnected-(U8-Pad1)" "~{IRQ_VIA1}" "~{IRQ_ACIA}" "unconnected-(U10-Pad7)" "unconnected-(U10-Pad11)" "unconnected-(U10-Pad16)" "unconnected-(U10-Pad17)" ClockBank
+    "unconnected-(U_BANK_1-Pad12)" "unconnected-(U_BANK_1-Pad13)" "unconnected-(U_BANK_1-Pad14)" "unconnected-(U_BANK_1-Pad15)" "unconnected-(U_BANK_1-Pad16)" ClockLSB ClockMSB "Net-(D20-Pad1)"
+    "unconnected-(U_DECODER_1-Pad5)" "unconnected-(U_DECODER_1-Pad6)" "unconnected-(U_DECODER_1-Pad7)" GFXPAGE ~{RomDiskOE} "unconnected-(U_DECODER_1-Pad10)" "unconnected-(U_DECODER_1-Pad11)" "unconnected-(U_DECODER_1-Pad13)"
+    "unconnected-(U_DECODER_1-Pad14)" "unconnected-(U_DECODER_1-Pad15)" "unconnected-(U_DECODER_1-Pad16)" "unconnected-(U_DECODER_1-Pad17)" "unconnected-(X_CLK_ACIA1-Pad1)" "unconnected-(J3-Pad6)" "unconnected-(J3-Pad2)" "unconnected-(U_DECODER_PLD1-Pad18)"
+    HSYNC VSYNC VIDBUS VIDENABLE "Net-(DGFXPAGE1-Pad2)" TEXTMODE "Net-(DTEXTMODE1-Pad2)" "Net-(U3-Pad2)"
+    "Net-(U3-Pad3)" "Net-(U3-Pad4)" "Net-(U3-Pad5)" "Net-(U3-Pad6)" DISPLAY2 "unconnected-(U3-Pad9)" "unconnected-(U3-Pad12)" DISPLAY3
+    "unconnected-(U8-Pad2)" "unconnected-(U_AND_OUT1-Pad11)" "unconnected-(U_AND_OUT1-Pad12)" "unconnected-(U_AND_OUT1-Pad13)" ClockVidReg "unconnected-(U_DECODER_1-Pad9)" "Net-(U_MEM_SRLATCH1-Pad11)" PHIVGA
+    PHI4 PHI8 PHI16 DISPLAY SHIFTOUT "Net-(U_MEM_SRLATCH1-Pad15)" VQ5 VQ4
+    VQ6 VQ3 VQ2 VQ1 VQ0 HRESET VRESET VQ8
+    VQ7 VQ9 "unconnected-(U_DECODE_SIGS1-Pad3)" HQ1 HQ2 HQ4 HQ5 HQ0
+    VMLATCH "Net-(U_DECODE_SIGS1-Pad6)" N0C N1C N2C "~{CPUBUS_CS}" "unconnected-(X_CLK_VGA1-Pad1)" LOADSHIFT
+    PLD22 "unconnected-(J_VGA1-Pad4)" "unconnected-(J_VGA1-Pad9)" "unconnected-(J_VGA1-Pad11)" "unconnected-(J_VGA1-Pad12)" "unconnected-(J_VGA1-Pad15)" "~{CS_IO2}" "~{CS_IO3}"
+    "Net-(U_MEM_SRLATCH1-Pad7)" "Net-(U_MEM_SRLATCH1-Pad9)" "Net-(U_MEM_SRLATCH1-Pad13)" "Net-(U_ADDR_CNT1-Pad11)" "Net-(U_ADDR_CNT1-Pad12)" "Net-(U_ADDR_CNT1-Pad13)" "Net-(U_ADDR_CNT1-Pad14)" "Net-(U_ADDR_CNT2-Pad11)"
+    "Net-(U_ADDR_CNT2-Pad12)" "Net-(U_ADDR_CNT2-Pad13)" "Net-(U_ADDR_CNT2-Pad14)" "Net-(U_ADDR_CNT3-Pad11)" "Net-(U_ADDR_CNT3-Pad12)" "Net-(U_ADDR_CNT3-Pad13)" "Net-(U_ADDR_CNT3-Pad14)" "Net-(U_ADDR_CNT4-Pad11)"
+    "Net-(U_ADDR_CNT4-Pad12)" "Net-(U_ADDR_CNT4-Pad13)" "Net-(U_ADDR_CNT4-Pad14)" "unconnected-(U_ADDR_CNT4-Pad15)" "unconnected-(U_CLOCK_DIV1-Pad15)" "unconnected-(U_DECODE_SIGS1-Pad9)" "Net-(U_DECODE_SIGS1-Pad10)" "Net-(U_DECODE_SIGS1-Pad11)"
+    HQ3 GFXMODE "unconnected-(U_DECODE_SIGS1-Pad4)" "Net-(U_DECODE_SIGS1-Pad5)" "unconnected-(U_NOT_DECODE1-Pad8)" "Net-(U_DECODE_SIGS1-Pad7)" "unconnected-(U_DECODE_SIGS1-Pad8)" "unconnected-(U_NOT_DECODE1-Pad9)"
+    "unconnected-(U_ROM_ADDR_LOW1-Pad11)" "unconnected-(U_ROM_ADDR_LOW1-Pad12)" "unconnected-(U_DECODE_SIGS1-Pad13)" "unconnected-(U_DECODE_SIGS1-Pad14)" "unconnected-(U_DECODE_SIGS1-Pad15)" "unconnected-(U_DECODE_SIGS1-Pad16)" "unconnected-(U_DECODE_SIGS1-Pad17)" "unconnected-(U_ROM_ADDR_LOW1-Pad13)"
+    FS4 "unconnected-(JVIAS1-Pad10)" FS3 FS0 VL7 VL6 VL5 VL4
+    VL3 VL2 VL1 VL0 TD0 "unconnected-(U_HORIZ_CNT1-Pad6)" "unconnected-(U_HORIZ_CNT1-Pad7)" "unconnected-(U_HORIZ_CNT1-Pad9)"
+    TD1 TD2 TD3 TD4 "unconnected-(JVIAS1-Pad12)" "unconnected-(JVIAS1-Pad14)" "unconnected-(JVIAS1-Pad16)" "unconnected-(JVIAS1-Pad18)"
+    "unconnected-(JVIAS1-Pad20)" "unconnected-(JVIAS1-Pad22)" "unconnected-(JVIAS1-Pad24)" "unconnected-(JVIAS1-Pad26)" "unconnected-(U_XOR1-Pad1)" "unconnected-(U_XOR1-Pad2)" "unconnected-(U_XOR1-Pad3)" TD5
+    TD6 TD7 FS1 FS2 FS5 AR3 AR4 AR5
+    AR6 AR7 AR8 AR9 AR10 AR11 AR15 AR14
+    AR13 AR12 "unconnected-(U_DECODER_PLD1-Pad19)" "unconnected-(U_DECODER_PLD1-Pad20)" "unconnected-(JVIAS1-Pad28)" "unconnected-(JVIAS1-Pad30)" "unconnected-(JVIAS1-Pad32)" "unconnected-(U1-Pad6)"
+    "unconnected-(U1-Pad7)" "unconnected-(U_ROM_VGA1-Pad19)" "Net-(U_AND_OUT1-Pad3)" "unconnected-(U_ROM_VGA1-Pad20)" "unconnected-(U_ROM_VGA1-Pad21)" "Net-(U_VERT_CNT_1-Pad9)" "unconnected-(U_VERT_CNT_2-Pad2)" "unconnected-(U_VERT_CNT_2-Pad3)"
+    "unconnected-(U_VERT_CNT_2-Pad4)" "unconnected-(U_VERT_CNT_2-Pad5)" "unconnected-(U_VERT_CNT_2-Pad6)" "unconnected-(U_NOT_DECODE1-Pad3)" "unconnected-(U_NOT_DECODE1-Pad4)" "unconnected-(U_VERT_CNT_2-Pad7)" "unconnected-(U_VERT_CNT_2-Pad9)" "SHIFTOUT_GFX"
+    "SHIFTOUT_TXT" "unconnected-(U_XOR1-Pad4)" "unconnected-(U_XOR1-Pad5)" "unconnected-(U_XOR1-Pad6)" "unconnected-(U_XOR1-Pad8)" "unconnected-(U_XOR1-Pad9)" "unconnected-(U_XOR1-Pad10)"
+    (clearance_class default)
+    (via_rule default)
+    (rule
+      (width 250.0)
+    )
+    (circuit 
+      (use_layer F.Cu In1.Cu B.Cu)
+    )
+  )
+  (class "kicad_default"
+    (clearance_class "kicad_default")
+    (via_rule "kicad_default")
+    (rule
+      (width 250.0)
+    )
+    (circuit 
+      (use_layer F.Cu In1.Cu B.Cu)
+    )
+  )
+  (class Ground
+    GND
+    (clearance_class Ground)
+    (via_rule Ground)
+    (rule
+      (width 500.0)
+    )
+    (circuit 
+      (use_layer F.Cu In1.Cu B.Cu)
+    )
+  )
+  (class Vcc
+    VCC
+    (clearance_class Vcc)
+    (via_rule Vcc)
+    (rule
+      (width 500.0)
+    )
+    (circuit 
+      (use_layer F.Cu In1.Cu B.Cu)
+    )
+  )
+)
