@@ -1,0 +1,163 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.IO;
+
+// bits 0..7   <-  character     (256 characters)          0x......FF
+// bits 8..11  <-  row           (16 rows per character)   0x.....F..
+// bits 12..17 <-- font select   (6 bits, up to 64 fonts)  0x...3F...
+// bit 18      <-- low, unused
+
+namespace fontrom
+{
+    internal class Program
+    {
+        static byte ReverseBits(byte b)
+        {
+            byte b2 = 0;
+            int i = 0;
+            for (int p = 7; p >= 0; p--)
+            {
+                if ((b & (1 << p)) != 0)
+                {
+                    b2 |= (byte)(1 << i);
+                }
+
+                i++;
+            }
+
+            return b2;
+        }
+
+        static void Main(string[] args)
+        {
+            string[] fontfiles = {
+                "VGA-ROM.F16",
+                "HANDWRIT.F16",
+                "MEDIEVAL.F16",
+                "MODERN.F16",
+                "OLD-ENGL.F16",
+                "PS2OLD8.F16",
+                "SANSERIF.F16",
+                "SUPER.F16",
+                "ROMAN.F16",
+                "VGA8.F16",
+                "WACKY2.F16",
+                "WIGGLY.F16",
+                "HOLLOW.F16",
+                "FATSCII.F16",
+                "BIGGER.F16",
+                "ANSIBLE.F16",
+                "16.F16",
+                "ART.F16",
+                "ARTX.F16",
+                "HACK4TH.F16",
+                "thin_ss.f16",
+                "TEX-MATH.F16",
+                "runic.f16",
+                "ROTUND.F16",
+                "SCRAWL2.F16",
+                "TALL_GFX.F16",
+                "TANDY2K1.F16",
+                "NICER40C.F16",
+                "police.f16",
+                "READABL8.F16",
+                "MACNTOSH.F16",
+                "lbitalic.f16",
+                "KEWL.F16",
+                "KANA.F16",
+                "HUGE.F16",
+                "STANDARD.F16",
+                "VOYNICH.F16",
+                "HANDUGLY.F16",
+                "boxround.f16",
+                "BLKBOARD.F16",
+                "bigserif.f16",
+                "AS-100.F16",
+                "APRI200D.F16",
+                "BIOS_D.F16",
+                "cp111.f16",
+                "cp112.f16",
+                "cp113.f16",
+                "cp437.f16",
+                "cp850.f16",
+                "cp851.f16",
+                "cp852.f16",
+                "cp853.f16",
+                "cp860.f16",
+                "cp861.f16",
+                "cp862.f16",
+                "cp863.f16",
+                "cp864.f16",
+                "cp865.f16",
+                "cp866.f16",
+                "cp880.f16",
+                "cp881.f16",
+                "cp882.f16",
+                "cp883.f16",
+                "cp884.f16"
+            };
+
+            // 512KB
+            byte[] mem = new byte[0x80000];
+
+            Console.WriteLine("Count Files={0}", fontfiles.Length);
+
+            int maxaddress = 0;
+            int iFont = 0;
+            foreach(string font in fontfiles)
+            {
+                FileStream f = new FileStream("../../fonts/" + font, FileMode.Open);
+                BinaryReader br = new BinaryReader(f);
+
+                for(int c = 0; c < 256; c++)
+                {
+                    Console.WriteLine("======================== Font={0} Char={1}", font, c);
+                    for(int r = 0; r < 16; r++)
+                    {
+                        int b = br.ReadByte();
+
+                        int address = (ReverseBits((byte)c)) | (r & 0xF) << 8 | (iFont & 0xFF) << 12;
+                        if (address > maxaddress)
+                        {
+                            maxaddress = address;
+                        }
+
+                        mem[address] = (byte)b;
+
+                        for (int p = 7; p >= 0; p--)
+                        {                          
+                            if ((b & (1 << p)) != 0)
+                            {
+                                Console.Write("#");
+                            }
+                            else
+                            {
+                                Console.Write(" ");
+                            }
+                        }
+
+
+                        Console.WriteLine("");
+                    }
+                }
+                iFont++;
+                f.Close();
+            }
+
+            // font rom memory populated, now output
+            Console.WriteLine("maxaddress=0x{0:X}", maxaddress);
+            FileStream fsfontrom = new FileStream("fontrom.dat", FileMode.Create);
+            BinaryWriter bw = new BinaryWriter(fsfontrom);
+            for (int i = 0; i < 0x80000; i++)
+            {
+                bw.Write(mem[i]);
+            }
+            bw.Flush();
+            bw.Close();
+            fsfontrom.Close();
+        }
+    }
+}
