@@ -1,0 +1,46 @@
+Name     EB6502 decoder ;
+PartNo   00 ;
+Date     11/15/2021 ;
+Revision 01 ;
+Designer Eric Badger ;
+Company  Eric Badger ;
+Assembly None ;
+Location  ;
+Device   g22v10 ;
+
+/*
+0x0000 0xCFFF RAM 48KB
+0xC000 0xC0FF Devices 
+0xC100 0xE2FF Basic ROM
+0xE300 0xFFFF OS
+*/
+
+/* input pins */
+Pin 1        = PHI2;
+Pin 2        = RW;
+Pin [3..10]  = [A15..A8];
+Pin 11       = VIDBUS;
+Pin 13       = VIDENABLE;
+
+/* output pins */
+
+Pin 14       = OE;
+Pin 15       = WE;
+Pin 16       = ROM_CS;
+Pin 17       = RAM_CS;
+
+Pin 21       = DEVICE_CS;
+Pin 23       = CPUBUS_CS;
+
+FIELD Address = [A15..A0];
+
+RAM          = Address:[0000..BFFF];
+DEV          = Address:[C000..C0FF];
+ROM          = Address:[C100..FFFF];
+
+!ROM_CS      = !RAM & !DEV;
+!RAM_CS      = RAM # !VIDBUS;
+!CPUBUS_CS   = RAM & VIDENABLE;
+!DEVICE_CS   = DEV;
+!WE          = !RW & PHI2;
+!OE          = RW # !VIDBUS;
