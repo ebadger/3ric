@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Diagnostics;
+using System.CodeDom;
 
 // bit  9 is graphics mode
 // bit 10 is graphics page
@@ -14,7 +15,18 @@ namespace videoaddress
 {
     internal class Program
     {
-        const int ROMSIZE = 0x80000;  // 39sf040
+        const int ROMSIZE                   = 0x80000;  // 39sf040
+        static ushort GRAPHICS_MODE         = 0x0;
+        static ushort TEXT_MODE             = 0x200;
+        static ushort GRAPHICS_PAGE_1       = 0x400;
+        static ushort GRAPHICS_PAGE_0       = 0x0;
+
+        static ushort GRAPHICS_PAGE_1_START = 0x2000;
+        static ushort GRAPHICS_PAGE_2_START = 0x4000;
+        static ushort TEXT_PAGE_1_START     = 0x400;
+        static ushort TEXT_PAGE_2_START     = 0x800;
+
+        static ushort ADDRESS_BLANK         = 0xFFF8;
 
         static ushort [] _scanLines= {
                 0x0000, 0x0400, 0x0800, 0x0C00, 0x1000, 0x1400, 0x1800, 0x1C00,
@@ -98,12 +110,12 @@ namespace videoaddress
             for (ushort y = 0; y < 480; y++)
             {
                 // 0 to 400 - graphics mode 0 graphics page 0
-                ushort elem = (ushort) y;
+                ushort elem = (ushort)(y + GRAPHICS_MODE + GRAPHICS_PAGE_0);
                 //ushort addr = (ushort)(0x2000 + (idx * 40));
-                ushort addr = (ushort)(0x2000 + _scanLines[idx]);
+                ushort addr = (ushort)(GRAPHICS_PAGE_1_START + _scanLines[idx]);
                 if (y < 32)
                 {
-                    mem[elem] = 0x500; // (ushort)(addr + 1);
+                    mem[elem] = ADDRESS_BLANK; // (ushort)(addr + 1);
                 }
                 else if (y < 416)
                 {
@@ -119,7 +131,7 @@ namespace videoaddress
                 else
                 {
                     //mem[elem] = (ushort)(addr + 1);
-                    mem[elem] = (ushort)0x500;
+                    mem[elem] = (ushort)ADDRESS_BLANK;
                 }
             }
 
@@ -128,13 +140,13 @@ namespace videoaddress
             for (ushort y = 0; y < 480; y++)
             {
                 // graphics mode 0 graphics page 1
-                int elem = (ushort)y + 0x400;
+                int elem = (ushort)(y + GRAPHICS_MODE + GRAPHICS_PAGE_1);
                 //ushort addr = (ushort)(0x4000 + (idx * 40));
-                ushort addr = (ushort)(0x4000 + _scanLines[idx]);
+                ushort addr = (ushort)(GRAPHICS_PAGE_2_START + _scanLines[idx]);
 
                 if (y < 32)
                 {
-                    mem[elem] = 0x500; // (ushort)(addr + 1);
+                    mem[elem] = ADDRESS_BLANK; // (ushort)(addr + 1);
                 }
                 else if (y < 416)
                 {
@@ -150,7 +162,7 @@ namespace videoaddress
                 }
                 else
                 {
-                    mem[elem] = 0x500; // (ushort)(addr + 1);
+                    mem[elem] = ADDRESS_BLANK; // (ushort)(addr + 1);
                 }
             }
 
@@ -159,17 +171,17 @@ namespace videoaddress
             idx = 0;
             for (int y = 0; y < 480; y++)
             {
-                // graphics mode 1 graphics page 0
-                int umem = y + 0x200;
+                // text mode,graphics page 0
+                int umem = y + TEXT_MODE + GRAPHICS_PAGE_0;
 
                 if ( y < 32)
                 {
-                    mem[umem] = 0x401;
+                    mem[umem] = ADDRESS_BLANK;
                 }
                 else if (y < 432)
                 {
                     idx = (y-32) / 16;
-                    ushort addr = (ushort)(0x400 + (idx * 40));
+                    ushort addr = (ushort)(TEXT_PAGE_1_START + (idx * 40));
 
                     Console.WriteLine("addr:0x{0:X4} y:{1} idx:{2}, 0x{3:X2}", addr, y, idx, (idx * 40));
 
@@ -179,7 +191,7 @@ namespace videoaddress
                 }
                 else
                 {
-                    mem[umem] =0x401;
+                    mem[umem] =ADDRESS_BLANK;
                 }
             }
 
@@ -187,17 +199,17 @@ namespace videoaddress
             idx = 0;
             for (int y = 0; y < 480; y++)
             {
-                // graphics mode 1 graphics page 1
-                int umem = y + 0x600;
+                // text mode, graphics page 1
+                int umem = y + TEXT_MODE + GRAPHICS_PAGE_1;
 
                 if (y < 32)
                 {
-                    mem[umem] = 0x401;
+                    mem[umem] = ADDRESS_BLANK;
                 }
                 else if (y < 432)
                 {
                     idx = (y - 32) / 16;
-                    ushort addr = (ushort)(0x800 + (idx * 40));
+                    ushort addr = (ushort)(TEXT_PAGE_2_START + (idx * 40));
 
                     Console.WriteLine("addr:0x{0:X4} y:{1} idx:{2}, 0x{3:X2}", addr, y, idx, (idx * 40));
 
@@ -207,7 +219,7 @@ namespace videoaddress
                 }
                 else
                 {
-                    mem[umem] = 0x401;
+                    mem[umem] = ADDRESS_BLANK;
                 }
             }
 
