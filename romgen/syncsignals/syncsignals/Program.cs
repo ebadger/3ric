@@ -84,6 +84,11 @@ namespace eepromgen2
                         val &= unchecked((byte)~FLAG_VRESET);
                     }
 
+                    if (y == 48 && x > 48)
+                    {
+                        val |= FLAG_DISPLAY;
+                    }
+
                     // visible flag - flag is on when we should output
                     // support 320x200 resolution - native VGA is 480 lines - 
                     // don't display the first 40 lines or the last 40 lines

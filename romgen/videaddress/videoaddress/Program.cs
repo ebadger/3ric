@@ -26,7 +26,7 @@ namespace videoaddress
         static ushort TEXT_PAGE_1_START     = 0x400;
         static ushort TEXT_PAGE_2_START     = 0x800;
 
-        static ushort ADDRESS_BLANK         = 0xFFF8;
+        static ushort ADDRESS_BLANK         = 0x0000;
 
         static ushort [] _scanLines= {
                 0x0000, 0x0400, 0x0800, 0x0C00, 0x1000, 0x1400, 0x1800, 0x1C00,
@@ -112,21 +112,22 @@ namespace videoaddress
                 // 0 to 400 - graphics mode 0 graphics page 0
                 ushort elem = (ushort)(y + GRAPHICS_MODE + GRAPHICS_PAGE_0);
                 //ushort addr = (ushort)(0x2000 + (idx * 40));
-                ushort addr = (ushort)(GRAPHICS_PAGE_1_START + _scanLines[idx]);
-                if (y < 48)
+                if (y <= 47)
                 {
                     mem[elem] = ADDRESS_BLANK; // (ushort)(addr + 1);
                 }
                 else if (y <= 432)
                 {
+                    if (idx < 191)
+                    {
+                        idx = (y - 48) / 2;
+                    }
+                    ushort addr = (ushort)(GRAPHICS_PAGE_1_START + _scanLines[idx]);
+
                     mem[elem] = addr;
                     msb[idx] = (addr & 0xFF00) >> 8;
                     lsb[idx] = (addr & 0xFF);
                     Console.WriteLine("addr:0x{0:X4} y:{1} idx:{2}, 0x{3:X2}", addr, y, idx, (idx * 40));
-                    if (idx < 191)
-                    {
-                        idx = (y-48)/2;
-                    }
                 }
                 else
                 {
@@ -142,22 +143,24 @@ namespace videoaddress
                 // graphics mode 0 graphics page 1
                 int elem = (ushort)(y + GRAPHICS_MODE + GRAPHICS_PAGE_1);
                 //ushort addr = (ushort)(0x4000 + (idx * 40));
-                ushort addr = (ushort)(GRAPHICS_PAGE_2_START + _scanLines[idx]);
 
-                if (y < 48)
+                if (y <= 47)
                 {
                     mem[elem] = ADDRESS_BLANK; // (ushort)(addr + 1);
                 }
                 else if (y <= 432)
                 {
+                    if (idx < 191)
+                    {
+                        idx = (y - 48) / 2;
+                    }
+
+                    ushort addr = (ushort)(GRAPHICS_PAGE_2_START + _scanLines[idx]);
+
                     mem[elem] = (ushort)addr;
                     msb2[idx] = (addr & 0xFF00) >> 8;
                     Console.WriteLine("addr:0x{0:X4} y:{1} idx:{2}, 0x{3:X2}", addr, y, idx, (idx * 40));
                     
-                    if (idx < 191)
-                    {
-                        idx = (y-48) / 2;
-                    }
 
                 }
                 else
