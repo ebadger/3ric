@@ -14,6 +14,13 @@ namespace fontrom
 {
     internal class Program
     {
+        static bool consoleOutput = true;
+
+        static byte NotReverseBits(byte b)
+        {
+            return b;
+        }
+
         static byte ReverseBits(byte b)
         {
             byte b2 = 0;
@@ -114,12 +121,16 @@ namespace fontrom
 
                 for(int c = 0; c < 256; c++)
                 {
-                    Console.WriteLine("======================== Font={0} Char={1}", font, c);
-                    for(int r = 0; r < 16; r++)
+                    if (consoleOutput)
+                    {
+                        Console.WriteLine("======================== Font={0} Char={1}", font, c);
+                    }
+
+                    for (int r = 0; r < 16; r++)
                     {
                         int b = br.ReadByte();
 
-                        int address = (ReverseBits((byte)c)) | (r & 0xF) << 8 | (iFont & 0xFF) << 12;
+                        int address = (NotReverseBits((byte)c)) | (r & 0xF) << 8 | (iFont & 0xFF) << 12;
                         if (address > maxaddress)
                         {
                             maxaddress = address;
@@ -127,20 +138,23 @@ namespace fontrom
 
                         mem[address] = (byte)b;
 
-                        for (int p = 7; p >= 0; p--)
-                        {                          
-                            if ((b & (1 << p)) != 0)
-                            {
-                                Console.Write("#");
+                        if(consoleOutput)
+                        {
+                            for (int p = 7; p >= 0; p--)
+                            {                          
+                                if ((b & (1 << p)) != 0)
+                                {
+                                    Console.Write("#");
+                                }
+                                else
+                                {
+                                    Console.Write(" ");
+                                }
                             }
-                            else
-                            {
-                                Console.Write(" ");
-                            }
+
+
+                            Console.WriteLine("");
                         }
-
-
-                        Console.WriteLine("");
                     }
                 }
                 iFont++;

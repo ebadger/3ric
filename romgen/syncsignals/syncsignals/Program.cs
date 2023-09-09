@@ -88,7 +88,7 @@ namespace eepromgen2
                     // support 320x200 resolution - native VGA is 480 lines - 
                     // don't display the first 40 lines or the last 40 lines
 
-                    if (x >= 0 && x < 40 && y < 432 && y > 31)
+                    if (x >= 0 && x < 40 && y <= 432 && y > 48)
                     {
                         val |= FLAG_DISPLAY;
                     }

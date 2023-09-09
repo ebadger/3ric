@@ -113,11 +113,11 @@ namespace videoaddress
                 ushort elem = (ushort)(y + GRAPHICS_MODE + GRAPHICS_PAGE_0);
                 //ushort addr = (ushort)(0x2000 + (idx * 40));
                 ushort addr = (ushort)(GRAPHICS_PAGE_1_START + _scanLines[idx]);
-                if (y < 32)
+                if (y < 48)
                 {
                     mem[elem] = ADDRESS_BLANK; // (ushort)(addr + 1);
                 }
-                else if (y < 416)
+                else if (y <= 432)
                 {
                     mem[elem] = addr;
                     msb[idx] = (addr & 0xFF00) >> 8;
@@ -125,7 +125,7 @@ namespace videoaddress
                     Console.WriteLine("addr:0x{0:X4} y:{1} idx:{2}, 0x{3:X2}", addr, y, idx, (idx * 40));
                     if (idx < 191)
                     {
-                        idx += y % 2;
+                        idx = (y-48)/2;
                     }
                 }
                 else
@@ -144,11 +144,11 @@ namespace videoaddress
                 //ushort addr = (ushort)(0x4000 + (idx * 40));
                 ushort addr = (ushort)(GRAPHICS_PAGE_2_START + _scanLines[idx]);
 
-                if (y < 32)
+                if (y < 48)
                 {
                     mem[elem] = ADDRESS_BLANK; // (ushort)(addr + 1);
                 }
-                else if (y < 416)
+                else if (y <= 432)
                 {
                     mem[elem] = (ushort)addr;
                     msb2[idx] = (addr & 0xFF00) >> 8;
@@ -156,7 +156,7 @@ namespace videoaddress
                     
                     if (idx < 191)
                     {
-                        idx += y % 2;
+                        idx = (y-48) / 2;
                     }
 
                 }

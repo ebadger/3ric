@@ -1,0 +1,74 @@
+Name     A2Color;
+PartNo   00 ;
+Date     9/8/2023 ;
+Revision 01 ;
+Designer Eric Badger ;
+Company  Eric Badger ;
+Assembly None ;
+Location  ;
+Device   g22v10 ;
+
+
+/* input pins */
+Pin 1        = CURRBIT;
+Pin 2        = PREVBIT;
+Pin 3        = ODDBIT;
+Pin 4        = PALLETE;
+Pin 5        = DISPLAY;
+Pin 6        = TEXTBIT;
+Pin 7        = GRAYSCALE;
+
+/* output pins */
+
+Pin 14       = R1;
+Pin 15       = R2;
+Pin 16       = R3;
+Pin 17       = B1;
+Pin 18       = B2;
+Pin 19       = B3;
+Pin 20       = G1;
+Pin 21       = G2;
+Pin 22       = G3;
+
+
+A_01         = !PREVBIT & CURRBIT;
+A_10         = PREVBIT &!CURRBIT;
+
+A_XOR        = A_01 $ A_10;
+
+A_ODD        = A_XOR & ODDBIT;
+
+X_01         = A_01 $ A_ODD;
+X_10         = A_10 $ A_ODD;
+
+WHITE        = PREVBIT & CURRBIT & DISPLAY # GRAYSCALE & CURRBIT & DISPLAY;
+
+CYAN         = X_10 & PALLETE & DISPLAY;
+ORANGE       = X_01 & PALLETE & DISPLAY;
+
+GREEN        = X_01 & !PALLETE & DISPLAY;
+VIOLET       = X_10 & !PALLETE & DISPLAY;
+
+TEXT         = TEXTBIT & DISPLAY;
+
+/*
+	WHITE  - every pin on                                RRR BBB GGG
+	ORANGE - 3 parts red, 1 part blue, 1 part green      RRR B   G 
+       GREEN  - 3 parts green                                       GGG
+       VIOLET - 3 parts red, 3 parts blue                   RRR BBB
+       CYAN    - 3 parts blue, 2 parts green, 1 part red    R   BBB GG
+*/
+
+/*R1           = TEXT # WHITE # ORANGE # VIOLET # CYAN;*/
+R2           = TEXT # WHITE # ORANGE # VIOLET;
+R3           = TEXT # WHITE # ORANGE # VIOLET;
+
+B1           = TEXT # WHITE # ORANGE # VIOLET # CYAN;
+B2           = TEXT # WHITE # VIOLET # CYAN;
+/*B3           = TEXT # WHITE # VIOLET # CYAN;*/
+
+G1           = TEXT # WHITE # ORANGE # GREEN # CYAN;
+/*G2           = TEXT # WHITE # GREEN  # CYAN;*/
+G3           = TEXT # WHITE # GREEN;
+
+
