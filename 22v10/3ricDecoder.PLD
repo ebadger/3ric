@@ -1,0 +1,51 @@
+Name     3ricdecoder ;
+PartNo   00 ;
+Date     11/15/2021 ;
+Revision 01 ;
+Designer Eric Badger ;
+Company  Eric Badger ;
+Assembly None ;
+Location  ;
+Device   g22v10 ;
+
+/*
+0x0000 0xBFFF RAM 48KB,  Basic ROM from 0x9000 0xBFFF
+0xC000 0xC7FF Devices
+0xC800 0xCFFF Special RAM 
+0xD000 0xDFFF ROM bank (1 or 2 RAM)
+0xE000 0xFFFF ROM aux bank to RAM
+*/
+
+/* input pins */
+Pin 1        = PHI2;
+Pin 2        = RW;
+Pin [3..7]   = [A15..A11];
+Pin 8        = BB;        /* basic bank     */
+Pin 9        = B2;        /* bank 2         */
+Pin 10       = BRW;       /* Bank RAM Write */
+Pin 11       = VIDBUS;
+Pin 13       = VIDENABLE;
+Pin 22       = BRR;       /* Bank RAM Read  */
+
+/* output pins */
+
+Pin 14       = OE;
+Pin 15       = WE;
+Pin 16       = ROM_CS;
+Pin 17       = RAM_CS;
+
+Pin 20       = CPUBUS_CS;
+Pin 21       = DEVICE_CS;
+
+DEV          = A11 # A12 # A13 # !(A14 & A15);
+ROM          = (!(A14 & A15) # (!A12 & !A13) # (BRR & RW) # (BRW & !RW)) & !((A13 # A12) & A15 & BB & !A14);
+RAM          = !(ROM & DEV);
+
+!ROM_CS      = ROM;
+!RAM_CS      = RAM # !VIDBUS;
+!DEVICE_CS   = DEV;
+
+!WE          = !RW & PHI2;
+!OE          =  RW # !VIDBUS;
+
+!CPUBUS_CS   = RAM & VIDENABLE;
