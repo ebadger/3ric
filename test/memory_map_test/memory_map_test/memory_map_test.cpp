@@ -6,6 +6,10 @@
 
 using namespace std;
 
+const bool _dump_struct = false;
+const bool _dump_readable = false;
+const bool _test_expected = true;
+
 #define BIT(a,b) !!((a & b) != 0)
 typedef enum PIN
 {
@@ -29,16 +33,174 @@ typedef struct Result
 	bool a16;
 }Result;
 
+typedef struct Expected
+{
+	uint16_t start;
+	uint16_t end;
+	uint16_t pins;
+	bool rom;
+	bool ram;
+	bool dev;
+	bool a16;
+};
+
+
 std::vector<Result> _results[32];
 
+const Expected _expected[] = {
+    {0x0000,0xbfff,0x0000,1,0,1,0},
+    {0xc000,0xc7ff,0x0000,1,1,0,0},
+    {0xc800,0xcfff,0x0000,1,0,1,0},
+    {0xd000,0xffff,0x0000,0,1,1,0},
+    {0x0000,0x8fff,0x0001,1,0,1,0},
+    {0x9000,0xbfff,0x0001,0,1,1,0},
+    {0xc000,0xc7ff,0x0001,1,1,0,0},
+    {0xc800,0xcfff,0x0001,1,0,1,0},
+    {0xd000,0xffff,0x0001,0,1,1,0},
+    {0x0000,0xbfff,0x0002,1,0,1,0},
+    {0xc000,0xc7ff,0x0002,1,1,0,0},
+    {0xc800,0xcfff,0x0002,1,0,1,0},
+    {0xd000,0xffff,0x0002,0,1,1,0},
+    {0x0000,0x8fff,0x0003,1,0,1,0},
+    {0x9000,0xbfff,0x0003,0,1,1,0},
+    {0xc000,0xc7ff,0x0003,1,1,0,0},
+    {0xc800,0xcfff,0x0003,1,0,1,0},
+    {0xd000,0xffff,0x0003,0,1,1,0},
+    {0x0000,0xbfff,0x0004,1,0,1,0},
+    {0xc000,0xc7ff,0x0004,1,1,0,0},
+    {0xc800,0xffff,0x0004,1,0,1,0},
+    {0x0000,0x8fff,0x0005,1,0,1,0},
+    {0x9000,0xbfff,0x0005,0,1,1,0},
+    {0xc000,0xc7ff,0x0005,1,1,0,0},
+    {0xc800,0xffff,0x0005,1,0,1,0},
+    {0x0000,0xbfff,0x0006,1,0,1,0},
+    {0xc000,0xc7ff,0x0006,1,1,0,0},
+    {0xc800,0xcfff,0x0006,1,0,1,0},
+    {0xd000,0xdfff,0x0006,1,0,1,1},
+    {0xe000,0xffff,0x0006,1,0,1,0},
+    {0x0000,0x8fff,0x0007,1,0,1,0},
+    {0x9000,0xbfff,0x0007,0,1,1,0},
+    {0xc000,0xc7ff,0x0007,1,1,0,0},
+    {0xc800,0xcfff,0x0007,1,0,1,0},
+    {0xd000,0xdfff,0x0007,1,0,1,1},
+    {0xe000,0xffff,0x0007,1,0,1,0},
+    {0x0000,0xbfff,0x0008,1,0,1,0},
+    {0xc000,0xc7ff,0x0008,1,1,0,0},
+    {0xc800,0xcfff,0x0008,1,0,1,0},
+    {0xd000,0xffff,0x0008,0,1,1,0},
+    {0x0000,0x8fff,0x0009,1,0,1,0},
+    {0x9000,0xbfff,0x0009,0,1,1,0},
+    {0xc000,0xc7ff,0x0009,1,1,0,0},
+    {0xc800,0xcfff,0x0009,1,0,1,0},
+    {0xd000,0xffff,0x0009,0,1,1,0},
+    {0x0000,0xbfff,0x000a,1,0,1,0},
+    {0xc000,0xc7ff,0x000a,1,1,0,0},
+    {0xc800,0xcfff,0x000a,1,0,1,0},
+    {0xd000,0xffff,0x000a,0,1,1,0},
+    {0x0000,0x8fff,0x000b,1,0,1,0},
+    {0x9000,0xbfff,0x000b,0,1,1,0},
+    {0xc000,0xc7ff,0x000b,1,1,0,0},
+    {0xc800,0xcfff,0x000b,1,0,1,0},
+    {0xd000,0xffff,0x000b,0,1,1,0},
+    {0x0000,0xbfff,0x000c,1,0,1,0},
+    {0xc000,0xc7ff,0x000c,1,1,0,0},
+    {0xc800,0xffff,0x000c,1,0,1,0},
+    {0x0000,0x8fff,0x000d,1,0,1,0},
+    {0x9000,0xbfff,0x000d,0,1,1,0},
+    {0xc000,0xc7ff,0x000d,1,1,0,0},
+    {0xc800,0xffff,0x000d,1,0,1,0},
+    {0x0000,0xbfff,0x000e,1,0,1,0},
+    {0xc000,0xc7ff,0x000e,1,1,0,0},
+    {0xc800,0xcfff,0x000e,1,0,1,0},
+    {0xd000,0xdfff,0x000e,1,0,1,1},
+    {0xe000,0xffff,0x000e,1,0,1,0},
+    {0x0000,0x8fff,0x000f,1,0,1,0},
+    {0x9000,0xbfff,0x000f,0,1,1,0},
+    {0xc000,0xc7ff,0x000f,1,1,0,0},
+    {0xc800,0xcfff,0x000f,1,0,1,0},
+    {0xd000,0xdfff,0x000f,1,0,1,1},
+    {0xe000,0xffff,0x000f,1,0,1,0},
+    {0x0000,0xbfff,0x0010,1,0,1,0},
+    {0xc000,0xc7ff,0x0010,1,1,0,0},
+    {0xc800,0xcfff,0x0010,1,0,1,0},
+    {0xd000,0xffff,0x0010,0,1,1,0},
+    {0x0000,0x8fff,0x0011,1,0,1,0},
+    {0x9000,0xbfff,0x0011,0,1,1,0},
+    {0xc000,0xc7ff,0x0011,1,1,0,0},
+    {0xc800,0xcfff,0x0011,1,0,1,0},
+    {0xd000,0xffff,0x0011,0,1,1,0},
+    {0x0000,0xbfff,0x0012,1,0,1,0},
+    {0xc000,0xc7ff,0x0012,1,1,0,0},
+    {0xc800,0xcfff,0x0012,1,0,1,0},
+    {0xd000,0xffff,0x0012,0,1,1,0},
+    {0x0000,0x8fff,0x0013,1,0,1,0},
+    {0x9000,0xbfff,0x0013,0,1,1,0},
+    {0xc000,0xc7ff,0x0013,1,1,0,0},
+    {0xc800,0xcfff,0x0013,1,0,1,0},
+    {0xd000,0xffff,0x0013,0,1,1,0},
+    {0x0000,0xbfff,0x0014,1,0,1,0},
+    {0xc000,0xc7ff,0x0014,1,1,0,0},
+    {0xc800,0xcfff,0x0014,1,0,1,0},
+    {0xd000,0xffff,0x0014,0,1,1,0},
+    {0x0000,0x8fff,0x0015,1,0,1,0},
+    {0x9000,0xbfff,0x0015,0,1,1,0},
+    {0xc000,0xc7ff,0x0015,1,1,0,0},
+    {0xc800,0xcfff,0x0015,1,0,1,0},
+    {0xd000,0xffff,0x0015,0,1,1,0},
+    {0x0000,0xbfff,0x0016,1,0,1,0},
+    {0xc000,0xc7ff,0x0016,1,1,0,0},
+    {0xc800,0xcfff,0x0016,1,0,1,0},
+    {0xd000,0xffff,0x0016,0,1,1,0},
+    {0x0000,0x8fff,0x0017,1,0,1,0},
+    {0x9000,0xbfff,0x0017,0,1,1,0},
+    {0xc000,0xc7ff,0x0017,1,1,0,0},
+    {0xc800,0xcfff,0x0017,1,0,1,0},
+    {0xd000,0xffff,0x0017,0,1,1,0},
+    {0x0000,0xbfff,0x0018,1,0,1,0},
+    {0xc000,0xc7ff,0x0018,1,1,0,0},
+    {0xc800,0xffff,0x0018,1,0,1,0},
+    {0x0000,0x8fff,0x0019,1,0,1,0},
+    {0x9000,0xbfff,0x0019,0,1,1,0},
+    {0xc000,0xc7ff,0x0019,1,1,0,0},
+    {0xc800,0xffff,0x0019,1,0,1,0},
+    {0x0000,0xbfff,0x001a,1,0,1,0},
+    {0xc000,0xc7ff,0x001a,1,1,0,0},
+    {0xc800,0xcfff,0x001a,1,0,1,0},
+    {0xd000,0xdfff,0x001a,1,0,1,1},
+    {0xe000,0xffff,0x001a,1,0,1,0},
+    {0x0000,0x8fff,0x001b,1,0,1,0},
+    {0x9000,0xbfff,0x001b,0,1,1,0},
+    {0xc000,0xc7ff,0x001b,1,1,0,0},
+    {0xc800,0xcfff,0x001b,1,0,1,0},
+    {0xd000,0xdfff,0x001b,1,0,1,1},
+    {0xe000,0xffff,0x001b,1,0,1,0},
+    {0x0000,0xbfff,0x001c,1,0,1,0},
+    {0xc000,0xc7ff,0x001c,1,1,0,0},
+    {0xc800,0xffff,0x001c,1,0,1,0},
+    {0x0000,0x8fff,0x001d,1,0,1,0},
+    {0x9000,0xbfff,0x001d,0,1,1,0},
+    {0xc000,0xc7ff,0x001d,1,1,0,0},
+    {0xc800,0xffff,0x001d,1,0,1,0},
+    {0x0000,0xbfff,0x001e,1,0,1,0},
+    {0xc000,0xc7ff,0x001e,1,1,0,0},
+    {0xc800,0xcfff,0x001e,1,0,1,0},
+    {0xd000,0xdfff,0x001e,1,0,1,1},
+    {0xe000,0xffff,0x001e,1,0,1,0},
+    {0x0000,0x8fff,0x001f,1,0,1,0},
+    {0x9000,0xbfff,0x001f,0,1,1,0},
+    {0xc000,0xc7ff,0x001f,1,1,0,0},
+    {0xc800,0xcfff,0x001f,1,0,1,0},
+    {0xd000,0xdfff,0x001f,1,0,1,1},
+    {0xe000,0xffff,0x001f,1,0,1,0}
+};
 
 int main()
 {
 	bool rom = false;
 	bool ram = false;
 	bool dev = false;
-	int pos = 0;
-	
+    int errors = 0;
+
 	for (int p = 0; p < 32; p++)
 	{
 		bool a[17] = { false };
@@ -66,8 +228,8 @@ int main()
 
 			a[16] = ((BIT(p,BRR) && BIT(p,RW)) || (BIT(p, BRW) && !BIT(p,RW)))
 				&& BIT(p,B2)
-				&& (!a[13] && a[14])
-				&& (a[14] && a[15] && a[12]);
+				&& !a[13]
+                && (a[14] && a[15] && a[12]);
 
 			Result r;
 			r.addr = addr;
@@ -79,6 +241,8 @@ int main()
 			_results[p].push_back(r);
 		}
 	}
+
+    int pos = 0;
 
 	for (auto r : _results)
 	{
@@ -106,20 +270,58 @@ int main()
 					maxaddr = v.addr;
 				}
 
-				tags.clear();
-				for (int i = 0; i < 5; i++)
-				{
-					if ((result.pins >> i) & 1)
-					{
-						tags.append(_pinTags[i]);
-						tags.append(L" ");
-					}
-				}
+                if (_dump_readable || _test_expected)
+                {
+				    tags.clear();
+				    for (int i = 0; i < 5; i++)
+				    {
+					    if ((result.pins >> i) & 1)
+					    {
+						    tags.append(_pinTags[i]);
+						    tags.append(L" ");
+					    }
+				    }
+                }
 
 				if (maxaddr != UINT_MAX)
 				{
-					wprintf(L"%20s: %04x - %04x, Rom:%d, Ram:%d, Dev:%d, A16:%d\r\n", tags.c_str(), minaddr, result.addr, result.rom, result.ram, result.dev, result.a16);
-					minaddr = v.addr;
+                    if (_test_expected)
+                    {
+                        Expected ex = {};
+                        ex.start = minaddr;
+                        ex.end = result.addr;
+                        ex.pins = result.pins;
+                        ex.rom = result.rom;
+                        ex.ram = result.ram;
+                        ex.dev = result.dev;
+                        ex.a16 = result.a16;
+
+                        if (memcmp(&_expected[pos++], &ex, sizeof(Expected)))
+                        {
+                            errors++;
+                            // error, unexpected value
+                            wprintf(L"%20s: %04x - %04x, Rom:%d, Ram:%d, Dev:%d, A16:%d\r\n", tags.c_str(), minaddr, result.addr, result.rom, result.ram, result.dev, result.a16);
+                        }
+                    }
+
+                    if (_dump_struct)
+                    {
+                        wprintf(L"    {0x%04x,0x%04x,0x%04x,%d,%d,%d,%d},\r\n",
+                            minaddr,
+                            result.addr,
+                            result.pins,
+                            result.rom,
+                            result.ram,
+                            result.dev,
+                            result.a16);
+                    }
+
+                    if (_dump_readable)
+                    {
+                        wprintf(L"%20s: %04x - %04x, Rom:%d, Ram:%d, Dev:%d, A16:%d\r\n", tags.c_str(), minaddr, result.addr, result.rom, result.ram, result.dev, result.a16);
+                    }
+
+                    minaddr = v.addr;
 					maxaddr = UINT_MAX;
 				}
 
@@ -128,8 +330,47 @@ int main()
 
 			result = v;
 		}
-		wprintf(L"%20s: %04x - %04x, Rom:%d, Ram:%d, Dev:%d, A16:%d\r\n", tags.c_str(), minaddr, result.addr, result.rom, result.ram, result.dev, result.a16);
+        
+        if (_dump_struct)
+        {
+            wprintf(L"    {0x%04x,0x%04x,0x%04x,%d,%d,%d,%d},\r\n",
+                minaddr,
+                result.addr,
+                result.pins,
+                result.rom,
+                result.ram,
+                result.dev,
+                result.a16);
+        }
 
-		pos++;
+        if (_dump_readable)
+        {
+            wprintf(L"%20s: %04x - %04x, Rom:%d, Ram:%d, Dev:%d, A16:%d\r\n", tags.c_str(), minaddr, result.addr, result.rom, result.ram, result.dev, result.a16);
+        }
+
+        if (_test_expected)
+        {
+            Expected ex = {};
+            ex.start = minaddr;
+            ex.end = result.addr;
+            ex.pins = result.pins;
+            ex.rom = result.rom;
+            ex.ram = result.ram;
+            ex.dev = result.dev;
+            ex.a16 = result.a16;
+
+            if (memcmp(&_expected[pos++], &ex, sizeof(Expected)))
+            {
+                errors++;
+                wprintf(L"%20s: %04x - %04x, Rom:%d, Ram:%d, Dev:%d, A16:%d\r\n", tags.c_str(), minaddr, result.addr, result.rom, result.ram, result.dev, result.a16);
+            }
+        }
+
+
 	}
+
+    if (_test_expected)
+    {
+        wprintf(L"errors=%d\r\n", errors);
+    }
  }
