@@ -9,16 +9,20 @@ Location  ;
 Device   g22v10 ;
 
 /*
-0x0000 0xCFFF RAM 48KB
-0xC000 0xC0FF Devices 
-0xC100 0xE2FF Basic ROM
-0xE300 0xFFFF OS
+0x0000 0x9DFF RAM 39KB
+0x9E00 0xBFFF RAM2 8KB / BASIC ROM
+0xC000 0xC7FF Devices
+0xC800 0xCFFF RAM3
+0xD000 0xDFFF BANK1
+0xE000 0xFFFF OS / BANK2
 */
 
 /* input pins */
 Pin 1        = PHI2;
 Pin 2        = RW;
-Pin [3..10]  = [A15..A8];
+Pin [3..8]   = [A15..A11];
+Pin 9        = BANK1;
+Pin 10       = BANK2;
 Pin 11       = VIDBUS;
 Pin 13       = VIDENABLE;
 
@@ -34,9 +38,9 @@ Pin 23       = CPUBUS_CS;
 
 FIELD Address = [A15..A0];
 
-RAM          = Address:[0000..BFFF];
-DEV          = Address:[C000..C0FF];
-ROM          = Address:[C100..FFFF];
+RAM          = Address:[0000..BFFF] # Address:[C800..CFFF];
+DEV          = Address:[C000..C7FF];
+ROM          = Address:[D000..FFFF];
 
 !ROM_CS      = !RAM & !DEV;
 !RAM_CS      = RAM # !VIDBUS;
