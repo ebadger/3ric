@@ -11,8 +11,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Badger6502Emulator", "Badge
 EndProject
 Project("{C7167F0D-BC9F-4E6E-AFE1-012C56B48DB5}") = "Badger6502Emulator (Package)", "Badger6502Emulator (Package)\Badger6502Emulator (Package).wapproj", "{6BD775FF-1A01-47CA-94D7-063C08527B31}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ft232h", "ft232h\ft232h.vcxproj", "{10988C2D-7E43-4FDF-A4F1-A2DF0B0868C1}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|arm64 = Debug|arm64
@@ -73,18 +71,6 @@ Global
 		{6BD775FF-1A01-47CA-94D7-063C08527B31}.Release|x86.ActiveCfg = Release|x86
 		{6BD775FF-1A01-47CA-94D7-063C08527B31}.Release|x86.Build.0 = Release|x86
 		{6BD775FF-1A01-47CA-94D7-063C08527B31}.Release|x86.Deploy.0 = Release|x86
-		{10988C2D-7E43-4FDF-A4F1-A2DF0B0868C1}.Debug|arm64.ActiveCfg = Debug|x64
-		{10988C2D-7E43-4FDF-A4F1-A2DF0B0868C1}.Debug|arm64.Build.0 = Debug|x64
-		{10988C2D-7E43-4FDF-A4F1-A2DF0B0868C1}.Debug|x64.ActiveCfg = Debug|x64
-		{10988C2D-7E43-4FDF-A4F1-A2DF0B0868C1}.Debug|x64.Build.0 = Debug|x64
-		{10988C2D-7E43-4FDF-A4F1-A2DF0B0868C1}.Debug|x86.ActiveCfg = Debug|Win32
-		{10988C2D-7E43-4FDF-A4F1-A2DF0B0868C1}.Debug|x86.Build.0 = Debug|Win32
-		{10988C2D-7E43-4FDF-A4F1-A2DF0B0868C1}.Release|arm64.ActiveCfg = Release|x64
-		{10988C2D-7E43-4FDF-A4F1-A2DF0B0868C1}.Release|arm64.Build.0 = Release|x64
-		{10988C2D-7E43-4FDF-A4F1-A2DF0B0868C1}.Release|x64.ActiveCfg = Release|x64
-		{10988C2D-7E43-4FDF-A4F1-A2DF0B0868C1}.Release|x64.Build.0 = Release|x64
-		{10988C2D-7E43-4FDF-A4F1-A2DF0B0868C1}.Release|x86.ActiveCfg = Release|Win32
-		{10988C2D-7E43-4FDF-A4F1-A2DF0B0868C1}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

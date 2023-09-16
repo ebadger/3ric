@@ -34,7 +34,6 @@ using namespace Badger6502Emulator::implementation;
 #define TXCOUNT 38400 // Total pixels/2 (since we have 2 pixels per byte)
 uint8_t vga_buffer[TXCOUNT];
 
-void FtdiInit();
 
 uint16_t scanlines[] = {
 0x0000, 0x0400, 0x0800, 0x0C00, 0x1000, 0x1400, 0x1800, 0x1C00,
@@ -96,7 +95,6 @@ namespace winrt::Badger6502Emulator::implementation
 
     MainWindow::MainWindow()
     {
-        FtdiInit();
         InitializeComponent();
 
         InitializeCriticalSection(&_cs);

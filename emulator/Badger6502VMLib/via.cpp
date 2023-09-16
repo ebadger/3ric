@@ -1,8 +1,5 @@
 #include "via.h"
 
-void SetDPins(uint8_t pins, uint8_t dir);
-uint8_t ReadDPins();
-
 // via implementation is not complete and not tested for the large variety of scenarios supported
 // adding basic skeleton and adding support for my particular PS/2 keyboard scenario
 
@@ -105,7 +102,6 @@ uint8_t VIA::ReadRegister(uint8_t reg)
 		}
 
 		//_register[reg] = ReadDPins();
-		pins = ReadDPins();
 		pins = pins & ~(_register[DDRA]);
 		return pins;
 
@@ -259,7 +255,6 @@ presented in the next section.
 
 	case DDRA:
 		_register[DDRA] = data;
-		SetDPins(_register[ORA_IRA] & _register[DDRA], _register[DDRA]);
 		break;
 
 	case DDRB:
@@ -335,8 +330,6 @@ presented in the next section.
 		// not sure this is correct
 
 		_register[ORA_IRA] = temp;
-
-		SetDPins(temp & _register[DDRA], _register[DDRA]);
 
 		break;
 

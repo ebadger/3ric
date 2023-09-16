@@ -204,9 +204,6 @@
     <ProjectReference Include="..\Badger6502VMLib\Badger6502VMLib.vcxproj">
       <Project>{a269c8b1-56a9-44aa-a4c5-29c05769fd3d}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\ft232h\ft232h.vcxproj">
-      <Project>{10988c2d-7e43-4fdf-a4f1-a2df0b0868c1}</Project>
-    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
