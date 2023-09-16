@@ -1,6 +1,6 @@
 Name     3ricdecoder ;
 PartNo   00 ;
-Date     11/15/2021 ;
+Date     9/14/2023 ;
 Revision 01 ;
 Designer Eric Badger ;
 Company  Eric Badger ;
@@ -34,6 +34,7 @@ Pin 15       = WE;
 Pin 16       = ROM_CS;
 Pin 17       = RAM_CS;
 
+Pin 19       = A16;
 Pin 20       = CPUBUS_CS;
 Pin 21       = DEVICE_CS;
 
@@ -44,7 +45,7 @@ RAM          = !(ROM & DEV);
 !ROM_CS      = ROM;
 !RAM_CS      = RAM # !VIDBUS;
 !DEVICE_CS   = DEV;
-
+A16          = (BRR & RW # BRW & !RW) & B2 & !A13 & (A14 & A15 & A12);
 !WE          = !RW & PHI2;
 !OE          =  RW # !VIDBUS;
 

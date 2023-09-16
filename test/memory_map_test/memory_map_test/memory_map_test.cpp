@@ -9,8 +9,16 @@ using namespace std;
 const bool _dump_struct = false;
 const bool _dump_readable = false;
 const bool _test_expected = true;
+const bool _gen_22v10_testdata = true;
 
 #define BIT(a,b) !!((a & b) != 0)
+
+#define PIN2BUF(_A) { \
+                    if(_A) { buf[pos] = L'1'; \
+                   } else { \
+                    buf[pos] = L'0'; } pos++; \
+                   }
+
 typedef enum PIN
 {
 	BB =  1 << 0,
@@ -42,7 +50,7 @@ typedef struct Expected
 	bool ram;
 	bool dev;
 	bool a16;
-};
+} Expected;
 
 
 std::vector<Result> _results[32];
@@ -194,97 +202,100 @@ const Expected _expected[] = {
     {0xe000,0xffff,0x001f,1,0,1,0}
 };
 
-int main()
+void TestLogic()
 {
-	bool rom = false;
-	bool ram = false;
-	bool dev = false;
-    int errors = 0;
+    bool rom = false;
+    bool ram = false;
+    bool dev = false;
+    for (int p = 0; p < 32; p++)
+    {
+        bool a[17] = { false };
 
-	for (int p = 0; p < 32; p++)
-	{
-		bool a[17] = { false };
+        for (uint32_t addr = 0; addr <= 0xFFFF; addr++)
+        {
+            // populate the address bits
+            for (int i = 0; i < 16; i++)
+            {
+                a[i] = (addr >> i) & 1;
+            }
 
-		for (uint32_t addr = 0; addr <= 0xFFFF; addr++)
-		{
-			// populate the address bits
-			for (int i = 0; i < 16; i++)
-			{
-				a[i] = (addr >> i) & 1;
-			}
+            dev = (a[11] || a[12] || a[13]) || !(a[14] && a[15]);
 
-			dev = (a[11] || a[12] || a[13]) || !(a[14] && a[15]);
+            rom = (!(a[14] && a[15])
+                || (!a[12] && !a[13])
+                || (BIT(p, BRR) && BIT(p, RW))
+                || (BIT(p, BRW) && !(BIT(p, RW))))
+                &&
+                !((a[13] || a[12]) && a[15]
+                    && BIT(p, BB)
+                    && !a[14]);
 
-			rom = (!(a[14] && a[15])
-				|| (!a[12] && !a[13])
-				|| (BIT(p,BRR) && BIT(p,RW))
-				|| (BIT(p,BRW) && !(BIT(p,RW))))
-				&&
-				!((a[13] || a[12]) && a[15]
-					&& BIT(p,BB)
-					&& !a[14]);
+            ram = !(dev && rom);
 
-			ram = !(dev && rom);
-
-			a[16] = ((BIT(p,BRR) && BIT(p,RW)) || (BIT(p, BRW) && !BIT(p,RW)))
-				&& BIT(p,B2)
-				&& !a[13]
+            a[16] = ((BIT(p, BRR) && BIT(p, RW)) || (BIT(p, BRW) && !BIT(p, RW)))
+                && BIT(p, B2)
+                && !a[13]
                 && (a[14] && a[15] && a[12]);
 
-			Result r;
-			r.addr = addr;
-			r.pins = p;
-			r.ram = ram;
-			r.rom = rom;
-			r.dev = dev;
-			r.a16 = a[16];
-			_results[p].push_back(r);
-		}
-	}
+            Result r;
+            r.addr = addr;
+            r.pins = p;
+            r.ram = ram;
+            r.rom = rom;
+            r.dev = dev;
+            r.a16 = a[16];
+            _results[p].push_back(r);
+        }
+    }
 
+}
+
+void ValidateData()
+{
+    int errors = 0;
     int pos = 0;
 
-	for (auto r : _results)
-	{
-		wstring tags;
-		uint32_t minaddr = UINT_MAX;
-		uint32_t maxaddr = UINT_MAX;
-		Result result = {};
-		result.addr = 0xFFFF;
-		
-		
-		for (auto v : r)
-		{
-			if (   result.rom != v.rom
-				|| result.ram != v.ram
-				|| result.dev != v.dev
-				|| result.a16 != v.a16
-				|| result.addr +1 != v.addr )
-			{
-				if (minaddr == UINT_MAX)
-				{
-					minaddr = v.addr;
-				}
-				else if (maxaddr == UINT_MAX)
-				{
-					maxaddr = v.addr;
-				}
+    for (auto r : _results)
+    {
+        wstring tags;
+        uint32_t minaddr = UINT_MAX;
+        uint32_t maxaddr = UINT_MAX;
+        Result result = {};
+        result.addr = 0xFFFF;
+
+
+        for (auto v : r)
+        {
+            if (result.rom != v.rom
+                || result.ram != v.ram
+                || result.dev != v.dev
+                || result.a16 != v.a16
+                || result.addr + 1 != v.addr)
+            {
+                if (minaddr == UINT_MAX)
+                {
+                    minaddr = v.addr;
+                }
+                else if (maxaddr == UINT_MAX)
+                {
+                    maxaddr = v.addr;
+                }
 
                 if (_dump_readable || _test_expected)
                 {
-				    tags.clear();
-				    for (int i = 0; i < 5; i++)
-				    {
-					    if ((result.pins >> i) & 1)
-					    {
-						    tags.append(_pinTags[i]);
-						    tags.append(L" ");
-					    }
-				    }
+                    tags.clear();
+                    for (int i = 0; i < 5; i++)
+                    {
+                        if ((result.pins >> i) & 1)
+                        {
+                            tags.append(_pinTags[i]);
+                            tags.append(L" ");
+                        }
+                    }
                 }
 
-				if (maxaddr != UINT_MAX)
-				{
+                if (maxaddr != UINT_MAX)
+                {
                     if (_test_expected)
                     {
                         Expected ex = {};
@@ -322,15 +333,15 @@ int main()
                     }
 
                     minaddr = v.addr;
-					maxaddr = UINT_MAX;
-				}
+                    maxaddr = UINT_MAX;
+                }
 
-				// switch range
-			}
+                // switch range
+            }
 
-			result = v;
-		}
-        
+            result = v;
+        }
+
         if (_dump_struct)
         {
             wprintf(L"    {0x%04x,0x%04x,0x%04x,%d,%d,%d,%d},\r\n",
@@ -367,10 +378,91 @@ int main()
         }
 
 
-	}
+    }
 
     if (_test_expected)
     {
         wprintf(L"errors=%d\r\n", errors);
     }
- }
+}
+
+
+void Write22v10Simulation()
+{
+    wchar_t buf[255] = {0};
+    wchar_t buf2[255] = {0};
+
+    FILE * file = nullptr;
+    FILE * file2 = nullptr;
+    if (0 == fopen_s(&file,  "3ricDecoder.si",  "w+") 
+     && 0 == fopen_s(&file2, "3ricDecoder.out", "w+"))
+    {
+        fwprintf(file, L"ORDER: A15, A14, A13, A12, A11, RW, VIDBUS, VIDENABLE, BB, B2, BRW, BRR, !ROM_CS, !RAM_CS, !DEVICE_CS, A16;\r\n\r\n\r\nVECTORS:\r\n");
+        int outpos = 0;
+
+        for (auto e : _expected)
+        {
+            for (int a = (e.start >> 11); a < (e.end >> 11); a++)
+            {
+                int pos = 0;
+
+                swprintf_s(buf2, _countof(buf2), L"%04d: ", ++outpos);
+
+                for (int bit = 4; bit >= 0; bit--)
+                {
+                    PIN2BUF((a >> bit) & 1);
+                }
+
+                PIN2BUF(e.pins & RW);
+                PIN2BUF(1); // vidbus
+                PIN2BUF(1); // videnable
+                PIN2BUF(e.pins & BB);
+                PIN2BUF(e.pins & B2);
+                PIN2BUF(e.pins & BRW);
+                PIN2BUF(e.pins & BRR);
+
+                wcscat_s(buf2, _countof(buf2), buf);
+                
+                buf[pos++] = L'*'; // ROM_CS
+                buf[pos++] = L'*'; // RAM_CS
+                buf[pos++] = L'*'; // DEVICE_CS
+                buf[pos++] = L'*'; // A16_CS
+
+                int buf2len = wcslen(buf2);
+
+                buf[pos++] = L'\r';
+                buf[pos++] = L'\n';
+                
+                swprintf_s(&buf2[buf2len], _countof(buf2) - buf2len, L"%c%c%c%c\r",
+                    e.rom ? L'H' : L'L',
+                    e.ram ? L'H' : L'L',
+                    e.dev ? L'H' : L'L',
+                    e.a16 ? L'H' : L'L');
+                
+                fwprintf(file,  buf);
+                fwprintf(file2, buf2);
+
+                memset(buf, 0, _countof(buf) * sizeof(wchar_t));
+                memset(buf2, 0, _countof(buf2) * sizeof(wchar_t));
+            }
+
+        }
+
+        fflush(file);
+        fflush(file2);
+
+        ::fclose(file);
+        ::fclose(file2);
+    }
+}
+
+int main()
+{
+    TestLogic();
+    ValidateData();
+
+    if (_gen_22v10_testdata)
+    {
+        Write22v10Simulation();
+    }
+}
