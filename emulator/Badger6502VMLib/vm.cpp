@@ -46,15 +46,9 @@ void VM::Init()
 		_data[i] = (rand() * 255) & 0xFF;
 	}
 
-	memset(_video, 0, sizeof(int8_t) * _pal_countof(_video));
 	pal_initromdisk(&_romdisk);
-
 }
 
-uint8_t * VM::GetVideoBuffer()
-{
-	return (uint8_t *) &_video;
-}
 
 void VM::Run()
 {
@@ -87,12 +81,137 @@ void VM::SetTestMode(bool mode)
 	_testmode = mode;
 }
 
+void VM::DoSoftSwitches(uint16_t address, bool write)
+{
+	switch (address)
+	{
+	case MM_SS_GRAPHICS:
+		_graphics = true;
+		break;
+
+	case MM_SS_TEXT:
+		_graphics = false;
+		break;
+
+	case MM_SS_DISPLAY1:
+		_page2 = false;
+		break;
+
+	case MM_SS_DISPLAY2:
+		_page2 = true;
+		break;
+
+	case MM_SS_FULLSCREEN:
+		_mixed = false;
+		break;
+
+	case MM_SS_SPLITSCREEN:
+		_mixed = true;
+		break;
+
+	case MM_SS_HIRES:
+		_lores = false;
+		break;
+
+	case MM_SS_LORES:
+		_lores = true;
+		break;
+
+		// memory banking
+/*
+	bool _bank_read_page2 = false;
+	bool _bank_write_page2 = false;
+	bool _bank_read_page1 = false;
+	bool _bank_write_page2 = false;
+*/
+	case MM_SS_R_BANK2:
+	case MM_SS_R_BANK2_2:
+		_bank_page1 = false;
+		_bank_read = true;
+		_bank_write = false;
+		break;
+
+	case MM_SS_W_BANK2:
+	case MM_SS_W_BANK2_2:
+		_bank_page1 = false;
+		_bank_read = false;
+		_bank_write = true;
+		break;
+
+	case MM_SS_R_ROM2:
+	case MM_SS_R_ROM2_2:
+	case MM_SS_R_ROM1:
+	case MM_SS_R_ROM1_2:
+		_bank_read = false;
+		_bank_write = false;
+		break;
+
+	case MM_SS_RW_BANK2:
+	case MM_SS_RW_BANK2_2:
+		_bank_page1 = false;
+		_bank_write = _bank_read;
+		_bank_read = true;
+		break;
+
+	case MM_SS_R_BANK1:
+	case MM_SS_R_BANK1_2:
+		_bank_page1 = true;
+		_bank_read = true;
+		_bank_write = false;
+		break;
+
+	case MM_SS_W_BANK1:
+	case MM_SS_W_BANK1_2:
+		_bank_page1 = true;
+		_bank_read = false;
+		_bank_write = true;
+		break;
+
+	case MM_SS_RW_BANK1:
+	case MM_SS_RW_BANK1_2:
+		_bank_page1 = true;
+		_bank_write = _bank_read;
+		_bank_read = true;
+		break;
+	
+	case MM_SS_BASIC_ROM_OFF:
+		if (write)
+		{
+			_basicbank = false;
+		}
+
+		break;
+	case MM_SS_BASIC_ROM_ON:
+		if (write)
+		{
+			_basicbank = true;
+		}
+		break;
+
+	default:
+		return;
+	}
+
+	if (address >= MM_SS_START && address <= MM_SS_END_LOW)
+	{
+		if (CallbackSetSoftSwitches)
+		{
+			CallbackSetSoftSwitches(_graphics, _page2, _mixed, _lores);
+		}
+	}
+}
+
 uint8_t VM::ReadData(uint16_t address)
 {
-    if (address >= MM_RAM_START && address <= MM_RAM_END)
+    if (address >= MM_RAM_START && address <= MM_RAM_END
+	||  address >= MM_RAM2_START && address <= MM_RAM2_END)
 	{
 		// RAM
 		return _data[address];
+	}
+	else if (address >= MM_SS_START && address <= MM_SS_END)
+	{
+		DoSoftSwitches(address, false);
 	}
 	else if (address >= MM_ACIA_START && address <= MM_ACIA_END)
 	{
@@ -109,26 +228,25 @@ uint8_t VM::ReadData(uint16_t address)
 		uint32_t addr = (_romdiskBank & 3) << 16 | _romdiskHigh << 8 | _romdiskLow;
 		return _romdisk[addr];
 	}
-	else if (address >= MM_FILE_START && address <= MM_FILE_END)
-	{
-		if ((address & 0xF) == 0xF)
-		{
-			return _result;
-		}
-		else
-		{
-			return 0;
-		}
-	}
 	else if (address >= MM_DEVICES_START && address <= MM_DEVICES_END)
 	{
 		// unimplemented devices
 		return _data[address];
 	}
-	else if (address >= MM_ROM_START && address <= MM_ROM_END ||
-		     address >= MM_OS_START && address <= MM_OS_END)
+	else if (address >= MM_ROM_START && address <= MM_ROM_END)
 	{
 		return _data[address];
+	}
+	else if (address >= MM_BASIC_START && address <= MM_BASIC_END)
+	{
+		if (_basicbank)
+		{
+			return _basic[address - MM_BASIC_START];
+		}
+		else
+		{
+			return _data[address];
+		}
 	}
 	else
 	{
@@ -148,7 +266,11 @@ void VM::WriteData(uint16_t address, uint8_t byte)
 		CallbackWriteMemory(address, byte);
 	}
 
-	if (address >= MM_RAM_START && address <= MM_RAM_END)
+	if (address >= MM_RAM_START && address <= MM_RAM_END
+		|| address >= MM_RAM2_START && address <= MM_RAM2_END
+		|| (_basicbank == false 
+			&& address >= MM_BASIC_START && address <= MM_BASIC_END)
+	)
 	{
 		// RAM
 		_data[address] = byte;
@@ -191,14 +313,24 @@ void VM::WriteData(uint16_t address, uint8_t byte)
 			}
 		}
 	}
-	else if (address >= MM_ROM_START && address <= MM_ROM_END ||
-		     address >= MM_OS_START && address <= MM_OS_END)
+	else if (address >= MM_ROM_START && address <= MM_ROM_END)
 	{
 		// ROM
 		if (_testmode)
 		{
 			_data[address] = byte;
 		}
+	}
+	else if (address >= MM_BASIC_START && address <= MM_BASIC_END)
+	{
+		if (_testmode || !_basicbank)
+		{
+			_data[address] = byte;
+		}
+	}
+	else if (address >= MM_SS_START && address <= MM_SS_END)
+	{
+		DoSoftSwitches(address, true);
 	}
 	else if (address >= MM_ACIA_START && address <= MM_ACIA_END)
 	{
@@ -234,6 +366,7 @@ void VM::WriteData(uint16_t address, uint8_t byte)
 		}
 
 	}
+#if 0
 	else if (address >= MM_AUDIO_START && address <= MM_AUDIO_END)
 	{
 		switch(address & 0xF)
@@ -324,6 +457,7 @@ void VM::WriteData(uint16_t address, uint8_t byte)
 				break;
 		}
 	}
+#endif
 	else if (address >= MM_DEVICES_START && address <= MM_DEVICES_END)
 	{
 		// unimplemented devices
@@ -349,17 +483,24 @@ bool VM::LoadBinaryFile(const char* szFileName)
 bool VM::LoadBinaryFile(const char* szFileName, uint16_t offset)
 {
 	struct stat results = { 0 };
+	int max_read = 0x10000;
+
 	if (stat(szFileName, &results) == 0)
 	{
 		ifstream data(szFileName, ios::in | ios::binary);
-		
-		if (offset + results.st_size > 0x10000)
+	
+		if (max_read > results.st_size)
+		{
+			max_read = results.st_size;
+		}
+
+		if (offset + max_read > 0x10000)
 		{
 			data.close();
 			return false;
 		}
 
-		data.read((char *)&_data[offset], results.st_size);
+		data.read((char *)&_data[offset], max_read);
 		data.close();
 
 		return true;
@@ -403,6 +544,11 @@ uint8_t * VM::GetData()
 uint8_t * VM::GetRomDisk()
 {
 	return (uint8_t *)_romdisk;
+}
+
+uint8_t* VM::GetBasicRom()
+{
+	return (uint8_t*)_basic;
 }
 
 #if defined(PLATFORM_WINDOWS)

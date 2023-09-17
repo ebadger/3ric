@@ -829,12 +829,33 @@ namespace winrt::Badger6502Emulator::implementation
             }
         };
 
+        //			CallbackSetSoftSwitches(_graphics, _page2, _mixed, _lores);
+
+        _vm.CallbackSetSoftSwitches = [&](bool graphics, bool page2, bool mixed, bool lores) -> void {
+            UNREFERENCED_PARAMETER(mixed);
+            UNREFERENCED_PARAMETER(lores);
+
+            bool queued = DispatcherQueue().TryEnqueue(
+                DispatcherQueuePriority::Low,
+                [&, graphics, page2]() {
+                    _gfxPage = page2;
+                    _textMode = !graphics;
+
+                    RefreshVideo();
+                });
+
+            if (!queued)
+            {
+                __debugbreak();
+            }
+        };
+
         _vm.CallbackSetMode = [&](uint8_t flags) -> void {
             bool queued = DispatcherQueue().TryEnqueue(
                 DispatcherQueuePriority::Low,
                 [&, flags]() {
-                    _gfxPage = !!(flags & 0x40);
-                    _textMode = ((flags & 0x80) == 0);
+                    //_gfxPage = !!(flags & 0x40);
+                    //_textMode = ((flags & 0x80) == 0);
                     _font = flags & 0x3F;
 
                     RefreshVideo();
@@ -1023,8 +1044,10 @@ namespace winrt::Badger6502Emulator::implementation
         }
 
         //if (vm.LoadBinaryFile("c:\\6502_65C02_functional_tests\\6502_functional_test.bin", 0))
-        if (_vm.LoadBinaryFile("c:\\eb6502\\targets\\badger6502.bin", 0x8000))
+        if (_vm.LoadBinaryFile("c:\\eb6502\\targets\\badger6502.bin", 0x0000))
         {
+            memcpy(_vm.GetBasicRom(), &_vm.GetData()[0x9000], sizeof(uint8_t) * 0x3000);
+
             _vm.LoadRomDiskFile("c:\\eb6502\\targets\\loderun.bin");
 
             // load Loderunner into RAM
@@ -1037,7 +1060,7 @@ namespace winrt::Badger6502Emulator::implementation
             //_vm.LoadBinaryFile("c:\\eb6502\\targets\\breakout_0803.bin", 0x4000);
             _vm.LoadBinaryFile("c:\\eb6502\\targets\\gomoku.bin", 0x4000);
 
-            // temporarily write a fat directory entry
+            // temporarily write a fcopyat directory entry
             //_vm.LoadBinaryFile("c:\\eb6502\\targets\\fatentry.bin", 0xA000);
             
             std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
