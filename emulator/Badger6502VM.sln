@@ -8,8 +8,13 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Badger6502VMTest", "Badger6502VMTest\Badger6502VMTest.vcxproj", "{4789D7B1-5044-4B88-8BB3-B6835F8EB989}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Badger6502Emulator", "Badger6502Emulator\Badger6502Emulator.vcxproj", "{A4905ADA-E754-4742-A8D2-E88AC6FAD1E3}"
+	ProjectSection(ProjectDependencies) = postProject
+		{A7FD00E0-5506-46AE-A843-5D0E0B41BD04} = {A7FD00E0-5506-46AE-A843-5D0E0B41BD04}
+	EndProjectSection
 EndProject
 Project("{C7167F0D-BC9F-4E6E-AFE1-012C56B48DB5}") = "Badger6502Emulator (Package)", "Badger6502Emulator (Package)\Badger6502Emulator (Package).wapproj", "{6BD775FF-1A01-47CA-94D7-063C08527B31}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MockMicroSD", "MockMicroSD\MockMicroSD.vcxproj", "{A7FD00E0-5506-46AE-A843-5D0E0B41BD04}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -71,6 +76,18 @@ Global
 		{6BD775FF-1A01-47CA-94D7-063C08527B31}.Release|x86.ActiveCfg = Release|x86
 		{6BD775FF-1A01-47CA-94D7-063C08527B31}.Release|x86.Build.0 = Release|x86
 		{6BD775FF-1A01-47CA-94D7-063C08527B31}.Release|x86.Deploy.0 = Release|x86
+		{A7FD00E0-5506-46AE-A843-5D0E0B41BD04}.Debug|arm64.ActiveCfg = Debug|x64
+		{A7FD00E0-5506-46AE-A843-5D0E0B41BD04}.Debug|arm64.Build.0 = Debug|x64
+		{A7FD00E0-5506-46AE-A843-5D0E0B41BD04}.Debug|x64.ActiveCfg = Debug|x64
+		{A7FD00E0-5506-46AE-A843-5D0E0B41BD04}.Debug|x64.Build.0 = Debug|x64
+		{A7FD00E0-5506-46AE-A843-5D0E0B41BD04}.Debug|x86.ActiveCfg = Debug|Win32
+		{A7FD00E0-5506-46AE-A843-5D0E0B41BD04}.Debug|x86.Build.0 = Debug|Win32
+		{A7FD00E0-5506-46AE-A843-5D0E0B41BD04}.Release|arm64.ActiveCfg = Release|x64
+		{A7FD00E0-5506-46AE-A843-5D0E0B41BD04}.Release|arm64.Build.0 = Release|x64
+		{A7FD00E0-5506-46AE-A843-5D0E0B41BD04}.Release|x64.ActiveCfg = Release|x64
+		{A7FD00E0-5506-46AE-A843-5D0E0B41BD04}.Release|x64.Build.0 = Release|x64
+		{A7FD00E0-5506-46AE-A843-5D0E0B41BD04}.Release|x86.ActiveCfg = Release|Win32
+		{A7FD00E0-5506-46AE-A843-5D0E0B41BD04}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

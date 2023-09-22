@@ -933,6 +933,29 @@ namespace winrt::Badger6502Emulator::implementation
 
         _vm.CallbackWriteMemory = [&](uint16_t address, uint8_t byte) -> void
         {
+            if (address == MM_VIA1_START + VIA::ORA_IRA_2
+                || address == MM_VIA1_START + VIA::ORA_IRA)
+            {
+                // SD Card
+                uint8_t reg = _vm.GetVIA1()->ReadRegister(VIA::ORA_IRA);
+
+                _sdcard.SetCS(reg & 0x10);
+                _sdcard.SetMOSI(reg & 0x4);
+                _sdcard.SetSCK(reg & 0x8);
+
+                if (_sdcard.GetMISO())
+                {
+                    reg |= 0x2;
+                }
+                else
+                {
+                    reg = reg & (uint8_t)~2;
+                }
+
+                _vm.GetVIA1()->WriteRegister(VIA::ORA_IRA, reg);
+
+            }
+
             if (_countBreakPoints > 0) // todo: make thread safe
             {
                 EnterCriticalSection(&_csBreakpoints);
@@ -1036,6 +1059,8 @@ namespace winrt::Badger6502Emulator::implementation
                 });
         };
 #endif
+
+        _sdcard.LoadImageFile(L"c:\\eb6502\\targets\\sd.001");
 
         uint32_t retval = _fontFile.MapFile(L"c:\\eb6502\\targets\\fontrom.dat");
         if (retval != 0)
@@ -1169,6 +1194,7 @@ namespace winrt::Badger6502Emulator::implementation
 
                 cycles += pCPU->Step();
                 totalcycles += cycles;
+
 
                 EnterCriticalSection(&_csPS2);
                 _vm.GetPS2Keyboard()->ProcessKeys(totalcycles);

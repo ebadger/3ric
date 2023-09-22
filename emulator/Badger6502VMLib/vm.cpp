@@ -261,10 +261,6 @@ void VM::WriteData(uint16_t address, uint8_t byte)
 {
 	std::string filename = "";
 
-	if (CallbackWriteMemory)
-	{
-		CallbackWriteMemory(address, byte);
-	}
 
 	if (address >= MM_RAM_START && address <= MM_RAM_END
 		|| address >= MM_RAM2_START && address <= MM_RAM2_END
@@ -466,6 +462,12 @@ void VM::WriteData(uint16_t address, uint8_t byte)
 	{
 		pal_debugbreak();
 	}
+
+	if (CallbackWriteMemory)
+	{
+		CallbackWriteMemory(address, byte);
+	}
+
 }
 
 

@@ -102,7 +102,7 @@ uint8_t VIA::ReadRegister(uint8_t reg)
 		}
 
 		//_register[reg] = ReadDPins();
-		pins = pins & ~(_register[DDRA]);
+		pins = _register[reg];
 		return pins;
 
 	case ORB_IRB:
@@ -330,6 +330,7 @@ presented in the next section.
 		// not sure this is correct
 
 		_register[ORA_IRA] = temp;
+		_register[ORA_IRA_2] = temp;
 
 		break;
 

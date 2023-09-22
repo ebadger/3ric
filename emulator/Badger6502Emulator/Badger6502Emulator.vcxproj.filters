@@ -44,4 +44,7 @@
   <ItemGroup>
     <Xml Include="WTS.ProjectConfig.xml" />
   </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natvis" />
+  </ItemGroup>
 </Project>

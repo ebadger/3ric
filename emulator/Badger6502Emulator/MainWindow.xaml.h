@@ -13,6 +13,7 @@
 #include "BreakPointItem.h"
 #include "ResizeBorder.h"
 #include "MappedFile.h"
+#include "sdcard.h"
 
 using namespace std;
 
@@ -141,6 +142,7 @@ namespace winrt::Badger6502Emulator::implementation
         std::vector<BreakPointItem*> _vecBreakPointsFast;
 
         MappedFile _fontFile;
+        SDCard _sdcard;
 
         uint8_t _countBreakPoints = 0;
         uint32_t _clockspeed = 0;
