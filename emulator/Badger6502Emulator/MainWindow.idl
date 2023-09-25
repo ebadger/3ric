@@ -1,0 +1,41 @@
+namespace Badger6502Emulator
+{
+    enum ResizeOrientation
+    {
+        Vertical,
+        Horizontal
+    };
+
+    runtimeclass ResizeBorder : Microsoft.UI.Xaml.Controls.Control
+    {
+        ResizeBorder();
+        ResizeOrientation Orientation;
+    };
+
+    enum BreakPointTarget
+    {
+        PC,
+        SP,
+        A,
+        X,
+        Y,
+        OpCode,
+        MemoryWrite
+    };
+
+    runtimeclass BreakPointItem : Microsoft.UI.Xaml.Controls.ListBoxItem
+    {
+        BreakPointItem();
+        Int16 Data;
+        BreakPointTarget Target;
+        String Text;
+    };
+
+    [default_interface]
+    runtimeclass MainWindow : Microsoft.UI.Xaml.Window
+    {
+        MainWindow();
+        Int32 MyProperty;
+        IObservableVector<BreakPointItem> BreakPoints { get; };
+    };
+}

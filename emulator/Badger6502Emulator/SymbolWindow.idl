@@ -1,0 +1,9 @@
+namespace Badger6502Emulator
+{
+    [default_interface]
+    runtimeclass SymbolWindow : Microsoft.UI.Xaml.Window
+    {
+        SymbolWindow();
+        Int32 MyProperty;
+    }
+}

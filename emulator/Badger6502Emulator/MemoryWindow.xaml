@@ -1,0 +1,25 @@
+﻿<Window
+    x:Class="Badger6502Emulator.MemoryWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Badger6502Emulator"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    mc:Ignorable="d"
+    >
+
+    <Grid>
+        <StackPanel Orientation="Vertical">
+            <StackPanel Grid.Row="0" Grid.ColumnSpan="2"  Height="25" Orientation="Horizontal" Spacing="15" x:Name="TitleBar" VerticalAlignment="Top">
+                <TextBlock x:Name="txtTitle" VerticalAlignment="Center" Text="Badger6502 - memory" Padding="12,0,256,0"/>
+            </StackPanel>
+        
+            <StackPanel Orientation="Vertical" Grid.Row="1">
+                <muxc:RichEditBox HorizontalAlignment="Stretch" VerticalAlignment="Stretch" x:Name="txtAddress" Background="White" Foreground="Green" IsColorFontEnabled="True" IsSpellCheckEnabled="False" TextWrapping="NoWrap" AcceptsReturn="False" FontFamily="Lucida Console"  IsRightTapEnabled="True"/>
+                <muxc:RichEditBox x:Name="txtMemory" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" AcceptsReturn="False" TextWrapping="Wrap" FontFamily="Lucida Console"/>
+                <muxc:RichEditBox x:Name="txtMemoryAscii" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" AcceptsReturn="False" TextWrapping="Wrap" FontFamily="Lucida Console"/>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</Window>
