@@ -12,11 +12,12 @@ Device   g22v10 ;
 0x0000 0xBFFF RAM 48KB,  Basic ROM from 0x9000 0xBFFF
 0xC000 0xC7FF Devices
 0xC800 0xCFFF Special RAM 
-0xD000 0xDFFF ROM bank (1 or 2 RAM)
-0xE000 0xFFFF ROM aux bank to RAM
+0xD000 0xDFFF ROM / Banked RAM (1 or 2)
+0xE000 0xFFFF ROM / Banked RAM
 */
 
 /* input pins */
+
 Pin 1        = PHI2;
 Pin 2        = RW;
 Pin [3..7]   = [A15..A11];
@@ -34,7 +35,7 @@ Pin 15       = WE;
 Pin 16       = ROM_CS;
 Pin 17       = RAM_CS;
 
-Pin 19       = A16;
+Pin 19      = A16;
 Pin 20       = CPUBUS_CS;
 Pin 21       = DEVICE_CS;
 

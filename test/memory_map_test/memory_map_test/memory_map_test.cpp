@@ -236,7 +236,7 @@ void TestLogic()
                 && BIT(p, B2)
                 && !a[13]
                 && (a[14] && a[15] && a[12]);
-
+             
             Result r;
             r.addr = addr;
             r.pins = p;
@@ -428,7 +428,7 @@ void Write22v10Simulation()
                 buf[pos++] = L'*'; // DEVICE_CS
                 buf[pos++] = L'*'; // A16_CS
 
-                int buf2len = wcslen(buf2);
+                int buf2len = (int)wcslen(buf2);
 
                 buf[pos++] = L'\r';
                 buf[pos++] = L'\n';

@@ -1,3 +1,0 @@
-﻿  memory_map_test.cpp
-C:\3ric\test\memory_map_test\memory_map_test\memory_map_test.cpp(45,2): warning C4091: 'typedef ': ignored on left of 'Expected' when no variable is declared
-  memory_map_test.vcxproj -> C:\3ric\test\memory_map_test\x64\Debug\memory_map_test.exe

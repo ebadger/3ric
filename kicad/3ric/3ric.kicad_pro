@@ -531,6 +531,14 @@
     [
       "f1111e82-0abc-4d93-b82c-5bd5a885becb",
       "PLL"
+    ],
+    [
+      "b718fcb1-8742-4b46-85e8-c35e05bc00ea",
+      "address_decoder"
+    ],
+    [
+      "c920751f-edd2-4cd3-a630-9d0b3423e6d7",
+      "banking"
     ]
   ],
   "text_variables": {}
