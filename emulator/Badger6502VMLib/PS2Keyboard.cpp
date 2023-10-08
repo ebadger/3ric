@@ -1,9 +1,15 @@
 #include "ps2keyboard.h"
-#define CYCLE_THRESHOLD   10000
+#define CYCLE_THRESHOLD   1000
 
 PS2Keyboard::PS2Keyboard(VM* p)
 {
 	_vm = p;
+}
+
+void PS2Keyboard::Reset()
+{
+    _vecKeys.clear();
+    _lastcycle = 0;
 }
 
 void PS2Keyboard::SignalHardwareKey(bool down, uint32_t scancode)

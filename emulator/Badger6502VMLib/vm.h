@@ -28,6 +28,9 @@ enum
 	MM_VIDEO_END		= 0x5FFF,
 	MM_DEVICES_START	= 0xC000,
 	MM_SS_START         = 0xC000,
+	MM_SS_KEYBOARD      = 0xC000,
+	MM_SS_BASIC_ROM_OFF = 0xC006,
+	MM_SS_BASIC_ROM_ON  = 0xC007,
 	MM_SS_GRAPHICS      = 0xC050,
 	MM_SS_TEXT          = 0xC051,
 	MM_SS_FULLSCREEN    = 0xC052,
@@ -54,8 +57,6 @@ enum
 	MM_SS_W_BANK1_2     = 0xC08D,
 	MM_SS_R_ROM1_2      = 0xC08E,
 	MM_SS_RW_BANK1_2    = 0xC08F,
-	MM_SS_BASIC_ROM_OFF = 0xC0E0,
-	MM_SS_BASIC_ROM_ON  = 0xC0E1,
 	MM_SS_END           = 0xC0FF,
 	MM_DEVICES_END		= 0xC7FF,
 	MM_ACIA_START		= 0xC100,
@@ -159,6 +160,7 @@ private:
 	bool _bank_read = false;
 	bool _bank_write = false;
 	bool _bank_page1 = false;
+	bool _bank_ff = false;
 
 	bool _graphics = false;
 	bool _page2 = false;

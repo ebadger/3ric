@@ -17,7 +17,8 @@ public:
 	void SignalHardwareKey(bool down, uint32_t scancode);
 	void ProcessKeys(uint32_t cycle);
 	uint8_t TranslateScancode(uint8_t);
-	
+	void Reset();
+
 	void ProcessRaw(uint8_t bit);
 private:
 	VM* _vm = nullptr;
