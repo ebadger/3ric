@@ -129,13 +129,19 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 		_bank_page1 = false;
 		_bank_read = true;
 		_bank_write = false;
+		_bank_ff = false;
 		break;
 
 	case MM_SS_W_BANK2:
 	case MM_SS_W_BANK2_2:
 		_bank_page1 = false;
 		_bank_read = false;
-		_bank_write = true;
+		if (!_bank_ff)
+		{
+			_bank_write = true;
+		}
+		_bank_ff = true;
+
 		break;
 
 	case MM_SS_R_ROM2:
@@ -144,13 +150,19 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 	case MM_SS_R_ROM1_2:
 		_bank_read = false;
 		_bank_write = false;
+		_bank_ff = false;
 		break;
 
 	case MM_SS_RW_BANK2:
 	case MM_SS_RW_BANK2_2:
 		_bank_page1 = false;
-		_bank_write = _bank_read;
 		_bank_read = true;
+		if (_bank_ff)
+		{
+			_bank_write = true;
+		}
+		_bank_ff = true;
+
 		break;
 
 	case MM_SS_R_BANK1:
@@ -158,19 +170,29 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 		_bank_page1 = true;
 		_bank_read = true;
 		_bank_write = false;
+		_bank_ff = false;
 		break;
 
 	case MM_SS_W_BANK1:
 	case MM_SS_W_BANK1_2:
 		_bank_page1 = true;
 		_bank_read = false;
-		_bank_write = true;
+		if (_bank_ff)
+		{
+			_bank_write = true;
+		}
+		_bank_ff = true;
+
 		break;
 
 	case MM_SS_RW_BANK1:
 	case MM_SS_RW_BANK1_2:
 		_bank_page1 = true;
-		_bank_write = _bank_read;
+		if (_bank_ff)
+		{
+			_bank_write = true;
+		}
+		_bank_ff = true;
 		_bank_read = true;
 		break;
 	
@@ -207,6 +229,10 @@ uint8_t VM::ReadData(uint16_t address)
 	||  address >= MM_RAM2_START && address <= MM_RAM2_END)
 	{
 		// RAM
+		return _data[address];
+	}
+	else if (address == MM_SS_KEYBOARD)
+	{
 		return _data[address];
 	}
 	else if (address >= MM_SS_START && address <= MM_SS_END)
@@ -308,6 +334,10 @@ void VM::WriteData(uint16_t address, uint8_t byte)
 				CallbackText2(address - 0x800, byte);
 			}
 		}
+	}
+	else if (address == MM_SS_KEYBOARD)
+	{
+		_data[address] = byte;
 	}
 	else if (address >= MM_ROM_START && address <= MM_ROM_END)
 	{

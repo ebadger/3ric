@@ -326,6 +326,8 @@ namespace winrt::Badger6502Emulator::implementation
             {
                 UpdateExecutionState(ExecutionState::Stopped);
                 _vm.GetCPU()->Reset();
+                _vm.GetPS2Keyboard()->Reset();
+
             });
 
         miInterrupt().Click([this](IInspectable const&, RoutedEventArgs const&)
@@ -955,7 +957,19 @@ namespace winrt::Badger6502Emulator::implementation
                 _vm.GetVIA1()->WriteRegister(VIA::ORA_IRA, reg);
 
             }
-
+#if 0
+            if (pCPU->PC >= 0xF800 && pCPU->PC < 0xFF00)
+            {
+                UpdateExecutionState(ExecutionState::Stopped);
+                EnterCriticalSection(&_csDebug);
+                strDebug.clear();
+                dwDebugLines = 0;
+                LeaveCriticalSection(&_csDebug);
+                pCPU->DumpHistory();
+                pCPU->SetOutput(true);
+                _wlistingContents = _vm.Disassemble();
+            }
+#endif
             if (_countBreakPoints > 0) // todo: make thread safe
             {
                 EnterCriticalSection(&_csBreakpoints);
