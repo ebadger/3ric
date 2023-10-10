@@ -34,9 +34,11 @@ Pin 14       = OE;
 Pin 15       = WE;
 Pin 16       = ROM_CS;
 Pin 17       = RAM_CS;
+Pin 18       = CXXX;
 Pin 19       = A16;
 Pin 20       = CPUBUS_CS;
 Pin 21       = DEVICE_CS;
+Pin 22       = DXXX;
 
 DEV          = A11 # A12 # A13 # !(A14 & A15);
 ROM          = (!(A14 & A15) # (!A12 & !A13) # (RAMREAD & RW) # (RAMWRITE & !RW)) & !((A13 # A12) & A15 & BB & !A14);
