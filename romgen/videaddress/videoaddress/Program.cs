@@ -8,23 +8,31 @@ using System.Runtime.CompilerServices;
 using System.Diagnostics;
 using System.CodeDom;
 
+// bits 0-8 are the scan line
 // bit  9 is graphics mode
 // bit 10 is graphics page
+// bit 11 is Full mode
+// bit 12 is HiRes
 
 namespace videoaddress
 {
     internal class Program
     {
-        const int ROMSIZE                   = 0x80000;  // 39sf040
-        static ushort GRAPHICS_MODE         = 0x0;
-        static ushort TEXT_MODE             = 0x200;
-        static ushort GRAPHICS_PAGE_1       = 0x400;
-        static ushort GRAPHICS_PAGE_0       = 0x0;
+        const int ROMSIZE                   = 0x80000;  // 39sf040 is 512KB
+        static ushort PAGE_0                = 0;
+        static ushort TEXT_MODE             = 0;
+        static ushort GRAPHICS_MODE_MIXED   = 0;
+        static ushort SCANLINES             = 480;
 
-        static ushort GRAPHICS_PAGE_1_START = 0x2000;
-        static ushort GRAPHICS_PAGE_2_START = 0x4000;
-        static ushort TEXT_PAGE_1_START     = 0x400;
-        static ushort TEXT_PAGE_2_START     = 0x800;
+        static ushort GRAPHICS_MODE         = 1 << 9;
+        static ushort PAGE_1                = 1 << 10;
+        static ushort GRAPHICS_FULL         = 1 << 11;
+        static ushort GRAPHICS_HIRES        = 1 << 12;
+
+        static ushort GRAPHICS_PAGE_0_START = 0x2000;
+        static ushort GRAPHICS_PAGE_1_START = 0x4000;
+        static ushort TEXT_PAGE_0_START     = 0x400;
+        static ushort TEXT_PAGE_1_START     = 0x800;
 
         static ushort ADDRESS_BLANK         = 0x0000;
 
@@ -54,7 +62,22 @@ namespace videoaddress
                 0x0350, 0x0750, 0x0B50, 0x0F50, 0x1350, 0x1750, 0x1B50, 0x1F50,
                 0x03D0, 0x07D0, 0x0BD0, 0x0FD0, 0x13D0, 0x17D0, 0x1BD0, 0x1FD0 };
 
-        
+        static ushort[] _scanLinesText = {
+                0x0000, 0x0080, 0x0100, 0x0180, 0x0200, 0x0280, 0x0300, 0x0380,
+                0x0028, 0x00A8, 0x0128, 0x01A8, 0x0228, 0x02A8, 0x0328, 0x03A8,
+                0x0050, 0x00D0, 0x0150, 0x01D0, 0x0250, 0x02D0, 0x0350, 0x03D0 };
+  
+        static int[] msb;
+        static int[] msb2;
+        static int[] lsb;
+
+
+        static int[] msbtext;
+        static int[] msbtext2;
+        static int[] lsbtext;
+
+        static ushort[] mem;
+
         static string toBinaryString(ushort num)
         {
             StringBuilder binstring = new StringBuilder("0000000000000000");
@@ -80,15 +103,149 @@ namespace videoaddress
             }
         }
 
+        static void FillGraphicsRegion(ushort mode, ushort page, bool full, bool hires, ushort start)
+        {
+            // graphics mode page 1
+            int idx = 0;
+            
+            for (ushort y = 0; y < SCANLINES; y++)
+            {
+                ushort startAdjusted = start;
+
+                if (!full && hires)
+                {
+                    if (y <= 400)
+                    {
+                        mode = GRAPHICS_MODE;
+
+                        if (page == PAGE_0)
+                        {
+                            startAdjusted = GRAPHICS_PAGE_0_START;
+                        }
+                        else
+                        {
+                            startAdjusted = GRAPHICS_PAGE_1_START;
+                        }
+                    }
+                    else
+                    {
+                        mode = TEXT_MODE;
+
+                        if (page == PAGE_0)
+                        {
+                            startAdjusted = TEXT_PAGE_0_START;
+                        }
+                        else
+                        {
+                            startAdjusted = TEXT_PAGE_1_START;
+                        }
+                    }
+                }
+
+                ushort elem = (ushort)(y + mode + page);
+
+                if (full)
+                {
+                    elem += GRAPHICS_FULL;
+                }
+
+                if (hires)
+                {
+                    elem += GRAPHICS_HIRES;
+                }
+
+                if (mode == GRAPHICS_MODE && hires)
+                {
+                    if (y < 48)
+                    {
+                        mem[elem] = ADDRESS_BLANK; // (ushort)(addr + 1);
+                    }
+                    else if (y <= 432)
+                    {
+                        if (idx < 191)
+                        {
+                            idx = (y - 48) / 2;
+                        }
+
+                        ushort addr = (ushort)(startAdjusted + _scanLines[idx]);
+
+                        mem[elem] = addr;
+
+                        addr |= 2;  // gfx shift
+
+                        if (hires && full)
+                        {
+                            if (PAGE_0 == page)
+                            {
+                                msb[idx] = (addr & 0xFF00) >> 8;
+                            }
+                            else
+                            {
+                                msb2[idx] = (addr & 0xFF00) >> 8;
+                            }
+                        }
+
+                        lsb[idx] = (addr & 0xF8);
+                        Console.WriteLine("addr:0x{0:X4} y:{1} idx:{2}, 0x{3:X2}", addr, y, idx, (idx * 40));
+                    }
+                    else
+                    {
+                        //mem[elem] = (ushort)(addr + 1);
+                        mem[elem] = (ushort)ADDRESS_BLANK;
+                    }
+
+                }
+                else
+                {
+                    // text mode
+
+                    if (y < 48)
+                    {
+                        mem[elem] = ADDRESS_BLANK;
+                    }
+                    else if (y < 432)
+                    {
+                        idx = (y - 48) / 16;
+                        ushort addr = (ushort)(startAdjusted + _scanLinesText[idx]); //(idx * 40)); // todo, change this to match A2 memory layout
+
+                        Console.WriteLine("addr:0x{0:X4} y:{1} idx:{2}, 0x{3:X2}", addr, y, idx, (idx * 40));
+
+                        addr |= 1;  // text shift
+
+                        mem[elem] = addr;
+
+                        if (full)
+                        {
+                            if (PAGE_0 == page)
+                            {
+                                msbtext[idx] = (addr & 0xFF00) >> 8;
+                            }
+                            else
+                            {
+                                msbtext2[idx] = (addr & 0xFF00) >> 8;
+
+                            }
+                            lsbtext[idx] = (addr & 0xF8);
+                        }
+                    }
+                    else
+                    {
+                        mem[elem] = ADDRESS_BLANK;
+                    }
+
+                }
+            }
+        }
+
         static void Main(string[] args)
         {
-            int[] msb = new int[480];
-            int[] lsb = new int[480];
+            msb = new int[SCANLINES];
+            lsb = new int[SCANLINES];
+            msb2 = new int[SCANLINES];
 
-            int[] msb2 = new int[480];
-
-            int[] msbtext = new int[32];
-            int[] lsbtext = new int[32];
+            msbtext = new int[24];
+            msbtext2 = new int[24];
+            lsbtext = new int[24];
 
             dumpbin();
 
@@ -98,144 +255,51 @@ namespace videoaddress
             BinaryWriter bwlow = new BinaryWriter(fslow);
             BinaryWriter bwhigh = new BinaryWriter(fshigh);
 
-            ushort [] mem = new ushort[ROMSIZE];
+            mem = new ushort[ROMSIZE];
 
             for (int i = 0; i < ROMSIZE; i++)
             {
                 mem[i] = 0;
             }
 
-            // graphics mode page 1
-            int idx = 0;
-            for (ushort y = 0; y < 480; y++)
-            {
-                // 0 to 400 - graphics mode 0 graphics page 0
-                ushort elem = (ushort)(y + GRAPHICS_MODE + GRAPHICS_PAGE_0);
-                //ushort addr = (ushort)(0x2000 + (idx * 40));
-                if (y <= 47)
-                {
-                    mem[elem] = ADDRESS_BLANK; // (ushort)(addr + 1);
-                }
-                else if (y <= 432)
-                {
-                    if (idx < 191)
-                    {
-                        idx = (y - 48) / 2;
-                    }
-                    ushort addr = (ushort)(GRAPHICS_PAGE_1_START + _scanLines[idx]);
+            // full mode
 
-                    mem[elem] = addr;
-                    msb[idx] = (addr & 0xFF00) >> 8;
-                    lsb[idx] = (addr & 0xFF);
-                    Console.WriteLine("addr:0x{0:X4} y:{1} idx:{2}, 0x{3:X2}", addr, y, idx, (idx * 40));
-                }
-                else
-                {
-                    //mem[elem] = (ushort)(addr + 1);
-                    mem[elem] = (ushort)ADDRESS_BLANK;
-                }
-            }
+            // hires
+            FillGraphicsRegion(TEXT_MODE, PAGE_0, true, true, TEXT_PAGE_0_START);
+            FillGraphicsRegion(TEXT_MODE, PAGE_1, true, true, TEXT_PAGE_1_START);
+            FillGraphicsRegion(GRAPHICS_MODE, PAGE_0, true, true, GRAPHICS_PAGE_0_START);
+            FillGraphicsRegion(GRAPHICS_MODE, PAGE_1, true, true, GRAPHICS_PAGE_1_START);
 
-            // graphics mode page 2
-            idx = 0;
-            for (ushort y = 0; y < 480; y++)
-            {
-                // graphics mode 0 graphics page 1
-                int elem = (ushort)(y + GRAPHICS_MODE + GRAPHICS_PAGE_1);
-                //ushort addr = (ushort)(0x4000 + (idx * 40));
-
-                if (y <= 47)
-                {
-                    mem[elem] = ADDRESS_BLANK; // (ushort)(addr + 1);
-                }
-                else if (y <= 432)
-                {
-                    if (idx < 191)
-                    {
-                        idx = (y - 48) / 2;
-                    }
-
-                    ushort addr = (ushort)(GRAPHICS_PAGE_2_START + _scanLines[idx]);
-
-                    mem[elem] = (ushort)addr;
-                    msb2[idx] = (addr & 0xFF00) >> 8;
-                    Console.WriteLine("addr:0x{0:X4} y:{1} idx:{2}, 0x{3:X2}", addr, y, idx, (idx * 40));
-                    
-
-                }
-                else
-                {
-                    mem[elem] = ADDRESS_BLANK; // (ushort)(addr + 1);
-                }
-            }
+            // lores
+            FillGraphicsRegion(TEXT_MODE, PAGE_0, true, false, TEXT_PAGE_0_START);
+            FillGraphicsRegion(TEXT_MODE, PAGE_1, true, false, TEXT_PAGE_1_START);
+            FillGraphicsRegion(GRAPHICS_MODE, PAGE_0, true, false, TEXT_PAGE_0_START);
+            FillGraphicsRegion(GRAPHICS_MODE, PAGE_1, true, false, TEXT_PAGE_1_START);
 
 
-            // now text mode page 1
-            idx = 0;
-            for (int y = 0; y < 480; y++)
-            {
-                // text mode,graphics page 0
-                int umem = y + TEXT_MODE + GRAPHICS_PAGE_0;
+            // mixed mode
 
-                if ( y < 32)
-                {
-                    mem[umem] = ADDRESS_BLANK;
-                }
-                else if (y < 432)
-                {
-                    idx = (y-32) / 16;
-                    ushort addr = (ushort)(TEXT_PAGE_1_START + (idx * 40));
+            // hires
+            FillGraphicsRegion(TEXT_MODE, PAGE_0, false, true, TEXT_PAGE_0_START);
+            FillGraphicsRegion(TEXT_MODE, PAGE_1, false, true, TEXT_PAGE_1_START);
+            FillGraphicsRegion(GRAPHICS_MODE, PAGE_0, false, true, GRAPHICS_PAGE_0_START);
+            FillGraphicsRegion(GRAPHICS_MODE, PAGE_1, false, true, GRAPHICS_PAGE_1_START);
 
-                    Console.WriteLine("addr:0x{0:X4} y:{1} idx:{2}, 0x{3:X2}", addr, y, idx, (idx * 40));
-
-                    mem[umem] = addr;
-                    msbtext[idx] = (addr & 0xFF00) >> 8;
-                    lsbtext[idx] = (addr & 0xFF);
-                }
-                else
-                {
-                    mem[umem] =ADDRESS_BLANK;
-                }
-            }
-
-            // text mode page 2
-            idx = 0;
-            for (int y = 0; y < 480; y++)
-            {
-                // text mode, graphics page 1
-                int umem = y + TEXT_MODE + GRAPHICS_PAGE_1;
-
-                if (y < 32)
-                {
-                    mem[umem] = ADDRESS_BLANK;
-                }
-                else if (y < 432)
-                {
-                    idx = (y - 32) / 16;
-                    ushort addr = (ushort)(TEXT_PAGE_2_START + (idx * 40));
-
-                    Console.WriteLine("addr:0x{0:X4} y:{1} idx:{2}, 0x{3:X2}", addr, y, idx, (idx * 40));
-
-                    mem[umem] = addr;
-                    msbtext[idx] = (addr & 0xFF00) >> 8;
-                    lsbtext[idx] = (addr & 0xFF);
-                }
-                else
-                {
-                    mem[umem] = ADDRESS_BLANK;
-                }
-            }
+            // lores
+            FillGraphicsRegion(TEXT_MODE, PAGE_0, false, false, TEXT_PAGE_0_START);
+            FillGraphicsRegion(TEXT_MODE, PAGE_1, false, false, TEXT_PAGE_1_START);
+            FillGraphicsRegion(GRAPHICS_MODE, PAGE_0, false, false, TEXT_PAGE_0_START);
+            FillGraphicsRegion(GRAPHICS_MODE, PAGE_1, false, false, TEXT_PAGE_1_START);
 
 
             for (int i = 0; i < ROMSIZE; i++)
             {
-                byte addrl = (byte)(mem[i] & 0xFF);
-                byte addrh = (byte)((mem[i] >> 8) & 0xFF);
+                byte l = (byte)(mem[i] & 0xFF);
+                byte h = (byte)((mem[i] >> 8) & 0xFF);
 
-                bwlow.Write(addrl);
-                bwhigh.Write(addrh);
+                bwlow.Write(l);
+                bwhigh.Write(h);
             }
-
 
             Console.WriteLine("eb_hires1_msb:");
             for(int y = 0; y < 200; y+=8)
@@ -244,6 +308,21 @@ namespace videoaddress
                 for(int i = 0; i < 8; i++)
                 {
                     Console.Write("${0:X2}", msb[y + i]);
+                    if (i < 7)
+                    {
+                        Console.Write(",");
+                    }
+                }
+                Console.WriteLine("");
+            }
+
+            Console.WriteLine("eb_hires2_msb:");
+            for (int y = 0; y < 200; y += 8)
+            {
+                Console.Write("        .byte ");
+                for (int i = 0; i < 8; i++)
+                {
+                    Console.Write("${0:X2}", msb2[y + i]);
                     if (i < 7)
                     {
                         Console.Write(",");
@@ -266,26 +345,9 @@ namespace videoaddress
                 }
                 Console.WriteLine("");
             }
-
-            
-            Console.WriteLine("eb_hires2_msb:");
-            for (int y = 0; y < 200; y += 8)
-            {
-                Console.Write("        .byte ");
-                for (int i = 0; i < 8; i++)
-                {
-                    Console.Write("${0:X2}", msb2[y + i]);
-                    if (i < 7)
-                    {
-                        Console.Write(",");
-                    }
-                }
-                Console.WriteLine("");
-            }
-           
-
-            Console.WriteLine("eb_text_msb:");
-            for (int y = 0; y < 30; y+=4)
+     
+            Console.WriteLine("eb_text1_msb:");
+            for (int y = 0; y < 24; y+=4)
             {
                 Console.Write("        .byte ");
                 for (int i = 0; i < 4; i++)
@@ -299,8 +361,23 @@ namespace videoaddress
                 Console.WriteLine("");
             }
 
+            Console.WriteLine("eb_text1_msb:");
+            for (int y = 0; y < 24; y += 4)
+            {
+                Console.Write("        .byte ");
+                for (int i = 0; i < 4; i++)
+                {
+                    Console.Write("${0:X2}", msbtext2[y + i]);
+                    if (i < 3)
+                    {
+                        Console.Write(",");
+                    }
+                }
+                Console.WriteLine("");
+            }
+
             Console.WriteLine("eb_text_lsb:");
-            for (int y = 0; y < 30; y += 4)
+            for (int y = 0; y < 24; y += 4)
             {
                 Console.Write("        .byte ");
                 for (int i = 0; i < 4; i++)
@@ -314,36 +391,6 @@ namespace videoaddress
                 Console.WriteLine("");
             }
 
-            Console.WriteLine("font_lookup:");
-            for (int y = 0; y < 256; y += 4)
-            {
-                Console.Write("        .addr ");
-                for (int i = 0; i < 4; i++)
-                {
-                    Console.Write("font8x8+${0:X4}", (y + i) * 8);
-                    if (i != 3)
-                    {
-                        Console.Write(",");
-                    }
-                }
-                Console.WriteLine("");
-            }
-            /*
-            Console.WriteLine("font_lookup_lsb:");
-            for (int y = 0; y < 256; y += 4)
-            {
-                Console.Write("        .addr ");
-                for (int i = 0; i < 4; i++)
-                {
-                    Console.Write("font8x8+${0:X4}", (y + i)*8);
-                    if (i != 3)
-                    {
-                        Console.Write(",");
-                    }
-                }
-                Console.WriteLine("");
-            }
-            */
 
             bwlow.Flush();
             bwhigh.Flush();
