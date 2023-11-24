@@ -60,9 +60,10 @@ namespace winrt::Badger6502Emulator::implementation
             Running = 1,
             Stop = 2,
             Stopped = 3,
-            Stepping = 4,
-            Reset = 5,
-            Quit = 6
+            Stepping = 4,            
+            StepOver = 5,
+            Reset = 6,
+            Quit = 7
         };
 
         //void myButton_Click(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::RoutedEventArgs const& args);
@@ -111,7 +112,7 @@ namespace winrt::Badger6502Emulator::implementation
         bool ValidateAndAssignValue(wstring const&, uint16_t &);
         bool ValidateAndAssignBit(wstring const& str, uint8_t& val);
         bool IsValidNumber(wstring const& hstr, bool *isHex);
-        bool EvaluateBreakpoint(CPU *pCPU, uint16_t addr, uint8_t datas);
+        bool EvaluateBreakpoint(CPU *pCPU, uint16_t addr, uint8_t data, bool read);
         void SetSourceContents();
 
         void InitVGA();
@@ -133,6 +134,7 @@ namespace winrt::Badger6502Emulator::implementation
         IAsyncAction btnAddBreakpoint_Click(IInspectable const& sender, RoutedEventArgs const& args);
         void btnRemoveBreakpoint_Click(IInspectable const& sender, RoutedEventArgs const& args);
         void txtBreakValue_changed(IInspectable const& sender, TextChangedEventArgs const& args);
+        void txtBreakValue2_changed(IInspectable const& sender, TextChangedEventArgs const& args);
         void miLoadROM_Click(IInspectable const& sender, RoutedEventArgs const& args);
         void miLoadRAM_Click(IInspectable const& sender, RoutedEventArgs const& args);
         void miLoadROMDISK_Click(IInspectable const& sender, RoutedEventArgs const& args);        

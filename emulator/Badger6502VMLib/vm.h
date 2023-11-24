@@ -29,8 +29,8 @@ enum
 	MM_DEVICES_START	= 0xC000,
 	MM_SS_START         = 0xC000,
 	MM_SS_KEYBOARD      = 0xC000,
-	MM_SS_BASIC_ROM_OFF = 0xC006,
-	MM_SS_BASIC_ROM_ON  = 0xC007,
+	MM_SS_BASIC_ROM_ON  = 0xC006,
+	MM_SS_BASIC_ROM_OFF = 0xC007,
 	MM_SS_GRAPHICS      = 0xC050,
 	MM_SS_TEXT          = 0xC051,
 	MM_SS_FULLSCREEN    = 0xC052,
@@ -119,6 +119,7 @@ public:
 	std::function<void(uint16_t, uint8_t)> CallbackText2;
 	std::function<void(uint8_t)> CallbackSetMode;
 	std::function<void(uint16_t, uint8_t)> CallbackWriteMemory;
+	std::function<void(uint16_t)> CallbackReadMemory;
 	std::function<void(bool, bool, bool, bool)> CallbackSetSoftSwitches;
 
 	std::function<void(std::string &, std::vector<uint8_t> &, uint8_t &)> CallbackLoadFile;

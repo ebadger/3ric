@@ -85,9 +85,12 @@
                     <ComboBoxItem>Y</ComboBoxItem>
                     <ComboBoxItem>OpCode</ComboBoxItem>
                     <ComboBoxItem>Memory Write</ComboBoxItem>
+                    <ComboBoxItem>Jump Range</ComboBoxItem>
+                    <ComboBoxItem>Address</ComboBoxItem>
                 </ComboBox>
                 <TextBlock Margin="10" VerticalAlignment="Center">Equals</TextBlock>
                 <TextBox x:Name="txtBreakValue" Height="25" Margin="10" VerticalAlignment="Center" TextChanged="txtBreakValue_changed"/>
+                <TextBox x:Name="txtBreakValue2" Height="25" Margin="10" VerticalAlignment="Center" TextChanged="txtBreakValue2_changed"/>
             </StackPanel>
         </ContentDialog>
 

@@ -1,3 +1,5 @@
+#include "windows.h"
+
 #include "vm.h"
 #include "badgervmpal.h"
 #include <wchar.h>
@@ -43,7 +45,7 @@ void VM::Init()
 	// fill data with garbage
 	for (int i = 0; i < _pal_countof(_data); i++)
 	{
-		_data[i] = (rand() * 255) & 0xFF;
+		_data[i] = 0x00;// (rand() * 255) & 0xFF;
 	}
 
 	pal_initromdisk(&_romdisk);
@@ -197,17 +199,11 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 		break;
 	
 	case MM_SS_BASIC_ROM_OFF:
-		if (write)
-		{
-			_basicbank = false;
-		}
+		_basicbank = false;
 
 		break;
 	case MM_SS_BASIC_ROM_ON:
-		if (write)
-		{
-			_basicbank = true;
-		}
+		_basicbank = true;
 		break;
 
 	default:
@@ -225,10 +221,18 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 
 uint8_t VM::ReadData(uint16_t address)
 {
-    if (address >= MM_RAM_START && address <= MM_RAM_END
-	||  address >= MM_RAM2_START && address <= MM_RAM2_END)
+	if (CallbackReadMemory)
+	{
+		CallbackReadMemory(address);
+	}
+
+    if (address >= MM_RAM_START && address <= MM_RAM_END)
 	{
 		// RAM
+		return _data[address];
+	}
+	else if (address >= MM_RAM2_START && address <= MM_RAM2_END)
+	{
 		return _data[address];
 	}
 	else if (address == MM_SS_KEYBOARD)

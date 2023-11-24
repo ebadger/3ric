@@ -12,6 +12,8 @@ namespace winrt::Badger6502Emulator::implementation
 	{
 		_data = 0;
 		_target = BreakPointTarget::PC;
+		_rangeStart = 0;
+		_rangeEnd = 0;
 	}
 	
 	void BreakPointItem::Text(hstring t)
@@ -44,20 +46,39 @@ namespace winrt::Badger6502Emulator::implementation
 		return _data;
 	}
 
-	bool BreakPointItem::EvaluateBreakpoint(CPU* pCPU, uint16_t addr, uint8_t data)
+	uint16_t BreakPointItem::RangeStart()
+	{
+		return _rangeStart;
+	}
+
+	uint16_t BreakPointItem::RangeEnd()
+	{
+		return _rangeEnd;
+	}
+	void BreakPointItem::RangeStart(uint16_t data)
+	{
+		_rangeStart = data;
+	}
+
+	void BreakPointItem::RangeEnd(uint16_t data)
+	{
+		_rangeEnd = data;
+	}
+
+	bool BreakPointItem::EvaluateBreakpoint(CPU* pCPU, uint16_t addr, uint8_t data, bool read)
 	{
 		UNREFERENCED_PARAMETER(data);
 
 		switch (_target)
 		{
 		case BreakPointTarget::PC:
-			if (pCPU->PC == _data)
+			if (pCPU->PC == _data && !read)
 			{
 				return true;
 			}
 			break;
 		case BreakPointTarget::SP:
-			if (pCPU->SP == _data)
+			if (pCPU->SP == _data && !read)
 			{
 				return true;
 			}
@@ -87,11 +108,25 @@ namespace winrt::Badger6502Emulator::implementation
 			}
 			break;
 		case BreakPointTarget::MemoryWrite:
-			if (addr == _data)
+			if (addr == _data && !read)
 			{
 				return true;
 			}
 			break;
+		case BreakPointTarget::JsrRange:
+			if ((addr < _rangeStart || addr > _rangeEnd)
+				&& (pCPU->_OpCode == JSR_ABS
+					|| pCPU->_OpCode == JMP_ABS
+					|| pCPU->_OpCode == JMP_ABS_I)
+				)
+			{
+				return true;
+			}
+		case BreakPointTarget::Address:
+			if (addr == _data)
+			{
+				return true;
+			}
 		}
 
 		return false;

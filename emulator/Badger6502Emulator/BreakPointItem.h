@@ -25,16 +25,25 @@ namespace winrt::Badger6502Emulator::implementation
 		BreakPointTarget Target();
 		void Target(BreakPointTarget t);
 
+		uint16_t RangeStart();
+		void RangeStart(uint16_t);
+
+		uint16_t RangeEnd();
+		void RangeEnd(uint16_t);
+
 		int16_t Data();
 		void Data(int16_t v);
 
 		hstring Text();
 		void Text(hstring h);
 
-		bool EvaluateBreakpoint(CPU* pCPU, uint16_t addr, uint8_t data);
+		bool EvaluateBreakpoint(CPU* pCPU, uint16_t addr, uint8_t data, bool read);
 
 		BreakPointTarget _target = BreakPointTarget::PC;
 		uint16_t _data = 0;
+		uint16_t _rangeStart = 0;
+		uint16_t _rangeEnd = 0;
+
 		hstring _text;
 	};
 }

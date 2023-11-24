@@ -20,13 +20,17 @@ namespace Badger6502Emulator
         X,
         Y,
         OpCode,
-        MemoryWrite
+        MemoryWrite,
+        JsrRange,
+        Address
     };
 
     runtimeclass BreakPointItem : Microsoft.UI.Xaml.Controls.ListBoxItem
     {
         BreakPointItem();
         Int16 Data;
+        UInt16 RangeStart;
+        UInt16 RangeEnd;
         BreakPointTarget Target;
         String Text;
     };
