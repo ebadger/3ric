@@ -72,13 +72,13 @@ namespace winrt::Badger6502Emulator::implementation
 		switch (_target)
 		{
 		case BreakPointTarget::PC:
-			if (pCPU->PC == _data && !read)
+			if (pCPU->PC == _data)
 			{
 				return true;
 			}
 			break;
 		case BreakPointTarget::SP:
-			if (pCPU->SP == _data && !read)
+			if (pCPU->SP == _data)
 			{
 				return true;
 			}

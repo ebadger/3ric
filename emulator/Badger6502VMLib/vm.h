@@ -142,6 +142,10 @@ private:
 	uint8_t			_data[0x10000];  // 64KB address space
 	uint8_t			_basic[0x3000];  // 12KB basic bank ROM
 
+	uint8_t         _bank1_d000[0x1000];
+	uint8_t         _bank2_d000[0x1000];
+	uint8_t         _bank_e000[0x2000];
+
 	uint8_t *		_romdisk; // 512KB ROM disk
 
 	uint8_t			_romdiskLow = 0;

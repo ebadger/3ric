@@ -45,7 +45,7 @@ void VM::Init()
 	// fill data with garbage
 	for (int i = 0; i < _pal_countof(_data); i++)
 	{
-		_data[i] = 0x00;// (rand() * 255) & 0xFF;
+		_data[i] =  (rand() * 255) & 0xFF;
 	}
 
 	pal_initromdisk(&_romdisk);
@@ -183,7 +183,7 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 		{
 			_bank_write = true;
 		}
-		_bank_ff = true;
+		_bank_ff = true;	
 
 		break;
 
@@ -265,7 +265,28 @@ uint8_t VM::ReadData(uint16_t address)
 	}
 	else if (address >= MM_ROM_START && address <= MM_ROM_END)
 	{
-		return _data[address];
+		if (_bank_read) // read RAM
+		{
+			if (address >= 0xD000 && address < 0xE000)
+			{
+				if (_bank_page1)
+				{
+					return _bank1_d000[address - 0xD000];
+				}
+				else
+				{
+					return _bank2_d000[address - 0xD000];
+				}
+			}
+			else if (address >= 0xE000 && address <= 0xFFFF)
+			{
+				return _bank_e000[address - 0xE000];
+			}
+		}
+		else
+		{
+			return _data[address];
+		}
 	}
 	else if (address >= MM_BASIC_START && address <= MM_BASIC_END)
 	{
@@ -349,6 +370,25 @@ void VM::WriteData(uint16_t address, uint8_t byte)
 		if (_testmode)
 		{
 			_data[address] = byte;
+		}
+		
+		if (_bank_write)
+		{
+			if (address >= 0xD000 && address < 0xE000)
+			{
+				if (_bank_page1)
+				{
+					_bank1_d000[address - 0xD000] = byte;
+				}
+				else
+				{
+					_bank2_d000[address - 0xD000] = byte;
+				}
+			}
+			else if (address >= 0xE000 && address <= 0xFFFF)
+			{
+				_bank_e000[address - 0xE000] = byte;
+			}
 		}
 	}
 	else if (address >= MM_BASIC_START && address <= MM_BASIC_END)
