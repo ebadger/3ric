@@ -758,6 +758,7 @@ namespace winrt::Badger6502Emulator::implementation
         uint32_t profcycles = 0;
         double proftime;
         double textModeTime;
+        int32_t callDepth = 0;
 
         LARGE_INTEGER freq = { 0 };
         LARGE_INTEGER count = { 0 };
@@ -1294,9 +1295,20 @@ namespace winrt::Badger6502Emulator::implementation
 #endif
                 if (_executionState == ExecutionState::StepOver)
                 {
+                    if (pCPU->_OpCode == JSR_ABS)
+                    {
+                        callDepth++;
+                    }
+
                     if (pCPU->_OpCode == RTS_STACK)
                     {
-                        UpdateExecutionState(ExecutionState::Stopped);
+                        callDepth--;
+
+                        if (callDepth < 1)
+                        {
+                            callDepth = 0;
+                            UpdateExecutionState(ExecutionState::Stopped);
+                        }
                     }
                 }
 

@@ -88,11 +88,40 @@ void SDCard::SetSCK(bool level)
 
 		if (_bits == 8)
 		{
-			_mode = MODE_WRITESECTOR;
+			_mode = MODE_WRITESECTOR_START;
 			_bits = 0;
 		}
 		return;
 	}
+	else if (MODE_WRITESECTOR_START == _mode)
+	{
+		_byteIn <<= 1;
+		_byteIn |= _mosi ? 1 : 0;
+		_bits++;
+
+		if (_bits == 8)
+		{
+			_mode = MODE_WRITESECTOR;
+			_bits = 0;
+			_byteIn = 0;
+			_byteCount = 0;
+		}
+		return;
+	}
+	else if (MODE_WRITESECTOR_COMPLETE == _mode)
+	{
+		_miso = (_response >> (7 - _bits)) & 1;
+		_bits++;
+
+		if (_bits == 8)
+		{
+			_mode = MODE_GO_IDLE;
+			_response = 0xff;
+			_bits = 0;
+		}
+		return;
+	}
+
 	else if (MODE_GO_IDLE == _mode)
 	{
 		_miso = (_response >> (7 - _bits)) & 1;
@@ -204,7 +233,7 @@ void SDCard::SetSCK(bool level)
 				break;
 			case 0x58:
 				_mode = MODE_WRITESECTOR_ACK;
-				_response = 1;
+				_response = 0;
 				SetSector();
 				break;
 			}
@@ -225,7 +254,23 @@ void SDCard::SetSCK(bool level)
 	}
 	else if (MODE_WRITESECTOR == _mode)
 	{
+		_byteIn <<= 1;
+		_byteIn |= _mosi ? 1 : 0;
+		_bits++;
 
+		if (_bits == 8)
+		{
+			_mappedFile.SetData(_pos++, _byteIn);
+			_bits = 0;
+			_byteIn = 0;
+
+			if (++_byteCount == 512)
+			{
+				_response = 5;
+				_mode = MODE_WRITESECTOR_COMPLETE;
+				_byteCount = 0;
+			}
+		}
 	}
 
 

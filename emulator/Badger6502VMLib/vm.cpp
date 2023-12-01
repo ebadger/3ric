@@ -134,7 +134,7 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 		_bank_ff = false;
 		break;
 
-	case MM_SS_W_BANK2:
+	case MM_SS_W_BANK2:	
 	case MM_SS_W_BANK2_2:
 		_bank_page1 = false;
 		_bank_read = false;

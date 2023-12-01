@@ -8,6 +8,8 @@ public:
 
 	uint32_t MapFile(wchar_t* wzFileName);
 	uint8_t GetData(uint32_t address);
+	bool SetData(uint32_t address, uint8_t byte);
+
 	bool IsInitialized();
 
 private:
