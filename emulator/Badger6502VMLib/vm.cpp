@@ -51,6 +51,24 @@ void VM::Init()
 	pal_initromdisk(&_romdisk);
 }
 
+void VM::Reset()
+{
+	_basicbank = false;
+
+	_bank_read = false;
+	_bank_write = false;
+	_bank_page1 = false;
+	_bank_ff = false;
+
+	_graphics = false;
+	_page2 = false;
+	_mixed = false;
+	_lores = false;
+
+	_cpu->Reset();
+	_pPS2->Reset();
+	
+}
 
 void VM::Run()
 {

@@ -85,6 +85,7 @@ public:
 	~VM();
 
 	void Run();
+	void Reset();
 	CPU* GetCPU();
 	VIA* GetVIA1();
 	VIA* GetVIA2();

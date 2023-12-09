@@ -362,8 +362,9 @@ namespace winrt::Badger6502Emulator::implementation
         miReset().Click([this](IInspectable const&, RoutedEventArgs const&)
             {
                 UpdateExecutionState(ExecutionState::Stopped);
-                _vm.GetCPU()->Reset();
+                _vm.GetCPU()->Reset();                
                 _vm.GetPS2Keyboard()->Reset();
+                _vm.Reset();
             });
 
         miInterrupt().Click([this](IInspectable const&, RoutedEventArgs const&)
@@ -1246,6 +1247,7 @@ namespace winrt::Badger6502Emulator::implementation
 
                 case ExecutionState::Reset:
                     pCPU->Reset();
+                    _vm.Reset();
                     totalcycles = 0;
                     _sourceFilename = "";
                     // fall through
@@ -1509,6 +1511,8 @@ namespace winrt::Badger6502Emulator::implementation
                 uint32_t addr = textScanlines[y/16] + x;
                 uint8_t curr = pText[addr];
 
+                curr &= 0x7F;
+
                 uint32_t fontaddr = 0;
                 uint8_t line = y % 16;
 
@@ -1703,17 +1707,20 @@ namespace winrt::Badger6502Emulator::implementation
             str = txtBreakValue().Text().c_str();
             str2 = txtBreakValue2().Text().c_str();
 
+            ValidateAndAssignValue(str, i16);
+            ValidateAndAssignValue(str2, i16_2);
+
             switch (comboBreak().SelectedIndex())
             {
             case 0: // PC
-                ValidateAndAssignValue(str, i16);
                 bp.Data(i16);
+                bp.RangeStart(i16);
+                bp.RangeEnd(i16_2);
                 bp.Target(BreakPointTarget::PC);
                 swprintf_s(wcText, _countof(wcText), L"PC == $%04X", i16);
 
                 break;
             case 1: // SP
-                ValidateAndAssignValue(str, i16);
                 bp.Data(i16);
                 bp.Target(BreakPointTarget::SP);
                 swprintf_s(wcText, _countof(wcText), L"SP == $%04X", i16);
@@ -1721,47 +1728,43 @@ namespace winrt::Badger6502Emulator::implementation
                 break;
             case 2: // A
                 ValidateAndAssignValue(str, i8);
+
                 bp.Data(i8);
                 bp.Target(BreakPointTarget::A);
                 swprintf_s(wcText, _countof(wcText), L" A == $%02X", i8);
 
                 break;
             case 3: // X
-                ValidateAndAssignValue(str, i8);
                 bp.Data(i8);
                 bp.Target(BreakPointTarget::X);
                 swprintf_s(wcText, _countof(wcText), L" X == $%02X", i8);
                 break;
             case 4: // Y
-                ValidateAndAssignValue(str, i8);
                 bp.Data(i8);
                 bp.Target(BreakPointTarget::Y);
                 swprintf_s(wcText, _countof(wcText), L" Y == $%02X", i8);
                 break;
             case 5: // OpCode
-                ValidateAndAssignValue(str, i8);
                 bp.Data(i8);
                 bp.Target(BreakPointTarget::OpCode);
                 swprintf_s(wcText, _countof(wcText), L" OpCode == $%02X", i8);
                 break;
             case 6: // Memory Write
-                ValidateAndAssignValue(str, i16);
                 bp.Data(i16);
+                bp.RangeStart(i16);
+                bp.RangeEnd(i16_2);
                 bp.Target(BreakPointTarget::MemoryWrite);
-                swprintf_s(wcText, _countof(wcText), L" MemoryWrite to $%04X", i16);
+                swprintf_s(wcText, _countof(wcText), L" MemoryWrite to $%04X-$%04X", i16, i16_2);
                 break;
             case 7: // jump range
-                ValidateAndAssignValue(str, i16);
-                ValidateAndAssignValue(str2, i16_2);
                 bp.RangeStart(i16);
                 bp.RangeEnd(i16_2);
                 bp.Target(BreakPointTarget::JsrRange);
                 swprintf_s(wcText, _countof(wcText), L" JumpRange $%04X-$%04X", i16,i16_2);
             case 8:
-                ValidateAndAssignValue(str, i16);
                 bp.Data(i16);
                 bp.Target(BreakPointTarget::Address);
-                swprintf_s(wcText, _countof(wcText), L" Address $%04X", i16);
+                swprintf_s(wcText, _countof(wcText), L" Address $%04X-$%04X", i16, i16_2);
                 break;
             }
 

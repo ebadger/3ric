@@ -108,9 +108,16 @@ namespace winrt::Badger6502Emulator::implementation
 			}
 			break;
 		case BreakPointTarget::MemoryWrite:
-			if (addr == _data && !read)
+			if (!read)
 			{
-				return true;
+				if (addr == _data)
+				{
+					return true;
+				}
+				else if (addr >= _rangeStart && addr <= _rangeEnd)
+				{
+					return true;
+				}
 			}
 			break;
 		case BreakPointTarget::JsrRange:
@@ -123,9 +130,17 @@ namespace winrt::Badger6502Emulator::implementation
 				return true;
 			}
 		case BreakPointTarget::Address:
-			if (addr == _data)
+			if (read)
 			{
-				return true;
+				if (addr == _data)
+				{
+					return true;
+				}
+				else if (addr >= _rangeStart && addr <= _rangeEnd)
+				{
+					return true;
+				}
+
 			}
 		}
 
