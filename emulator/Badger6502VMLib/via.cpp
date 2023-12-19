@@ -19,14 +19,16 @@ void VIA::SignalPin(VIA::Pins pin)
 		if (_register[IER] & 0x2)
 		{
 			_register[IFR] |= 0x82;
-			_vm->GetCPU()->MaskableInterrupt(false);
+			//_vm->GetCPU()->MaskableInterrupt(false);
+			_vm->GetCPU()->NonMaskableInterrupt();
 		}
 		break;
 	case CA2:
 		if (_register[IER] & 0x1)
 		{
 			_register[IFR] |= 0x81;
-			_vm->GetCPU()->MaskableInterrupt(false);
+			//_vm->GetCPU()->MaskableInterrupt(false);
+			_vm->GetCPU()->NonMaskableInterrupt();
 		}
 		break;
 
@@ -34,14 +36,16 @@ void VIA::SignalPin(VIA::Pins pin)
 		if (_register[IER] & 0x10)
 		{
 			_register[IFR] |= 0x90;
-			_vm->GetCPU()->MaskableInterrupt(false);
+			_vm->GetCPU()->NonMaskableInterrupt();
+			//_vm->GetCPU()->MaskableInterrupt(false);
 		}
 		break;
 	case CB2:
 		if (_register[IER] & 0x08)
 		{
 			_register[IFR] |= 0x88;
-			_vm->GetCPU()->MaskableInterrupt(false);
+			_vm->GetCPU()->NonMaskableInterrupt();
+			//_vm->GetCPU()->MaskableInterrupt(false);
 		}
 		break;
 	}

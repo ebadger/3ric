@@ -114,7 +114,8 @@ namespace winrt::Badger6502Emulator::implementation
 				{
 					return true;
 				}
-				else if (addr >= _rangeStart && addr <= _rangeEnd)
+				else if (_rangeStart != _rangeEnd &&
+					addr >= _rangeStart && addr <= _rangeEnd)
 				{
 					return true;
 				}
@@ -136,7 +137,9 @@ namespace winrt::Badger6502Emulator::implementation
 				{
 					return true;
 				}
-				else if (addr >= _rangeStart && addr <= _rangeEnd)
+				else if (_rangeStart != _rangeEnd 
+					&& addr >= _rangeStart 
+					&& addr <= _rangeEnd)
 				{
 					return true;
 				}

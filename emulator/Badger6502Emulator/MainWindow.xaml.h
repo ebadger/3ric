@@ -70,26 +70,16 @@ namespace winrt::Badger6502Emulator::implementation
         HANDLE _hThread = INVALID_HANDLE_VALUE;
 
         static VM _vm;
-        static vector<uint8_t> _vecKeys;
-        static vector<QueueItem> _vecHires1;
-        static vector<QueueItem> _vecHires2;
-        static vector<QueueItem> _vecText1;
-        static vector<QueueItem> _vecText2;
+        vector<uint8_t> _vecKeys;
+        vector<QueueItem> _vecHires1;
+        vector<QueueItem> _vecHires2;
+        vector<QueueItem> _vecText1;
+        vector<QueueItem> _vecText2;
 
         static CRITICAL_SECTION _cs;
-        static CRITICAL_SECTION _csSource;
-        static CRITICAL_SECTION _csEdit;
-        static CRITICAL_SECTION _csDebug;
-        static CRITICAL_SECTION _csPixelOp;
-        static CRITICAL_SECTION _csPS2;
-        static CRITICAL_SECTION _csBreakpoints;
-        static CRITICAL_SECTION _csHires1;
-        static CRITICAL_SECTION _csHires2;
-        static CRITICAL_SECTION _csText1;
-        static CRITICAL_SECTION _csText2;
 
-        static bool _fHasSymbols;
-        static bool _fHasListing;
+        bool _fHasSymbols = false;
+        bool _fHasListing = false;
         static ExecutionState _executionState;
 
         static string _sourceFilename;

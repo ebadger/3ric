@@ -112,15 +112,20 @@ namespace fontrom
 
             Console.WriteLine("Count Files={0}", fontfiles.Length);
 
+            string lookup = "@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_ !\"#$%&'()*+,-./0123456789:;<=>?";
             int maxaddress = 0;
             int iFont = 0;
             foreach(string font in fontfiles)
             {
                 FileStream f = new FileStream("../../fonts/" + font, FileMode.Open);
                 BinaryReader br = new BinaryReader(f);
+                byte [] fontdata = new byte[br.BaseStream.Length];
+                fontdata = br.ReadBytes((int)br.BaseStream.Length);
 
-                for(int c = 0; c < 256; c++)
+                for(uint c = 0; c < 256; c++)
                 {
+                    uint c2 = lookup[(int)(c & 0x3F)];
+
                     if (consoleOutput)
                     {
                         Console.WriteLine("======================== Font={0} Char={1}", font, c);
@@ -128,7 +133,13 @@ namespace fontrom
 
                     for (int r = 0; r < 16; r++)
                     {
-                        int b = br.ReadByte();
+                        //int b = br.ReadByte();
+                        int b = fontdata[(c2 * 16) + r];
+
+                        if ( c >= 0 && c < 128)
+                        {
+                            b = ~b; 
+                        }
 
                         int address = (NotReverseBits((byte)c)) | (r & 0xF) << 8 | (iFont & 0xFF) << 12;
                         if (address > maxaddress)

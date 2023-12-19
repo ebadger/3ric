@@ -11,11 +11,13 @@ public:
 	bool SetData(uint32_t address, uint8_t byte);
 
 	bool IsInitialized();
+	DWORD GetFileSize();
 
 private:
 	bool _initialized = false;
 	HANDLE _hMapFile = INVALID_HANDLE_VALUE;
 	HANDLE _hBaseFile = INVALID_HANDLE_VALUE;
 	uint8_t* _pBuf;
+	DWORD _dwFileSize = 0;
 
 };

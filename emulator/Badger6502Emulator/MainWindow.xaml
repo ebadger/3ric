@@ -116,7 +116,7 @@
             </muxc:MenuBarItem>
 
             <muxc:MenuBarItem Title="Emulation">
-                <ToggleMenuFlyoutItem Text="PS2 Keyboard Emulation" IsChecked="False" x:Name="ps2EmulationItem"/>
+                <ToggleMenuFlyoutItem Text="PS2 Keyboard Emulation" IsChecked="True" x:Name="ps2EmulationItem"/>
                 <MenuFlyoutSeparator/>
                 <RadioMenuFlyoutItem x:Name="C0" Text="Unlimited" GroupName="EmulationSpeedGroup" Click="clock_OnClicked"/>
                 <RadioMenuFlyoutItem x:Name="C1" Text="1 MHz" GroupName="EmulationSpeedGroup"  Click="clock_OnClicked"/>

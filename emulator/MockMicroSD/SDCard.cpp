@@ -291,4 +291,9 @@ void SDCard::SetSector()
 
 	_pos = _sector * c_clusterSize;
 
+	if (_pos >= _mappedFile.GetFileSize())
+	{
+		_pos = _mappedFile.GetFileSize() - 1;
+	}
+
 }

@@ -91,26 +91,16 @@ namespace winrt::Badger6502Emulator::implementation
 {
 
     VM MainWindow::_vm;
-    vector<uint8_t> MainWindow::_vecKeys;
-    vector<MainWindow::QueueItem> MainWindow::_vecHires1;
-    vector<MainWindow::QueueItem> MainWindow::_vecHires2;
-    vector<MainWindow::QueueItem> MainWindow::_vecText1;
-    vector<MainWindow::QueueItem> MainWindow::_vecText2;
+    //vector<uint8_t> MainWindow::_vecKeys;
+    //vector<MainWindow::QueueItem> MainWindow::_vecHires1;
+    //vector<MainWindow::QueueItem> MainWindow::_vecHires2;
+    //vector<MainWindow::QueueItem> MainWindow::_vecText1;
+    //vector<MainWindow::QueueItem> MainWindow::_vecText2;
 
     CRITICAL_SECTION MainWindow::_cs;
-    CRITICAL_SECTION MainWindow::_csSource;
-    CRITICAL_SECTION MainWindow::_csEdit;
-    CRITICAL_SECTION MainWindow::_csDebug;
-    CRITICAL_SECTION MainWindow::_csPixelOp;
-    CRITICAL_SECTION MainWindow::_csPS2;
-    CRITICAL_SECTION MainWindow::_csBreakpoints;
-    CRITICAL_SECTION MainWindow::_csHires1;
-    CRITICAL_SECTION MainWindow::_csHires2;
-    CRITICAL_SECTION MainWindow::_csText1;
-    CRITICAL_SECTION MainWindow::_csText2;
 
-    bool MainWindow::_fHasSymbols = false;
-    bool MainWindow::_fHasListing = false;
+    //bool MainWindow::_fHasSymbols = false;
+    //bool MainWindow::_fHasListing = false;
     MainWindow::ExecutionState MainWindow::_executionState;
     string MainWindow::_sourceFilename;
     string MainWindow::_sourceContents;
@@ -124,16 +114,6 @@ namespace winrt::Badger6502Emulator::implementation
         InitializeComponent();
 
         InitializeCriticalSection(&_cs);
-        InitializeCriticalSection(&_csSource);
-        InitializeCriticalSection(&_csEdit);
-        InitializeCriticalSection(&_csDebug);
-        InitializeCriticalSection(&_csPixelOp);
-        InitializeCriticalSection(&_csPS2);
-        InitializeCriticalSection(&_csBreakpoints);
-        InitializeCriticalSection(&_csHires1);
-        InitializeCriticalSection(&_csHires2);
-        InitializeCriticalSection(&_csText1);
-        InitializeCriticalSection(&_csText2);
 
         ExtendsContentIntoTitleBar(true);
         SetTitleBar(TitleBar());
@@ -229,9 +209,9 @@ namespace winrt::Badger6502Emulator::implementation
                     if (_executionState == ExecutionState::Running 
                      || _executionState == ExecutionState::StepOver)
                     {
-                        EnterCriticalSection(&_csPS2);
+                        EnterCriticalSection(&_cs);
                         _vm.GetPS2Keyboard()->SignalHardwareKey(false, args.KeyStatus().ScanCode);
-                        LeaveCriticalSection(&_csPS2);
+                        LeaveCriticalSection(&_cs);
                     }
                 }
 
@@ -245,9 +225,9 @@ namespace winrt::Badger6502Emulator::implementation
                     if (_executionState == ExecutionState::Running
                      || _executionState == ExecutionState::StepOver)
                     {
-                        EnterCriticalSection(&_csPS2);
+                        EnterCriticalSection(&_cs);
                         _vm.GetPS2Keyboard()->SignalHardwareKey(false, args.KeyStatus().ScanCode);
-                        LeaveCriticalSection(&_csPS2);
+                        LeaveCriticalSection(&_cs);
                     }
                 }
             });
@@ -260,9 +240,9 @@ namespace winrt::Badger6502Emulator::implementation
                     if (_executionState == ExecutionState::Running
                      || _executionState == ExecutionState::StepOver)
                     {
-                        EnterCriticalSection(&_csPS2);
+                        EnterCriticalSection(&_cs);
                         _vm.GetPS2Keyboard()->SignalHardwareKey(true, args.KeyStatus().ScanCode);
-                        LeaveCriticalSection(&_csPS2);
+                        LeaveCriticalSection(&_cs);
                     }
                 }
 
@@ -452,16 +432,6 @@ namespace winrt::Badger6502Emulator::implementation
         WaitForSingleObject(_hThread, INFINITE);
 
         DeleteCriticalSection(&_cs);
-        DeleteCriticalSection(&_csSource);
-        DeleteCriticalSection(&_csEdit);
-        DeleteCriticalSection(&_csDebug);
-        DeleteCriticalSection(&_csPixelOp);
-        DeleteCriticalSection(&_csPS2);
-        DeleteCriticalSection(&_csBreakpoints);
-        DeleteCriticalSection(&_csHires1);
-        DeleteCriticalSection(&_csHires2);
-        DeleteCriticalSection(&_csText1);
-        DeleteCriticalSection(&_csText2);
 
         DebugSymbols::Clear();
     }
@@ -789,7 +759,7 @@ namespace winrt::Badger6502Emulator::implementation
             }
 
             text[0] = (char)byte;
-            EnterCriticalSection(&_csEdit);
+            EnterCriticalSection(&_cs);
 
             if (byte == 8 && strEdit.length() > 0)
             {
@@ -805,7 +775,7 @@ namespace winrt::Badger6502Emulator::implementation
                 strEdit = strEdit.substr(0x3000);
             }
 
-            LeaveCriticalSection(&_csEdit);
+            LeaveCriticalSection(&_cs);
 
             if (!fEditPending)
             {
@@ -819,12 +789,12 @@ namespace winrt::Badger6502Emulator::implementation
                         fmt.ForegroundColor(Windows::UI::Colors::Green());
                         doc.SetDefaultCharacterFormat(fmt);
 
-                        EnterCriticalSection(&_csEdit);
+                        EnterCriticalSection(&_cs);
                         auto sel = doc.Selection();
                         doc.SetText(TextSetOptions::None, strEdit.c_str());
-
                         sel.SetRange((int32_t)strEdit.length(), (int32_t)strEdit.length());
-                        LeaveCriticalSection(&_csEdit);
+                        LeaveCriticalSection(&_cs);
+
                         sel.ScrollIntoView(PointOptions::Start);
                         //txtSerial().IsReadOnly(true);
                         fEditPending = false;
@@ -840,7 +810,7 @@ namespace winrt::Badger6502Emulator::implementation
             WCHAR wcBuf[255];
             swprintf_s(wcBuf, _countof(wcBuf), L"%S", str);
 
-            EnterCriticalSection(&_csDebug);
+            EnterCriticalSection(&_cs);
 
             if (dwDebugLines++ % 1500 == 0)
             {
@@ -848,7 +818,7 @@ namespace winrt::Badger6502Emulator::implementation
             }
             strDebug.append(wcBuf);
 
-            LeaveCriticalSection(&_csDebug);
+            LeaveCriticalSection(&_cs);
 
             if (!fDebugPending)
             {
@@ -858,10 +828,10 @@ namespace winrt::Badger6502Emulator::implementation
                     DispatcherQueuePriority::Low,
                     [&]() {                        
                         txtDebug().IsReadOnly(false);
-                        EnterCriticalSection(&_csDebug);
+                        EnterCriticalSection(&_cs);
                         txtDebug().Document().SetText(TextSetOptions::None, strDebug);
                         txtDebug().Document().Selection().SetRange((int32_t)strDebug.length(), (int32_t)strDebug.length());
-                        LeaveCriticalSection(&_csDebug);
+                        LeaveCriticalSection(&_cs);
                         txtDebug().Document().Selection().ScrollIntoView(PointOptions::Start);
                         txtDebug().IsReadOnly(true);
                         fDebugPending = false;
@@ -910,12 +880,12 @@ namespace winrt::Badger6502Emulator::implementation
 
         _vm.CallbackText1 = [&](uint16_t address, uint8_t byte) -> void {
 
-            EnterCriticalSection(&_csText1);
+            EnterCriticalSection(&_cs);
             QueueItem i;
             i.address = address;
             i.data = byte;
             _vecText1.push_back(i);
-            LeaveCriticalSection(&_csText1);
+            LeaveCriticalSection(&_cs);
 
             DispatcherQueue().TryEnqueue(
                 DispatcherQueuePriority::Low,
@@ -926,12 +896,12 @@ namespace winrt::Badger6502Emulator::implementation
 
         _vm.CallbackText2 = [&](uint16_t address, uint8_t byte) -> void {
 
-            EnterCriticalSection(&_csText2);
+            EnterCriticalSection(&_cs);
             QueueItem i;
             i.address = address;
             i.data = byte;
             _vecText2.push_back(i);
-            LeaveCriticalSection(&_csText2);
+            LeaveCriticalSection(&_cs);
 
             DispatcherQueue().TryEnqueue(
                 DispatcherQueuePriority::Low,
@@ -942,29 +912,33 @@ namespace winrt::Badger6502Emulator::implementation
 
         _vm.CallbackHires1 = [&](uint16_t address, uint8_t byte) -> void {
 
-            EnterCriticalSection(&_csHires1);
+            EnterCriticalSection(&_cs);
+
             QueueItem i;
             i.address = address;
             i.data = byte;
             _vecHires1.push_back(i);
-            LeaveCriticalSection(&_csHires1);
+
+            LeaveCriticalSection(&_cs);
 
             DispatcherQueue().TryEnqueue(
                 DispatcherQueuePriority::Low,
                 [&]() {
                     ProcessHires1();
-                    });  
+                });
         };
 
         
         _vm.CallbackHires2 = [&](uint16_t address, uint8_t byte) -> void
         {
-            EnterCriticalSection(&_csHires2);
+            EnterCriticalSection(&_cs);
+
             QueueItem i;
             i.address = address;
             i.data = byte;
             _vecHires2.push_back(i);
-            LeaveCriticalSection(&_csHires2);
+
+            LeaveCriticalSection(&_cs);
 
             DispatcherQueue().TryEnqueue(
                 DispatcherQueuePriority::Low,
@@ -977,20 +951,18 @@ namespace winrt::Badger6502Emulator::implementation
         {
             if (_countBreakPoints > 0) // todo: make thread safe
             {
-                EnterCriticalSection(&_csBreakpoints);
+                EnterCriticalSection(&_cs);
 
                 if (_countBreakPoints > 0 && EvaluateBreakpoint(pCPU, address, 0, true))
                 {
                     UpdateExecutionState(ExecutionState::Stopped);
-                    EnterCriticalSection(&_csDebug);
                     strDebug.clear();
                     dwDebugLines = 0;
-                    LeaveCriticalSection(&_csDebug);
                     pCPU->DumpHistory();
                     pCPU->SetOutput(true);
                     _wlistingContents = _vm.Disassemble();
                 }
-                LeaveCriticalSection(&_csBreakpoints);
+                LeaveCriticalSection(&_cs);
             }
         };
 
@@ -1033,20 +1005,18 @@ namespace winrt::Badger6502Emulator::implementation
 #endif
             if (_countBreakPoints > 0) // todo: make thread safe
             {
-                EnterCriticalSection(&_csBreakpoints);
+                EnterCriticalSection(&_cs);
                 
                 if (_countBreakPoints > 0  && EvaluateBreakpoint(pCPU, address, byte, false))
                 {
                     UpdateExecutionState(ExecutionState::Stopped);
-                    EnterCriticalSection(&_csDebug);
                     strDebug.clear();
                     dwDebugLines = 0;
-                    LeaveCriticalSection(&_csDebug);
                     pCPU->DumpHistory();
                     pCPU->SetOutput(true);
                     _wlistingContents = _vm.Disassemble();
                 }
-                LeaveCriticalSection(&_csBreakpoints);
+                LeaveCriticalSection(&_cs);
             }
         };
         
@@ -1279,9 +1249,9 @@ namespace winrt::Badger6502Emulator::implementation
                 cycles += pCPU->Step();
                 totalcycles += cycles;
 
-                EnterCriticalSection(&_csPS2);
+                EnterCriticalSection(&_cs);
                 _vm.GetPS2Keyboard()->ProcessKeys(totalcycles);
-                LeaveCriticalSection(&_csPS2);
+                LeaveCriticalSection(&_cs);
 
 #if 0
                 /* DEBUGGING TOOLS*/
@@ -1314,24 +1284,17 @@ namespace winrt::Badger6502Emulator::implementation
                     }
                 }
 
-                EnterCriticalSection(&_csBreakpoints);
+                EnterCriticalSection(&_cs);
                 if (_countBreakPoints > 0 && EvaluateBreakpoint(pCPU, 0, 0, true))
                 {
                     UpdateExecutionState(ExecutionState::Stopped);
-                    EnterCriticalSection(&_csDebug);
                     strDebug.clear();
                     dwDebugLines = 0;
-                    LeaveCriticalSection(&_csDebug);
                     pCPU->DumpHistory();
                     pCPU->SetOutput(true);
                     _wlistingContents = _vm.Disassemble();
                 }
-                LeaveCriticalSection(&_csBreakpoints);
-
-                if (_firenmi && totalcycles % 10000000 == 0)
-                {
-                    pCPU->NonMaskableInterrupt();
-                }
+                LeaveCriticalSection(&_cs);
 
                 if (_executionState == ExecutionState::Stopped)
                 {
@@ -1367,8 +1330,7 @@ namespace winrt::Badger6502Emulator::implementation
 
     void MainWindow::RefreshVideo()
     {
-        EnterCriticalSection(&_csHires1);
-        EnterCriticalSection(&_csHires2);
+        //EnterCriticalSection(&_cs);
 
         uint8_t* pHiRes = _hires1;
         if (_gfxPage == 1)
@@ -1382,8 +1344,7 @@ namespace winrt::Badger6502Emulator::implementation
             draw_hires_line_color_apple(y, pHiRes);
         }
 
-        LeaveCriticalSection(&_csHires1);
-        LeaveCriticalSection(&_csHires2);
+        //LeaveCriticalSection(&_cs);
 
         if (_textMode == 0)
         {
@@ -1455,11 +1416,11 @@ namespace winrt::Badger6502Emulator::implementation
                     //have to clip to a subset to get end of control to render correctly
                     //https://github.com/microsoft/microsoft-ui-xaml/issues/1842
 
-                    EnterCriticalSection(&_csSource);
+                    EnterCriticalSection(&_cs);
                     //_wlistingContents = _vm.Disassemble();
                     wstring w2 = _wlistingContents.substr(o1, o3 - o1);
                     //wstring w2 = _wlistingContents;
-                    LeaveCriticalSection(&_csSource);
+                    LeaveCriticalSection(&_cs);
                     Windows::UI::Color highlight({ 255, 0, 128, 0 });
 
                     auto doc = txtSource().Document();
@@ -1511,7 +1472,6 @@ namespace winrt::Badger6502Emulator::implementation
                 uint32_t addr = textScanlines[y/16] + x;
                 uint8_t curr = pText[addr];
 
-                curr &= 0x7F;
 
                 uint32_t fontaddr = 0;
                 uint8_t line = y % 16;
@@ -1688,7 +1648,7 @@ namespace winrt::Badger6502Emulator::implementation
 
         uint16_t i16;
         uint16_t i16_2;
-        uint8_t i8;
+        uint8_t i8 = 0;
         WCHAR wcText[64];
 
         dialogBreakpoints().PrimaryButtonText(L"OK");
@@ -1770,12 +1730,12 @@ namespace winrt::Badger6502Emulator::implementation
 
             bp.Content(box_value(wcText));
 
-            EnterCriticalSection(&_csBreakpoints);
+            EnterCriticalSection(&_cs);
             BreakPoints().Append(bp);
             BreakPointItem* rawbp = winrt::get_self<BreakPointItem>(bp);
             _vecBreakPointsFast.push_back(rawbp);
             _countBreakPoints++;
-            LeaveCriticalSection(&_csBreakpoints);
+            LeaveCriticalSection(&_cs);
         }
     }
 
@@ -1785,11 +1745,11 @@ namespace winrt::Badger6502Emulator::implementation
 
         if (index >= 0)
         {
-            EnterCriticalSection(&_csBreakpoints);
+            EnterCriticalSection(&_cs);
             _vecBreakPoints.RemoveAt(index);
             _vecBreakPointsFast.erase(_vecBreakPointsFast.begin() + index);
             _countBreakPoints--;
-            LeaveCriticalSection(&_csBreakpoints);
+            LeaveCriticalSection(&_cs);
         }
     }
 
@@ -2247,63 +2207,70 @@ namespace winrt::Badger6502Emulator::implementation
     void MainWindow::ProcessHires1()
     {
         bool dirty = false;
+        vector<int> vecLines;
 
-        EnterCriticalSection(&_csHires1);
+        EnterCriticalSection(&_cs);
 
-        while (_vecHires1.size() > 0)
+        for (auto pItem : _vecHires1)
         {
-            QueueItem pItem = *_vecHires1.begin();
-            _vecHires1.erase(_vecHires1.begin());
-
             _hires1[pItem.address] = pItem.data;
 
             if (_gfxPage == 0 && _textMode == 0)
             {
                 uint8_t y = pixelindex[pItem.address] & 0xFF;
-                //uint8_t y = (uint8_t)(pItem.address / 40);
-                //draw_hires_line_eb6502(y, _hires1);
-                draw_hires_line_color_apple(y, _hires1);
-                dirty = true;
+                vecLines.push_back(y);
             }
+            dirty = true;
         }
+        
+        _vecHires1.clear();
+        LeaveCriticalSection(&_cs);
+
+        for (auto i : vecLines)
+        {
+            draw_hires_line_color_apple((uint8_t)i, _hires1);
+        }
+
+        vecLines.clear();
 
         if (dirty)
         {
             _vgaBitmap.Invalidate();
         }
 
-        LeaveCriticalSection(&_csHires1);
     }
 
     void MainWindow::ProcessHires2()
     {
         bool dirty = false;
+        vector<int> vecLines;
 
-        EnterCriticalSection(&_csHires2);
+        EnterCriticalSection(&_cs);
 
-        while (_vecHires2.size() > 0)
+        for (auto pItem : _vecHires2)
         {
-            QueueItem pItem = *_vecHires2.begin();
-            _vecHires2.erase(_vecHires2.begin());
-
             _hires2[pItem.address] = pItem.data;
 
             if (_gfxPage == 1 && _textMode == 0)
             {
                 uint8_t y = pixelindex[pItem.address] & 0xFF;
-               // uint8_t y = (uint8_t)(pItem.address / 40);
-                //draw_hires_line_eb6502(y, _hires2);
-                draw_hires_line_color_apple(y, _hires2);
-                dirty = true;
+                vecLines.push_back(y);
             }
+            dirty = true;
+        }
+
+        _vecHires2.clear();
+        LeaveCriticalSection(&_cs);
+
+        for (auto i : vecLines)
+        {
+            draw_hires_line_color_apple((uint8_t)i, _hires2);
         }
 
         if (dirty)
         {
             _vgaBitmap.Invalidate();
         }
-
-        LeaveCriticalSection(&_csHires2);
     }
 
     void MainWindow::DrawText()
@@ -2329,14 +2296,11 @@ namespace winrt::Badger6502Emulator::implementation
     }
 
     void MainWindow::ProcessText1()
-    {
-        EnterCriticalSection(&_csText1);
+    {   
+        EnterCriticalSection(&_cs);
 
-        while (_vecText1.size() > 0)
+        for (auto pItem : _vecText1)
         {
-            QueueItem pItem = *_vecText1.begin();
-            _vecText1.erase(_vecText1.begin());
-
             _text1[pItem.address] = pItem.data;
 
             if (_gfxPage == 0 && _textMode == 1)
@@ -2344,19 +2308,17 @@ namespace winrt::Badger6502Emulator::implementation
                 _textDirty = true;
             }
         }
-        LeaveCriticalSection(&_csText1);
+        _vecText1.clear();
+        LeaveCriticalSection(&_cs);
 
     }
 
     void MainWindow::ProcessText2()
     {
-        EnterCriticalSection(&_csText2);
+        EnterCriticalSection(&_cs);
 
-        while (_vecText2.size() > 0)
+        for (auto pItem : _vecText2)
         {
-            QueueItem pItem = *_vecText2.begin();
-            _vecText2.erase(_vecText2.begin());
-
             _text2[pItem.address] = pItem.data;
 
             if (_gfxPage == 1 && _textMode == 1)
@@ -2365,6 +2327,6 @@ namespace winrt::Badger6502Emulator::implementation
             }
         }
 
-        LeaveCriticalSection(&_csText2);
+        LeaveCriticalSection(&_cs);
     }
 }

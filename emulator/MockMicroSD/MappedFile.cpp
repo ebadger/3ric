@@ -51,6 +51,8 @@ uint32_t MMappedFile::MapFile(wchar_t* wzFile)
 		return GetLastError();
 	}
 
+	_dwFileSize = ::GetFileSize(_hBaseFile, NULL);
+
 	_hMapFile = CreateFileMapping(_hBaseFile, 
 								nullptr, 
 								PAGE_READWRITE, 
@@ -71,4 +73,9 @@ uint32_t MMappedFile::MapFile(wchar_t* wzFile)
 
 	_initialized = true;
 	return 0;
+}
+
+DWORD MMappedFile::GetFileSize()
+{
+	return _dwFileSize;
 }
