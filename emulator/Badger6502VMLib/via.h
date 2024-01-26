@@ -38,9 +38,11 @@ public:
 	};
 
 private:
-	VM* _vm = nullptr;
-	uint8_t _register[MAX_ENUM] = { 0 };
+	VM*		 _vm = nullptr;
+	uint8_t  _register[MAX_ENUM] = { 0 };
 
+	uint16_t _t1_count = 0;
+	uint16_t _t2_count = 0;
 
 public:
 
@@ -49,5 +51,6 @@ public:
 	void    SignalPin(Pins pin);
 	void    WriteRegister(uint8_t reg, uint8_t data);
 	uint8_t ReadRegister(uint8_t reg);
-
+	void    Tick();
+	void	Reset();
 };

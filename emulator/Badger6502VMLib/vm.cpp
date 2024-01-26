@@ -67,7 +67,8 @@ void VM::Reset()
 
 	_cpu->Reset();
 	_pPS2->Reset();
-	
+	_via1->Reset();
+	_via2->Reset();
 }
 
 void VM::Run()
@@ -105,6 +106,14 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 {
 	switch (address)
 	{
+	case MM_SS_KEYBD_STROBE:
+		_via1->SignalPin(VIA::CB1);
+		break;
+
+	case MM_SS_JOYSTICK:
+		_via1->SignalPin(VIA::CB2);
+		break;
+
 	case MM_SS_GRAPHICS:
 		_graphics = true;
 		break;
@@ -260,6 +269,7 @@ uint8_t VM::ReadData(uint16_t address)
 	else if (address >= MM_SS_START && address <= MM_SS_END)
 	{
 		DoSoftSwitches(address, false);
+		return _data[address];
 	}
 	else if (address >= MM_ACIA_START && address <= MM_ACIA_END)
 	{
@@ -419,6 +429,7 @@ void VM::WriteData(uint16_t address, uint8_t byte)
 	else if (address >= MM_SS_START && address <= MM_SS_END)
 	{
 		DoSoftSwitches(address, true);
+		_data[address] = byte;
 	}
 	else if (address >= MM_ACIA_START && address <= MM_ACIA_END)
 	{

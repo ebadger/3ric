@@ -1,5 +1,5 @@
 #include "ps2keyboard.h"
-#define CYCLE_THRESHOLD   10
+#define CYCLE_THRESHOLD   1000
 
 PS2Keyboard::PS2Keyboard(VM* p)
 {
@@ -77,10 +77,12 @@ void PS2Keyboard::ProcessKeys(uint32_t cycles)
         return;
     }
 
+#if 0
     if (_vm->GetCPU()->flags.bits.I == 1)
     {
         return;
     }
+#endif
 
 	if (cycles - _lastcycle > CYCLE_THRESHOLD)
 	{

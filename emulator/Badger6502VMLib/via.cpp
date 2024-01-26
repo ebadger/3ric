@@ -8,6 +8,54 @@ VIA::VIA(VM* p)
 	_vm = p;
 }
 
+void VIA::Reset()
+{
+	memset(_register, 0, MAX_ENUM);
+}
+
+void VIA::Tick()
+{
+	if (_vm->GetCPU()->flags.bits.I == 1)
+	{
+		return;
+	}
+	
+	if ((_register[IER] & 0x7F) & (_register[IFR] & 0x7F))
+	{
+		_vm->GetCPU()->NonMaskableInterrupt();
+	}
+
+	if (_t1_count > 0)
+	{
+		_t1_count--;
+
+		if (_t1_count == 0)
+		{
+			if (_register[IER] & 0x40)
+			{
+				_register[IFR] |= 0xC0;
+				// trigger interrupt
+				_vm->GetCPU()->NonMaskableInterrupt();
+			}
+		}
+	}
+
+	if (_t2_count > 0)
+	{
+		_t2_count--;
+
+		if (_t2_count == 0)
+		{
+			if (_register[IER] & 0x20)
+			{
+				_register[IFR] |= 0xA0;
+				// trigger interrupt
+				_vm->GetCPU()->NonMaskableInterrupt();
+			}
+		}
+	}
+}
+
 void VIA::SignalPin(VIA::Pins pin)
 {
 	// interrupt behavior is not modeled correctly
@@ -49,6 +97,7 @@ void VIA::SignalPin(VIA::Pins pin)
 		}
 		break;
 	}
+
 }
 
 uint8_t VIA::ReadRegister(uint8_t reg)
@@ -136,17 +185,14 @@ uint8_t VIA::ReadRegister(uint8_t reg)
 //6   Time out of T1         Read T1C - L low or write T1L - H high
 
 	case T1CH:
-		// counter behavior not implemented
 		return _register[T1CH];
 
 	case T1CL:
-		// counter behavior not implemented
-		// clear bit 4 in the IFR
-		_register[IFR] &= 0xEF;
+		// clear bit 6 in the IFR
+		_register[IFR] &= 0xBF;
 		return _register[T1CL];
 
 	case T2CH:
-		// counter behavior not implemented
 		return _register[T2CH];
 
 	case T2CL:
@@ -271,6 +317,8 @@ presented in the next section.
 
 	case T1CH:
 		_register[T1CH] = data;
+		_t1_count = data << 8;
+		_t1_count |= _register[T1CL];
 		break;
 
 	case T1CL:
@@ -280,8 +328,10 @@ presented in the next section.
 	case T2CH:
 		// clear bit 5 in the IFR
 		_register[IFR] &= 0xDF;
-
 		_register[T2CH] = data;
+
+		_t2_count = data << 8;
+		_t2_count |= _register[T2CL];
 		break;
 
 	case T2CL:
@@ -291,7 +341,6 @@ presented in the next section.
 	case T1LH:
 		// clear bit 4 in the IFR
 		_register[IFR] &= 0xEF;
-
 		_register[T1LH] = data;
 		break;
 

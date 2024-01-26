@@ -274,6 +274,11 @@ namespace winrt::Badger6502Emulator::implementation
                         args.Handled(true);
                     }
                 }
+                else if (args.Key() == Windows::System::VirtualKey::F8)
+                {
+                    UpdateExecutionState(ExecutionState::Reset);
+                }
+
                 else if (args.Key() == Windows::System::VirtualKey::F1)
                 {
                     _clockspeed /= 2;
@@ -1248,6 +1253,12 @@ namespace winrt::Badger6502Emulator::implementation
 
                 cycles += pCPU->Step();
                 totalcycles += cycles;
+
+                for (uint32_t i = 0; i < cycles; i++)
+                {
+                    _vm.GetVIA1()->Tick();
+                    _vm.GetVIA2()->Tick();
+                }
 
                 EnterCriticalSection(&_cs);
                 _vm.GetPS2Keyboard()->ProcessKeys(totalcycles);
