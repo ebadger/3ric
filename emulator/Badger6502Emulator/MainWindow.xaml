@@ -108,7 +108,7 @@
                 <MenuFlyoutItem Text="Run (F5)" x:Name="miRun"/>
                 <MenuFlyoutItem Text="Break (Pause)" x:Name="miBreak"/>
                 <MenuFlyoutItem Text="Step (F10)" x:Name="miStep"/>
-                <MenuFlyoutItem Text="Reset" x:Name="miReset"/>
+                <MenuFlyoutItem Text="Reset (F12)" x:Name="miReset"/>
                 <ToggleMenuFlyoutItem Text="Fire Periodic NMI" IsChecked="False" x:Name="miInterrupt"/>
                 <MenuFlyoutItem Text="Registers" x:Name="miRegister" Click="clickSetRegister"/>
                 <MenuFlyoutItem Text="Memory" x:Name="miMemory" Click="clickMemory"/>

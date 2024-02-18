@@ -151,4 +151,5 @@
   (lib (name "dk_USB-DVI-HDMI-Connectors")(type "Legacy")(uri "C:/EB6502/kicad_projects/eb6502/digikey-symbols/dk_USB-DVI-HDMI-Connectors.lib")(options "")(descr ""))
   (lib (name "EB6502-custom")(type "KiCad")(uri "${KIPRJMOD}/EB6502-custom.kicad_sym")(options "")(descr ""))
   (lib (name "sn74ls131")(type "Legacy")(uri "C:/EB6502/kicad_projects/ul_SN74LS31N/KiCAD/2022-11-21_18-06-40/2022-11-21_18-06-40.lib")(options "")(descr ""))
+  (lib (name "ay-3-8910")(type "Legacy")(uri "${KIPRJMOD}/ay-3-8910.lib")(options "")(descr ""))
 )

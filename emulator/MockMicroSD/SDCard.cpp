@@ -237,9 +237,7 @@ void SDCard::SetSCK(bool level)
 				SetSector();
 				break;
 			}
-
 		}
-
 	}
 	else if (MODE_READSECTOR == _mode)
 	{
@@ -272,8 +270,6 @@ void SDCard::SetSCK(bool level)
 			}
 		}
 	}
-
-
 }
 
 bool SDCard::GetMISO()
@@ -295,5 +291,4 @@ void SDCard::SetSector()
 	{
 		_pos = _mappedFile.GetFileSize() - 1;
 	}
-
 }

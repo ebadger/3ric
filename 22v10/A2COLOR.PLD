@@ -52,8 +52,8 @@ VIOLET       = X_10 & !PALLETE & DISPLAY;
 TEXT         = TEXTBIT & DISPLAY;
 
 /*
-	WHITE  - every pin on                                RRR BBB GGG
-	ORANGE - 3 parts red, 1 part blue, 1 part green      RRR B   G 
+       WHITE  - every pin on                                RRR BBB GGG
+       ORANGE - 3 parts red, 1 part blue, 1 part green      RRR B   G 
        GREEN  - 3 parts green                                       GGG
        VIOLET - 3 parts red, 3 parts blue                   RRR BBB
        CYAN    - 3 parts blue, 2 parts green, 1 part red    R   BBB GG

@@ -62,3 +62,4 @@ A16          = (RAMREAD & RW # RAMWRITE & !RW) & B2 & !A13 & (A14 & A15 & A12) &
 !WE           = !RW & VIDENABLE;
 !OE           = RW # VIDBUS;
 
+CPUBUS_CS    = RAM # !VIDENABLE;
