@@ -60,35 +60,26 @@ namespace winrt::Badger6502Emulator::implementation
             Running = 1,
             Stop = 2,
             Stopped = 3,
-            Stepping = 4,
-            Reset = 5,
-            Quit = 6
+            Stepping = 4,            
+            StepOver = 5,
+            Reset = 6,
+            Quit = 7
         };
 
         //void myButton_Click(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::RoutedEventArgs const& args);
         HANDLE _hThread = INVALID_HANDLE_VALUE;
 
         static VM _vm;
-        static vector<uint8_t> _vecKeys;
-        static vector<QueueItem> _vecHires1;
-        static vector<QueueItem> _vecHires2;
-        static vector<QueueItem> _vecText1;
-        static vector<QueueItem> _vecText2;
+        vector<uint8_t> _vecKeys;
+        vector<QueueItem> _vecHires1;
+        vector<QueueItem> _vecHires2;
+        vector<QueueItem> _vecText1;
+        vector<QueueItem> _vecText2;
 
         static CRITICAL_SECTION _cs;
-        static CRITICAL_SECTION _csSource;
-        static CRITICAL_SECTION _csEdit;
-        static CRITICAL_SECTION _csDebug;
-        static CRITICAL_SECTION _csPixelOp;
-        static CRITICAL_SECTION _csPS2;
-        static CRITICAL_SECTION _csBreakpoints;
-        static CRITICAL_SECTION _csHires1;
-        static CRITICAL_SECTION _csHires2;
-        static CRITICAL_SECTION _csText1;
-        static CRITICAL_SECTION _csText2;
 
-        static bool _fHasSymbols;
-        static bool _fHasListing;
+        bool _fHasSymbols = false;
+        bool _fHasListing = false;
         static ExecutionState _executionState;
 
         static string _sourceFilename;
@@ -111,7 +102,7 @@ namespace winrt::Badger6502Emulator::implementation
         bool ValidateAndAssignValue(wstring const&, uint16_t &);
         bool ValidateAndAssignBit(wstring const& str, uint8_t& val);
         bool IsValidNumber(wstring const& hstr, bool *isHex);
-        bool EvaluateBreakpoint(CPU *pCPU, uint16_t addr, uint8_t datas);
+        bool EvaluateBreakpoint(CPU *pCPU, uint16_t addr, uint8_t data, bool read);
         void SetSourceContents();
 
         void InitVGA();
@@ -133,6 +124,7 @@ namespace winrt::Badger6502Emulator::implementation
         IAsyncAction btnAddBreakpoint_Click(IInspectable const& sender, RoutedEventArgs const& args);
         void btnRemoveBreakpoint_Click(IInspectable const& sender, RoutedEventArgs const& args);
         void txtBreakValue_changed(IInspectable const& sender, TextChangedEventArgs const& args);
+        void txtBreakValue2_changed(IInspectable const& sender, TextChangedEventArgs const& args);
         void miLoadROM_Click(IInspectable const& sender, RoutedEventArgs const& args);
         void miLoadRAM_Click(IInspectable const& sender, RoutedEventArgs const& args);
         void miLoadROMDISK_Click(IInspectable const& sender, RoutedEventArgs const& args);        

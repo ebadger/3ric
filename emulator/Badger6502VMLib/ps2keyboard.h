@@ -22,7 +22,7 @@ public:
 	void ProcessRaw(uint8_t bit);
 private:
 	VM* _vm = nullptr;
-	vector<KeyEvent> _vecKeys;
+	vector<KeyEvent> _vecBits;
 	uint32_t _lastcycle = 0;
 
 private:

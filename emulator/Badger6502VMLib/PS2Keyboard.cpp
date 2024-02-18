@@ -8,20 +8,20 @@ PS2Keyboard::PS2Keyboard(VM* p)
 
 void PS2Keyboard::Reset()
 {
-    _vecKeys.clear();
+    _vecBits.clear();
     _lastcycle = 0;
 }
 
 void PS2Keyboard::SignalHardwareKey(bool down, uint32_t scancode)
 {
-    KeyEvent start;
-    KeyEvent parity;
-    KeyEvent stop;
+    KeyEvent start = {};
+    KeyEvent parity = {};
+    KeyEvent stop = {};
 
     start.bit = 0;
     stop.bit = 1;
     int8_t p = 0;
-
+    
     uint8_t sc = TranslateScancode(scancode);
     // queue up the bits
     if (!down)
@@ -29,7 +29,7 @@ void PS2Keyboard::SignalHardwareKey(bool down, uint32_t scancode)
         // up flag
         uint8_t flag = 0xF0;
 
-        _vecKeys.push_back(start);
+        _vecBits.push_back(start);
 
         for (int i = 0; i < 8; i++)
         {
@@ -38,19 +38,19 @@ void PS2Keyboard::SignalHardwareKey(bool down, uint32_t scancode)
             p += k.bit;
 
             flag = flag >> 1;
-            _vecKeys.push_back(k);
+            _vecBits.push_back(k);
         }
 
         p = (p % 2 == 0) ? 0 : 1;
 
         parity.bit = p;
-        _vecKeys.push_back(parity);
-        _vecKeys.push_back(stop);
+        _vecBits.push_back(parity);
+        _vecBits.push_back(stop);
     }
 
     p = 0;
     // write start bit
-    _vecKeys.push_back(start);
+    _vecBits.push_back(start);
 
     // scancode
     for (int i = 0; i < 8; i++)
@@ -59,32 +59,39 @@ void PS2Keyboard::SignalHardwareKey(bool down, uint32_t scancode)
         k.bit = sc & 1;
         p += k.bit;
         sc = sc >> 1;
-        _vecKeys.push_back(k);
+        _vecBits.push_back(k);
     }
 
     p = (p % 2 == 0) ? 0 : 1;
 
     parity.bit = p;
-    _vecKeys.push_back(parity);
-    _vecKeys.push_back(stop);
+    _vecBits.push_back(parity);
+    _vecBits.push_back(stop);
 
 }
 
 void PS2Keyboard::ProcessKeys(uint32_t cycles)
 {
-    if (_vecKeys.size() == 0)
+    if (_vecBits.size() == 0)
     {
         return;
     }
 
+#if 0
+    if (_vm->GetCPU()->flags.bits.I == 1)
+    {
+        return;
+    }
+#endif
+
 	if (cycles - _lastcycle > CYCLE_THRESHOLD)
 	{
-		_lastcycle = cycles;
-        		
-        KeyEvent k = *_vecKeys.begin();
+        _lastcycle = cycles;
+
+        KeyEvent k = *_vecBits.begin();
         _vm->GetPS2Keyboard()->ProcessRaw(k.bit);
 
-        _vecKeys.erase(_vecKeys.begin());
+        _vecBits.erase(_vecBits.begin());
 	}
 }
 

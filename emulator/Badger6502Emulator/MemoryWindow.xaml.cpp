@@ -45,7 +45,7 @@ namespace winrt::Badger6502Emulator::implementation
 
         _timer = this->DispatcherQueue().CreateTimer();
         _timer.IsRepeating(true);
-        _timer.Interval(TimeSpan(100));
+        _timer.Interval(TimeSpan(250));
         _timer.Start();
 
         _timer.Tick([this](IInspectable const&, IInspectable const&)
@@ -64,6 +64,7 @@ namespace winrt::Badger6502Emulator::implementation
         txtAddress().Document().GetText(TextGetOptions::AdjustCrlf, hstrAddress);
         if (IsValidNumber(hstrAddress.c_str(), &ishex) && ishex)
         {
+            uint8_t rgAddr[16];
             wchar_t wcLine[255];
             wstring memout;
             wstring memascii;
@@ -77,23 +78,26 @@ namespace winrt::Badger6502Emulator::implementation
                 memout.append(wcLine);
                 memascii.append(wcLine);
 
+                EnterCriticalSection(&implementation::MainWindow::_cs);
+                memcpy(rgAddr, &pData[addr], 16);
+                LeaveCriticalSection(&implementation::MainWindow::_cs);
+                addr += 16;
+
                 for (int x = 0; x < 16; x++)
                 {
-                    swprintf_s(wcLine, _countof(wcLine), L"$%02X ", pData[addr]);
+                    swprintf_s(wcLine, _countof(wcLine), L"$%02X ", rgAddr[x]);
                     memout.append(wcLine);
 
-                    int c = pData[addr];
-                    if (isprint(c) == 0)
+                    int c = rgAddr[x];
+                    if (isprint(c) == 0 || c == 13 || c == 10 || c == 32)
                     {
-                        c = '.';
+                        c = ' ';
                     }
 
-                    swprintf_s(wcLine, _countof(wcLine), L"%c ", pData[addr]);
+                    swprintf_s(wcLine, _countof(wcLine), L"  %c ", c);
                     memascii.append(wcLine);
-
-                    addr++;
                 }
-
+                
                 memout.append(L"\r\n");
                 memascii.append(L"\r\n");
             }

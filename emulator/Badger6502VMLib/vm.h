@@ -29,8 +29,9 @@ enum
 	MM_DEVICES_START	= 0xC000,
 	MM_SS_START         = 0xC000,
 	MM_SS_KEYBOARD      = 0xC000,
-	MM_SS_BASIC_ROM_OFF = 0xC006,
-	MM_SS_BASIC_ROM_ON  = 0xC007,
+	MM_SS_BASIC_ROM_ON  = 0xC006,
+	MM_SS_BASIC_ROM_OFF = 0xC007,
+	MM_SS_KEYBD_STROBE  = 0xC010,
 	MM_SS_GRAPHICS      = 0xC050,
 	MM_SS_TEXT          = 0xC051,
 	MM_SS_FULLSCREEN    = 0xC052,
@@ -39,6 +40,7 @@ enum
 	MM_SS_DISPLAY2      = 0xC055,
 	MM_SS_LORES         = 0xC056,
 	MM_SS_HIRES         = 0xC057,
+	MM_SS_JOYSTICK      = 0xC070,
 	MM_SS_END_LOW       = 0xC07F,
 	MM_SS_START_HIGH    = 0xC080,
 	MM_SS_R_BANK2       = 0xC080,
@@ -85,6 +87,7 @@ public:
 	~VM();
 
 	void Run();
+	void Reset();
 	CPU* GetCPU();
 	VIA* GetVIA1();
 	VIA* GetVIA2();
@@ -119,6 +122,7 @@ public:
 	std::function<void(uint16_t, uint8_t)> CallbackText2;
 	std::function<void(uint8_t)> CallbackSetMode;
 	std::function<void(uint16_t, uint8_t)> CallbackWriteMemory;
+	std::function<void(uint16_t)> CallbackReadMemory;
 	std::function<void(bool, bool, bool, bool)> CallbackSetSoftSwitches;
 
 	std::function<void(std::string &, std::vector<uint8_t> &, uint8_t &)> CallbackLoadFile;
@@ -140,6 +144,10 @@ private:
 	
 	uint8_t			_data[0x10000];  // 64KB address space
 	uint8_t			_basic[0x3000];  // 12KB basic bank ROM
+
+	uint8_t         _bank1_d000[0x1000];
+	uint8_t         _bank2_d000[0x1000];
+	uint8_t         _bank_e000[0x2000];
 
 	uint8_t *		_romdisk; // 512KB ROM disk
 

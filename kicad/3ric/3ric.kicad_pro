@@ -1,5 +1,6 @@
 {
   "board": {
+    "3dviewports": [],
     "design_settings": {
       "defaults": {
         "board_outline_line_width": 0.09999999999999999,
@@ -130,46 +131,15 @@
       "zones_allow_external_fillets": false,
       "zones_use_no_outline": true
     },
-    "layer_presets": []
+    "layer_presets": [],
+    "viewports": []
   },
   "boards": [],
   "cvpcb": {
     "equivalence_files": []
   },
   "erc": {
-    "erc_exclusions": [
-      "lib_symbol_issues|1828800|838200|6e736c26-e642-4825-ba9c-5673a9adde97|00000000-0000-0000-0000-000000000000",
-      "lib_symbol_issues|1866900|901700|6e736c26-e642-4825-ba9c-5673a9adde97|00000000-0000-0000-0000-000000000000",
-      "pin_to_pin|1079500|1155700|ddfb40d0-e6be-48e8-972b-66d0648a53ea|e17fea67-c4b0-4051-954c-39d72aa9df0e",
-      "pin_to_pin|1079500|1181100|8c69c1ea-3daa-4512-b415-be69112022f6|c5223a0b-7d45-41ef-851c-d3bbafe95655",
-      "pin_to_pin|1079500|1206500|055d2a5d-62c9-4940-ad6a-bf0fa7a25a17|30b848ae-52df-498a-893b-63d82db29284",
-      "pin_to_pin|1079500|1231900|7d346109-8896-47d4-851f-d89c124b3585|5a02290a-bab2-475f-a4ca-16804b72ff10",
-      "pin_to_pin|1079500|1689100|1d3956b8-987c-4af4-91b9-f051adeec6e4|0c011518-ed06-48e0-8b1e-0e106c0f7563",
-      "pin_to_pin|1079500|254000|7ba8ebe3-8cb4-4269-9242-f464706e7d91|23eb991e-fc50-40df-b822-6e119b918e40",
-      "pin_to_pin|1079500|279400|b3f2186b-137d-463d-92ad-37f92df44662|b2bc0297-c138-409d-bf84-414a5009b955",
-      "pin_to_pin|1079500|304800|7e015d6c-714b-4785-8f43-3fdce6d6b6b2|1ed93588-58e1-4f84-b88b-d9dd5a16848c",
-      "pin_to_pin|1079500|330200|38ca03ba-25f9-4afe-aa2c-a3bf83878549|80d4c98a-f98d-4a84-874d-a62fcfb85f28",
-      "pin_to_pin|1079500|711200|6a5055ec-7368-4caa-b0c1-686ac1187e45|5384a4d1-95e8-47e0-8526-f5b26f0d8957",
-      "pin_to_pin|1079500|736600|5e371c9e-6fc9-4cda-b555-3aee48261ff6|e2e7be77-5b68-4a89-be0e-46c78fecebe8",
-      "pin_to_pin|1079500|762000|03799c17-2e98-4019-be9d-2ae97b033188|1cf81cca-1e26-4ce8-b4e8-6780fe7c5643",
-      "pin_to_pin|1079500|787400|d01e24d1-c759-4117-849e-50e48ed554e9|faddae85-39dd-45e7-9046-c72a7904ff67",
-      "pin_to_pin|1308100|1282700|e17fea67-c4b0-4051-954c-39d72aa9df0e|ddfb40d0-e6be-48e8-972b-66d0648a53ea",
-      "pin_to_pin|1308100|1308100|c5223a0b-7d45-41ef-851c-d3bbafe95655|8c69c1ea-3daa-4512-b415-be69112022f6",
-      "pin_to_pin|1308100|1333500|30b848ae-52df-498a-893b-63d82db29284|055d2a5d-62c9-4940-ad6a-bf0fa7a25a17",
-      "pin_to_pin|1308100|1358900|5a02290a-bab2-475f-a4ca-16804b72ff10|7d346109-8896-47d4-851f-d89c124b3585",
-      "pin_to_pin|1308100|1384300|933bb155-845c-40d7-bc40-43e70ba693aa|74b96cea-5af9-4e24-b720-aea61058da64",
-      "pin_to_pin|1308100|1409700|6b154514-4dbd-4663-8d62-a36dd1b0697b|a2511b65-8683-433c-9a78-a6b67db543e4",
-      "pin_to_pin|1308100|1435100|a6714555-ec6a-4c09-80a8-3d80b029f164|2a7752c9-ce1c-497a-bc3f-e21fbd9149bd",
-      "pin_to_pin|1308100|1460500|0c011518-ed06-48e0-8b1e-0e106c0f7563|1d3956b8-987c-4af4-91b9-f051adeec6e4",
-      "pin_to_pin|1308100|482600|23eb991e-fc50-40df-b822-6e119b918e40|7ba8ebe3-8cb4-4269-9242-f464706e7d91",
-      "pin_to_pin|1308100|508000|b2bc0297-c138-409d-bf84-414a5009b955|b3f2186b-137d-463d-92ad-37f92df44662",
-      "pin_to_pin|1308100|533400|1ed93588-58e1-4f84-b88b-d9dd5a16848c|7e015d6c-714b-4785-8f43-3fdce6d6b6b2",
-      "pin_to_pin|1308100|558800|80d4c98a-f98d-4a84-874d-a62fcfb85f28|38ca03ba-25f9-4afe-aa2c-a3bf83878549",
-      "pin_to_pin|1308100|584200|5384a4d1-95e8-47e0-8526-f5b26f0d8957|6a5055ec-7368-4caa-b0c1-686ac1187e45",
-      "pin_to_pin|1308100|609600|e2e7be77-5b68-4a89-be0e-46c78fecebe8|5e371c9e-6fc9-4cda-b555-3aee48261ff6",
-      "pin_to_pin|1308100|635000|1cf81cca-1e26-4ce8-b4e8-6780fe7c5643|03799c17-2e98-4019-be9d-2ae97b033188",
-      "pin_to_pin|1308100|660400|faddae85-39dd-45e7-9046-c72a7904ff67|d01e24d1-c759-4117-849e-50e48ed554e9"
-    ],
+    "erc_exclusions": [],
     "meta": {
       "version": 0
     },
@@ -346,18 +316,23 @@
     "rule_severities": {
       "bus_definition_conflict": "error",
       "bus_entry_needed": "error",
-      "bus_label_syntax": "error",
       "bus_to_bus_conflict": "error",
       "bus_to_net_conflict": "error",
+      "conflicting_netclasses": "error",
       "different_unit_footprint": "error",
       "different_unit_net": "error",
       "duplicate_reference": "error",
       "duplicate_sheet_names": "error",
+      "endpoint_off_grid": "warning",
       "extra_units": "error",
       "global_label_dangling": "warning",
       "hier_label_mismatch": "error",
       "label_dangling": "error",
       "lib_symbol_issues": "warning",
+      "missing_bidi_pin": "warning",
+      "missing_input_pin": "warning",
+      "missing_power_pin": "error",
+      "missing_unit": "warning",
       "multiple_net_names": "warning",
       "net_not_bus_member": "warning",
       "no_connect_connected": "warning",
@@ -367,6 +342,7 @@
       "pin_to_pin": "warning",
       "power_pin_not_driven": "error",
       "similar_labels": "warning",
+      "simulation_model_issue": "ignore",
       "unannotated": "error",
       "unit_value_mismatch": "error",
       "unresolved_variable": "error",
@@ -384,7 +360,7 @@
   "net_settings": {
     "classes": [
       {
-        "bus_width": 12.0,
+        "bus_width": 12,
         "clearance": 0.2,
         "diff_pair_gap": 0.25,
         "diff_pair_via_gap": 0.25,
@@ -398,10 +374,10 @@
         "track_width": 0.25,
         "via_diameter": 0.8,
         "via_drill": 0.4,
-        "wire_width": 6.0
+        "wire_width": 6
       },
       {
-        "bus_width": 12.0,
+        "bus_width": 12,
         "clearance": 0.2,
         "diff_pair_gap": 0.25,
         "diff_pair_via_gap": 0.25,
@@ -410,18 +386,15 @@
         "microvia_diameter": 0.5,
         "microvia_drill": 0.1,
         "name": "Ground",
-        "nets": [
-          "GND"
-        ],
         "pcb_color": "rgba(0, 0, 0, 0.000)",
         "schematic_color": "rgba(0, 0, 0, 0.000)",
         "track_width": 0.5,
         "via_diameter": 0.8,
         "via_drill": 0.5,
-        "wire_width": 6.0
+        "wire_width": 6
       },
       {
-        "bus_width": 12.0,
+        "bus_width": 12,
         "clearance": 0.2,
         "diff_pair_gap": 0.25,
         "diff_pair_via_gap": 0.25,
@@ -430,21 +403,29 @@
         "microvia_diameter": 0.5,
         "microvia_drill": 0.1,
         "name": "Vcc",
-        "nets": [
-          "VCC"
-        ],
         "pcb_color": "rgba(0, 0, 0, 0.000)",
         "schematic_color": "rgba(0, 0, 0, 0.000)",
         "track_width": 0.5,
         "via_diameter": 0.8,
         "via_drill": 0.5,
-        "wire_width": 6.0
+        "wire_width": 6
       }
     ],
     "meta": {
-      "version": 2
+      "version": 3
     },
-    "net_colors": null
+    "net_colors": null,
+    "netclass_assignments": null,
+    "netclass_patterns": [
+      {
+        "netclass": "Ground",
+        "pattern": "GND"
+      },
+      {
+        "netclass": "Vcc",
+        "pattern": "VCC"
+      }
+    ]
   },
   "pcbnew": {
     "last_paths": {
@@ -460,6 +441,8 @@
   "schematic": {
     "annotate_start_num": 0,
     "drawing": {
+      "dashed_lines_dash_length_ratio": 12.0,
+      "dashed_lines_gap_length_ratio": 3.0,
       "default_line_thickness": 6.0,
       "default_text_size": 50.0,
       "field_names": [],
@@ -491,7 +474,11 @@
     "page_layout_descr_file": "",
     "plot_directory": "../../schematic_pdf/",
     "spice_adjust_passive_values": false,
+    "spice_current_sheet_as_root": false,
     "spice_external_command": "spice \"%I\"",
+    "spice_model_current_sheet_as_root": true,
+    "spice_save_all_currents": false,
+    "spice_save_all_voltages": false,
     "subpart_first_id": 65,
     "subpart_id_separator": 0
   },

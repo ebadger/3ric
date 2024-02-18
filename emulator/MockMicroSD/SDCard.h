@@ -20,6 +20,8 @@ private:
 		MODE_READSECTOR_ACK,
 		MODE_READSECTOR_START,
 		MODE_WRITESECTOR_ACK,
+		MODE_WRITESECTOR_START,
+		MODE_WRITESECTOR_COMPLETE,
 		MODE_READSECTOR,
 		MODE_WRITESECTOR,
 		MODE_GO_IDLE,
@@ -35,6 +37,7 @@ private:
 	uint8_t _bits = 0;
 	uint8_t _byteIn = 0;
 	uint16_t _response = 0;
+	uint32_t _byteCount = 0;
 
 	uint8_t _command[6] = { 0 };
 	uint8_t _commandByte = 0;

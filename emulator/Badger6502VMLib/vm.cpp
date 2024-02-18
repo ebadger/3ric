@@ -1,3 +1,5 @@
+#include "windows.h"
+
 #include "vm.h"
 #include "badgervmpal.h"
 #include <wchar.h>
@@ -43,12 +45,31 @@ void VM::Init()
 	// fill data with garbage
 	for (int i = 0; i < _pal_countof(_data); i++)
 	{
-		_data[i] = (rand() * 255) & 0xFF;
+		_data[i] =  (rand() * 255) & 0xFF;
 	}
 
 	pal_initromdisk(&_romdisk);
 }
 
+void VM::Reset()
+{
+	_basicbank = false;
+
+	_bank_read = false;
+	_bank_write = false;
+	_bank_page1 = false;
+	_bank_ff = false;
+
+	_graphics = false;
+	_page2 = false;
+	_mixed = false;
+	_lores = false;
+
+	_cpu->Reset();
+	_pPS2->Reset();
+	_via1->Reset();
+	_via2->Reset();
+}
 
 void VM::Run()
 {
@@ -85,6 +106,14 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 {
 	switch (address)
 	{
+	case MM_SS_KEYBD_STROBE:
+		_via1->SignalPin(VIA::CB1);
+		break;
+
+	case MM_SS_JOYSTICK:
+		_via1->SignalPin(VIA::CB2);
+		break;
+
 	case MM_SS_GRAPHICS:
 		_graphics = true;
 		break;
@@ -132,7 +161,7 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 		_bank_ff = false;
 		break;
 
-	case MM_SS_W_BANK2:
+	case MM_SS_W_BANK2:	
 	case MM_SS_W_BANK2_2:
 		_bank_page1 = false;
 		_bank_read = false;
@@ -181,7 +210,7 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 		{
 			_bank_write = true;
 		}
-		_bank_ff = true;
+		_bank_ff = true;	
 
 		break;
 
@@ -197,17 +226,11 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 		break;
 	
 	case MM_SS_BASIC_ROM_OFF:
-		if (write)
-		{
-			_basicbank = false;
-		}
+		_basicbank = false;
 
 		break;
 	case MM_SS_BASIC_ROM_ON:
-		if (write)
-		{
-			_basicbank = true;
-		}
+		_basicbank = true;
 		break;
 
 	default:
@@ -225,10 +248,18 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 
 uint8_t VM::ReadData(uint16_t address)
 {
-    if (address >= MM_RAM_START && address <= MM_RAM_END
-	||  address >= MM_RAM2_START && address <= MM_RAM2_END)
+	if (CallbackReadMemory)
+	{
+		CallbackReadMemory(address);
+	}
+
+    if (address >= MM_RAM_START && address <= MM_RAM_END)
 	{
 		// RAM
+		return _data[address];
+	}
+	else if (address >= MM_RAM2_START && address <= MM_RAM2_END)
+	{
 		return _data[address];
 	}
 	else if (address == MM_SS_KEYBOARD)
@@ -238,6 +269,7 @@ uint8_t VM::ReadData(uint16_t address)
 	else if (address >= MM_SS_START && address <= MM_SS_END)
 	{
 		DoSoftSwitches(address, false);
+		return _data[address];
 	}
 	else if (address >= MM_ACIA_START && address <= MM_ACIA_END)
 	{
@@ -261,7 +293,28 @@ uint8_t VM::ReadData(uint16_t address)
 	}
 	else if (address >= MM_ROM_START && address <= MM_ROM_END)
 	{
-		return _data[address];
+		if (_bank_read) // read RAM
+		{
+			if (address >= 0xD000 && address < 0xE000)
+			{
+				if (_bank_page1)
+				{
+					return _bank1_d000[address - 0xD000];
+				}
+				else
+				{
+					return _bank2_d000[address - 0xD000];
+				}
+			}
+			else if (address >= 0xE000 && address <= 0xFFFF)
+			{
+				return _bank_e000[address - 0xE000];
+			}
+		}
+		else
+		{
+			return _data[address];
+		}
 	}
 	else if (address >= MM_BASIC_START && address <= MM_BASIC_END)
 	{
@@ -346,6 +399,25 @@ void VM::WriteData(uint16_t address, uint8_t byte)
 		{
 			_data[address] = byte;
 		}
+		
+		if (_bank_write)
+		{
+			if (address >= 0xD000 && address < 0xE000)
+			{
+				if (_bank_page1)
+				{
+					_bank1_d000[address - 0xD000] = byte;
+				}
+				else
+				{
+					_bank2_d000[address - 0xD000] = byte;
+				}
+			}
+			else if (address >= 0xE000 && address <= 0xFFFF)
+			{
+				_bank_e000[address - 0xE000] = byte;
+			}
+		}
 	}
 	else if (address >= MM_BASIC_START && address <= MM_BASIC_END)
 	{
@@ -357,6 +429,7 @@ void VM::WriteData(uint16_t address, uint8_t byte)
 	else if (address >= MM_SS_START && address <= MM_SS_END)
 	{
 		DoSoftSwitches(address, true);
+		_data[address] = byte;
 	}
 	else if (address >= MM_ACIA_START && address <= MM_ACIA_END)
 	{

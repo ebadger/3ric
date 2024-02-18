@@ -1019,7 +1019,6 @@ uint8_t CPU::NonMaskableInterrupt()
 
 	waitForInterrupt = false;
 
-
 	retaddr = PC;
 	// push return address onto the stack
 	// push PC onto the stack - push the MSB first

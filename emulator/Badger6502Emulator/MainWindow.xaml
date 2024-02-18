@@ -85,9 +85,12 @@
                     <ComboBoxItem>Y</ComboBoxItem>
                     <ComboBoxItem>OpCode</ComboBoxItem>
                     <ComboBoxItem>Memory Write</ComboBoxItem>
+                    <ComboBoxItem>Jump Range</ComboBoxItem>
+                    <ComboBoxItem>Address</ComboBoxItem>
                 </ComboBox>
                 <TextBlock Margin="10" VerticalAlignment="Center">Equals</TextBlock>
                 <TextBox x:Name="txtBreakValue" Height="25" Margin="10" VerticalAlignment="Center" TextChanged="txtBreakValue_changed"/>
+                <TextBox x:Name="txtBreakValue2" Height="25" Margin="10" VerticalAlignment="Center" TextChanged="txtBreakValue2_changed"/>
             </StackPanel>
         </ContentDialog>
 
@@ -105,7 +108,7 @@
                 <MenuFlyoutItem Text="Run (F5)" x:Name="miRun"/>
                 <MenuFlyoutItem Text="Break (Pause)" x:Name="miBreak"/>
                 <MenuFlyoutItem Text="Step (F10)" x:Name="miStep"/>
-                <MenuFlyoutItem Text="Reset" x:Name="miReset"/>
+                <MenuFlyoutItem Text="Reset (F12)" x:Name="miReset"/>
                 <ToggleMenuFlyoutItem Text="Fire Periodic NMI" IsChecked="False" x:Name="miInterrupt"/>
                 <MenuFlyoutItem Text="Registers" x:Name="miRegister" Click="clickSetRegister"/>
                 <MenuFlyoutItem Text="Memory" x:Name="miMemory" Click="clickMemory"/>
@@ -113,7 +116,7 @@
             </muxc:MenuBarItem>
 
             <muxc:MenuBarItem Title="Emulation">
-                <ToggleMenuFlyoutItem Text="PS2 Keyboard Emulation" IsChecked="False" x:Name="ps2EmulationItem"/>
+                <ToggleMenuFlyoutItem Text="PS2 Keyboard Emulation" IsChecked="True" x:Name="ps2EmulationItem"/>
                 <MenuFlyoutSeparator/>
                 <RadioMenuFlyoutItem x:Name="C0" Text="Unlimited" GroupName="EmulationSpeedGroup" Click="clock_OnClicked"/>
                 <RadioMenuFlyoutItem x:Name="C1" Text="1 MHz" GroupName="EmulationSpeedGroup"  Click="clock_OnClicked"/>
