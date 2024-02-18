@@ -74,32 +74,34 @@ namespace eepromgen2
                     byte val = FLAG_HRESET | FLAG_VRESET | FLAG_HSYNC | FLAG_VSYNC;
 
                     // set reset flags - if reset is low, corresponding counter is reset
-                    if (x > 48)
+                    if (x >= 49)
                     {
                         val &= unchecked((byte)~FLAG_HRESET);
                     }
 
-                    if (y > 524 && x > 48)
+                    if (y > 524 && x >= 49)
                     {
                         val &= unchecked((byte)~FLAG_VRESET);
                     }
 
+                    /*
                     if (y == 48 && x > 48)
                     {
                         val |= FLAG_DISPLAY;
                     }
-
+                    */
                     // visible flag - flag is on when we should output
                     // support 320x200 resolution - native VGA is 480 lines - 
                     // don't display the first 40 lines or the last 40 lines
 
-                    if (x >= 0 && x < 40 && y <= 432 && y > 48)
+                    if (((x >= 0 && x <= 38 || x == 49) && y < 432 && y > 48)
+                        || (x >= 48 && y == 48))
                     {
                         val |= FLAG_DISPLAY;
                     }
 
                     // sync pulses, stay high and pulse low
-                    if (x > 40 && x < 47)
+                    if (x >= 41 && x <= 46)
                     {
                         val &= unchecked((byte)~FLAG_HSYNC);
                     }

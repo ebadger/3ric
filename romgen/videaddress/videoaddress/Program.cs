@@ -34,7 +34,11 @@ namespace videoaddress
         static ushort TEXT_PAGE_0_START     = 0x400;
         static ushort TEXT_PAGE_1_START     = 0x800;
 
-        static ushort ADDRESS_BLANK         = 0x0000;
+        static ushort   ADDRESS_BLANK         = 0x0003;
+
+        static ushort BIT_TXTSHIFT = 1 << 0;
+        static ushort BIT_GFXSHIFT = 1 << 1;
+        static ushort BIT_LOWSHIFT = 1 << 2;
 
         static ushort [] _scanLines= {
                 0x0000, 0x0400, 0x0800, 0x0C00, 0x1000, 0x1400, 0x1800, 0x1C00,
@@ -107,71 +111,105 @@ namespace videoaddress
         {
             // graphics mode page 1
             int idx = 0;
-            
+            ushort adjustedMode = mode;
+
             for (ushort y = 0; y < SCANLINES; y++)
             {
                 ushort startAdjusted = start;
 
-                if (!full && hires)
+                if (!full)
                 {
-                    if (y <= 400)
+                    if (hires)
                     {
-                        mode = GRAPHICS_MODE;
-
-                        if (page == PAGE_0)
+                        if (y <= 368)
                         {
-                            startAdjusted = GRAPHICS_PAGE_0_START;
+                            adjustedMode = GRAPHICS_MODE;
+
+                            if (page == PAGE_0)
+                            {
+                                startAdjusted = GRAPHICS_PAGE_0_START;
+                            }
+                            else
+                            {
+                                startAdjusted = GRAPHICS_PAGE_1_START;
+                            }
                         }
                         else
                         {
-                            startAdjusted = GRAPHICS_PAGE_1_START;
+                            adjustedMode = TEXT_MODE;
+
+                            if (page == PAGE_0)
+                            {
+                                startAdjusted = TEXT_PAGE_0_START;
+                            }
+                            else
+                            {
+                                startAdjusted = TEXT_PAGE_1_START;
+                            }
                         }
                     }
                     else
                     {
-                        mode = TEXT_MODE;
-
-                        if (page == PAGE_0)
+                        if (y <= 368)
                         {
-                            startAdjusted = TEXT_PAGE_0_START;
+                            adjustedMode = GRAPHICS_MODE;
+
+                            if (page == PAGE_0)
+                            {
+                                startAdjusted = TEXT_PAGE_0_START;
+                            }
+                            else
+                            {
+                                startAdjusted = TEXT_PAGE_1_START;
+                            }
                         }
                         else
                         {
-                            startAdjusted = TEXT_PAGE_1_START;
+                            adjustedMode = TEXT_MODE;
+
+                            if (page == PAGE_0)
+                            {
+                                startAdjusted = TEXT_PAGE_0_START;
+                            }
+                            else
+                            {
+                                startAdjusted = TEXT_PAGE_1_START;
+                            }
                         }
                     }
+
                 }
 
                 ushort elem = (ushort)(y + mode + page);
 
                 if (full)
                 {
-                    elem += GRAPHICS_FULL;
+                    elem |= GRAPHICS_FULL;
                 }
 
                 if (hires)
                 {
-                    elem += GRAPHICS_HIRES;
+                    elem |= GRAPHICS_HIRES;
                 }
 
-                if (mode == GRAPHICS_MODE && hires)
+                if (adjustedMode == GRAPHICS_MODE && hires)
                 {
                     if (y < 48)
                     {
                         mem[elem] = ADDRESS_BLANK; // (ushort)(addr + 1);
                     }
-                    else if (y <= 432)
+                    else if (y < 432)
                     {
-                        if (idx < 191)
+                        if (idx < 192)
                         {
                             idx = (y - 48) / 2;
                         }
 
                         ushort addr = (ushort)(startAdjusted + _scanLines[idx]);
+                        addr |= (ushort)(BIT_TXTSHIFT | BIT_LOWSHIFT);
 
                         mem[elem] = addr;
 
-                        addr |= 2;  // gfx shift
 
                         if (hires && full)
                         {
@@ -195,6 +233,42 @@ namespace videoaddress
                     }
 
                 }
+                else if (adjustedMode == GRAPHICS_MODE && !hires)
+                {
+                    if (y < 48)
+                    {
+                        mem[elem] = ADDRESS_BLANK;
+                    }
+                    else if (y < 432)
+                    {
+                        idx = (y - 48) / 16;
+                        ushort addr = (ushort)(startAdjusted + _scanLinesText[idx]); //(idx * 40)); // todo, change this to match A2 memory layout
+                        addr |= (ushort)(BIT_GFXSHIFT | BIT_TXTSHIFT); // high means not active
+
+                        Console.WriteLine("addr:0x{0:X4} y:{1} idx:{2}, 0x{3:X2}", addr, y, idx, (idx * 40));
+
+                        mem[elem] = addr;
+
+                        if (full)
+                        {
+                            if (PAGE_0 == page)
+                            {
+                                msbtext[idx] = (addr & 0xFF00) >> 8;
+                            }
+                            else
+                            {
+                                msbtext2[idx] = (addr & 0xFF00) >> 8;
+
+                            }
+                            lsbtext[idx] = (addr & 0xF8);
+                        }
+                    }
+                    else
+                    {
+                        mem[elem] = ADDRESS_BLANK;
+                    }
+
+                }
                 else
                 {
                     // text mode
@@ -207,10 +281,9 @@ namespace videoaddress
                     {
                         idx = (y - 48) / 16;
                         ushort addr = (ushort)(startAdjusted + _scanLinesText[idx]); //(idx * 40)); // todo, change this to match A2 memory layout
+                        addr |= (ushort)(BIT_GFXSHIFT | BIT_LOWSHIFT); // text shift low is the signal, high means not active
 
                         Console.WriteLine("addr:0x{0:X4} y:{1} idx:{2}, 0x{3:X2}", addr, y, idx, (idx * 40));
-
-                        addr |= 1;  // text shift
 
                         mem[elem] = addr;
 
@@ -259,7 +332,7 @@ namespace videoaddress
 
             for (int i = 0; i < ROMSIZE; i++)
             {
-                mem[i] = 0;
+                mem[i] = ADDRESS_BLANK;
             }
 
             // full mode

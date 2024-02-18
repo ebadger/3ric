@@ -14,7 +14,7 @@ namespace fontrom
 {
     internal class Program
     {
-        static bool consoleOutput = true;
+        static bool consoleOutput = false;
 
         static byte NotReverseBits(byte b)
         {
