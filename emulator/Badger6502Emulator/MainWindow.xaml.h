@@ -106,9 +106,11 @@ namespace winrt::Badger6502Emulator::implementation
         void SetSourceContents();
 
         void InitVGA();
+        void ClearVGA();
         void ProcessPixelOps();
         void PlotPixel(uint16_t row, uint16_t col, uint8_t color);
         void draw_hires_line_color_apple(uint8_t y, uint8_t* pHires);
+        void draw_lores_line_color_apple(uint8_t* pText);
         void draw_hires_line_eb6502(uint8_t y, uint8_t* pHires);
         void draw_text_eb6502(uint8_t* pText);
         void ProcessHires1();
@@ -145,6 +147,8 @@ namespace winrt::Badger6502Emulator::implementation
         int _gfxPage = 0;
         int _textMode = 0;
         int _font = 0;
+        int _mixed = 0;
+        int _lores = 0;
 
         uint8_t _hires1[0x2000];
         uint8_t _hires2[0x2000];

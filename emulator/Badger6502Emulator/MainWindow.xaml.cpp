@@ -848,15 +848,15 @@ namespace winrt::Badger6502Emulator::implementation
         //			CallbackSetSoftSwitches(_graphics, _page2, _mixed, _lores);
 
         _vm.CallbackSetSoftSwitches = [&](bool graphics, bool page2, bool mixed, bool lores) -> void {
-            UNREFERENCED_PARAMETER(mixed);
-            UNREFERENCED_PARAMETER(lores);
 
             bool queued = DispatcherQueue().TryEnqueue(
                 DispatcherQueuePriority::Low,
-                [&, graphics, page2]() {
+                [&, graphics, page2, mixed, lores]() {
                     _gfxPage = page2;
                     _textMode = !graphics;
-
+                    _mixed = mixed;
+                    _lores = lores;
+                    ClearVGA();
                     RefreshVideo();
                 });
 
@@ -1197,15 +1197,24 @@ namespace winrt::Badger6502Emulator::implementation
 
                 if (textModeTime >= .16)
                 {
-                    if ((_executionState == ExecutionState::Running
-                      || _executionState == ExecutionState::StepOver) 
-                      && _textMode == 1)
+                    if (_executionState == ExecutionState::Running
+                        || _executionState == ExecutionState::StepOver)
                     {
-                        DispatcherQueue().TryEnqueue(
-                            DispatcherQueuePriority::Low,
-                            [&]() {
-                                DrawText();
-                            });
+                        if (_textMode == 1 || _mixed == 1 || (_textMode == 0 && _lores == 1))
+                        {
+                            DispatcherQueue().TryEnqueue(
+                                DispatcherQueuePriority::Low,
+                                [&]() {
+                                    if (_textMode == 1 || _mixed == 1)
+                                    {
+                                        DrawText();
+                                    }
+                                    if (_textMode == 0 && _lores == 1)
+                                    {
+                                        DrawText(); // draw lowres
+                                    }
+                                });
+                        }
                     }
                     textModeTime = 0.0;
                 }
@@ -1344,29 +1353,29 @@ namespace winrt::Badger6502Emulator::implementation
         //EnterCriticalSection(&_cs);
 
         uint8_t* pHiRes = _hires1;
+        uint8_t* pText = _text1;
+
         if (_gfxPage == 1)
         {
             pHiRes = _hires2;
+            pText = _text2;
         }
 
-        for (uint8_t y = 0; y < 192; y++)
+        if (_lores == 0)
         {
-            //draw_hires_line_eb6502(y, pHiRes);
-            draw_hires_line_color_apple(y, pHiRes);
-        }
-
-        //LeaveCriticalSection(&_cs);
-
-        if (_textMode == 0)
-        {
-            _vgaBitmap.Invalidate();
-            imgVGA().Source(_vgaBitmap);
+            for (uint8_t y = 0; y < 192; y++)
+            {
+                //draw_hires_line_eb6502(y, pHiRes);
+                draw_hires_line_color_apple(y, pHiRes);
+            }
         }
         else
         {
-            _vgaBitmapTextMode.Invalidate();
-            imgVGA().Source(_vgaBitmapTextMode);
+            draw_lores_line_color_apple(pText);
         }
+        //LeaveCriticalSection(&_cs);
+
+        _vgaBitmap.Invalidate();
     }
 
     void MainWindow::SetSourceContents()
@@ -1455,13 +1464,18 @@ namespace winrt::Badger6502Emulator::implementation
 
     void MainWindow::InitVGA()
     {
-        _vgaBitmap = WriteableBitmap(320, 200);
+        _vgaBitmap = WriteableBitmap(320, 400);
         _pixelBuffer = (uint32_t*)_vgaBitmap.PixelBuffer().data();
 
-        _vgaBitmapTextMode = WriteableBitmap(320, 400);
-        _pixelBufferTextMode = (uint32_t*)_vgaBitmapTextMode.PixelBuffer().data();
+        //_vgaBitmapTextMode = WriteableBitmap(320, 400);
+        //_pixelBufferTextMode = (uint32_t*)_vgaBitmapTextMode.PixelBuffer().data();
 
         imgVGA().Source(_vgaBitmap);
+        ClearVGA();
+    }
+
+    void MainWindow::ClearVGA()
+    {
         // clear display
         for (uint16_t y = 0; y < 400; y++)
         {
@@ -1477,9 +1491,15 @@ namespace winrt::Badger6502Emulator::implementation
     {
         for (uint32_t x = 0; x < 40; x++)
         {
-            for (uint32_t y = 0; y < 400; y++)
+            uint32_t startrow = 0;
+            if (_mixed && !_textMode)
+            {
+                startrow = 320;
+            }
+
+            for (uint32_t y = startrow; y < 384; y++)
             {                
-                //uint32_t addr = ((y/16) * 40) + x;
+                //uint32_t addr = ((y/16) * 40) + x
                 uint32_t addr = textScanlines[y/16] + x;
                 uint8_t curr = pText[addr];
 
@@ -1496,11 +1516,11 @@ namespace winrt::Badger6502Emulator::implementation
                 {
                     if (bytes & (1<<i))
                     {
-                        _pixelBufferTextMode[(x * 8) + bit + (y * 320)] = 0xFFFFFFFF;
+                        _pixelBuffer[(x * 8) + bit + (y * 320)] = 0xFFFFFFFF;
                     }
                     else
                     {
-                        _pixelBufferTextMode[(x * 8) + bit + (y * 320)] = 0xFF000000;
+                        _pixelBuffer[(x * 8) + bit + (y * 320)] = 0xFF000000;
                     }
                     bit++;
                 }
@@ -1538,6 +1558,8 @@ namespace winrt::Badger6502Emulator::implementation
         uint8_t pallete = 0;
         uint8_t prevbit = 0;
         uint8_t color = 0;
+        uint16_t ya = y * 2;
+
    //                                Violet  Green           Cyan Red 
         uint8_t colors[2][4] = { {0x0, 0x5, 0x2, 0xF}, {0x0, 0x6, 0x1, 0xF} };
         uint16_t countPixel = 0;
@@ -1569,10 +1591,99 @@ namespace winrt::Badger6502Emulator::implementation
 
                 color = colors[pallete][index];
 
-                PlotPixel(y, countPixel++, color);
+                PlotPixel(ya, countPixel, color);
+                PlotPixel(ya+1, countPixel++, color);
 
                 prevbit = bit;
             }
+        }
+    }
+
+    void MainWindow::draw_lores_line_color_apple(uint8_t* pText)
+    {
+        uint8_t index = 0;
+        uint32_t color = 0;
+        uint32_t endy = 384;
+
+        if (_mixed == 1)
+        {
+            endy = 320;
+        }
+
+        for (uint32_t x = 0; x < 40; x++)
+        {
+            for (uint32_t y = 0; y < endy; y++)
+            {
+                uint32_t addr = textScanlines[y / 16] + x;
+                uint8_t curr = pText[addr];
+
+                if ((y & 8) == 0)
+                {
+                    index = curr & 0xF;
+                }
+                else
+                {
+                    index = curr >> 4;
+                }
+
+                switch (index)
+                {
+                case 0: // black
+                    color = 0xFF000000;
+                    break;
+                case 1: // magenta
+                    color = 0xFF901740;
+                    break;
+                case 2: // dark blue
+                    color = 0xFF402CA5;
+                    break;
+                case 3: // purple
+                    color = 0xFFD043E5;
+                    break;
+                case 4: // dark green
+                    color = 0xFF006940;
+                    break;
+                case 5: // Grey #1
+                    color = 0xFF808080;
+                    break;
+                case 6: // medium blue
+                    color = 0xFF2F95E5;
+                    break;
+                case 7: // light blue
+                    color = 0xFFBFABFF;
+                    break;
+                case 8: // brown
+                    color = 0xFF405400;
+                    break;
+                case 9: // orange
+                    color = 0xFFD06A1A;
+                    break;
+                case 10: // grey #2
+                    color = 0xFF808080;
+                    break;
+                case 11: // pink
+                    color = 0xFFFF96BF;
+                    break;
+                case 12: // green
+                    color = 0xFF2FBC1A;
+                    break;
+                case 13: // yellow
+                    color = 0xFFBFD35A;
+                    break;
+                case 14: // aqua
+                    color = 0xFF6FE8BF;
+                    break;
+                case 15: // white
+                    color = 0xFFFFFFFF;
+                    break;
+                }
+
+                for (int i = 0 ; i < 8; i++)
+                {
+                    _pixelBuffer[(x * 8) + i + (y * 320)] = color;
+                }
+            }
+
         }
     }
 
@@ -1600,7 +1711,14 @@ namespace winrt::Badger6502Emulator::implementation
         uint32_t newcolor = 0xFF000000; 
         uint32_t intensity = 0xFF;
 
-        if (row >= 200 || col >= 320)
+        uint32_t rowmax = 400;
+
+        if (_mixed && !_textMode)
+        {
+            rowmax = 336;
+        }
+
+        if (row >= rowmax || col >= 320)
         {
             return;
         }
@@ -2226,12 +2344,12 @@ namespace winrt::Badger6502Emulator::implementation
         {
             _hires1[pItem.address] = pItem.data;
 
-            if (_gfxPage == 0 && _textMode == 0)
+            if (_gfxPage == 0 && _textMode == 0 && _lores == 0)
             {
                 uint8_t y = pixelindex[pItem.address] & 0xFF;
                 vecLines.push_back(y);
+                dirty = true;
             }
-            dirty = true;
         }
         
         _vecHires1.clear();
@@ -2262,12 +2380,12 @@ namespace winrt::Badger6502Emulator::implementation
         {
             _hires2[pItem.address] = pItem.data;
 
-            if (_gfxPage == 1 && _textMode == 0)
+            if (_gfxPage == 1 && _textMode == 0 && _lores == 0)
             {
                 uint8_t y = pixelindex[pItem.address] & 0xFF;
                 vecLines.push_back(y);
+                dirty = true;
             }
-            dirty = true;
         }
 
         _vecHires2.clear();
@@ -2288,20 +2406,42 @@ namespace winrt::Badger6502Emulator::implementation
     {
         if (_textDirty)
         {
-            if (_textMode == 1)
+            if (_textMode == 1 || _mixed == 1 || _lores == 1)
             {
                 //draw_text_eb6502(_text1);
 
-                if (_gfxPage == 0)
+                if (_textMode == 1)
                 {
-                    draw_text_eb6502(_text1);
+                    if (_gfxPage == 0)
+                    {
+                        draw_text_eb6502(_text1);
+                    }
+                    else
+                    {
+                        draw_text_eb6502(_text2);
+                    }
                 }
                 else
                 {
-                    draw_text_eb6502(_text2);
+                    if (_gfxPage == 0)
+                    {
+                        draw_lores_line_color_apple(_text1);
+                        if (_mixed == 1)
+                        {
+                            draw_text_eb6502(_text1);
+                        }
+                    }
+                    else
+                    {
+                        draw_lores_line_color_apple(_text2);
+                        if (_mixed == 1)
+                        {
+                            draw_text_eb6502(_text2);
+                        }
+                    }
                 }
 
-                _vgaBitmapTextMode.Invalidate();
+                _vgaBitmap.Invalidate();
             }
         }
     }
@@ -2314,7 +2454,7 @@ namespace winrt::Badger6502Emulator::implementation
         {
             _text1[pItem.address] = pItem.data;
 
-            if (_gfxPage == 0 && _textMode == 1)
+            if (_gfxPage == 0 && (_textMode == 1 || _mixed == 1) || _lores == 1)
             {
                 _textDirty = true;
             }
@@ -2332,7 +2472,7 @@ namespace winrt::Badger6502Emulator::implementation
         {
             _text2[pItem.address] = pItem.data;
 
-            if (_gfxPage == 1 && _textMode == 1)
+            if (_gfxPage == 1 && (_textMode == 1 || _mixed == 1))
             {
                 _textDirty = true;
             }
