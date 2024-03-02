@@ -136,7 +136,7 @@ namespace fontrom
                         //int b = br.ReadByte();
                         int b = fontdata[(c2 * 16) + r];
 
-                        if ( c >= 0 && c < 128)
+                        if ( c >= 0 && c < 128) // inverse
                         {
                             b = ~b; 
                         }
@@ -170,6 +170,145 @@ namespace fontrom
                 }
                 iFont++;
                 f.Close();
+            }
+
+            // now populate the low-res graphics data
+
+            for(int i = 0; i < 256; i++)
+            {
+                for(int r = 0; r < 16; r++)
+                {
+                    for(int iPal = 0; iPal < 64; iPal++)  
+                    {
+                        // iPal == the color palette, for now, leave them all the same
+                        byte c = 0;
+                        byte b = 0;
+                        
+                        byte red = 0;
+                        byte green = 0;
+                        byte blue = 0;
+                        byte intensity = 0;
+
+                        if (r < 8)
+                        {
+                            c = (byte)(i >> 4);
+                        }
+                        else
+                        {
+                            c = (byte)(i & 0xF);
+                        }
+
+                        int address = (NotReverseBits((byte)i)) | (r & 0xF) << 8 | (iPal & 0xFF) << 12 | 1 << 18;
+                        if (address > maxaddress)
+                        {
+                            maxaddress = address;
+                        }
+
+                        switch(c)
+                        {
+                            case 0: // black
+                                red = 0;
+                                green = 0;
+                                blue = 0;
+                                intensity = 0;
+                                break;
+                            case 1: // red
+                                red = 3;
+                                green = 0;
+                                blue = 0;
+                                intensity = 0;
+                                break;
+                            case 2:  // dark blue
+                                red = 0;
+                                green = 0;
+                                blue = 3;
+                                intensity = 0;
+                                break;
+                            case 3: // purple
+                                red = 3;
+                                green = 0;
+                                blue = 3;
+                                intensity = 0;
+                                break;
+                            case 4: // Dark Green
+                                red = 0;
+                                green = 3;
+                                blue = 0;
+                                intensity = 0;
+                                break;
+                            case 5: // Gray 1
+                                red = 1;
+                                green = 1;
+                                blue = 1;
+                                intensity = 0;
+                                break;
+                            case 6: // Medium Blue
+                                red = 1;
+                                green = 1;
+                                blue = 3;
+                                intensity = 0;
+                                break;
+                            case 7: // Light Blue
+                                red = 2;
+                                green = 2;
+                                blue = 3;
+                                intensity = 1;
+                                break;
+                            case 8: // Brown
+                                red = 3;
+                                green = 2;
+                                blue = 0;
+                                intensity = 0;
+                                break;
+                            case 9: // orange
+                                red = 3;
+                                green = 1;
+                                blue = 0;
+                                intensity = 0;
+                                break;
+                            case 10: // Gray 2
+                                red = 2;
+                                green = 2;
+                                blue = 2;
+                                intensity = 0;
+                                break;
+                            case 11: // Pink
+                                red = 3;
+                                green = 1;
+                                blue = 1;
+                                intensity = 0;
+                                break;
+                            case 12: // Light Green
+                                red = 2;
+                                green = 3;
+                                blue = 2;
+                                intensity = 0;
+                                break;
+                            case 13: // Yellow
+                                red = 3;
+                                green = 3;
+                                blue = 0;
+                                intensity = 0;
+                                break;
+                            case 14: // Aqua
+                                red = 0;
+                                green = 3;
+                                blue = 3;
+                                intensity = 0;
+                                break;
+                            case 15: // White
+                                red = 3;
+                                green = 3;
+                                blue = 3;
+                                intensity = 3;
+                                break;
+                        }
+
+                        b = (byte)((red & 3) | (green & 3) << 2 | (blue & 3) << 4 | (intensity & 3) << 6);
+                        mem[address] = (byte)b;
+
+                    }
+                }
             }
 
             // font rom memory populated, now output

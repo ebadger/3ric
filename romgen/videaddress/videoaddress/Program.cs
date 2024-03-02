@@ -34,7 +34,7 @@ namespace videoaddress
         static ushort TEXT_PAGE_0_START     = 0x400;
         static ushort TEXT_PAGE_1_START     = 0x800;
 
-        static ushort   ADDRESS_BLANK         = 0x0003;
+        static ushort   ADDRESS_BLANK         = 0x0007;
 
         static ushort BIT_TXTSHIFT = 1 << 0;
         static ushort BIT_GFXSHIFT = 1 << 1;
@@ -117,7 +117,7 @@ namespace videoaddress
             {
                 ushort startAdjusted = start;
 
-                if (!full)
+                if (!full && GRAPHICS_MODE == mode)
                 {
                     if (hires)
                     {
