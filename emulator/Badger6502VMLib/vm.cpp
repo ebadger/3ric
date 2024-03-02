@@ -373,14 +373,14 @@ void VM::WriteData(uint16_t address, uint8_t byte)
 			}
 #endif
 		}
-		else if (address >= 0x400 && address <= 0x7E8)
+		else if (address >= 0x400 && address <= 0x7FF)
 		{
 			if (CallbackText1)
 			{
 				CallbackText1(address - 0x400, byte);
 			}
 		}
-		else if (address >= 0x800 && address <= 0xBE8)
+		else if (address >= 0x800 && address <= 0xBFF)
 		{
 			if (CallbackText2)
 			{

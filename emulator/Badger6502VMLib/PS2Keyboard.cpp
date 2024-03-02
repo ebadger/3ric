@@ -98,7 +98,8 @@ void PS2Keyboard::ProcessKeys(uint32_t cycles)
 // send raw bits from hardware based on clock cycle
 void PS2Keyboard::ProcessRaw(uint8_t bit)
 {
-    _vm->WriteData(MM_VIA1_START + VIA::ORA_IRA_2, bit); // via2 PORTA 0 bit, 
+    bit <<= 7;
+    _vm->WriteData(MM_VIA1_START + VIA::ORA_IRA_2, bit); // via2 PORTA 7 bit, 
     _vm->GetVIA1()->SignalPin(VIA::CA2);
 }
 
