@@ -488,44 +488,72 @@
       ""
     ],
     [
+      "16ecb62b-433c-4b3d-ae08-a168010e2dc7",
+      "Clock and VGA signals"
+    ],
+    [
       "b61474be-3832-4b6c-a3a4-928ac814faf5",
-      "vga_memsignal"
-    ],
-    [
-      "817a35a7-de63-4412-ae79-57fde5eabc67",
-      "Communication"
-    ],
-    [
-      "290c257d-4d63-492d-a5ad-035c64fcf51c",
-      "romdisk"
+      "Clock signals"
     ],
     [
       "3a5ec449-df9a-4784-a739-e66dc5cc26a2",
-      "vga_vidmem"
+      "Video address and counters"
     ],
     [
-      "764b565a-6190-4617-a6c7-5dd4a5c3617c",
-      "Power"
+      "24a3ac67-b632-4551-8167-d5cda39cc266",
+      "RAM"
     ],
     [
-      "764de188-ec10-46d2-ad5c-532e61c9ad1a",
-      "pixels"
+      "8b246c3b-322e-4fcf-a8df-6ee4f32565fa",
+      "cpu_rom"
     ],
     [
-      "16ecb62b-433c-4b3d-ae08-a168010e2dc7",
-      "vgatiming"
-    ],
-    [
-      "f1111e82-0abc-4d93-b82c-5bd5a885becb",
-      "PLL"
+      "817a35a7-de63-4412-ae79-57fde5eabc67",
+      "Devices, Serial, VIA"
     ],
     [
       "b718fcb1-8742-4b46-85e8-c35e05bc00ea",
       "address_decoder"
     ],
     [
+      "eb62d39d-6f37-46b8-9c1d-ed974a0a8b66",
+      "SoftSwitches"
+    ],
+    [
       "c920751f-edd2-4cd3-a630-9d0b3423e6d7",
-      "banking"
+      "Language Card and Sound"
+    ],
+    [
+      "9c158148-99b1-450a-8b7f-3c07647c5968",
+      "TextMode"
+    ],
+    [
+      "f1111e82-0abc-4d93-b82c-5bd5a885becb",
+      "PLL"
+    ],
+    [
+      "764b565a-6190-4617-a6c7-5dd4a5c3617c",
+      "Power"
+    ],
+    [
+      "290c257d-4d63-492d-a5ad-035c64fcf51c",
+      "romdisk"
+    ],
+    [
+      "daee66e3-1acf-4bf2-888e-d1288a5b77db",
+      "Mockingboard"
+    ],
+    [
+      "896392e0-4074-452d-a014-a15ee50eb391",
+      "GraphicsV2"
+    ],
+    [
+      "3d1988b8-66f2-463c-870d-4e35da6e7dd8",
+      "Power2"
+    ],
+    [
+      "90cce3b8-f6c8-4528-982c-77be2de27ade",
+      "LowRes"
     ]
   ],
   "text_variables": {}

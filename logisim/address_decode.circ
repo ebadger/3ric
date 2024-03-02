@@ -91,7 +91,7 @@
     <a name="circuit" val="main"/>
     <a name="circuitnamedboxfixedsize" val="true"/>
     <a name="clabelup" val="west"/>
-    <a name="simulationFrequency" val="256.0"/>
+    <a name="simulationFrequency" val="16.0"/>
     <comp lib="0" loc="(1040,1570)" name="Tunnel">
       <a name="facing" val="north"/>
       <a name="label" val="BSS"/>
@@ -450,17 +450,79 @@
       <a name="fanout" val="4"/>
       <a name="incoming" val="4"/>
     </comp>
+    <comp lib="0" loc="(2180,1010)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="VIDENABLE"/>
+    </comp>
     <comp lib="0" loc="(220,1360)" name="Tunnel">
       <a name="facing" val="east"/>
       <a name="label" val="SS"/>
+    </comp>
+    <comp lib="0" loc="(2210,1220)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="RAM"/>
+    </comp>
+    <comp lib="0" loc="(2210,1290)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="VIDBUS"/>
+    </comp>
+    <comp lib="0" loc="(2220,1380)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="RW"/>
+    </comp>
+    <comp lib="0" loc="(2220,1470)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="PHI2"/>
+    </comp>
+    <comp lib="0" loc="(2220,720)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="RW"/>
+    </comp>
+    <comp lib="0" loc="(2220,760)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="VIDBUS"/>
+    </comp>
+    <comp lib="0" loc="(2220,800)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="VIDENABLE"/>
+    </comp>
+    <comp lib="0" loc="(2220,840)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="PHI2"/>
     </comp>
     <comp lib="0" loc="(230,440)" name="Tunnel">
       <a name="facing" val="north"/>
       <a name="label" val="A5"/>
     </comp>
+    <comp lib="0" loc="(2310,1050)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="ROM"/>
+    </comp>
+    <comp lib="0" loc="(2310,1120)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="DEV"/>
+    </comp>
     <comp lib="0" loc="(240,1460)" name="Tunnel">
       <a name="facing" val="north"/>
       <a name="label" val="CXXX"/>
+    </comp>
+    <comp lib="0" loc="(2460,1030)" name="Tunnel">
+      <a name="label" val="CS_ROM"/>
+    </comp>
+    <comp lib="0" loc="(2460,1100)" name="Tunnel">
+      <a name="label" val="CS_DEVICE"/>
+    </comp>
+    <comp lib="0" loc="(2460,1180)" name="Tunnel">
+      <a name="label" val="CS_CPUBUS"/>
+    </comp>
+    <comp lib="0" loc="(2460,1270)" name="Tunnel">
+      <a name="label" val="CS_RAM"/>
+    </comp>
+    <comp lib="0" loc="(2460,1360)" name="Tunnel">
+      <a name="label" val="OE"/>
+    </comp>
+    <comp lib="0" loc="(2460,1450)" name="Tunnel">
+      <a name="label" val="WE"/>
     </comp>
     <comp lib="0" loc="(250,1240)" name="Tunnel">
       <a name="facing" val="north"/>
@@ -513,9 +575,6 @@
       <a name="facing" val="north"/>
       <a name="label" val="A1"/>
     </comp>
-    <comp lib="0" loc="(320,640)" name="Tunnel">
-      <a name="label" val="DXXX"/>
-    </comp>
     <comp lib="0" loc="(330,440)" name="Tunnel">
       <a name="facing" val="north"/>
       <a name="label" val="A0"/>
@@ -558,7 +617,7 @@
     </comp>
     <comp lib="0" loc="(370,960)" name="Tunnel">
       <a name="facing" val="north"/>
-      <a name="label" val="x80"/>
+      <a name="label" val="x60"/>
     </comp>
     <comp lib="0" loc="(380,1730)" name="Tunnel">
       <a name="facing" val="north"/>
@@ -572,6 +631,10 @@
       <a name="facing" val="south"/>
       <a name="fanout" val="4"/>
       <a name="incoming" val="4"/>
+    </comp>
+    <comp lib="0" loc="(410,960)" name="Tunnel">
+      <a name="facing" val="north"/>
+      <a name="label" val="x80"/>
     </comp>
     <comp lib="0" loc="(420,1730)" name="Tunnel">
       <a name="facing" val="north"/>
@@ -628,6 +691,9 @@
       <a name="facing" val="east"/>
       <a name="label" val="CLK"/>
     </comp>
+    <comp lib="0" loc="(510,630)" name="Tunnel">
+      <a name="label" val="DXXX"/>
+    </comp>
     <comp lib="0" loc="(520,1240)" name="Tunnel">
       <a name="facing" val="north"/>
       <a name="label" val="x9"/>
@@ -656,19 +722,35 @@
       <a name="facing" val="north"/>
       <a name="label" val="SS"/>
     </comp>
+    <comp lib="0" loc="(620,1460)" name="Tunnel">
+      <a name="facing" val="north"/>
+      <a name="label" val="SS"/>
+    </comp>
     <comp lib="0" loc="(620,1720)" name="Tunnel">
       <a name="facing" val="north"/>
       <a name="label" val="x30"/>
     </comp>
-    <comp lib="0" loc="(680,370)" name="Tunnel">
+    <comp lib="0" loc="(630,430)" name="Tunnel">
+      <a name="facing" val="north"/>
+      <a name="label" val="JOYSS"/>
+    </comp>
+    <comp lib="0" loc="(640,1360)" name="Tunnel">
       <a name="facing" val="east"/>
-      <a name="label" val="KBD"/>
+      <a name="label" val="JOYSS"/>
     </comp>
     <comp lib="0" loc="(70,440)" name="Tunnel">
       <a name="facing" val="north"/>
       <a name="label" val="A13"/>
     </comp>
-    <comp lib="0" loc="(700,500)" name="Tunnel">
+    <comp lib="0" loc="(700,1460)" name="Tunnel">
+      <a name="facing" val="north"/>
+      <a name="label" val="x60"/>
+    </comp>
+    <comp lib="0" loc="(700,430)" name="Tunnel">
+      <a name="facing" val="north"/>
+      <a name="label" val="KBD"/>
+    </comp>
+    <comp lib="0" loc="(700,570)" name="Tunnel">
       <a name="facing" val="north"/>
       <a name="label" val="A13OR12"/>
     </comp>
@@ -676,21 +758,21 @@
       <a name="facing" val="east"/>
       <a name="label" val="DEV"/>
     </comp>
-    <comp lib="0" loc="(760,570)" name="Tunnel">
+    <comp lib="0" loc="(760,640)" name="Tunnel">
       <a name="facing" val="north"/>
       <a name="label" val="A13"/>
     </comp>
-    <comp lib="0" loc="(780,780)" name="Tunnel">
-      <a name="facing" val="south"/>
-      <a name="label" val="RW"/>
-    </comp>
-    <comp lib="0" loc="(800,570)" name="Tunnel">
+    <comp lib="0" loc="(800,640)" name="Tunnel">
       <a name="facing" val="north"/>
       <a name="label" val="A12"/>
     </comp>
-    <comp lib="0" loc="(830,480)" name="Tunnel">
+    <comp lib="0" loc="(830,550)" name="Tunnel">
       <a name="facing" val="north"/>
       <a name="label" val="A11"/>
+    </comp>
+    <comp lib="0" loc="(850,230)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="RAM"/>
     </comp>
     <comp lib="0" loc="(860,830)" name="Tunnel">
       <a name="facing" val="north"/>
@@ -712,7 +794,7 @@
       <a name="facing" val="north"/>
       <a name="label" val="xA"/>
     </comp>
-    <comp lib="0" loc="(990,900)" name="Tunnel">
+    <comp lib="0" loc="(990,890)" name="Tunnel">
       <a name="facing" val="north"/>
       <a name="label" val="A12"/>
     </comp>
@@ -903,9 +985,24 @@
     <comp lib="1" loc="(210,770)" name="OR Gate">
       <a name="size" val="30"/>
     </comp>
+    <comp lib="1" loc="(2230,1010)" name="NOT Gate">
+      <a name="size" val="20"/>
+    </comp>
+    <comp lib="1" loc="(2270,1380)" name="NOT Gate">
+      <a name="size" val="20"/>
+    </comp>
+    <comp lib="1" loc="(2270,1470)" name="NOT Gate">
+      <a name="size" val="20"/>
+    </comp>
     <comp lib="1" loc="(230,1590)" name="OR Gate">
       <a name="facing" val="north"/>
     </comp>
+    <comp lib="1" loc="(2390,1030)" name="OR Gate"/>
+    <comp lib="1" loc="(2390,1100)" name="OR Gate"/>
+    <comp lib="1" loc="(2390,1180)" name="OR Gate"/>
+    <comp lib="1" loc="(2390,1270)" name="AND Gate"/>
+    <comp lib="1" loc="(2390,1360)" name="AND Gate"/>
+    <comp lib="1" loc="(2390,1450)" name="OR Gate"/>
     <comp lib="1" loc="(250,1090)" name="NOT Gate">
       <a name="facing" val="south"/>
       <a name="size" val="20"/>
@@ -946,18 +1043,22 @@
     <comp lib="1" loc="(290,600)" name="AND Gate">
       <a name="size" val="30"/>
     </comp>
+    <comp lib="1" loc="(290,640)" name="AND Gate">
+      <a name="size" val="30"/>
+    </comp>
     <comp lib="1" loc="(300,1090)" name="NOT Gate">
       <a name="facing" val="south"/>
       <a name="size" val="20"/>
-    </comp>
-    <comp lib="1" loc="(300,640)" name="NAND Gate">
-      <a name="size" val="30"/>
     </comp>
     <comp lib="1" loc="(300,910)" name="NOT Gate">
       <a name="facing" val="south"/>
       <a name="size" val="20"/>
     </comp>
     <comp lib="1" loc="(310,1090)" name="NOT Gate">
+      <a name="facing" val="south"/>
+      <a name="size" val="20"/>
+    </comp>
+    <comp lib="1" loc="(310,910)" name="NOT Gate">
       <a name="facing" val="south"/>
       <a name="size" val="20"/>
     </comp>
@@ -1016,6 +1117,9 @@
     <comp lib="1" loc="(440,1570)" name="OR Gate">
       <a name="facing" val="north"/>
     </comp>
+    <comp lib="1" loc="(490,630)" name="NAND Gate">
+      <a name="size" val="30"/>
+    </comp>
     <comp lib="1" loc="(530,1380)" name="OR Gate">
       <a name="facing" val="north"/>
     </comp>
@@ -1025,22 +1129,26 @@
     <comp lib="1" loc="(600,1640)" name="OR Gate">
       <a name="facing" val="north"/>
     </comp>
-    <comp lib="1" loc="(720,370)" name="NOT Gate">
-      <a name="size" val="20"/>
+    <comp lib="1" loc="(660,1380)" name="OR Gate">
+      <a name="facing" val="north"/>
     </comp>
-    <comp lib="1" loc="(750,330)" name="OR Gate">
+    <comp lib="1" loc="(670,360)" name="NAND Gate">
       <a name="facing" val="north"/>
       <a name="size" val="30"/>
     </comp>
-    <comp lib="1" loc="(760,370)" name="OR Gate">
+    <comp lib="1" loc="(750,310)" name="OR Gate">
       <a name="facing" val="north"/>
       <a name="size" val="30"/>
     </comp>
-    <comp lib="1" loc="(780,520)" name="OR Gate">
+    <comp lib="1" loc="(760,430)" name="OR Gate">
       <a name="facing" val="north"/>
       <a name="size" val="30"/>
     </comp>
-    <comp lib="1" loc="(810,430)" name="OR Gate">
+    <comp lib="1" loc="(780,590)" name="OR Gate">
+      <a name="facing" val="north"/>
+      <a name="size" val="30"/>
+    </comp>
+    <comp lib="1" loc="(810,500)" name="OR Gate">
       <a name="facing" val="north"/>
       <a name="size" val="30"/>
     </comp>
@@ -1066,7 +1174,7 @@
     <comp lib="1" loc="(990,1450)" name="OR Gate">
       <a name="facing" val="north"/>
     </comp>
-    <comp lib="1" loc="(990,860)" name="NOT Gate">
+    <comp lib="1" loc="(990,850)" name="NOT Gate">
       <a name="facing" val="north"/>
       <a name="size" val="20"/>
     </comp>
@@ -1133,6 +1241,9 @@
       <a name="facing" val="south"/>
       <a name="label" val="HIRES"/>
     </comp>
+    <comp lib="5" loc="(2240,870)" name="DipSwitch">
+      <a name="number" val="5"/>
+    </comp>
     <comp lib="5" loc="(360,210)" name="Hex Digit Display">
       <a name="labelvisible" val="true"/>
     </comp>
@@ -1148,9 +1259,6 @@
       <a name="labelvisible" val="true"/>
     </comp>
     <comp lib="5" loc="(480,210)" name="Hex Digit Display"/>
-    <comp lib="5" loc="(660,850)" name="DipSwitch">
-      <a name="number" val="5"/>
-    </comp>
     <comp lib="5" loc="(750,220)" name="LED">
       <a name="facing" val="south"/>
       <a name="label" val="dev"/>
@@ -1537,6 +1645,7 @@
     <wire from="(210,720)" to="(220,720)"/>
     <wire from="(210,770)" to="(220,770)"/>
     <wire from="(210,860)" to="(250,860)"/>
+    <wire from="(2180,1010)" to="(2210,1010)"/>
     <wire from="(220,1360)" to="(270,1360)"/>
     <wire from="(220,540)" to="(220,550)"/>
     <wire from="(220,540)" to="(260,540)"/>
@@ -1544,12 +1653,50 @@
     <wire from="(220,730)" to="(240,730)"/>
     <wire from="(220,750)" to="(220,770)"/>
     <wire from="(220,750)" to="(240,750)"/>
+    <wire from="(2210,1220)" to="(2250,1220)"/>
+    <wire from="(2210,1290)" to="(2250,1290)"/>
+    <wire from="(2220,1380)" to="(2230,1380)"/>
+    <wire from="(2220,1470)" to="(2250,1470)"/>
+    <wire from="(2220,720)" to="(2290,720)"/>
+    <wire from="(2220,760)" to="(2270,760)"/>
+    <wire from="(2220,800)" to="(2260,800)"/>
+    <wire from="(2220,840)" to="(2250,840)"/>
+    <wire from="(2230,1010)" to="(2250,1010)"/>
+    <wire from="(2230,1380)" to="(2230,1430)"/>
+    <wire from="(2230,1380)" to="(2250,1380)"/>
+    <wire from="(2230,1430)" to="(2340,1430)"/>
+    <wire from="(2250,1010)" to="(2250,1080)"/>
+    <wire from="(2250,1010)" to="(2340,1010)"/>
+    <wire from="(2250,1080)" to="(2250,1160)"/>
+    <wire from="(2250,1080)" to="(2340,1080)"/>
+    <wire from="(2250,1160)" to="(2340,1160)"/>
+    <wire from="(2250,1200)" to="(2250,1220)"/>
+    <wire from="(2250,1200)" to="(2340,1200)"/>
+    <wire from="(2250,1220)" to="(2250,1250)"/>
+    <wire from="(2250,1250)" to="(2340,1250)"/>
+    <wire from="(2250,1290)" to="(2250,1340)"/>
+    <wire from="(2250,1290)" to="(2340,1290)"/>
+    <wire from="(2250,1340)" to="(2340,1340)"/>
+    <wire from="(2250,840)" to="(2250,870)"/>
+    <wire from="(2260,800)" to="(2260,870)"/>
+    <wire from="(2270,1380)" to="(2340,1380)"/>
+    <wire from="(2270,1470)" to="(2340,1470)"/>
+    <wire from="(2270,760)" to="(2270,870)"/>
+    <wire from="(2290,720)" to="(2290,870)"/>
     <wire from="(230,1570)" to="(230,1590)"/>
     <wire from="(230,320)" to="(230,440)"/>
     <wire from="(230,320)" to="(470,320)"/>
     <wire from="(230,610)" to="(230,630)"/>
     <wire from="(230,610)" to="(260,610)"/>
     <wire from="(230,630)" to="(260,630)"/>
+    <wire from="(2310,1050)" to="(2340,1050)"/>
+    <wire from="(2310,1120)" to="(2340,1120)"/>
+    <wire from="(2390,1030)" to="(2460,1030)"/>
+    <wire from="(2390,1100)" to="(2460,1100)"/>
+    <wire from="(2390,1180)" to="(2460,1180)"/>
+    <wire from="(2390,1270)" to="(2460,1270)"/>
+    <wire from="(2390,1360)" to="(2460,1360)"/>
+    <wire from="(2390,1450)" to="(2460,1450)"/>
     <wire from="(240,1450)" to="(240,1460)"/>
     <wire from="(240,1450)" to="(250,1450)"/>
     <wire from="(250,1050)" to="(250,1070)"/>
@@ -1586,6 +1733,7 @@
     <wire from="(290,290)" to="(500,290)"/>
     <wire from="(290,530)" to="(300,530)"/>
     <wire from="(290,600)" to="(300,600)"/>
+    <wire from="(290,640)" to="(450,640)"/>
     <wire from="(290,940)" to="(290,960)"/>
     <wire from="(30,420)" to="(30,440)"/>
     <wire from="(30,420)" to="(370,420)"/>
@@ -1594,10 +1742,10 @@
     <wire from="(300,1180)" to="(400,1180)"/>
     <wire from="(300,1450)" to="(300,1460)"/>
     <wire from="(300,530)" to="(300,560)"/>
+    <wire from="(300,530)" to="(430,530)"/>
     <wire from="(300,560)" to="(320,560)"/>
     <wire from="(300,580)" to="(300,600)"/>
     <wire from="(300,580)" to="(320,580)"/>
-    <wire from="(300,640)" to="(320,640)"/>
     <wire from="(300,880)" to="(300,890)"/>
     <wire from="(300,910)" to="(300,950)"/>
     <wire from="(300,950)" to="(330,950)"/>
@@ -1607,6 +1755,9 @@
     <wire from="(310,1210)" to="(310,1240)"/>
     <wire from="(310,280)" to="(310,440)"/>
     <wire from="(310,280)" to="(510,280)"/>
+    <wire from="(310,880)" to="(310,890)"/>
+    <wire from="(310,910)" to="(310,940)"/>
+    <wire from="(310,940)" to="(370,940)"/>
     <wire from="(320,1050)" to="(320,1070)"/>
     <wire from="(320,1090)" to="(320,1160)"/>
     <wire from="(320,1160)" to="(460,1160)"/>
@@ -1617,7 +1768,7 @@
     <wire from="(330,270)" to="(520,270)"/>
     <wire from="(330,880)" to="(330,890)"/>
     <wire from="(330,910)" to="(330,930)"/>
-    <wire from="(330,930)" to="(370,930)"/>
+    <wire from="(330,930)" to="(410,930)"/>
     <wire from="(330,950)" to="(330,960)"/>
     <wire from="(340,1050)" to="(340,1070)"/>
     <wire from="(340,1090)" to="(340,1140)"/>
@@ -1641,7 +1792,7 @@
     <wire from="(370,1450)" to="(380,1450)"/>
     <wire from="(370,250)" to="(370,420)"/>
     <wire from="(370,420)" to="(370,440)"/>
-    <wire from="(370,930)" to="(370,960)"/>
+    <wire from="(370,940)" to="(370,960)"/>
     <wire from="(380,1050)" to="(380,1070)"/>
     <wire from="(380,1430)" to="(380,1450)"/>
     <wire from="(380,1620)" to="(380,1640)"/>
@@ -1662,6 +1813,7 @@
     <wire from="(400,390)" to="(400,440)"/>
     <wire from="(410,250)" to="(410,380)"/>
     <wire from="(410,380)" to="(410,440)"/>
+    <wire from="(410,930)" to="(410,960)"/>
     <wire from="(420,1430)" to="(420,1450)"/>
     <wire from="(420,1450)" to="(430,1450)"/>
     <wire from="(420,1620)" to="(420,1640)"/>
@@ -1673,6 +1825,8 @@
     <wire from="(430,1550)" to="(440,1550)"/>
     <wire from="(430,250)" to="(430,360)"/>
     <wire from="(430,360)" to="(430,440)"/>
+    <wire from="(430,530)" to="(430,620)"/>
+    <wire from="(430,620)" to="(450,620)"/>
     <wire from="(440,1550)" to="(440,1570)"/>
     <wire from="(440,210)" to="(440,230)"/>
     <wire from="(440,250)" to="(440,350)"/>
@@ -1692,6 +1846,7 @@
     <wire from="(490,1360)" to="(530,1360)"/>
     <wire from="(490,250)" to="(490,300)"/>
     <wire from="(490,300)" to="(490,440)"/>
+    <wire from="(490,630)" to="(510,630)"/>
     <wire from="(490,750)" to="(520,750)"/>
     <wire from="(50,410)" to="(380,410)"/>
     <wire from="(50,410)" to="(50,440)"/>
@@ -1721,43 +1876,55 @@
     <wire from="(580,1550)" to="(580,1560)"/>
     <wire from="(580,1690)" to="(580,1720)"/>
     <wire from="(600,1610)" to="(600,1640)"/>
+    <wire from="(620,1440)" to="(620,1460)"/>
+    <wire from="(620,1440)" to="(640,1440)"/>
     <wire from="(620,1690)" to="(620,1720)"/>
-    <wire from="(640,420)" to="(640,720)"/>
-    <wire from="(640,420)" to="(750,420)"/>
+    <wire from="(630,410)" to="(630,430)"/>
+    <wire from="(630,410)" to="(660,410)"/>
+    <wire from="(640,1360)" to="(660,1360)"/>
+    <wire from="(640,1430)" to="(640,1440)"/>
+    <wire from="(640,480)" to="(640,720)"/>
+    <wire from="(640,480)" to="(750,480)"/>
     <wire from="(640,720)" to="(880,720)"/>
-    <wire from="(680,370)" to="(700,370)"/>
+    <wire from="(660,1360)" to="(660,1380)"/>
+    <wire from="(660,400)" to="(660,410)"/>
+    <wire from="(670,350)" to="(670,360)"/>
+    <wire from="(670,350)" to="(740,350)"/>
+    <wire from="(680,1430)" to="(680,1440)"/>
+    <wire from="(680,1440)" to="(700,1440)"/>
+    <wire from="(680,400)" to="(680,410)"/>
+    <wire from="(680,410)" to="(700,410)"/>
     <wire from="(70,400)" to="(390,400)"/>
     <wire from="(70,400)" to="(70,440)"/>
-    <wire from="(700,480)" to="(700,500)"/>
-    <wire from="(700,480)" to="(780,480)"/>
+    <wire from="(700,1440)" to="(700,1460)"/>
+    <wire from="(700,410)" to="(700,430)"/>
+    <wire from="(700,550)" to="(700,570)"/>
+    <wire from="(700,550)" to="(780,550)"/>
     <wire from="(710,250)" to="(750,250)"/>
-    <wire from="(710,840)" to="(710,850)"/>
-    <wire from="(710,840)" to="(780,840)"/>
-    <wire from="(720,370)" to="(740,370)"/>
-    <wire from="(740,360)" to="(740,370)"/>
+    <wire from="(740,340)" to="(740,350)"/>
     <wire from="(750,220)" to="(750,250)"/>
     <wire from="(750,250)" to="(750,300)"/>
-    <wire from="(750,300)" to="(750,330)"/>
+    <wire from="(750,300)" to="(750,310)"/>
     <wire from="(750,300)" to="(870,300)"/>
-    <wire from="(750,400)" to="(750,420)"/>
-    <wire from="(760,360)" to="(760,370)"/>
-    <wire from="(760,560)" to="(760,570)"/>
-    <wire from="(760,560)" to="(770,560)"/>
-    <wire from="(770,400)" to="(770,420)"/>
-    <wire from="(770,420)" to="(810,420)"/>
-    <wire from="(770,550)" to="(770,560)"/>
-    <wire from="(780,470)" to="(780,480)"/>
-    <wire from="(780,470)" to="(800,470)"/>
-    <wire from="(780,480)" to="(780,520)"/>
-    <wire from="(780,780)" to="(780,840)"/>
-    <wire from="(790,550)" to="(790,560)"/>
-    <wire from="(790,560)" to="(800,560)"/>
-    <wire from="(800,460)" to="(800,470)"/>
-    <wire from="(800,560)" to="(800,570)"/>
-    <wire from="(810,420)" to="(810,430)"/>
-    <wire from="(820,460)" to="(820,470)"/>
-    <wire from="(820,470)" to="(830,470)"/>
-    <wire from="(830,470)" to="(830,480)"/>
+    <wire from="(750,460)" to="(750,480)"/>
+    <wire from="(760,340)" to="(760,430)"/>
+    <wire from="(760,630)" to="(760,640)"/>
+    <wire from="(760,630)" to="(770,630)"/>
+    <wire from="(770,460)" to="(770,480)"/>
+    <wire from="(770,480)" to="(810,480)"/>
+    <wire from="(770,620)" to="(770,630)"/>
+    <wire from="(780,540)" to="(780,550)"/>
+    <wire from="(780,540)" to="(800,540)"/>
+    <wire from="(780,550)" to="(780,590)"/>
+    <wire from="(790,620)" to="(790,630)"/>
+    <wire from="(790,630)" to="(800,630)"/>
+    <wire from="(800,530)" to="(800,540)"/>
+    <wire from="(800,630)" to="(800,640)"/>
+    <wire from="(810,480)" to="(810,500)"/>
+    <wire from="(820,530)" to="(820,540)"/>
+    <wire from="(820,540)" to="(830,540)"/>
+    <wire from="(830,540)" to="(830,550)"/>
+    <wire from="(850,230)" to="(880,230)"/>
     <wire from="(860,810)" to="(860,830)"/>
     <wire from="(860,810)" to="(870,810)"/>
     <wire from="(870,1830)" to="(2030,1830)"/>
@@ -1765,7 +1932,8 @@
     <wire from="(870,790)" to="(870,810)"/>
     <wire from="(870,990)" to="(2020,990)"/>
     <wire from="(870,990)" to="(870,1830)"/>
-    <wire from="(880,220)" to="(880,240)"/>
+    <wire from="(880,220)" to="(880,230)"/>
+    <wire from="(880,230)" to="(880,240)"/>
     <wire from="(880,720)" to="(880,750)"/>
     <wire from="(880,720)" to="(950,720)"/>
     <wire from="(890,280)" to="(890,300)"/>
@@ -1791,7 +1959,7 @@
     <wire from="(990,1250)" to="(990,1410)"/>
     <wire from="(990,1410)" to="(1070,1410)"/>
     <wire from="(990,1410)" to="(990,1450)"/>
-    <wire from="(990,790)" to="(990,860)"/>
-    <wire from="(990,880)" to="(990,900)"/>
+    <wire from="(990,790)" to="(990,850)"/>
+    <wire from="(990,870)" to="(990,890)"/>
   </circuit>
 </project>
