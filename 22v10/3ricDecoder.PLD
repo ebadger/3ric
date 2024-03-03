@@ -18,6 +18,7 @@ Device   g22v10 ;
 
 /* input pins */
 
+
 Pin 1        = PHI2;
 Pin 2        = RW;
 Pin [3..7]   = [A15..A11];
@@ -27,6 +28,7 @@ Pin 10       = RAMWRITE;       /* Bank RAM Write */
 Pin 11       = VIDBUS;    /* low when video hardware has the bus */
 Pin 13       = VIDENABLE; /* low when video hardware takes ownership of bus */
 Pin 18       = KBD;
+Pin 20       = RAM;
 Pin 22       = RAMREAD;       /* Bank RAM Read  */
 
 /* output pins */
@@ -36,24 +38,28 @@ Pin 15       = WE;
 Pin 16       = ROM_CS;
 Pin 17       = RAM_CS;
 Pin 19       = A16;
-Pin 20       = CPUBUS_CS;
 Pin 21       = DEVICE_CS;
+Pin 23       = CPUBUS_CS;
 
 /* Logic for signals when CPU controls the bus */
 DEV          = !(A14 & A15) # A13 # A12 # A11 # !KBD;
 ROM          = (!(A14 & A15) # (!A12 & !A13) # (RAMREAD & RW) # (RAMWRITE & !RW)) & !((A13 # A12) & A15 & BB & !A14);
 RAM          = !(ROM & DEV);
 
+/* RAM should always be low when video hardware accesses bus*/
+RAM_CS       = RAM & VIDENABLE;
+
 /* ROM and DEVICE should always be high when video accesses the bus */
 ROM_CS       = ROM # !VIDENABLE;
 DEVICE_CS    = DEV # !VIDENABLE;
+CPUBUS_CS    = RAM;
 
-/* RAM should always be low when video hardware accesses bus*/
-RAM_CS       = RAM & VIDBUS;
 
 /* A16 should always be low when video hardware accesses bus */
+
 A16          = (RAMREAD & RW # RAMWRITE & !RW) & B2 & !A13 & (A14 & A15 & A12) & VIDENABLE;
-!WE          = !RW & PHI2;
-!OE          =  RW # !VIDBUS;
+
+!WE           = !RW & VIDENABLE;
+!OE           = RW # VIDBUS;
 
 CPUBUS_CS    = RAM # !VIDENABLE;
