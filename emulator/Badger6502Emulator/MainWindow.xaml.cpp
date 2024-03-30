@@ -1126,7 +1126,7 @@ namespace winrt::Badger6502Emulator::implementation
             _vm.LoadRomDiskFile("c:\\eb6502\\targets\\loderun.bin");
 
             // load Loderunner into RAM
-            memcpy(&_vm.GetData()[0x200], &_vm.GetRomDisk()[0x200], sizeof(uint8_t) * 0xBE00);
+            //memcpy(&_vm.GetData()[0x800], &_vm.GetRomDisk()[0], sizeof(uint8_t) * 0xB600);
 
 
             _fHasSymbols = DebugSymbols::LoadDebugFile("c:\\eb6502\\targets\\badger6502.dbg");
