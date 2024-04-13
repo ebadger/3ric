@@ -59,6 +59,55 @@ enum
 	MM_SS_W_BANK1_2     = 0xC08D,
 	MM_SS_R_ROM1_2      = 0xC08E,
 	MM_SS_RW_BANK1_2    = 0xC08F,
+
+	// DISK slot 6
+
+	/*
+	* https://stackoverflow.com/questions/69369122/apple-iie-6502-assembly-accessing-disk
+	* 
+	To turn on the drive, access $C0E9. To turn it off, access $C0E8. 
+	The effect of turning off the drive will be delayed by about a second.
+
+	To switch to drive 2, access $C0EB. To switch to drive 1, access $C0EA.
+
+	To move the head, think of it as being attached to a wheel which is 
+	attached to a hand on a clock face. The hand will point at 12:00 when 
+	the head is at any even numbered, track, and at 6:00 when it is on any 
+	odd numbered track. Reading $C0E1, $C0E3, $C0E5, or $C0E7 will turn on a coil 
+	that pulls the hand toward 12:00, 3:00, 6:00, or 9:00. Accessing the
+	next lower address will turn off the coil. 
+	Move the head by turning on a coil 90 degrees from the wheel's current position, 
+	waiting awhile, turning that coil off and turning on the next one, etc.
+
+	To see if a drive is attached, read $C0EC a few times and see if the value changes. 
+	If not, no drive is attached. If a drive is known to exist, use a two-instruction loop 
+	to read $C0EC until the high bit becomes set. If one a four-cycle instruction 
+	was used for the read, and a two-cycle branch-not-taken once high bit became set 
+	(e.g. wait293: LDX $C0EC / BPL wait293). To ensure that one reads every byte, 
+	ensure that the CPU executes at least 12 and at most 24 cycles before the next time 
+	the sequence is executed. Taking less than 12 cycles may yield duplicate reads. 
+	Taking more than 24 may cause bytes to be skipped.
+
+	To start writing data, write any value to $C0ED, then write the first byte 
+	value to $C0EF and immediately read $C0EC (ignore the value written). 
+	One must then execute exactly 24 cycles of other code, 
+	a write of the next byte to $C0ED, an immediate read of $C0EC, etc. 
+	When done, read $C0EE.
+	*/
+
+	MM_SS_DISK_START    = 0xC0E0,
+	MM_SS_DISK_PH0_OFF  = 0xC0E0,  // 0, 2, 4, 6  for stepper motor phase 0-3
+	MM_SS_DISK_PH0_ON   = 0xC0E1,  // 1, 3, 5, 7  for stepper motor phase 0-3
+    MM_SS_DISK_MOTOR_OFF= 0xC0E8,
+	MM_SS_DISK_MOTOR_ON = 0xC0E9,
+	MM_SS_DISK_SEL_D1   = 0xC0EA,  // A = disk 1, B = disk 2
+	MM_SS_DISK_SEL_D2   = 0xC0EB,
+	MM_SS_DISK_Q6_OFF   = 0xC0EC,  // read switch - reading this reads an encoded byte from the disk
+	MM_SS_DISK_Q6_ON    = 0xC0ED,  // write switch
+	MM_SS_DISK_Q7_OFF   = 0xC0EE,  // clear switch
+	MM_SS_DISK_Q7_ON    = 0xC0EF,  // shift switch
+	MM_SS_DISK_END      = 0xC0EF,
+
 	MM_SS_END           = 0xC0FF,
 	MM_DEVICES_END		= 0xC7FF,
 	MM_ACIA_START		= 0xC100,
@@ -68,6 +117,8 @@ enum
 	MM_ROMDISK_START    = 0xC300,
 	MM_ROMDISK_END      = 0xC30F,
 	MM_AUDIO_START      = 0xC400,
+	MM_DISKROM_START    = 0xC600,
+	MM_DISKROM_END      = 0xC6FF,
 	MM_RAM2_START       = 0xC800,
 	MM_RAM2_END         = 0xCFFF,
 	MM_ROM_START		= 0xD000,
@@ -135,6 +186,7 @@ public:
 private:
 	void Init();
 	void DoSoftSwitches(uint16_t address, bool write);
+	uint8_t DoDisk(uint16_t address, bool write);
 
 	CPU	*			_cpu;
 	ACIA *			_acia;

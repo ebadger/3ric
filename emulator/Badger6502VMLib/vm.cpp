@@ -102,6 +102,11 @@ void VM::SetTestMode(bool mode)
 	_testmode = mode;
 }
 
+uint8_t VM::DoDisk(uint16_t address, bool write)
+{
+	return _data[address];
+}
+
 void VM::DoSoftSwitches(uint16_t address, bool write)
 {
 	switch (address)
@@ -266,6 +271,10 @@ uint8_t VM::ReadData(uint16_t address)
 	{
 		return _data[address];
 	}
+	else if (address >= MM_SS_DISK_START && address <= MM_SS_DISK_END)
+	{
+		return DoDisk(address, false);
+	}
 	else if (address >= MM_SS_START && address <= MM_SS_END)
 	{
 		DoSoftSwitches(address, false);
@@ -285,6 +294,10 @@ uint8_t VM::ReadData(uint16_t address)
 	{
 		uint32_t addr = (_romdiskBank & 3) << 16 | _romdiskHigh << 8 | _romdiskLow;
 		return _romdisk[addr];
+	}
+	else if (address >= MM_DISKROM_START && address <= MM_DISKROM_END)
+	{
+		return _data[address];
 	}
 	else if (address >= MM_DEVICES_START && address <= MM_DEVICES_END)
 	{
@@ -425,6 +438,10 @@ void VM::WriteData(uint16_t address, uint8_t byte)
 		{
 			_data[address] = byte;
 		}
+	}
+	else if (address >= MM_SS_DISK_START && address <= MM_SS_DISK_END)
+	{
+		DoDisk(address, true);
 	}
 	else if (address >= MM_SS_START && address <= MM_SS_END)
 	{

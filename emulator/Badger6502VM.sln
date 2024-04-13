@@ -16,6 +16,13 @@ Project("{C7167F0D-BC9F-4E6E-AFE1-012C56B48DB5}") = "Badger6502Emulator (Package
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MockMicroSD", "MockMicroSD\MockMicroSD.vcxproj", "{A7FD00E0-5506-46AE-A843-5D0E0B41BD04}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "WozLib", "WozLib\WozLib.vcxproj", "{0A4AF4CF-459E-47E0-BA44-FA067B2760A6}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "WozFileTestApp", "WozFileTestApp\WozFileTestApp.vcxproj", "{5CDB6EFD-9D2D-4340-A3C1-B35BF5F2E541}"
+	ProjectSection(ProjectDependencies) = postProject
+		{0A4AF4CF-459E-47E0-BA44-FA067B2760A6} = {0A4AF4CF-459E-47E0-BA44-FA067B2760A6}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|arm64 = Debug|arm64
@@ -88,6 +95,30 @@ Global
 		{A7FD00E0-5506-46AE-A843-5D0E0B41BD04}.Release|x64.Build.0 = Release|x64
 		{A7FD00E0-5506-46AE-A843-5D0E0B41BD04}.Release|x86.ActiveCfg = Release|Win32
 		{A7FD00E0-5506-46AE-A843-5D0E0B41BD04}.Release|x86.Build.0 = Release|Win32
+		{0A4AF4CF-459E-47E0-BA44-FA067B2760A6}.Debug|arm64.ActiveCfg = Debug|x64
+		{0A4AF4CF-459E-47E0-BA44-FA067B2760A6}.Debug|arm64.Build.0 = Debug|x64
+		{0A4AF4CF-459E-47E0-BA44-FA067B2760A6}.Debug|x64.ActiveCfg = Debug|x64
+		{0A4AF4CF-459E-47E0-BA44-FA067B2760A6}.Debug|x64.Build.0 = Debug|x64
+		{0A4AF4CF-459E-47E0-BA44-FA067B2760A6}.Debug|x86.ActiveCfg = Debug|Win32
+		{0A4AF4CF-459E-47E0-BA44-FA067B2760A6}.Debug|x86.Build.0 = Debug|Win32
+		{0A4AF4CF-459E-47E0-BA44-FA067B2760A6}.Release|arm64.ActiveCfg = Release|x64
+		{0A4AF4CF-459E-47E0-BA44-FA067B2760A6}.Release|arm64.Build.0 = Release|x64
+		{0A4AF4CF-459E-47E0-BA44-FA067B2760A6}.Release|x64.ActiveCfg = Release|x64
+		{0A4AF4CF-459E-47E0-BA44-FA067B2760A6}.Release|x64.Build.0 = Release|x64
+		{0A4AF4CF-459E-47E0-BA44-FA067B2760A6}.Release|x86.ActiveCfg = Release|Win32
+		{0A4AF4CF-459E-47E0-BA44-FA067B2760A6}.Release|x86.Build.0 = Release|Win32
+		{5CDB6EFD-9D2D-4340-A3C1-B35BF5F2E541}.Debug|arm64.ActiveCfg = Debug|x64
+		{5CDB6EFD-9D2D-4340-A3C1-B35BF5F2E541}.Debug|arm64.Build.0 = Debug|x64
+		{5CDB6EFD-9D2D-4340-A3C1-B35BF5F2E541}.Debug|x64.ActiveCfg = Debug|x64
+		{5CDB6EFD-9D2D-4340-A3C1-B35BF5F2E541}.Debug|x64.Build.0 = Debug|x64
+		{5CDB6EFD-9D2D-4340-A3C1-B35BF5F2E541}.Debug|x86.ActiveCfg = Debug|Win32
+		{5CDB6EFD-9D2D-4340-A3C1-B35BF5F2E541}.Debug|x86.Build.0 = Debug|Win32
+		{5CDB6EFD-9D2D-4340-A3C1-B35BF5F2E541}.Release|arm64.ActiveCfg = Release|x64
+		{5CDB6EFD-9D2D-4340-A3C1-B35BF5F2E541}.Release|arm64.Build.0 = Release|x64
+		{5CDB6EFD-9D2D-4340-A3C1-B35BF5F2E541}.Release|x64.ActiveCfg = Release|x64
+		{5CDB6EFD-9D2D-4340-A3C1-B35BF5F2E541}.Release|x64.Build.0 = Release|x64
+		{5CDB6EFD-9D2D-4340-A3C1-B35BF5F2E541}.Release|x86.ActiveCfg = Release|Win32
+		{5CDB6EFD-9D2D-4340-A3C1-B35BF5F2E541}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
