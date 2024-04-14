@@ -4,6 +4,10 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 17.3.32901.215
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Badger6502VMLib", "Badger6502VMLib\Badger6502VMLib.vcxproj", "{A269C8B1-56A9-44AA-A4C5-29C05769FD3D}"
+	ProjectSection(ProjectDependencies) = postProject
+		{0A4AF4CF-459E-47E0-BA44-FA067B2760A6} = {0A4AF4CF-459E-47E0-BA44-FA067B2760A6}
+		{A7FD00E0-5506-46AE-A843-5D0E0B41BD04} = {A7FD00E0-5506-46AE-A843-5D0E0B41BD04}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Badger6502VMTest", "Badger6502VMTest\Badger6502VMTest.vcxproj", "{4789D7B1-5044-4B88-8BB3-B6835F8EB989}"
 EndProject

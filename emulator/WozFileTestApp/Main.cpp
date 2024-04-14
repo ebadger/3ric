@@ -53,6 +53,15 @@ int main(int, char**)
 			printf("Error: 0x%08x\r\n", result);
 		}
 
+		for (int i = 0; i < 160; i++)
+		{
+			wozFile.SetTrack(i);
+			for (int b = 0; b < 1000; b++)
+			{
+				wozFile.GetNextBit();
+			}
+		}
+
 		InfoChunkData* pInfo = wozFile.GetInfoChunkData();
 	}
 	

@@ -82,6 +82,11 @@ PS2Keyboard* VM::GetPS2Keyboard()
 	return _pPS2;
 }
 
+DriveEmulator* VM::GetDriveEmulator()
+{
+	return &_driveEmulator;
+}
+
 CPU* VM::GetCPU()
 {
 	return _cpu;
@@ -102,9 +107,15 @@ void VM::SetTestMode(bool mode)
 	_testmode = mode;
 }
 
-uint8_t VM::DoDisk(uint16_t address, bool write)
+uint8_t VM::DoDisk(uint16_t address, uint8_t data, bool write)
 {
-	return _data[address];
+	if (false == write)
+	{
+		return _driveEmulator.Read(address & 0xF);
+	}
+	
+	_driveEmulator.Write(address & 0xF, data);
+	return 0;
 }
 
 void VM::DoSoftSwitches(uint16_t address, bool write)
@@ -273,7 +284,7 @@ uint8_t VM::ReadData(uint16_t address)
 	}
 	else if (address >= MM_SS_DISK_START && address <= MM_SS_DISK_END)
 	{
-		return DoDisk(address, false);
+		return DoDisk(address, 0, false);
 	}
 	else if (address >= MM_SS_START && address <= MM_SS_END)
 	{
@@ -441,7 +452,7 @@ void VM::WriteData(uint16_t address, uint8_t byte)
 	}
 	else if (address >= MM_SS_DISK_START && address <= MM_SS_DISK_END)
 	{
-		DoDisk(address, true);
+		DoDisk(address, byte, true);
 	}
 	else if (address >= MM_SS_START && address <= MM_SS_END)
 	{

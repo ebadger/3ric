@@ -8,6 +8,7 @@
 #include <functional>
 #include <unordered_map>
 #include "badgervmpal.h"
+#include "DriveEmulator.h"
 
 using namespace std;
 
@@ -143,9 +144,9 @@ public:
 	VIA* GetVIA1();
 	VIA* GetVIA2();
 	PS2Keyboard* GetPS2Keyboard();
-
+	DriveEmulator* GetDriveEmulator();
 	bool SimulateSerialKey(uint8_t key);
-
+	
 	uint8_t ReadData  (uint16_t address);
 	void    WriteData (uint16_t address, uint8_t byte);
 	bool	LoadBinaryFile(const char* wzFileName);
@@ -186,7 +187,9 @@ public:
 private:
 	void Init();
 	void DoSoftSwitches(uint16_t address, bool write);
-	uint8_t DoDisk(uint16_t address, bool write);
+	uint8_t DoDisk(uint16_t address, uint8_t data, bool write);
+
+	DriveEmulator _driveEmulator;
 
 	CPU	*			_cpu;
 	ACIA *			_acia;

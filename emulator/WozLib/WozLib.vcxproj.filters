@@ -18,12 +18,27 @@
     <ClInclude Include="WozFile.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="WozErrors.h">
+    <ClInclude Include="DriveEmulator.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="WozDisk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Timing.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="WozErrors.h">
+      <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="WozFile.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="DriveEmulator.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="WozDisk.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

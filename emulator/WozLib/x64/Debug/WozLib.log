@@ -1,3 +1,2 @@
-﻿  WozFile.cpp
-C:\3ric\emulator\WozLib\WozFile.cpp(20,2): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data
+﻿  WozDisk.cpp
   WozLib.vcxproj -> C:\3ric\emulator\x64\Debug\WozLib.lib

@@ -127,10 +127,15 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="DriveEmulator.h" />
+    <ClInclude Include="Timing.h" />
+    <ClInclude Include="WozDisk.h" />
     <ClInclude Include="WozErrors.h" />
     <ClInclude Include="WozFile.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="DriveEmulator.cpp" />
+    <ClCompile Include="WozDisk.cpp" />
     <ClCompile Include="WozFile.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

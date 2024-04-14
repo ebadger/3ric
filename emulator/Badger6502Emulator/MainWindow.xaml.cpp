@@ -1267,7 +1267,9 @@ namespace winrt::Badger6502Emulator::implementation
                 {
                     _vm.GetVIA1()->Tick();
                     _vm.GetVIA2()->Tick();
+                    _vm.GetDriveEmulator()->AddCycles(1);
                 }
+
 
                 EnterCriticalSection(&_cs);
                 _vm.GetPS2Keyboard()->ProcessKeys(totalcycles);
@@ -1977,6 +1979,91 @@ namespace winrt::Badger6502Emulator::implementation
         return false;
     }
 
+    std::string MainWindow::GetDiskImage()
+    {
+        PWSTR pszFileName = nullptr;
+        PWSTR pszFilePath = nullptr;
+        IShellItem* pItem = nullptr;
+        IFileOpenDialog* pFileOpen = nullptr;
+        DWORD dwFlags = 0;
+        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
+        string filename;
+
+        HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        if (FAILED(hr))
+        {
+            goto exit;
+        }
+
+        // Create the FileOpenDialog object.
+        hr = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_ALL, IID_IFileOpenDialog, reinterpret_cast<void**>(&pFileOpen));
+        if (FAILED(hr))
+        {
+            goto exit;
+        }
+
+        // Before setting, always get the options first in order 
+        // not to override existing options.
+        hr = pFileOpen->GetOptions(&dwFlags);
+        if (FAILED(hr))
+        {
+            goto exit;
+        }
+        // In this case, get shell items only for file system items.
+        hr = pFileOpen->SetOptions(dwFlags | FOS_FILEMUSTEXIST);
+        if (FAILED(hr))
+        {
+            goto exit;
+        }
+
+        // Show the Open dialog box.
+        hr = pFileOpen->Show(NULL);
+        if (FAILED(hr))
+        {
+            goto exit;
+        }
+
+        hr = pFileOpen->GetResult(&pItem);
+        if (FAILED(hr))
+        {
+            goto exit;
+        }
+
+        hr = pItem->GetDisplayName(SIGDN_DESKTOPABSOLUTEPARSING, &pszFileName);
+        if (FAILED(hr))
+        {
+            goto exit;
+        }
+
+        filename = conv.to_bytes(pszFileName);
+
+    exit:
+
+        if (pszFilePath)
+        {
+            CoTaskMemFree(pszFilePath);
+        }
+
+        if (pszFileName)
+        {
+            CoTaskMemFree(pszFileName);
+        }
+
+        if (pItem)
+        {
+            pItem->Release();
+        }
+
+        if (pFileOpen)
+        {
+            pFileOpen->Release();
+        }
+
+        CoUninitialize();
+
+        return filename;
+    }
+
     void MainWindow::miLoadROM_Click(IInspectable const&, RoutedEventArgs const&)
     {
         PWSTR pszFileName = nullptr;
@@ -2043,7 +2130,7 @@ namespace winrt::Badger6502Emulator::implementation
             UpdateExecutionState(ExecutionState::Stopped);
 
             size_t offset = filename.find_last_of('.');
-            dbg = filename.substr(0, offset) + ".dbg";
+            dbg = filename.substr(0, offset) + ".woz";
             lst = filename.substr(0, offset) + ".lst";
 
             DebugSymbols::Clear();
@@ -2323,6 +2410,95 @@ namespace winrt::Badger6502Emulator::implementation
         case L'3':
             _clockspeed = 3000000;
             break;
+        }
+    }
+
+    void MainWindow::disk1Insert_OnClicked(IInspectable const& , RoutedEventArgs const&)
+    {
+        bool inserted = false;
+
+        WozDisk* pDisk = _vm.GetDriveEmulator()->GetDisk(0);
+        if (pDisk->IsDiskPresent())
+        {
+            pDisk->RemoveDisk();
+        }
+
+        std::string f = GetDiskImage();
+
+        if (f.size() > 0)
+        {
+            inserted = pDisk->InsertDisk(f.c_str());
+        }
+
+        if (inserted)
+        {
+            WCHAR wcBuf[MAX_PATH];
+            size_t pos = f.find_last_of('\\');
+            if (pos > 0)
+            {
+                f = f.substr(pos+1);
+            }
+
+            swprintf_s(wcBuf, _countof(wcBuf), L"Disk 1 (%S)", f.c_str());
+            menuDisk1Title().Text(wcBuf);
+        }
+        else
+        {
+            menuDisk1Title().Text(L"Disk 1 (Empty)");
+        }
+    }
+
+    void MainWindow::disk1Remove_OnClicked(IInspectable const& , RoutedEventArgs const& )
+    {
+        WozDisk* pDisk = _vm.GetDriveEmulator()->GetDisk(0);
+        if (pDisk->IsDiskPresent())
+        {
+            pDisk->RemoveDisk();
+            menuDisk1Title().Text(L"Disk 1 (Empty)");
+        }
+    }
+
+    void MainWindow::disk2Insert_OnClicked(IInspectable const& , RoutedEventArgs const& )
+    {
+        bool inserted = false;
+
+        WozDisk* pDisk = _vm.GetDriveEmulator()->GetDisk(1);
+        if (pDisk->IsDiskPresent())
+        {
+            pDisk->RemoveDisk();
+        }
+
+        std::string f = GetDiskImage();
+
+        if (f.size() > 0)
+        {
+            inserted = pDisk->InsertDisk(f.c_str());
+        }
+
+        if (inserted)
+        {
+            WCHAR wcBuf[MAX_PATH];
+            size_t pos = f.find_last_of('\\');
+            if (pos > 0)
+            {
+                f = f.substr(pos+1);
+            }
+
+            swprintf_s(wcBuf, _countof(wcBuf), L"Disk 2 (%S)", f.c_str());
+            menuDisk2Title().Text(wcBuf);
+        }
+        else
+        {
+            menuDisk2Title().Text(L"Disk 2 (Empty)");
+        }
+    }
+    void MainWindow::disk2Remove_OnClicked(IInspectable const& , RoutedEventArgs const& )
+    {
+        WozDisk* pDisk = _vm.GetDriveEmulator()->GetDisk(1);
+        if (pDisk->IsDiskPresent())
+        {
+            pDisk->RemoveDisk();
+            menuDisk2Title().Text(L"Disk 2 (Empty)");
         }
     }
 

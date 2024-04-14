@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <vector>
 #include "WozErrors.h"
+#include "timing.h"
 
 // https://applesaucefdc.com/woz/reference2/
 
@@ -24,8 +25,14 @@ typedef struct Chunk
 	static uint32_t WRIT_CHUNK_ID;
 	static uint32_t META_CHUNK_ID;
 	static uint32_t FLUX_CHUNK_ID;
-
 } _Chunk;
+
+typedef struct TRK
+{
+	uint16_t StartingBlock;  // (x << 9) to get byte offset
+	uint16_t BlockCount;
+	uint32_t BitCount;
+} _TRK;
 
 typedef struct InfoChunkData
 {
@@ -82,20 +89,33 @@ public:
 
 	uint32_t OpenFile(const char* szFileName);
 	InfoChunkData* GetInfoChunkData();
+	void CloseFile();
+	bool IsFileLoaded();
+	bool GetNextBit();
+	void SetTrack(int16_t track);
 
 private:
 
 	uint32_t ReadFileHeader();
 	uint32_t ReadChunks();
 
+	std::vector<uint8_t> _trackData;
 	std::vector<Chunk *> _vecChunks;
 	Chunk* _InfoChunk = nullptr;
 	Chunk* _MetaChunk = nullptr;
 	Chunk* _TrksChunk = nullptr;
 	Chunk* _TmapChunk = nullptr;
 
+	TRK* _Trk = nullptr;
+	uint8_t* _Tmap = nullptr;
+
 	uint32_t _crc = 0;
 	uint32_t _fileEnd = 0;
 
 	FILE * _wozFile = nullptr;
+	int16_t _track = -1;
+
+	uint32_t _readPosition = 0;
+	uint32_t _bitCount = 0;
+
 };

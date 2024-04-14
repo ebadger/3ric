@@ -124,6 +124,17 @@
                 <RadioMenuFlyoutItem x:Name="C6" Text="6 MHz" GroupName="EmulationSpeedGroup"  Click="clock_OnClicked"/>
             </muxc:MenuBarItem>
 
+            <muxc:MenuBarItem Title="Disk">
+                <MenuFlyoutSubItem Text="Disk 1 (Empty)" x:Name="menuDisk1Title">
+                    <MenuFlyoutItem Text="Insert Disk" x:Name="menuDisk1Insert" Click="disk1Insert_OnClicked"/>
+                    <MenuFlyoutItem Text="Remove Disk" x:Name="menuDisk1Remove" Click="disk1Remove_OnClicked"/>
+                </MenuFlyoutSubItem>
+                <MenuFlyoutSubItem Text="Disk 2 (Empty)" x:Name="menuDisk2Title">
+                    <MenuFlyoutItem Text="Insert Disk" x:Name="menuDisk2Insert" Click="disk2Insert_OnClicked"/>
+                    <MenuFlyoutItem Text="Remove Disk" x:Name="menuDisk2Remove" Click="disk2Remove_OnClicked"/>
+                </MenuFlyoutSubItem>
+            </muxc:MenuBarItem>
+
         </muxc:MenuBar>
 
         <Grid Grid.Row="2" Grid.ColumnSpan="2">

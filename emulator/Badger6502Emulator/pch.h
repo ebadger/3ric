@@ -43,3 +43,4 @@
 #include <winrt/Microsoft.UI.Xaml.Shapes.h>
 #include <microsoft.ui.xaml.window.h>
 
+#include <driveemulator.h>

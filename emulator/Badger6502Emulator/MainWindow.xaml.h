@@ -132,6 +132,12 @@ namespace winrt::Badger6502Emulator::implementation
         void miLoadROMDISK_Click(IInspectable const& sender, RoutedEventArgs const& args);        
         void clock_OnClicked(IInspectable const& sender, RoutedEventArgs const& args);
 
+        void disk1Insert_OnClicked(IInspectable const& sender, RoutedEventArgs const& args);
+        void disk1Remove_OnClicked(IInspectable const& sender, RoutedEventArgs const& args);
+        void disk2Insert_OnClicked(IInspectable const& sender, RoutedEventArgs const& args);
+        void disk2Remove_OnClicked(IInspectable const& sender, RoutedEventArgs const& args);
+        std::string GetDiskImage();
+
         Windows::Foundation::Collections::IObservableVector<Badger6502Emulator::BreakPointItem> _vecBreakPoints;
         std::vector<BreakPointItem*> _vecBreakPointsFast;
 
