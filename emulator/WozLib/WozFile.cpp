@@ -2,7 +2,8 @@
 #include <Windows.h>
 #include <debugapi.h>
 
-const char* c_WOZHeader = "WOZ2";
+const char* c_WOZ2Header = "WOZ2";
+const char* c_WOZ1Header = "WOZ1";
 
 // statics
 uint32_t Chunk::INFO_CHUNK_ID = *(uint32_t*)"INFO";
@@ -99,11 +100,14 @@ uint32_t WozFile::ReadFileHeader()
 
 	// validate the header
 	// for now only support Woz2.x format
-	if (strncmp(c_WOZHeader, buffer, 4) != 0)
+	if (strncmp(c_WOZ2Header, buffer, 4) != 0)
 	{
-		// header mismatch
-		// not a valid WOZ file
-		return INVALID_WOZ_FILE;
+		if (strncmp(c_WOZ1Header, buffer, 4) != 0)
+		{
+			// header mismatch
+			// not a valid WOZ file
+			return INVALID_WOZ_FILE;
+		}
 	}
 
 	if (buffer[4] != (char)0xFF)

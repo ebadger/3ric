@@ -1262,12 +1262,17 @@ namespace winrt::Badger6502Emulator::implementation
 
                 cycles += pCPU->Step();
                 totalcycles += cycles;
+                //bool isInInterrupt = pCPU->flags.bits.I == 1;
 
                 for (uint32_t i = 0; i < cycles; i++)
                 {
                     _vm.GetVIA1()->Tick();
                     _vm.GetVIA2()->Tick();
-                    _vm.GetDriveEmulator()->AddCycles(1);
+
+                    //if(!isInInterrupt)
+                    {
+                        _vm.GetDriveEmulator()->AddCycles(1);
+                    }
                 }
 
 
