@@ -96,42 +96,43 @@
 
         
         <muxc:MenuBar Grid.Row="1" Grid.ColumnSpan="2" Background="DimGray" AllowFocusOnInteraction="False">
-            
-            <muxc:MenuBarItem Title="File">
-                <MenuFlyoutItem Text="Load ROM Image" x:Name="miLoadROM" Click="miLoadROM_Click"/>
-                <MenuFlyoutItem Text="Load RAM Image" x:Name="miLoadRAM" Click="miLoadRAM_Click"/>
-                <MenuFlyoutItem Text="Load ROMDISK Image" x:Name="miLoadRomDisk" Click="miLoadROMDISK_Click"/>
-                <MenuFlyoutItem Text="Exit" x:Name="miExit"/>
+
+            <muxc:MenuBarItem IsTabStop="False" Title="File">
+                <MenuFlyoutItem IsTabStop="False" Text="Load ROM Image" x:Name="miLoadROM" Click="miLoadROM_Click"/>
+                <MenuFlyoutItem IsTabStop="False" Text="Load RAM Image" x:Name="miLoadRAM" Click="miLoadRAM_Click"/>
+                <MenuFlyoutItem IsTabStop="False" Text="Load ROMDISK Image" x:Name="miLoadRomDisk" Click="miLoadROMDISK_Click"/>
+                <MenuFlyoutItem IsTabStop="False" Text="Exit" x:Name="miExit"/>
             </muxc:MenuBarItem>
 
-            <muxc:MenuBarItem Title="Debugging">
-                <MenuFlyoutItem Text="Run (F5)" x:Name="miRun"/>
-                <MenuFlyoutItem Text="Break (Pause)" x:Name="miBreak"/>
-                <MenuFlyoutItem Text="Step (F10)" x:Name="miStep"/>
-                <MenuFlyoutItem Text="Reset (F12)" x:Name="miReset"/>
-                <ToggleMenuFlyoutItem Text="Fire Periodic NMI" IsChecked="False" x:Name="miInterrupt"/>
-                <MenuFlyoutItem Text="Registers" x:Name="miRegister" Click="clickSetRegister"/>
-                <MenuFlyoutItem Text="Memory" x:Name="miMemory" Click="clickMemory"/>
+            <muxc:MenuBarItem IsTabStop="False" Title="Debugging">
+                <MenuFlyoutItem IsTabStop="False" Text="Run (F5)" x:Name="miRun"/>
+                <MenuFlyoutItem IsTabStop="False" Text="Break (Pause)" x:Name="miBreak"/>
+                <MenuFlyoutItem IsTabStop="False" Text="Step (F10)" x:Name="miStep"/>
+                <MenuFlyoutItem IsTabStop="False" Text="Reset (F12)" x:Name="miReset"/>
+                <ToggleMenuFlyoutItem IsTabStop="False" Text="Fire Periodic NMI" IsChecked="False" x:Name="miInterrupt"/>
+                <MenuFlyoutItem IsTabStop="False" Text="Registers" x:Name="miRegister" Click="clickSetRegister"/>
+                <MenuFlyoutItem IsTabStop="False" Text="Memory" x:Name="miMemory" Click="clickMemory"/>
 
             </muxc:MenuBarItem>
 
-            <muxc:MenuBarItem Title="Emulation">
-                <ToggleMenuFlyoutItem Text="PS2 Keyboard Emulation" IsChecked="True" x:Name="ps2EmulationItem"/>
+            <muxc:MenuBarItem IsTabStop="False" Title="Emulation">
+                <ToggleMenuFlyoutItem IsTabStop="False" Text="PS2 Keyboard Emulation" IsChecked="True" x:Name="ps2EmulationItem"/>
                 <MenuFlyoutSeparator/>
-                <RadioMenuFlyoutItem x:Name="C0" Text="Unlimited" GroupName="EmulationSpeedGroup" Click="clock_OnClicked"/>
-                <RadioMenuFlyoutItem x:Name="C1" Text="1 MHz" GroupName="EmulationSpeedGroup"  Click="clock_OnClicked"/>
-                <RadioMenuFlyoutItem x:Name="C3" Text="3 MHz" GroupName="EmulationSpeedGroup"  Click="clock_OnClicked"/>
-                <RadioMenuFlyoutItem x:Name="C6" Text="6 MHz" GroupName="EmulationSpeedGroup"  Click="clock_OnClicked"/>
+                <RadioMenuFlyoutItem IsTabStop="False" x:Name="C0" Text="Unlimited" GroupName="EmulationSpeedGroup" Click="clock_OnClicked"/>
+                <RadioMenuFlyoutItem IsTabStop="False" x:Name="C1" Text="1 MHz" GroupName="EmulationSpeedGroup"  Click="clock_OnClicked"/>
+                <RadioMenuFlyoutItem IsTabStop="False" x:Name="CA" Text="1.57 MHz" GroupName="EmulationSpeedGroup"  Click="clock_OnClicked"/>
+                <RadioMenuFlyoutItem IsTabStop="False" x:Name="C3" Text="3 MHz" GroupName="EmulationSpeedGroup"  Click="clock_OnClicked"/>
+                <RadioMenuFlyoutItem IsTabStop="False" x:Name="C6" Text="6 MHz" GroupName="EmulationSpeedGroup"  Click="clock_OnClicked"/>
             </muxc:MenuBarItem>
 
-            <muxc:MenuBarItem Title="Disk">
-                <MenuFlyoutSubItem Text="Disk 1 (Empty)" x:Name="menuDisk1Title">
-                    <MenuFlyoutItem Text="Insert Disk" x:Name="menuDisk1Insert" Click="disk1Insert_OnClicked"/>
-                    <MenuFlyoutItem Text="Remove Disk" x:Name="menuDisk1Remove" Click="disk1Remove_OnClicked"/>
+            <muxc:MenuBarItem IsTabStop="False" Title="Disk">
+                <MenuFlyoutSubItem IsTabStop="False" Text="Disk 1 (Empty)" x:Name="menuDisk1Title">
+                    <MenuFlyoutItem IsTabStop="False" Text="Insert Disk" x:Name="menuDisk1Insert" Click="disk1Insert_OnClicked"/>
+                    <MenuFlyoutItem IsTabStop="False" Text="Remove Disk" x:Name="menuDisk1Remove" Click="disk1Remove_OnClicked"/>
                 </MenuFlyoutSubItem>
-                <MenuFlyoutSubItem Text="Disk 2 (Empty)" x:Name="menuDisk2Title">
-                    <MenuFlyoutItem Text="Insert Disk" x:Name="menuDisk2Insert" Click="disk2Insert_OnClicked"/>
-                    <MenuFlyoutItem Text="Remove Disk" x:Name="menuDisk2Remove" Click="disk2Remove_OnClicked"/>
+                <MenuFlyoutSubItem IsTabStop="False" Text="Disk 2 (Empty)" x:Name="menuDisk2Title">
+                    <MenuFlyoutItem IsTabStop="False" Text="Insert Disk" x:Name="menuDisk2Insert" Click="disk2Insert_OnClicked"/>
+                    <MenuFlyoutItem IsTabStop="False" Text="Remove Disk" x:Name="menuDisk2Remove" Click="disk2Remove_OnClicked"/>
                 </MenuFlyoutSubItem>
             </muxc:MenuBarItem>
 
@@ -141,7 +142,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="4"/>
-                <ColumnDefinition Width="3.4*"/>
+                <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>

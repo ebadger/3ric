@@ -72,10 +72,8 @@ namespace winrt::Badger6502Emulator::implementation
         static VM _vm;
         vector<uint8_t> _vecKeys;
 
-        map<uint16_t, QueueItem> _mapHires1;
-        map<uint16_t, QueueItem> _mapHires2;
-        map<uint16_t, QueueItem> _mapText1;
-        map<uint16_t, QueueItem> _mapText2;
+        map<uint16_t, QueueItem> _mapHires[2];
+        map<uint16_t, QueueItem> _mapText[2];
 
         static CRITICAL_SECTION _cs;
 
@@ -108,15 +106,13 @@ namespace winrt::Badger6502Emulator::implementation
         void InitVGA();
         void ClearVGA();
         void ProcessPixelOps();
-        void PlotPixel(uint16_t row, uint16_t col, uint8_t color);
+        void PlotPixel(uint16_t row, uint16_t col, uint8_t color, bool twice = false);
         void draw_hires_line_color_apple(uint8_t y, uint8_t* pHires);
         void draw_lores_line_color_apple(uint8_t* pText);
         void draw_hires_line_eb6502(uint8_t y, uint8_t* pHires);
         void draw_text_eb6502(uint8_t* pText);
-        void ProcessHires1();
-        void ProcessHires2();
-        void ProcessText1();
-        void ProcessText2();
+        void ProcessHires();
+        void ProcessText();
         void RefreshVideo();
         void DrawText();
 
@@ -157,10 +153,8 @@ namespace winrt::Badger6502Emulator::implementation
         int _mixed = 0;
         int _lores = 0;
 
-        uint8_t _hires1[0x2000];
-        uint8_t _hires2[0x2000];
-        uint8_t _text1[0x400];
-        uint8_t _text2[0x400];
+        uint8_t _hires[2][0x2000];
+        uint8_t _text[2][0x400];
         bool _textDirty = false;
 
         uint16_t pixelindex[0x2000] = { 0 };
