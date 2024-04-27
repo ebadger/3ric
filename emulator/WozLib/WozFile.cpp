@@ -26,6 +26,8 @@ WozFile::~WozFile()
 
 void WozFile::CloseFile()
 {
+	std::lock_guard<std::mutex> guard(_mutex);
+
 	_track = -1;
 
 	_vecChunks.clear();
@@ -53,6 +55,8 @@ bool WozFile::IsFileLoaded()
 
 uint32_t WozFile::OpenFile(const char * szFileName)
 {
+	std::lock_guard<std::mutex> guard(_mutex);
+
 	errno_t err = fopen_s(&_wozFile, szFileName, "rb");
 
 	if (err != 0 || nullptr == _wozFile)
@@ -123,6 +127,7 @@ uint32_t WozFile::ReadFileHeader()
 
 uint32_t WozFile::ReadChunks()
 {
+
 	if (nullptr == _wozFile)
 	{
 		return INVALID_WOZ_FILE;
@@ -269,10 +274,16 @@ InfoChunkData* WozFile::GetInfoChunkData()
 
 void WozFile::SetTrack(int16_t track)
 {
+	std::lock_guard<std::mutex> guard(_mutex);
 	size_t read = 0;
 
 	_ASSERT(track < 160);
 	_ASSERT(_wozFile != nullptr);
+
+	if (_wozFile == nullptr)
+	{
+		return;
+	}
 
 	if (track > 159 || _track == track)
 	{
@@ -322,6 +333,8 @@ void WozFile::SetTrack(int16_t track)
 
 bool WozFile::GetNextBit()
 {
+	std::lock_guard<std::mutex> guard(_mutex);
+
 	if (_bitCount == 0)
 	{
 		return rand() % 2;
