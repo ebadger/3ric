@@ -3427,16 +3427,6 @@
 	)
 	(wire
 		(pts
-			(xy 111.76 55.88) (xy 160.02 55.88)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "0165b84f-f08d-4232-8e32-15bcfd71c47d")
-	)
-	(wire
-		(pts
 			(xy 125.73 71.12) (xy 124.46 71.12)
 		)
 		(stroke
@@ -3567,16 +3557,6 @@
 	)
 	(wire
 		(pts
-			(xy 93.98 53.34) (xy 96.52 53.34)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "1bb0c52c-023b-4f5b-ad4d-a8cd4f3d8479")
-	)
-	(wire
-		(pts
 			(xy 190.5 149.86) (xy 189.23 149.86)
 		)
 		(stroke
@@ -3594,16 +3574,6 @@
 			(type default)
 		)
 		(uuid "204fe9c3-819f-42a9-8b27-4c63798d706c")
-	)
-	(wire
-		(pts
-			(xy 93.98 58.42) (xy 96.52 58.42)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "2154f6d9-85fe-4b98-b3ac-36ec0cd13c60")
 	)
 	(wire
 		(pts
@@ -3777,6 +3747,16 @@
 	)
 	(wire
 		(pts
+			(xy 119.38 121.92) (xy 146.05 121.92)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4a8022f8-7282-474c-a2fd-b0ca98ae8724")
+	)
+	(wire
+		(pts
 			(xy 68.58 118.11) (xy 72.39 118.11)
 		)
 		(stroke
@@ -3797,7 +3777,7 @@
 	)
 	(wire
 		(pts
-			(xy 152.4 119.38) (xy 175.26 119.38)
+			(xy 161.29 119.38) (xy 175.26 119.38)
 		)
 		(stroke
 			(width 0)
@@ -3867,16 +3847,6 @@
 	)
 	(wire
 		(pts
-			(xy 137.16 121.92) (xy 119.38 121.92)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "645160c8-e6a4-4ed5-9f02-4e86bd553a9b")
-	)
-	(wire
-		(pts
 			(xy 66.04 82.55) (xy 66.04 110.49)
 		)
 		(stroke
@@ -3937,7 +3907,7 @@
 	)
 	(wire
 		(pts
-			(xy 134.62 116.84) (xy 137.16 116.84)
+			(xy 134.62 116.84) (xy 146.05 116.84)
 		)
 		(stroke
 			(width 0)
@@ -4254,6 +4224,16 @@
 			(type default)
 		)
 		(uuid "b2f62f33-071f-4b76-aa5d-b6cb0aef80a5")
+	)
+	(wire
+		(pts
+			(xy 109.22 55.88) (xy 160.02 55.88)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "ba1f9876-977b-4a02-b096-e9f08106edae")
 	)
 	(wire
 		(pts
@@ -6344,7 +6324,7 @@
 	)
 	(symbol
 		(lib_id "74xx:74LS32")
-		(at 144.78 119.38 0)
+		(at 153.67 119.38 0)
 		(unit 4)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -6353,7 +6333,7 @@
 		(fields_autoplaced yes)
 		(uuid "3178d043-88a9-49fe-9df4-e286dd9e2961")
 		(property "Reference" "U?"
-			(at 144.78 111.8702 0)
+			(at 153.67 111.8702 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6361,7 +6341,7 @@
 			)
 		)
 		(property "Value" "74LS32"
-			(at 144.78 114.4071 0)
+			(at 153.67 114.4071 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6369,7 +6349,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 144.78 119.38 0)
+			(at 153.67 119.38 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6378,7 +6358,7 @@
 			)
 		)
 		(property "Datasheet" "http://www.ti.com/lit/gpn/sn74LS32"
-			(at 144.78 119.38 0)
+			(at 153.67 119.38 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6387,7 +6367,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 144.78 119.38 0)
+			(at 153.67 119.38 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7904,7 +7884,7 @@
 	)
 	(symbol
 		(lib_id "74xx:74LS32")
-		(at 104.14 55.88 0)
+		(at 101.6 55.88 0)
 		(unit 2)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -7913,7 +7893,7 @@
 		(fields_autoplaced yes)
 		(uuid "92cf281d-0eae-4a41-98b1-042f38d219a9")
 		(property "Reference" "U?"
-			(at 104.14 48.3702 0)
+			(at 101.6 48.3702 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7921,7 +7901,7 @@
 			)
 		)
 		(property "Value" "74LS32"
-			(at 104.14 50.9071 0)
+			(at 101.6 50.9071 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7929,7 +7909,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 104.14 55.88 0)
+			(at 101.6 55.88 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7938,7 +7918,7 @@
 			)
 		)
 		(property "Datasheet" "http://www.ti.com/lit/gpn/sn74LS32"
-			(at 104.14 55.88 0)
+			(at 101.6 55.88 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7947,7 +7927,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 104.14 55.88 0)
+			(at 101.6 55.88 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7956,13 +7936,13 @@
 			)
 		)
 		(pin "1"
-			(uuid "90ef05de-a5f5-4a76-8677-878b6fcd258d")
+			(uuid "90ef05de-a5f5-4a76-8677-878b6fcd258e")
 		)
 		(pin "2"
-			(uuid "239888cb-0431-41d4-873e-e8bcb9e507f9")
+			(uuid "239888cb-0431-41d4-873e-e8bcb9e507fa")
 		)
 		(pin "3"
-			(uuid "5ff396ae-292e-4054-9542-ee35149ec028")
+			(uuid "5ff396ae-292e-4054-9542-ee35149ec029")
 		)
 		(pin "4"
 			(uuid "a0c934fc-faca-4bc1-bcd1-b804c99be46b")
@@ -7974,28 +7954,28 @@
 			(uuid "0c3dbcba-835d-422c-84d3-405d403b6ccf")
 		)
 		(pin "10"
-			(uuid "50f620c6-8d66-43bf-8a2a-351d3e74cd60")
+			(uuid "50f620c6-8d66-43bf-8a2a-351d3e74cd61")
 		)
 		(pin "8"
-			(uuid "95bdd560-bf81-4820-a478-082d376bdec3")
+			(uuid "95bdd560-bf81-4820-a478-082d376bdec4")
 		)
 		(pin "9"
-			(uuid "ff65f5b7-f923-4385-ad48-d2d0399031bc")
+			(uuid "ff65f5b7-f923-4385-ad48-d2d0399031bd")
 		)
 		(pin "11"
-			(uuid "a58097f7-ddeb-419b-9be7-957f7ecd735e")
+			(uuid "a58097f7-ddeb-419b-9be7-957f7ecd735f")
 		)
 		(pin "12"
-			(uuid "e84c202b-9d23-407a-b9f5-403d6f2836ce")
+			(uuid "e84c202b-9d23-407a-b9f5-403d6f2836cf")
 		)
 		(pin "13"
-			(uuid "b3288e9d-10ce-4a29-990b-b3aa91d7ca62")
+			(uuid "b3288e9d-10ce-4a29-990b-b3aa91d7ca63")
 		)
 		(pin "14"
-			(uuid "b8ddbcea-c7a6-4399-90ca-22c78270ca90")
+			(uuid "b8ddbcea-c7a6-4399-90ca-22c78270ca91")
 		)
 		(pin "7"
-			(uuid "826338c3-592c-44ef-b7fb-7afdf3ecbaf1")
+			(uuid "826338c3-592c-44ef-b7fb-7afdf3ecbaf2")
 		)
 		(instances
 			(project "3ric"
@@ -8277,37 +8257,37 @@
 			(uuid "782bede3-25ea-40d3-baab-5e90db1bae32")
 		)
 		(pin "4"
-			(uuid "2e02b543-01b1-4cbb-9a25-dc44ab15b711")
+			(uuid "2e02b543-01b1-4cbb-9a25-dc44ab15b712")
 		)
 		(pin "5"
-			(uuid "53560205-dbdc-4532-b74b-57e7e3bc4322")
+			(uuid "53560205-dbdc-4532-b74b-57e7e3bc4323")
 		)
 		(pin "6"
-			(uuid "d5a9dfe7-a2ef-4b1d-94da-aed91d662e1c")
+			(uuid "d5a9dfe7-a2ef-4b1d-94da-aed91d662e1d")
 		)
 		(pin "10"
-			(uuid "34e4d4fc-cfc8-4e3d-b862-7e32f38b2912")
+			(uuid "34e4d4fc-cfc8-4e3d-b862-7e32f38b2913")
 		)
 		(pin "8"
-			(uuid "d6578ab8-5743-4a27-a84c-e24eaf205bf5")
+			(uuid "d6578ab8-5743-4a27-a84c-e24eaf205bf6")
 		)
 		(pin "9"
-			(uuid "5dde91f8-ddf6-45eb-a0db-b81980ac66ac")
+			(uuid "5dde91f8-ddf6-45eb-a0db-b81980ac66ad")
 		)
 		(pin "11"
-			(uuid "9fa1a746-788e-41c3-aae6-4891620f8526")
+			(uuid "9fa1a746-788e-41c3-aae6-4891620f8527")
 		)
 		(pin "12"
-			(uuid "f7eae1b3-5f12-4d4e-b8b7-4fea1c6e809e")
+			(uuid "f7eae1b3-5f12-4d4e-b8b7-4fea1c6e809f")
 		)
 		(pin "13"
-			(uuid "ca610b7c-f568-41c7-9d03-9d7f295b23fb")
+			(uuid "ca610b7c-f568-41c7-9d03-9d7f295b23fc")
 		)
 		(pin "14"
-			(uuid "d1c02117-664d-4cf5-a29a-45ba1c6dd923")
+			(uuid "d1c02117-664d-4cf5-a29a-45ba1c6dd924")
 		)
 		(pin "7"
-			(uuid "2b4ed30a-94e5-4229-8b59-792fb0488906")
+			(uuid "2b4ed30a-94e5-4229-8b59-792fb0488907")
 		)
 		(instances
 			(project "3ric"
@@ -9203,22 +9183,22 @@
 			)
 		)
 		(pin "1"
-			(uuid "5fe10f0a-3858-4207-ac8f-550d9ad240b2")
+			(uuid "5fe10f0a-3858-4207-ac8f-550d9ad240b3")
 		)
 		(pin "2"
-			(uuid "6b917a3f-5676-4eda-8232-36542a648302")
+			(uuid "6b917a3f-5676-4eda-8232-36542a648303")
 		)
 		(pin "3"
-			(uuid "080070f0-44e6-41c8-b965-c4c41adf7d68")
+			(uuid "080070f0-44e6-41c8-b965-c4c41adf7d69")
 		)
 		(pin "4"
-			(uuid "447d692c-2c01-4ce9-9ee5-ebaaae01c8dd")
+			(uuid "447d692c-2c01-4ce9-9ee5-ebaaae01c8de")
 		)
 		(pin "5"
-			(uuid "1fec2080-fdca-407a-8b81-770f4d99310a")
+			(uuid "1fec2080-fdca-407a-8b81-770f4d99310b")
 		)
 		(pin "6"
-			(uuid "28259b07-ca5c-4322-95e3-2531459fac72")
+			(uuid "28259b07-ca5c-4322-95e3-2531459fac73")
 		)
 		(pin "10"
 			(uuid "943c77db-aab5-4647-8b01-f7e5bbf85aa3")
@@ -9230,19 +9210,19 @@
 			(uuid "b0241de7-3832-44d3-baf7-39cf4c0010a3")
 		)
 		(pin "11"
-			(uuid "549ccff3-645b-46e1-87d9-cd6411dc3bdc")
+			(uuid "549ccff3-645b-46e1-87d9-cd6411dc3bdd")
 		)
 		(pin "12"
-			(uuid "ec394047-9d56-411f-85df-c0300d4e0345")
+			(uuid "ec394047-9d56-411f-85df-c0300d4e0346")
 		)
 		(pin "13"
-			(uuid "dbe2c608-479a-4a25-9f18-b168e649eccc")
+			(uuid "dbe2c608-479a-4a25-9f18-b168e649eccd")
 		)
 		(pin "14"
-			(uuid "cd738133-9231-45f2-ac90-a777f63fd26f")
+			(uuid "cd738133-9231-45f2-ac90-a777f63fd270")
 		)
 		(pin "7"
-			(uuid "d655c045-520c-4b64-84de-241a71617119")
+			(uuid "d655c045-520c-4b64-84de-241a7161711a")
 		)
 		(instances
 			(project "3ric"

@@ -28,8 +28,8 @@ using namespace Microsoft::UI::Xaml;
 using namespace Microsoft::UI::Xaml::Controls;
 using namespace Microsoft::UI::Xaml::Input;
 using namespace Microsoft::UI::Xaml::Media::Imaging;
-using namespace Microsoft::UI::Dispatching;
 using namespace Microsoft::UI::Text;
+using namespace Microsoft::UI::Dispatching;
 using namespace Windows::Foundation;
 using namespace winrt::Windows::Graphics::Imaging;
 using namespace winrt::Windows::Storage::Streams;
@@ -71,10 +71,9 @@ namespace winrt::Badger6502Emulator::implementation
 
         static VM _vm;
         vector<uint8_t> _vecKeys;
-        vector<QueueItem> _vecHires1;
-        vector<QueueItem> _vecHires2;
-        vector<QueueItem> _vecText1;
-        vector<QueueItem> _vecText2;
+
+        map<uint16_t, QueueItem> _mapHires[2];
+        map<uint16_t, QueueItem> _mapText[2];
 
         static CRITICAL_SECTION _cs;
 
@@ -86,12 +85,9 @@ namespace winrt::Badger6502Emulator::implementation
         static string _sourceContents;
         static string _listingContents;
         static wstring _wlistingContents;
-        static Microsoft::UI::Dispatching::DispatcherQueue *_pQueue;
 
-        Microsoft::UI::Xaml::Media::Imaging::WriteableBitmap _vgaBitmap = {nullptr};
-        Microsoft::UI::Xaml::Media::Imaging::WriteableBitmap _vgaBitmapTextMode = { nullptr };
-        uint32_t* _pixelBuffer = nullptr;
-        uint32_t* _pixelBufferTextMode = nullptr;
+        Microsoft::UI::Xaml::Media::Imaging::WriteableBitmap _vgaBitmap[2] = { nullptr, nullptr };
+        uint32_t* _pixelBuffer[2] = { 0 };
 
         static DWORD staticVMThreadProc(LPVOID);
         DWORD VMThreadProc();
@@ -108,17 +104,15 @@ namespace winrt::Badger6502Emulator::implementation
         void InitVGA();
         void ClearVGA();
         void ProcessPixelOps();
-        void PlotPixel(uint16_t row, uint16_t col, uint8_t color);
-        void draw_hires_line_color_apple(uint8_t y, uint8_t* pHires);
-        void draw_lores_line_color_apple(uint8_t* pText);
-        void draw_hires_line_eb6502(uint8_t y, uint8_t* pHires);
-        void draw_text_eb6502(uint8_t* pText);
-        void ProcessHires1();
-        void ProcessHires2();
-        void ProcessText1();
-        void ProcessText2();
-        void RefreshVideo();
-        void DrawText();
+        void PlotPixel(int page, uint16_t row, uint16_t col, uint8_t color, bool twice = false);
+        void draw_hires_line_color_apple(int page, uint8_t y);
+        void draw_lores_line_color_apple(int page);
+        void draw_hires_line_eb6502(int page, uint8_t y);
+        void draw_text_eb6502(int page);
+        void ProcessHires(int page);
+        void ProcessText(int page);
+        void RefreshVideo(int page);
+        void DrawText(int page);
 
         Windows::Foundation::IAsyncAction clickSetRegister(IInspectable const& sender, RoutedEventArgs const& e);
         void clickMemory(IInspectable const& sender, RoutedEventArgs const& e);
@@ -138,6 +132,7 @@ namespace winrt::Badger6502Emulator::implementation
         void disk2Remove_OnClicked(IInspectable const& sender, RoutedEventArgs const& args);
         std::string GetDiskImage();
 
+        Microsoft::UI::Dispatching::DispatcherQueueTimer _timer = nullptr;
         Windows::Foundation::Collections::IObservableVector<Badger6502Emulator::BreakPointItem> _vecBreakPoints;
         std::vector<BreakPointItem*> _vecBreakPointsFast;
 
@@ -156,11 +151,9 @@ namespace winrt::Badger6502Emulator::implementation
         int _mixed = 0;
         int _lores = 0;
 
-        uint8_t _hires1[0x2000];
-        uint8_t _hires2[0x2000];
-        uint8_t _text1[0x400];
-        uint8_t _text2[0x400];
-        bool _textDirty = false;
+        uint8_t _hires[2][0x2000];
+        uint8_t _text[2][0x400];
+        bool _textDirty[2] = { false , false };
 
         uint16_t pixelindex[0x2000] = { 0 };
     };

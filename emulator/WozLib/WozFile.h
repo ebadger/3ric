@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <vector>
+#include <mutex>
 #include "WozErrors.h"
 #include "timing.h"
 
@@ -101,6 +102,8 @@ private:
 
 	std::vector<uint8_t> _trackData;
 	std::vector<Chunk *> _vecChunks;
+	std::mutex _mutex;
+
 	Chunk* _InfoChunk = nullptr;
 	Chunk* _MetaChunk = nullptr;
 	Chunk* _TrksChunk = nullptr;

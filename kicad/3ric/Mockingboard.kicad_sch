@@ -6565,12 +6565,13 @@
 				(hide yes)
 			)
 		)
-		(property "Description" ""
-			(at 52.07 104.14 0)
+		(property "Description" "CONN JACK STEREO 3.5MM SMD R/A"
+			(at 57.15 78.74 0)
 			(effects
 				(font
-					(size 1.27 1.27)
+					(size 1.524 1.524)
 				)
+				(justify left)
 				(hide yes)
 			)
 		)
@@ -6626,16 +6627,6 @@
 		)
 		(property "DK_Detail_Page" "/product-detail/en/cui-inc/SJ-3523-SMT-TR/CP-3523SJCT-ND/669704"
 			(at 57.15 81.28 0)
-			(effects
-				(font
-					(size 1.524 1.524)
-				)
-				(justify left)
-				(hide yes)
-			)
-		)
-		(property "Description" "CONN JACK STEREO 3.5MM SMD R/A"
-			(at 57.15 78.74 0)
 			(effects
 				(font
 					(size 1.524 1.524)

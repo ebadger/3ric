@@ -257,7 +257,7 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 	{
 		if (CallbackSetSoftSwitches)
 		{
-			if (address != 0xC070) // skip joystick for now
+			if (address != 0xC070 && address != 0xC030) // skip joystick and speaker for now
 			{
 				CallbackSetSoftSwitches(_graphics, _page2, _mixed, _lores);
 			}
@@ -365,9 +365,6 @@ uint8_t VM::ReadData(uint16_t address)
 
 void VM::WriteData(uint16_t address, uint8_t byte)
 {
-	std::string filename = "";
-
-
 	if (address >= MM_RAM_START && address <= MM_RAM_END
 		|| address >= MM_RAM2_START && address <= MM_RAM2_END
 		|| (_basicbank == false 
@@ -517,6 +514,8 @@ void VM::WriteData(uint16_t address, uint8_t byte)
 	}
 	else if (address >= MM_FILE_START && address <= MM_FILE_END)
 	{
+		std::string filename = "";
+
 		std::vector<uint8_t> bytes;
 		uint16_t start = 0;
 		uint16_t end = 0;

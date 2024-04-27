@@ -88,7 +88,7 @@
 			)
 		)
 	)
-	(text "3RIC 2/21/2024"
+	(text "3RIC 4/25/2024"
 		(exclude_from_sim no)
 		(at 189.23 177.8 0)
 		(effects
@@ -698,8 +698,8 @@
 		)
 	)
 	(sheet
-		(at 147.32 110.49)
-		(size 30.48 15.24)
+		(at 105.41 135.89)
+		(size 33.02 15.24)
 		(fields_autoplaced yes)
 		(stroke
 			(width 0.1524)
@@ -710,7 +710,7 @@
 		)
 		(uuid "90cce3b8-f6c8-4528-982c-77be2de27ade")
 		(property "Sheetname" "LowRes"
-			(at 147.32 109.7784 0)
+			(at 105.41 135.1784 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -719,7 +719,7 @@
 			)
 		)
 		(property "Sheetfile" "LowRes.kicad_sch"
-			(at 147.32 126.3146 0)
+			(at 105.41 151.7146 0)
 			(effects
 				(font
 					(size 1.27 1.27)
