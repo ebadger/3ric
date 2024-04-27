@@ -91,11 +91,6 @@ namespace winrt::Badger6502Emulator::implementation
 {
 
     VM MainWindow::_vm;
-    //vector<uint8_t> MainWindow::_vecKeys;
-    //vector<MainWindow::QueueItem> MainWindow::_vecHires1;
-    //vector<MainWindow::QueueItem> MainWindow::_vecHires2;
-    //vector<MainWindow::QueueItem> MainWindow::_vecText1;
-    //vector<MainWindow::QueueItem> MainWindow::_vecText2;
 
     CRITICAL_SECTION MainWindow::_cs;
 
@@ -106,8 +101,6 @@ namespace winrt::Badger6502Emulator::implementation
     string MainWindow::_sourceContents;
     string MainWindow::_listingContents;
     wstring MainWindow::_wlistingContents;
-
-    DispatcherQueue* MainWindow::_pQueue;
 
     MainWindow::MainWindow()
     {
@@ -422,6 +415,18 @@ namespace winrt::Badger6502Emulator::implementation
 
         // Set the new window placement
         SetWindowPlacement(hWnd, &wp);
+
+        _timer = Microsoft::UI::Dispatching::DispatcherQueue::GetForCurrentThread().CreateTimer();
+        _timer.Interval(std::chrono::milliseconds(16));
+
+        _timer.Tick([&](auto const &, auto const &)
+        {
+            ProcessHires1();
+            ProcessHires2();
+            ProcessText1();
+            ProcessText2();
+        });
+        _timer.Start();
     }
 
     MainWindow::~MainWindow()
@@ -889,14 +894,16 @@ namespace winrt::Badger6502Emulator::implementation
             QueueItem i;
             i.address = address;
             i.data = byte;
-            _vecText1.push_back(i);
+            _mapText1[address] = i;
             LeaveCriticalSection(&_cs);
 
+            /*
             DispatcherQueue().TryEnqueue(
                 DispatcherQueuePriority::Low,
                 [&]() {
                     ProcessText1();
                 });
+            */
         };
 
         _vm.CallbackText2 = [&](uint16_t address, uint8_t byte) -> void {
@@ -905,14 +912,16 @@ namespace winrt::Badger6502Emulator::implementation
             QueueItem i;
             i.address = address;
             i.data = byte;
-            _vecText2.push_back(i);
+            _mapText2[address] = i;
             LeaveCriticalSection(&_cs);
 
+            /*
             DispatcherQueue().TryEnqueue(
                 DispatcherQueuePriority::Low,
                 [&]() {
                     ProcessText2();
                 });
+            */
         };
 
         _vm.CallbackHires1 = [&](uint16_t address, uint8_t byte) -> void {
@@ -922,15 +931,18 @@ namespace winrt::Badger6502Emulator::implementation
             QueueItem i;
             i.address = address;
             i.data = byte;
-            _vecHires1.push_back(i);
+            _mapHires1[address] = i;
+            //_vecHires1.push_back(i);
 
             LeaveCriticalSection(&_cs);
 
+            /*
             DispatcherQueue().TryEnqueue(
                 DispatcherQueuePriority::Low,
                 [&]() {
                     ProcessHires1();
                 });
+             */
         };
 
         
@@ -941,15 +953,16 @@ namespace winrt::Badger6502Emulator::implementation
             QueueItem i;
             i.address = address;
             i.data = byte;
-            _vecHires2.push_back(i);
-
+            _mapHires2[address] = i;
             LeaveCriticalSection(&_cs);
 
+            /*
             DispatcherQueue().TryEnqueue(
                 DispatcherQueuePriority::Low,
                 [&]() {
                     ProcessHires2();
                 });
+            */
         };
 
         _vm.CallbackReadMemory = [&](uint16_t address) -> void
@@ -2524,19 +2537,19 @@ namespace winrt::Badger6502Emulator::implementation
 
         EnterCriticalSection(&_cs);
 
-        for (auto pItem : _vecHires1)
+        for (auto pItem : _mapHires1)
         {
-            _hires1[pItem.address] = pItem.data;
+            _hires1[pItem.second.address] = pItem.second.data;
 
             if (_gfxPage == 0 && _textMode == 0 && _lores == 0)
             {
-                uint8_t y = pixelindex[pItem.address] & 0xFF;
+                uint8_t y = pixelindex[pItem.second.address] & 0xFF;
                 vecLines.push_back(y);
                 dirty = true;
             }
         }
         
-        _vecHires1.clear();
+        _mapHires1.clear();
         LeaveCriticalSection(&_cs);
 
         for (auto i : vecLines)
@@ -2560,19 +2573,19 @@ namespace winrt::Badger6502Emulator::implementation
 
         EnterCriticalSection(&_cs);
 
-        for (auto pItem : _vecHires2)
+        for (auto pItem : _mapHires2)
         {
-            _hires2[pItem.address] = pItem.data;
+            _hires2[pItem.second.address] = pItem.second.data;
 
             if (_gfxPage == 1 && _textMode == 0 && _lores == 0)
             {
-                uint8_t y = pixelindex[pItem.address] & 0xFF;
+                uint8_t y = pixelindex[pItem.second.address] & 0xFF;
                 vecLines.push_back(y);
                 dirty = true;
             }
         }
 
-        _vecHires2.clear();
+        _mapHires2.clear();
         LeaveCriticalSection(&_cs);
 
         for (auto i : vecLines)
@@ -2634,16 +2647,16 @@ namespace winrt::Badger6502Emulator::implementation
     {   
         EnterCriticalSection(&_cs);
 
-        for (auto pItem : _vecText1)
+        for (auto pItem : _mapText1)
         {
-            _text1[pItem.address] = pItem.data;
+            _text1[pItem.second.address] = pItem.second.data;
 
             if (_gfxPage == 0 && (_textMode == 1 || _mixed == 1) || _lores == 1)
             {
                 _textDirty = true;
             }
         }
-        _vecText1.clear();
+        _mapText1.clear();
         LeaveCriticalSection(&_cs);
 
     }
@@ -2652,9 +2665,9 @@ namespace winrt::Badger6502Emulator::implementation
     {
         EnterCriticalSection(&_cs);
 
-        for (auto pItem : _vecText2)
+        for (auto pItem : _mapText2)
         {
-            _text2[pItem.address] = pItem.data;
+            _text2[pItem.second.address] = pItem.second.data;
 
             if (_gfxPage == 1 && (_textMode == 1 || _mixed == 1))
             {

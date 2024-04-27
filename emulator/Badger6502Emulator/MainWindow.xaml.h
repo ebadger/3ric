@@ -28,8 +28,8 @@ using namespace Microsoft::UI::Xaml;
 using namespace Microsoft::UI::Xaml::Controls;
 using namespace Microsoft::UI::Xaml::Input;
 using namespace Microsoft::UI::Xaml::Media::Imaging;
-using namespace Microsoft::UI::Dispatching;
 using namespace Microsoft::UI::Text;
+using namespace Microsoft::UI::Dispatching;
 using namespace Windows::Foundation;
 using namespace winrt::Windows::Graphics::Imaging;
 using namespace winrt::Windows::Storage::Streams;
@@ -71,10 +71,11 @@ namespace winrt::Badger6502Emulator::implementation
 
         static VM _vm;
         vector<uint8_t> _vecKeys;
-        vector<QueueItem> _vecHires1;
-        vector<QueueItem> _vecHires2;
-        vector<QueueItem> _vecText1;
-        vector<QueueItem> _vecText2;
+
+        map<uint16_t, QueueItem> _mapHires1;
+        map<uint16_t, QueueItem> _mapHires2;
+        map<uint16_t, QueueItem> _mapText1;
+        map<uint16_t, QueueItem> _mapText2;
 
         static CRITICAL_SECTION _cs;
 
@@ -86,7 +87,6 @@ namespace winrt::Badger6502Emulator::implementation
         static string _sourceContents;
         static string _listingContents;
         static wstring _wlistingContents;
-        static Microsoft::UI::Dispatching::DispatcherQueue *_pQueue;
 
         Microsoft::UI::Xaml::Media::Imaging::WriteableBitmap _vgaBitmap = {nullptr};
         Microsoft::UI::Xaml::Media::Imaging::WriteableBitmap _vgaBitmapTextMode = { nullptr };
@@ -138,6 +138,7 @@ namespace winrt::Badger6502Emulator::implementation
         void disk2Remove_OnClicked(IInspectable const& sender, RoutedEventArgs const& args);
         std::string GetDiskImage();
 
+        Microsoft::UI::Dispatching::DispatcherQueueTimer _timer = nullptr;
         Windows::Foundation::Collections::IObservableVector<Badger6502Emulator::BreakPointItem> _vecBreakPoints;
         std::vector<BreakPointItem*> _vecBreakPointsFast;
 
