@@ -419,12 +419,16 @@ namespace winrt::Badger6502Emulator::implementation
         _timer = Microsoft::UI::Dispatching::DispatcherQueue::GetForCurrentThread().CreateTimer();
         _timer.Interval(std::chrono::milliseconds(16));
 
-        _timer.Tick([&](auto const &, auto const &)
-        {
-            ProcessHires();
-            ProcessText();
-            DrawText();
-        });
+        _timer.Tick([&](auto const&, auto const&)
+            {
+                int page = _gfxPage;
+                ProcessHires(page);
+                ProcessText(page);
+                //DrawText(page);
+                RefreshVideo(page);
+                _vgaBitmap[page].Invalidate();
+                imgVGA().Source(_vgaBitmap[page]);
+            });
         _timer.Start();
     }
 
@@ -860,8 +864,9 @@ namespace winrt::Badger6502Emulator::implementation
                     _textMode = graphics ? 0 : 1;
                     _mixed = mixed ? 1 : 0;
                     _lores = lores ? 1 : 0;
-                    ClearVGA();
-                    RefreshVideo();
+
+                    //ClearVGA();
+                    //RefreshVideo();
                 });
 
             if (!queued)
@@ -878,7 +883,7 @@ namespace winrt::Badger6502Emulator::implementation
                     //_textMode = ((flags & 0x80) == 0);
                     _font = flags & 0x3F;
 
-                    RefreshVideo();
+                    //RefreshVideo();
                 });
 
             if (!queued)
@@ -1367,31 +1372,37 @@ namespace winrt::Badger6502Emulator::implementation
         return 0;
     }
 
-    void MainWindow::RefreshVideo()
+    void MainWindow::RefreshVideo(int page)
     {
         //EnterCriticalSection(&_cs);
-
-        uint8_t* pHiRes = _hires[_gfxPage];
-        uint8_t* pText = _text[_gfxPage];
 
         if (_textMode == 0)
         {
             if (_lores == 0)
             {
-                for (uint8_t y = 0; y < 192; y++)
+                for (uint8_t y = 0; y <= 192; y++)
                 {
                     //draw_hires_line_eb6502(y, pHiRes);
-                    draw_hires_line_color_apple(y, pHiRes);
+                    draw_hires_line_color_apple(page, y);
                 }
             }
             else
             {
-                draw_lores_line_color_apple(pText);
+                draw_lores_line_color_apple(page);
             }
+
+            if (_mixed)
+            {
+                draw_text_eb6502(page);
+            }
+        }
+        else 
+        {
+            draw_text_eb6502(page);
         }
         //LeaveCriticalSection(&_cs);
 
-        _vgaBitmap.Invalidate();
+        //_vgaBitmap[_gfxPage].Invalidate();
     }
 
     void MainWindow::SetSourceContents()
@@ -1480,44 +1491,46 @@ namespace winrt::Badger6502Emulator::implementation
 
     void MainWindow::InitVGA()
     {
-        _vgaBitmap = WriteableBitmap(320, 400);
-        _pixelBuffer = (uint32_t*)_vgaBitmap.PixelBuffer().data();
+        _vgaBitmap[0] = WriteableBitmap(320, 384);
+        _vgaBitmap[1] = WriteableBitmap(320, 384);
+        _pixelBuffer[0] = (uint32_t*)_vgaBitmap[0].PixelBuffer().data();
+        _pixelBuffer[1] = (uint32_t*)_vgaBitmap[1].PixelBuffer().data();
 
         //_vgaBitmapTextMode = WriteableBitmap(320, 400);
         //_pixelBufferTextMode = (uint32_t*)_vgaBitmapTextMode.PixelBuffer().data();
 
-        imgVGA().Source(_vgaBitmap);
+        imgVGA().Source(_vgaBitmap[_gfxPage]);
         ClearVGA();
     }
 
     void MainWindow::ClearVGA()
     {
         // clear display
-        for (uint16_t y = 0; y < 400; y++)
+        for (uint16_t y = 0; y < 384; y++)
         {
             for (uint16_t x = 0; x < 320; x++)
             {
-                PlotPixel(y, x, 0);
+                PlotPixel(_gfxPage, y, x, 0);
             }
         }
-        _vgaBitmap.Invalidate();
+        _vgaBitmap[_gfxPage].Invalidate();
     }
 
-    void MainWindow::draw_text_eb6502(uint8_t* pText)
+    void MainWindow::draw_text_eb6502(int page)
     {
+        uint32_t startrow = 0;
+        if (_mixed && !_textMode)
+        {
+            startrow = 320;
+        }
+
         for (uint32_t x = 0; x < 40; x++)
         {
-            uint32_t startrow = 0;
-            if (_mixed && !_textMode)
-            {
-                startrow = 320;
-            }
-
             for (uint32_t y = startrow; y < 384; y++)
             {                
                 //uint32_t addr = ((y/16) * 40) + x
                 uint32_t addr = textScanlines[y/16] + x;
-                uint8_t curr = pText[addr];
+                uint8_t curr = _text[page][addr];
 
 
                 uint32_t fontaddr = 0;
@@ -1532,11 +1545,11 @@ namespace winrt::Badger6502Emulator::implementation
                 {
                     if (bytes & (1<<i))
                     {
-                        _pixelBuffer[(x * 8) + bit + (y * 320)] = 0xFFFFFFFF;
+                        _pixelBuffer[page][(x * 8) + bit + (y * 320)] = 0xFFFFFFFF;
                     }
                     else
                     {
-                        _pixelBuffer[(x * 8) + bit + (y * 320)] = 0xFF000000;
+                        _pixelBuffer[page][(x * 8) + bit + (y * 320)] = 0xFF000000;
                     }
                     bit++;
                 }
@@ -1545,13 +1558,13 @@ namespace winrt::Badger6502Emulator::implementation
         }
     }
 
-    void MainWindow::draw_hires_line_eb6502(uint8_t y, uint8_t* pHiRes)
+    void MainWindow::draw_hires_line_eb6502(int page, uint8_t y)
     {
         for (uint16_t x = 0; x < 40; x++)
         {
             //uint16_t laddr = (y * 40) + x;
             uint16_t laddr = scanlines[y] + x;
-            uint8_t curr = pHiRes[laddr];
+            uint8_t curr = _hires[page][laddr];
 
             for (uint8_t i = 0; i < 7; i++)
             {
@@ -1559,17 +1572,17 @@ namespace winrt::Badger6502Emulator::implementation
 
                 if (bit)
                 {
-                    PlotPixel(y, (x * 7) + i /*(7 - i)*/, 0xFF);
+                    PlotPixel(page, y, (x * 7) + i /*(7 - i)*/, 0xFF);
                 }
                 else
                 {
-                    PlotPixel(y, (x * 7) + i /*(7 - i)*/, 0x00);
+                    PlotPixel(page, y, (x * 7) + i /*(7 - i)*/, 0x00);
                 }
             }
         }
     }
 
-    void MainWindow::draw_hires_line_color_apple(uint8_t y, uint8_t* pHiRes)
+    void MainWindow::draw_hires_line_color_apple(int page, uint8_t y)
     {
         uint8_t pallete = 0;
         uint8_t prevbit = 0;
@@ -1583,7 +1596,7 @@ namespace winrt::Badger6502Emulator::implementation
         for (uint16_t x = 0; x < 40; x++)
         {
             uint16_t laddr = scanlines[y] + x;
-            uint8_t curr = pHiRes[laddr];
+            uint8_t curr = _hires[page][laddr];
 
             pallete = curr >> 7;
 
@@ -1606,8 +1619,16 @@ namespace winrt::Badger6502Emulator::implementation
                 }
 
                 color = colors[pallete][index];
+                uint16_t pixel = (uint16_t)(((float)countPixel / 280.0f) * 320);
+                countPixel++;
+                uint16_t nextpixel = (uint16_t)(((float)countPixel / 280.0f) * 320);
 
-                PlotPixel(ya, countPixel++, color, true);
+                PlotPixel(page, ya, pixel, color, true);
+                if (nextpixel - pixel > 1)
+                {
+                    PlotPixel(page, ya, pixel+1, color, true);
+                }
+
                 //PlotPixel(ya+1, countPixel++, color);
 
                 prevbit = bit;
@@ -1615,7 +1636,7 @@ namespace winrt::Badger6502Emulator::implementation
         }
     }
 
-    void MainWindow::draw_lores_line_color_apple(uint8_t* pText)
+    void MainWindow::draw_lores_line_color_apple(int page)
     {
         uint8_t index = 0;
         uint32_t color = 0;
@@ -1631,7 +1652,7 @@ namespace winrt::Badger6502Emulator::implementation
             for (uint32_t y = 0; y < endy; y++)
             {
                 uint32_t addr = textScanlines[y / 16] + x;
-                uint8_t curr = pText[addr];
+                uint8_t curr = _text[page][addr];
 
                 if ((y & 8) == 0)
                 {
@@ -1696,7 +1717,7 @@ namespace winrt::Badger6502Emulator::implementation
 
                 for (int i = 0 ; i < 8; i++)
                 {
-                    _pixelBuffer[(x * 8) + i + (y * 320)] = color;
+                    _pixelBuffer[page][(x * 8) + i + (y * 320)] = color;
                 }
             }
 
@@ -1722,12 +1743,12 @@ namespace winrt::Badger6502Emulator::implementation
 #endif
     }
 
-    void MainWindow::PlotPixel(uint16_t row, uint16_t col, uint8_t color, bool twice)
+    void MainWindow::PlotPixel(int page, uint16_t row, uint16_t col, uint8_t color, bool twice)
     {
         uint32_t newcolor; // = 0xFF000000;
         uint32_t intensity = 0xFF;
 
-        uint32_t rowmax = 400;
+        uint32_t rowmax = 384;
 
         const uint32_t colorarray[16] = 
         { 
@@ -1776,10 +1797,10 @@ namespace winrt::Badger6502Emulator::implementation
             newcolor |= (intensity << 16);
         }
         
-        _pixelBuffer[col + (row * 320)] = newcolor;
+        _pixelBuffer[page][col + (row * 320)] = newcolor;
         if (twice)
         {
-            _pixelBuffer[col + ((row+1) * 320)] = newcolor;
+            _pixelBuffer[page][col + ((row+1) * 320)] = newcolor;
         }
     }
 
@@ -2523,89 +2544,55 @@ namespace winrt::Badger6502Emulator::implementation
     }
 #endif
 
-    void MainWindow::ProcessHires()
+    void MainWindow::ProcessHires(int page)
     {
-        bool dirty = false;
-        vector<int> vecLines;
-
-        if (_textMode != 0 || _lores != 0)
-        {
-            return;
-        }
-
         EnterCriticalSection(&_cs);
 
-        for (auto pItem : _mapHires[_gfxPage])
+        for (auto pItem : _mapHires[page])
         {
-            _hires[_gfxPage][pItem.second.address] = pItem.second.data;
+            _hires[page][pItem.second.address] = pItem.second.data;
 
-            uint8_t y = pixelindex[pItem.second.address] & 0xFF;
-            vecLines.push_back(y);
-            dirty = true;
+            //uint8_t y = pixelindex[pItem.second.address] & 0xFF;
         }
 
-        _mapHires[_gfxPage].clear();
+        _mapHires[page].clear();
         LeaveCriticalSection(&_cs);
-
-        for (auto i : vecLines)
-        {
-            draw_hires_line_color_apple((uint8_t)i, _hires[_gfxPage]);
-        }
-
-        if (dirty)
-        {
-            _vgaBitmap.Invalidate();
-        }
     }
 
-    void MainWindow::DrawText()
+    void MainWindow::DrawText(int page)
     {
-        if (_textDirty)
+        if (_textDirty[page])
         {
-            if (_textMode || _mixed || _lores)
+            _textDirty[page] = false;
+
+            if (_lores && (!_textMode || _mixed))
             {
-                if (_textMode == 1)
-                {
-                    draw_text_eb6502(_text[_gfxPage]);
-                }
-                else if (_lores == 1)
-                {
-                    draw_lores_line_color_apple(_text[_gfxPage]);
-                    if (_mixed == 1)
-                    {
-                        draw_text_eb6502(_text[_gfxPage]);
-                    }
-                }
-                else
-                {
-                    if (_mixed == 1)
-                    {
-                        draw_text_eb6502(_text[_gfxPage]);
-                    }
-
-                }
-
-                _vgaBitmap.Invalidate();
+                draw_lores_line_color_apple(page);
             }
+
+            if (_mixed || _textMode)
+            {
+                draw_text_eb6502(page);
+            } 
         }
     }
 
-    void MainWindow::ProcessText()
+    void MainWindow::ProcessText(int page)
     {   
-
+        /*
         if (_textMode == 0 && _mixed == 0 && _lores == 0)
         {
             return;
         }
+        */
 
         EnterCriticalSection(&_cs);
-
-        for (auto pItem : _mapText[_gfxPage])
+        for (auto pItem : _mapText[page])
         {
-            _text[_gfxPage][pItem.second.address] = pItem.second.data;
-            _textDirty = true;
+            _text[page][pItem.second.address] = pItem.second.data;
+            _textDirty[page] = true;
         }
-        _mapText[_gfxPage].clear();
+        _mapText[page].clear();
         LeaveCriticalSection(&_cs);
     }
 }

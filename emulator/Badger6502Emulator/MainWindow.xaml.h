@@ -86,10 +86,8 @@ namespace winrt::Badger6502Emulator::implementation
         static string _listingContents;
         static wstring _wlistingContents;
 
-        Microsoft::UI::Xaml::Media::Imaging::WriteableBitmap _vgaBitmap = {nullptr};
-        Microsoft::UI::Xaml::Media::Imaging::WriteableBitmap _vgaBitmapTextMode = { nullptr };
-        uint32_t* _pixelBuffer = nullptr;
-        uint32_t* _pixelBufferTextMode = nullptr;
+        Microsoft::UI::Xaml::Media::Imaging::WriteableBitmap _vgaBitmap[2] = { nullptr, nullptr };
+        uint32_t* _pixelBuffer[2] = { 0 };
 
         static DWORD staticVMThreadProc(LPVOID);
         DWORD VMThreadProc();
@@ -106,15 +104,15 @@ namespace winrt::Badger6502Emulator::implementation
         void InitVGA();
         void ClearVGA();
         void ProcessPixelOps();
-        void PlotPixel(uint16_t row, uint16_t col, uint8_t color, bool twice = false);
-        void draw_hires_line_color_apple(uint8_t y, uint8_t* pHires);
-        void draw_lores_line_color_apple(uint8_t* pText);
-        void draw_hires_line_eb6502(uint8_t y, uint8_t* pHires);
-        void draw_text_eb6502(uint8_t* pText);
-        void ProcessHires();
-        void ProcessText();
-        void RefreshVideo();
-        void DrawText();
+        void PlotPixel(int page, uint16_t row, uint16_t col, uint8_t color, bool twice = false);
+        void draw_hires_line_color_apple(int page, uint8_t y);
+        void draw_lores_line_color_apple(int page);
+        void draw_hires_line_eb6502(int page, uint8_t y);
+        void draw_text_eb6502(int page);
+        void ProcessHires(int page);
+        void ProcessText(int page);
+        void RefreshVideo(int page);
+        void DrawText(int page);
 
         Windows::Foundation::IAsyncAction clickSetRegister(IInspectable const& sender, RoutedEventArgs const& e);
         void clickMemory(IInspectable const& sender, RoutedEventArgs const& e);
@@ -155,7 +153,7 @@ namespace winrt::Badger6502Emulator::implementation
 
         uint8_t _hires[2][0x2000];
         uint8_t _text[2][0x400];
-        bool _textDirty = false;
+        bool _textDirty[2] = { false , false };
 
         uint16_t pixelindex[0x2000] = { 0 };
     };

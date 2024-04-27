@@ -151,7 +151,7 @@
             </Grid.RowDefinitions>
 
             <StackPanel x:Name="stackVGA"  Grid.Row="0" Grid.Column="0" Background="DimGray" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Orientation="Vertical" IsHitTestVisible="True" AllowFocusOnInteraction="True">
-                <Image HorizontalAlignment="Center" VerticalAlignment="Center" x:Name="imgVGA" IsHitTestVisible="True" AllowFocusOnInteraction="True" AllowFocusWhenDisabled="True" Stretch="Fill" Width="640" Height="400"></Image>
+                <Image HorizontalAlignment="Center" VerticalAlignment="Center" x:Name="imgVGA" IsHitTestVisible="True" AllowFocusOnInteraction="True" AllowFocusWhenDisabled="True" Stretch="Fill" Width="700" Height="420"></Image>
             </StackPanel>
 
             <local:ResizeBorder Grid.Column="0" Grid.Row="1"  Background="Gray" Height="5" Orientation="Horizontal"/>
