@@ -1110,30 +1110,33 @@ namespace winrt::Badger6502Emulator::implementation
         };
 #endif
 
-        _sdcard.LoadImageFile(L"c:\\eb6502\\targets\\sd.001");
+        WCHAR dir[MAX_PATH] = {};
+        GetCurrentDirectoryW(MAX_PATH, (LPWSTR)dir);
+        
+        _sdcard.LoadImageFile(L"\\3ric\\emulator\\data\\sd.001");
 
-        uint32_t retval = _fontFile.MapFile(L"c:\\eb6502\\targets\\fontrom.dat");
+        uint32_t retval = _fontFile.MapFile(L"\\3ric\\emulator\\data\\fontrom.dat");
         if (retval != 0)
         {
             __debugbreak();
         }
 
         //if (vm.LoadBinaryFile("c:\\6502_65C02_functional_tests\\6502_functional_test.bin", 0))
-        if (_vm.LoadBinaryFile("c:\\eb6502\\targets\\badger6502.bin", 0x0000))
+        if (_vm.LoadBinaryFile("\\3ric\\emulator\\data\\badger6502.bin", 0x0000))
         {
             memcpy(_vm.GetBasicRom(), &_vm.GetData()[0x9000], sizeof(uint8_t) * 0x3000);
 
-            _vm.LoadRomDiskFile("c:\\eb6502\\targets\\loderun.bin");
+            _vm.LoadRomDiskFile("\\3ric\\emulator\\data\\loderun.bin");
 
             // load Loderunner into RAM
             //memcpy(&_vm.GetData()[0x800], &_vm.GetRomDisk()[0], sizeof(uint8_t) * 0xB600);
 
 
-            _fHasSymbols = DebugSymbols::LoadDebugFile("c:\\eb6502\\targets\\badger6502.dbg");
-            DebugSymbols::LoadDebugFile("c:\\eb6502\\targets\\loderun.dbg");
+            _fHasSymbols = DebugSymbols::LoadDebugFile("\\3ric\\emulator\\data\\badger6502.dbg");
+            DebugSymbols::LoadDebugFile("\\3ric\\emulator\\data\\loderun.dbg");
 
             //_vm.LoadBinaryFile("c:\\eb6502\\targets\\breakout_0803.bin", 0x4000);
-            _vm.LoadBinaryFile("c:\\eb6502\\targets\\gomoku.bin", 0x4000);
+            //_vm.LoadBinaryFile("c:\\eb6502\\targets\\gomoku.bin", 0x4000);
 
             // temporarily write a fcopyat directory entry
             //_vm.LoadBinaryFile("c:\\eb6502\\targets\\fatentry.bin", 0xA000);
