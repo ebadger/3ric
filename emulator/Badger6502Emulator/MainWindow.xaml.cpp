@@ -440,7 +440,7 @@ namespace winrt::Badger6502Emulator::implementation
 
     void MainWindow::Cleanup()
     {
-
+        _timer.Stop();
         UpdateExecutionState(ExecutionState::Quit);
         WaitForSingleObject(_hThread, INFINITE);
 
@@ -2547,7 +2547,10 @@ namespace winrt::Badger6502Emulator::implementation
 
     void MainWindow::ProcessHires(int page)
     {
-        EnterCriticalSection(&_cs);
+        if (false == TryEnterCriticalSection(&_cs))
+        {
+            return;
+        }
 
         for (auto pItem : _mapHires[page])
         {
@@ -2587,7 +2590,11 @@ namespace winrt::Badger6502Emulator::implementation
         }
         */
 
-        EnterCriticalSection(&_cs);
+        if (false == TryEnterCriticalSection(&_cs))
+        {
+            return;
+        }
+
         for (auto pItem : _mapText[page])
         {
             _text[page][pItem.second.address] = pItem.second.data;
