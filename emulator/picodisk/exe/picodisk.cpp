@@ -5,6 +5,14 @@
 #include <pico/multicore.h>
 #include "DriveEmulator.h"
 #include "sdcard.h"
+#include "console.h"
+#include "hardware/uart.h"
+#include "hardware/gpio.h"
+
+
+// UART0 TX and RX pins
+const uint UART_TX_PIN = 0;
+const uint UART_RX_PIN = 1;
 
 // D0-D7 : GPIO 6-13    - Data bus
 // DCS   : GPIO 14      - Drive chip select
@@ -33,14 +41,25 @@
 #define GPIO_A3      21
 #define GPIO_TEST    22
 #define GPIO_LAST    22
+#define GPIO_LED     25
 
-const uint32_t _maskData    = 0b00000000000000000011111111000000;
+uint32_t _maskData    = 0;
 //const uint32_t _maskAddress = 0b00000000001111000000000000000000; 
 uint64_t _cycleCount = 0;
 bool _testMode = false;
 
 DriveEmulator *_driveEmulator = nullptr;
 SDCard *_sdCard = nullptr;
+Console *_console = nullptr;
+
+void init_uart(uint baudrate) {
+    // Initialize UART0
+    uart_init(uart0, baudrate);
+
+    // Set the TX and RX pins by using the function gpio_set_function
+    gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
+    gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
+}
 
 void HandleCommunication(uint32_t bits, uint8_t address, bool fRW)
 {
@@ -48,6 +67,8 @@ void HandleCommunication(uint32_t bits, uint8_t address, bool fRW)
     uint32_t data = bits;
     uint32_t dataOut = 0;
     
+    _console->PrintOut("addr=%02x\n", address);
+
     if (fRW) // read
     {
         // CPU reading, so output
@@ -101,7 +122,7 @@ void HandleDrive(uint32_t bits, uint8_t address, bool fRW)
 
         if(_testMode)
         {
-            dataOut = (test_pattern[_cycleCount % 2] << GPIO_D0);
+            dataOut = test_pattern[_cycleCount % 2];
         }
         else
         {
@@ -130,12 +151,20 @@ void __not_in_flash_func(gpio_callback)(uint gpio, uint32_t events)
         uint32_t addr = bits;
         uint32_t data = bits;
 
-        bool fCCS = (bits & 1 << GPIO_CCS)  != 1;
-        bool fDCS = (bits & 1 << GPIO_DCS)  != 1;
-        bool fRW  = (bits & 1 << GPIO_RW)   != 0;
-        _testMode = (bits & 1 << GPIO_TEST) != 0;
+        bool fCCS = !((bits & 1 << GPIO_CCS)  != 0);
+        bool fDCS = !((bits & 1 << GPIO_DCS)  != 0);
+        bool fRW  =   (bits & 1 << GPIO_RW)   != 0;
+        _testMode =   (bits & 1 << GPIO_TEST) != 0;
 
         addr = (addr >> GPIO_A0) & 0xF;
+
+        _console->PrintOut("gpio_callback: CCS:%d, DCS:%d, RW:%d, T:%d, addr=%x, all=%08x\n",
+                    fCCS ? 1 : 0,
+                    fDCS ? 1 : 0,
+                    fRW ? 1 : 0,
+                    _testMode ? 1 : 0,
+                    addr,
+                    bits);
 
         if (fCCS)
         {
@@ -149,7 +178,7 @@ void __not_in_flash_func(gpio_callback)(uint gpio, uint32_t events)
     else if (events & GPIO_IRQ_EDGE_FALL)
     {
         // stop driving data?
-        gpio_set_dir_in_masked(_maskData);
+        // gpio_set_dir_in_masked(_maskData);
 
         // add cycles on the clock fall to buy time?
         _driveEmulator->AddCycles(1);
@@ -159,42 +188,138 @@ void __not_in_flash_func(gpio_callback)(uint gpio, uint32_t events)
 
 void init_GPIO()
 {
+    for(int i = GPIO_D0; i <= GPIO_D7; i++)
+    {
+        _maskData |= (1 << i);
+    }
+
+    gpio_init(GPIO_LED);
+    gpio_set_dir(GPIO_LED, GPIO_OUT);
+
     for(int i = GPIO_FIRST; i <= GPIO_LAST; i++)
     {
         gpio_init(i);
         gpio_set_dir(i, GPIO_IN);
     }
+
+    gpio_set_irq_enabled_with_callback(
+        GPIO_PHI2, 
+        GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, 
+        true, 
+        &gpio_callback);
 }
 
+void init_console()
+{
+    _console->AddCommand(
+    new Command(std::string("echo"), 
+    [&](std::vector<std::string>& params) -> void
+    {
+        for(int i = 0; i < params.size(); i++)
+        {
+            _console->PrintOut("echo: %s\n", params[i].c_str());
+        }
+    }));
+
+    _console->AddCommand(
+    new Command(std::string("dir"), 
+    [&](std::vector<std::string>& params) -> void
+    {
+        std::vector<std::string> vecFiles;
+        _sdCard->GetFilesInDirectory("\\", vecFiles);
+
+        for (std::string s : vecFiles)
+        {
+            _console->PrintOut("%s\n", s.c_str());
+        }
+    }));
+
+    _console->AddCommand(
+    new Command(std::string("load"), 
+    [&](std::vector<std::string>& params) -> void
+    {
+        if (params.size() != 2)
+        {
+            _console->PrintOut("usage: load [filename]\n");
+            return;
+        }
+
+        if (_driveEmulator->GetActiveDisk()->InsertDisk(params[1].c_str()))
+        {
+            _console->PrintOut("WOZ2 disk image loaded\n");
+        }
+        else
+        {
+            _console->PrintOut("WOZ2 disk image load failed\n");
+        }
+    }));
+
+    _console->AddCommand(
+    new Command(std::string("diskinfo"), 
+    [&](std::vector<std::string>& params) -> void
+    {
+        InfoChunkData *pData = _driveEmulator->GetActiveDisk()->GetFile()->GetInfoChunkData();
+
+        if(pData)
+        {
+            _console->PrintOut("Version: %d\nCreator: %s\nCompat HW: %d\nReq RAM: %d\n", 
+                    pData->Version,
+                    pData->Creator,
+                    pData->CompatibleHardware,
+                    pData->RequiredRAM);
+        }
+        else 
+        {
+            _console->PrintOut("No disk loaded in active drive\n");
+        }
+    }));
+
+}
 
 void core1() 
 {
     init_GPIO();
-    gpio_set_irq_enabled_with_callback(
-            GPIO_PHI2, 
-            GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, 
-            true, 
-            &gpio_callback);
 
+    uint32_t counter = 0;
     while(true)
     {
     }
 }
 
-int main(int , char **)
+int main()
 {
+    uint32_t counter = 0;
+    bool ledon = false;
+
+    stdio_init_all();
+
+    multicore_launch_core1(core1);
+
     _driveEmulator = new DriveEmulator();
     _sdCard = new SDCard();
+    _console = new Console();
 
     _sdCard->Init();
     _sdCard->Mount();
 
+    init_console();
     //set_sys_clock_khz(250000, true);
-
-    multicore_launch_core1(core1);
 
     while(true)
     {
+        uint8_t c = 0;
+        int ch = getchar_timeout_us(0);
+        if (ch != PICO_ERROR_TIMEOUT) {
+            // There is a character available to read
+            // Process the character
+            _console->InputByte((uint8_t)ch);
+            printf("%c", ch);
+        }        
+
+        if (_console->GetOutputByte(&c))
+        {
+            printf("%c", c);
+        }
     }
 
     return 0;

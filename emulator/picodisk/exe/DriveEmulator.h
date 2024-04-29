@@ -12,13 +12,13 @@ public:
 	uint8_t Read(uint8_t address);
 	void Write(uint8_t address, uint8_t data);
 	void AddCycles(uint32_t cycles);
+	WozDisk* GetActiveDisk();
 
 private:
 	void StartMotor();
 	void StopMotor();
 	void UpdateQ(bool Q6, bool Q7);
 
-	WozDisk* GetActiveDisk();
 	WozDisk* GetDisk(uint8_t i);
 
 	bool		_Q6 = false;
