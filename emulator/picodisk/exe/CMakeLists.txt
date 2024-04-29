@@ -6,7 +6,8 @@ target_sources( picodrive PRIVATE
     wozdisk.cpp 
     wozfile.cpp 
     sdcard.cpp 
-    hw_config.c )
+    hw_config.c 
+    console.cpp )
 
 #pico_generate_pio_header(badger6502vm ${CMAKE_CURRENT_LIST_DIR}/hsync.pio)
 #pico_generate_pio_header(badger6502vm ${CMAKE_CURRENT_LIST_DIR}/vsync.pio)

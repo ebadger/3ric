@@ -20,7 +20,8 @@ public:
 	uint8_t ToothBefore();
 	uint8_t ToothAfter();
 	int8_t UpdateWheel();
-
+	WozFile *GetFile();
+	
 private:
 	WozFile		_WozFile;
 	int16_t		_trackPosition;

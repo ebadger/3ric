@@ -207,3 +207,8 @@ bool WozDisk::IsDiskPresent()
 {
 	return _WozFile.IsFileLoaded();
 }
+
+WozFile * WozDisk::GetFile()
+{
+	return &_WozFile;
+}
