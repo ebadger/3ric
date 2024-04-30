@@ -1,3 +1,4 @@
+
 const int _datapins[] =  {22, 24, 26, 28, 30, 32, 34, 36};
 const int _addrpins[] =  {39, 41, 43, 45};
 // 47, 49, 51, 53
@@ -10,6 +11,9 @@ bool _readMode = false;
 bool _clockHigh = false;
 char _buf[255];
 uint8_t _addr = 0;
+
+uint8_t _stack[255];
+uint8_t _stackpos = 0;
 
 void SetReadWrite(bool read)
 {
@@ -84,11 +88,32 @@ void loop() {
 
   if (_clockHigh)
   {
-    _addr++;
-    _addr = _addr % 2;
-    WriteAddress(_addr);
+    if (_stackpos > 0)
+    {      
+      _addr = 0;
+      WriteAddress(_addr);
+      SetReadWrite(false); // write
+      WriteData(_stack[--_stackpos]);
+    }
+    else
+    {
+      _addr = 0;
+      WriteAddress(_addr);
+      SetReadWrite(true); // read
+      uint8_t b = ReadData();
+      Serial.write(b);
+    }
   }
   
+  if(Serial.available())
+  {
+      int byte = Serial.read();
+      // read a byte from the PC console
+      // send byte by writing to appropriate address
+      _stack[_stackpos++] = byte;
+  }
+
+
   digitalWrite(_phi2, _clockHigh);
   _clockHigh = !_clockHigh;
 
