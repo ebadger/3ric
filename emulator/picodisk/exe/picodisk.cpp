@@ -66,8 +66,11 @@ void HandleCommunication(uint32_t bits, uint8_t address, bool fRW)
     uint32_t test_pattern[2] = {0x0F, 0xF0}; // test pattern
     uint32_t data = bits;
     uint32_t dataOut = 0;
-    
+    uint8_t b = 0;
+
+#if 0
     _console->PrintOut("addr=%02x\n", address);
+#endif
 
     if (fRW) // read
     {
@@ -77,11 +80,17 @@ void HandleCommunication(uint32_t bits, uint8_t address, bool fRW)
         switch(address)
         {
             case 0:
-                // for now just output a test pattern
                 // output from conole buffer
-                gpio_put_masked(_maskData, (test_pattern[_cycleCount % 2] << GPIO_D0));
+                if (!_console->GetOutputByte(&b))
+                {
+                    b = 0;
+                }
+
+                dataOut = b;
+                gpio_put_masked(_maskData, dataOut << GPIO_D0);
                 break;
             case 1:
+                // for now just output a test pattern
                 // address 1 == byte count in pico buffer
                 gpio_put_masked(_maskData, (test_pattern[_cycleCount % 2] << GPIO_D0));
                 break;
@@ -93,12 +102,19 @@ void HandleCommunication(uint32_t bits, uint8_t address, bool fRW)
     {
         // CPU writing, set direction and read
         gpio_set_dir_in_masked(_maskData);
+        for(int i = 0; i < 2; i++)
+        {
+            data = gpio_get_all();  
+        }   
+
         data = (data >> GPIO_D0) & 0xFF;
 
+        printf("addr=%02x, data=%02x\n", address, data);
         switch(address)
         {
             case 0:
                 // read byte from the CPU for communication
+                _console->InputByte(data);
                 break;
             case 1:
                 // control byte?
@@ -111,7 +127,6 @@ void HandleCommunication(uint32_t bits, uint8_t address, bool fRW)
 
 void HandleDrive(uint32_t bits, uint8_t address, bool fRW)
 {
-    uint32_t test_pattern[2] = {0xAA, 0x55}; // test pattern
     uint32_t data = bits;
     uint32_t dataOut = 0;
 
@@ -120,15 +135,8 @@ void HandleDrive(uint32_t bits, uint8_t address, bool fRW)
         // CPU reading, so output
         gpio_set_dir_out_masked(_maskData);
 
-        if(_testMode)
-        {
-            dataOut = test_pattern[_cycleCount % 2];
-        }
-        else
-        {
-            uint8_t readbyte = _driveEmulator->Read(address);
-            dataOut = readbyte;
-        }
+        uint8_t readbyte = _driveEmulator->Read(address);
+        dataOut = readbyte;
 
         // for now just output a test pattern
         gpio_put_masked(_maskData, dataOut << GPIO_D0);
@@ -137,6 +145,12 @@ void HandleDrive(uint32_t bits, uint8_t address, bool fRW)
     {
         // CPU writing, set direction and read
         gpio_set_dir_in_masked(_maskData);
+        
+        for(int i = 0; i < 2; i++)
+        {
+            data = gpio_get_all();  
+        }
+
         data = (data >> GPIO_D0) & 0xFF;
         _driveEmulator->Write(address, data);
     }
@@ -158,6 +172,7 @@ void __not_in_flash_func(gpio_callback)(uint gpio, uint32_t events)
 
         addr = (addr >> GPIO_A0) & 0xF;
 
+#if 0
         _console->PrintOut("gpio_callback: CCS:%d, DCS:%d, RW:%d, T:%d, addr=%x, all=%08x\n",
                     fCCS ? 1 : 0,
                     fDCS ? 1 : 0,
@@ -165,7 +180,7 @@ void __not_in_flash_func(gpio_callback)(uint gpio, uint32_t events)
                     _testMode ? 1 : 0,
                     addr,
                     bits);
-
+#endif
         if (fCCS)
         {
             HandleCommunication(data, addr, fRW);
@@ -316,10 +331,12 @@ int main()
             printf("%c", ch);
         }        
 
+/*
         if (_console->GetOutputByte(&c))
         {
             printf("%c", c);
         }
+*/
     }
 
     return 0;
