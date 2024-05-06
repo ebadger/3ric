@@ -12,7 +12,7 @@ WozDisk::WozDisk()
 	_toothPosition = _trackPosition % 4;
 }
 
-void WozDisk::AddCycles(uint32_t cycles)
+void __not_in_flash_func(WozDisk::AddCycles)(uint32_t cycles)
 {
 	_cycles += cycles;
 }

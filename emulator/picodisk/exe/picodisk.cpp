@@ -6,9 +6,11 @@
 #include "DriveEmulator.h"
 #include "sdcard.h"
 #include "console.h"
-#include "hardware/uart.h"
-#include "hardware/gpio.h"
-
+#include <hardware/uart.h>
+#include <hardware/gpio.h>
+#include <hardware/pio.h>
+#include "ccsctrl.pio.h"
+#include "ccsdata.pio.h"
 
 // UART0 TX and RX pins
 const uint UART_TX_PIN = 0;
@@ -39,12 +41,29 @@ const uint UART_RX_PIN = 1;
 #define GPIO_A1      19
 #define GPIO_A2      20
 #define GPIO_A3      21
-#define GPIO_TEST    22
-#define GPIO_LAST    22
+#define GPIO_LAST    21
+#define GPIO_OE      22
 #define GPIO_LED     25
+#define GPIO_PHIO    26
+#define GPIO_PHIO2   27
+#define GPIO_SLOW    28
+
+#define BIT_DCS      1
+#define BIT_PHI2     2
+#define BIT_RW       4
+#define BIT_CCS      8
+
+#define IS_DCS(_X)  ((_X & BIT_DCS)  == BIT_DCS)
+#define IS_PHI2(_X) ((_X & BIT_PHI2) == BIT_PHI2)
+#define IS_RW(_X)   ((_X & BIT_RW)   == BIT_RW)
+#define IS_CCS(_X)  ((_X & BIT_CCS)  == BIT_CCS)
+
+PIO _pio = pio0;
+
+uint32_t _sm_addr;
+uint32_t _sm_data;
 
 uint32_t _maskData    = 0;
-//const uint32_t _maskAddress = 0b00000000001111000000000000000000; 
 uint64_t _cycleCount = 0;
 bool _testMode = false;
 
@@ -156,23 +175,23 @@ void HandleDrive(uint32_t bits, uint8_t address, bool fRW)
     }
 }
 
-void __not_in_flash_func(gpio_callback)(uint gpio, uint32_t events) 
+void __not_in_flash_func(phi2_handler)(uint32_t bits, bool fRise) 
 {
-    if (events & GPIO_IRQ_EDGE_RISE)
+    if (fRise)
     {
+        //gpio_put(GPIO_PHIO, true);
+
         _cycleCount++;
-        uint32_t bits = gpio_get_all();
         uint32_t addr = bits;
         uint32_t data = bits;
 
-        bool fCCS = !((bits & 1 << GPIO_CCS)  != 0);
-        bool fDCS = !((bits & 1 << GPIO_DCS)  != 0);
-        bool fRW  =   (bits & 1 << GPIO_RW)   != 0;
-        _testMode =   (bits & 1 << GPIO_TEST) != 0;
+        bool fDCS = (bits & 0x80000000) == 0;
+        bool fCCS = (bits & 0x20000000) == 0;
+        bool fRW  = (bits & 0x10000000) != 0;
 
-        addr = (addr >> GPIO_A0) & 0xF;
+        addr = (bits >> 24) & 0xF;
 
-#if 0
+/*
         _console->PrintOut("gpio_callback: CCS:%d, DCS:%d, RW:%d, T:%d, addr=%x, all=%08x\n",
                     fCCS ? 1 : 0,
                     fDCS ? 1 : 0,
@@ -180,48 +199,79 @@ void __not_in_flash_func(gpio_callback)(uint gpio, uint32_t events)
                     _testMode ? 1 : 0,
                     addr,
                     bits);
-#endif
+*/
         if (fCCS)
         {
-            HandleCommunication(data, addr, fRW);
+//            gpio_put(GPIO_OE, true);
+            //HandleCommunication(data, addr, fRW);
         }
         else if (fDCS)
         {
-            HandleDrive(data, addr, fRW);
+//            gpio_put(GPIO_OE, true);
+            //HandleDrive(data, addr, fRW);
         }
+        else
+        {
+ //           gpio_put(GPIO_OE, false);
+        }
+
+        //gpio_put(GPIO_PHIO2, true);
     }
-    else if (events & GPIO_IRQ_EDGE_FALL)
+    else
     {
+        //gpio_put(GPIO_PHIO, false);
+
         // stop driving data?
         // gpio_set_dir_in_masked(_maskData);
+ //       gpio_put(GPIO_OE, false);
 
         // add cycles on the clock fall to buy time?
-        _driveEmulator->AddCycles(1);
+        //_driveEmulator->AddCycles(1);
         // get next data and start writing?
+        //gpio_put(GPIO_PHIO2, false);
     }
 }
 
 void init_GPIO()
 {
+/*
     for(int i = GPIO_D0; i <= GPIO_D7; i++)
     {
         _maskData |= (1 << i);
     }
-
+*/
     gpio_init(GPIO_LED);
     gpio_set_dir(GPIO_LED, GPIO_OUT);
+
+    gpio_init(GPIO_SLOW);
+    gpio_set_dir(GPIO_SLOW, GPIO_IN);
 
     for(int i = GPIO_FIRST; i <= GPIO_LAST; i++)
     {
         gpio_init(i);
         gpio_set_dir(i, GPIO_IN);
+        gpio_pull_down(i);
     }
 
+    gpio_init(GPIO_OE);
+    gpio_set_dir(GPIO_OE, GPIO_OUT);
+    gpio_put(GPIO_OE, false);
+    
+    gpio_init(GPIO_PHIO);
+    gpio_set_dir(GPIO_PHIO, GPIO_OUT);
+    gpio_put(GPIO_PHIO, false);
+    
+    gpio_init(GPIO_PHIO2);
+    gpio_set_dir(GPIO_PHIO2, GPIO_OUT);
+    gpio_put(GPIO_PHIO2, false);
+
+/*
     gpio_set_irq_enabled_with_callback(
         GPIO_PHI2, 
         GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, 
         true, 
         &gpio_callback);
+*/
 }
 
 void init_console()
@@ -253,6 +303,8 @@ void init_console()
     new Command(std::string("load"), 
     [&](std::vector<std::string>& params) -> void
     {
+        _console->PrintOut("params=%d\n", params.size());
+
         if (params.size() != 2)
         {
             _console->PrintOut("usage: load [filename]\n");
@@ -291,24 +343,152 @@ void init_console()
 
 }
 
-void core1() 
-{
-    init_GPIO();
 
-    uint32_t counter = 0;
+void init_dma()
+{
+    // for comms with the CLI
+
+    // set up a DMA channel that automatically writes from the data.pio ISR into 
+    // a console circular RAM buffer.  Use the trick with a 2nd channel to trigger 
+    // a reset?
+    
+    // for the console, maybe we don't need a DMA channel for output.
+    // instead have the CPU just write to the tx fifo for the data.pio.
+    // fifo is 24 bytes, which is probably enough buffer.
+    // for disk emulation, this may need to work differently.
+}
+
+void init_PIO()
+{
+    _sm_addr = pio_claim_unused_sm(_pio, true);
+    uint offset = pio_add_program(_pio, &ccsctrl_program);  
+    ccsctrl_program_init(_pio, _sm_addr, offset, GPIO_DCS);
+
+    _sm_data = pio_claim_unused_sm(_pio, true);
+    offset = pio_add_program(_pio, &ccsdata_program);  
+    ccsdata_program_init(_pio, _sm_data, offset, GPIO_D0);
+
+    pio_set_sm_mask_enabled(_pio, (1 << _sm_addr | 1 << _sm_data), true);
+}
+
+void __not_in_flash_func(core1)() 
+{
+    uint8_t   addr = 0;
+    uint32_t  outval = 0;
+    bool      fOn = true;
+    BYTE      b = 0;
+    uint32_t  value2 = 0;
+    uint32_t  deviceMask = BIT_DCS | BIT_CCS;
+
+    init_GPIO();
+    init_PIO();
+
     while(true)
     {
+        uint32_t value = pio_sm_get_blocking(_pio, _sm_addr);
+        uint8_t addr;
+
+        if (!IS_PHI2(value))
+        {
+            continue;
+        }
+
+        if ((value & deviceMask) == deviceMask)
+        {
+            //neither device is active
+            pio_sm_clear_fifos(_pio, _sm_data);
+            continue;
+        }
+
+        addr =  ((value >> 4) & 0xF);
+
+        if (IS_RW(value))
+        {
+            switch(addr)
+            {
+                case 0:
+                    b = 0;
+                    _console->GetOutputByte(&b);
+                    pio_sm_put(_pio, _sm_data, (uint32_t)b);            
+                    break;
+                case 1:
+                case 2:
+                case 3:
+                case 4:
+                case 5:
+                case 6:
+                case 7:
+                case 8:
+                case 9:
+                case 10:
+                case 11:
+                case 12:
+                case 13:
+                case 14:
+                case 15:
+                    pio_sm_put(_pio, _sm_data, (uint32_t)outval);            
+                    outval++;
+                    break;
+            }
+        }
+        else
+        {
+            value2 = pio_sm_get_blocking(_pio, _sm_data);
+            // write
+            switch(addr)
+            {
+                case 0:
+                    if (value2 != 0)
+                    {
+                        _console->InputByte((uint8_t)value2);
+                    }
+/*
+                    printf("%08x: %08x, addr=%x, dcs=%d, ccs=%d, rw=%d, phi2=%d\n", 
+                        value2, 
+                        value, 
+                        addr, 
+                        BIT_DCS(value), 
+                        BIT_CCS(value), 
+                        BIT_RW(value), 
+                        BIT_PHI2(value));
+*/
+                    break;
+                case 1:
+                case 2:
+                case 3:
+                case 4:
+                case 5:
+                case 6:
+                case 7:
+                case 8:
+                case 9:
+                case 10:
+                case 11:
+                case 12:
+                case 13:
+                case 14:
+                case 15:
+                    break;
+
+                }
+        }
+
+#if 0
+        printf("%d: %08x, addr=%x, dcs=%d, ccs=%d, rw=%d, phi2=%d\n", 
+            outval, value, addr, BIT_DCS(value), BIT_CCS(value), BIT_RW(value), BIT_PHI2(value));
+#endif
     }
 }
 
-int main()
+int __not_in_flash_func(main)()
 {
+    bool fOn = false;
     uint32_t counter = 0;
     bool ledon = false;
 
-    stdio_init_all();
+    set_sys_clock_khz(270000, true);
 
-    multicore_launch_core1(core1);
+    stdio_init_all();
 
     _driveEmulator = new DriveEmulator();
     _sdCard = new SDCard();
@@ -317,11 +497,18 @@ int main()
     _sdCard->Init();
     _sdCard->Mount();
 
+    multicore_launch_core1(core1);
+
     init_console();
-    //set_sys_clock_khz(250000, true);
 
     while(true)
     {
+/*
+        if (_console->GetOutputByte(&c))
+        {
+            printf("%c", c);
+        }
+*/
         uint8_t c = 0;
         int ch = getchar_timeout_us(0);
         if (ch != PICO_ERROR_TIMEOUT) {
@@ -331,12 +518,16 @@ int main()
             printf("%c", ch);
         }        
 
-/*
-        if (_console->GetOutputByte(&c))
+        if (counter % 1000 == 0)
         {
-            printf("%c", c);
+            _console->ProcessInput();
         }
-*/
+
+        if(counter++ % 1000000 == 0)
+        {
+            gpio_put(GPIO_LED, fOn);
+            fOn = !fOn;
+        }
     }
 
     return 0;

@@ -41,8 +41,7 @@ DriveEmulator::~DriveEmulator()
 
 }
 
-void
-DriveEmulator::AddCycles(uint32_t cycles)
+void __not_in_flash_func(DriveEmulator::AddCycles)(uint32_t cycles)
 {
 	_cycles += cycles;
 	_D[0].AddCycles(cycles);

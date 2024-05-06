@@ -1,0 +1,38 @@
+.program ccsctrl
+.side_set 1 opt
+
+set pindirs, 0
+.wrap_target
+  ;wait 0 GPIO 17
+  wait 0 GPIO 15       ; wait for PHI2 to go low
+  wait 1 GPIO 15       ; wait for PHI2 to go high
+  MOV X,X         side 1
+  IN pins, 8
+  MOV X,X         side 0
+  .wrap
+
+% c-sdk {
+static inline void ccsctrl_program_init(PIO pio, uint sm, uint offset, uint pin) {
+  // 1. Define a config object
+  pio_sm_config config = ccsctrl_program_get_default_config(offset);
+  // 2. Set and initialize the input pins
+
+  sm_config_set_in_pins(&config, pin);
+
+  pio_sm_set_consecutive_pindirs(pio, sm, pin, 8, false); // input
+  pio_sm_set_consecutive_pindirs(pio, sm, 27, 1, true);
+  for (int i = 0; i < 8; i++)
+  {
+    pio_gpio_init(pio, pin + i);  
+  }
+  pio_gpio_init(pio, 27);
+
+  sm_config_set_in_shift(&config, false, true, 8);
+  //sm_config_set_fifo_join(&config, PIO_FIFO_JOIN_RX);
+
+  sm_config_set_sideset_pins(&config, 27);
+  // 3. Apply the configuration & activate the State Machine
+  pio_sm_init(pio, sm, offset, &config);
+  //pio_sm_set_enabled(pio, sm, true);
+}
+%}
