@@ -277,7 +277,7 @@ void init_GPIO()
 void init_console()
 {
     _console->AddCommand(
-    new Command(std::string("echo"), 
+    new Command(std::string("ECHO"), 
     [&](std::vector<std::string>& params) -> void
     {
         for(int i = 0; i < params.size(); i++)
@@ -287,7 +287,7 @@ void init_console()
     }));
 
     _console->AddCommand(
-    new Command(std::string("dir"), 
+    new Command(std::string("DIR"), 
     [&](std::vector<std::string>& params) -> void
     {
         std::vector<std::string> vecFiles;
@@ -300,7 +300,7 @@ void init_console()
     }));
 
     _console->AddCommand(
-    new Command(std::string("load"), 
+    new Command(std::string("LOAD"), 
     [&](std::vector<std::string>& params) -> void
     {
         _console->PrintOut("params=%d\n", params.size());
@@ -322,7 +322,7 @@ void init_console()
     }));
 
     _console->AddCommand(
-    new Command(std::string("diskinfo"), 
+    new Command(std::string("DISKINFO"), 
     [&](std::vector<std::string>& params) -> void
     {
         InfoChunkData *pData = _driveEmulator->GetActiveDisk()->GetFile()->GetInfoChunkData();
@@ -388,6 +388,7 @@ void __not_in_flash_func(core1)()
         uint32_t value = pio_sm_get_blocking(_pio, _sm_addr);
         uint8_t addr;
 
+
         if (!IS_PHI2(value))
         {
             continue;
@@ -402,6 +403,7 @@ void __not_in_flash_func(core1)()
 
         addr =  ((value >> 4) & 0xF);
 
+         
         if (IS_RW(value))
         {
             switch(addr)
@@ -434,6 +436,16 @@ void __not_in_flash_func(core1)()
         else
         {
             value2 = pio_sm_get_blocking(_pio, _sm_data);
+/*
+            printf("%08x: %08x, addr=%x, dcs=%d, ccs=%d, rw=%d, phi2=%d\n", 
+                value2, 
+                value, 
+                addr, 
+                IS_DCS(value), 
+                IS_CCS(value), 
+                IS_RW(value), 
+                IS_PHI2(value));           
+*/ 
             // write
             switch(addr)
             {
@@ -442,16 +454,7 @@ void __not_in_flash_func(core1)()
                     {
                         _console->InputByte((uint8_t)value2);
                     }
-/*
-                    printf("%08x: %08x, addr=%x, dcs=%d, ccs=%d, rw=%d, phi2=%d\n", 
-                        value2, 
-                        value, 
-                        addr, 
-                        BIT_DCS(value), 
-                        BIT_CCS(value), 
-                        BIT_RW(value), 
-                        BIT_PHI2(value));
-*/
+
                     break;
                 case 1:
                 case 2:
@@ -471,6 +474,7 @@ void __not_in_flash_func(core1)()
                     break;
 
                 }
+
         }
 
 #if 0

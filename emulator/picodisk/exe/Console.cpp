@@ -12,7 +12,7 @@ Console::~Console()
 void 
 Console::InputByte(uint8_t b)
 {
-	_bufIn[_bufInEnd++] = b;
+	_bufIn[_bufInEnd++] = toupper(b & 0x7F);
 }
 
 void
@@ -120,7 +120,12 @@ Console::PrintOut(const char *format, ...)
 	char *p = &buf[0];
 	while(*p)
 	{
-		_bufOut[_bufEnd++] = *p;
+		if (*p == '\n')
+		{
+			*p = '\r';
+		}
+		
+		_bufOut[_bufEnd++] = toupper(*p);
 		p++;
 	}
 }

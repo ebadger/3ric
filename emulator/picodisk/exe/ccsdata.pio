@@ -8,20 +8,25 @@ set pindirs, 0
 start:
   ;wait 0 GPIO 17
   wait 0 GPIO 15       ; wait for PHI2 to go low
-  set pindirs, 0   side 0    ; quit asserting data pins
   wait 1 GPIO 15       ; wait for PHI2 to go high  
   jmp PIN out_mode     ; R/W pin
 
 in_mode:
-   mov x,x          [3]     ; write in the tMDS period of 6502
-   mov x,x          side 1
-   in pins, 8  
-   jmp start        side 0
+  set pindirs, 0       ; quit asserting data pins
+  mov x,x          side 1
+  mov x,x          [3]     ; write in the tMDS period of 6502
+  in pins, 8  
+  mov x,x          side 0 
+  jmp start        
 
 out_mode:
-  set pindirs, 1            ; within tDSR period of 6502
+  jmp !OSRE out_mode_start  ; only continue of there is something in the OSRE
+  jmp start
+
+out_mode_start:
+  set pindirs, 1    ;side 1     ; within tDSR period of 6502
   out pins, 8
-  mov x,x           side 1
+  mov x,x           ;side 0
   .wrap             
 
 % c-sdk {
