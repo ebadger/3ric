@@ -1,4 +1,3 @@
-
 const int _datapins[] =  {22, 24, 26, 28, 30, 32, 34, 36};
 const int _addrpins[] =  {39, 41, 43, 45};
 // 47, 49, 51, 53
@@ -7,13 +6,13 @@ const int _selectCom = 49;
 const int _readWrite = 51;
 const int _phi2 = 53;
 
+const int _slow = 23;
+
 bool _readMode = false;
 bool _clockHigh = false;
 char _buf[255];
 uint8_t _addr = 0;
-
-uint8_t _stack[255];
-uint8_t _stackpos = 0;
+uint16_t _count = 0;
 
 void SetReadWrite(bool read)
 {
@@ -28,13 +27,10 @@ void SetReadWrite(bool read)
 
 void WriteData(uint8_t data)
 {
-  if (!_readMode)
+  for(int i = 0; i < 8; i++)
   {
-    for(int i = 0; i < 8; i++)
-    {
-      bool bitset = (data << i) != 0;
-      digitalWrite(_datapins[i], bitset);
-    }
+    bool bitset = ((data >> i) & 1) == 1;
+    digitalWrite(_datapins[i], bitset);
   }
 }
 
@@ -55,7 +51,10 @@ uint8_t ReadData()
     for(int i = 0; i < 8; i++)
     {
       bool isSet = digitalRead(_datapins[i]);
-      val |= ((isSet ? 1 : 0) << i);
+      if (isSet)
+      {
+        val |= ((isSet ? 1 : 0) << i);
+      }
     }
   }
 
@@ -76,6 +75,7 @@ void setup()
   pinMode(_selectCom, OUTPUT);
   pinMode(_readWrite, OUTPUT);
   pinMode(_phi2, OUTPUT);
+  pinMode(_slow, OUTPUT);
 
   digitalWrite(_selectCom, false);
   digitalWrite(_selectDrive, true);
@@ -83,43 +83,130 @@ void setup()
   SetReadWrite(true);
 }
 
+void loopbacktest()
+{
+    while(true)
+    {
+      delay(2);
+
+      if (_clockHigh)
+      {
+        uint8_t d = ReadData();
+        sprintf(_buf,"%d: data=%02x", _count++, d);
+        Serial.println(_buf);
+      }
+      else
+      {
+        WriteAddress(_count & 0xFF);
+      }
+
+      _clockHigh = !_clockHigh;
+      digitalWrite(_phi2, _clockHigh);
+
+      delay(250);
+    }
+}
+
+void testconsole()
+{
+  bool bWrite = false;
+  SetReadWrite(true);
+  WriteAddress(0);
+  
+  while(true)
+  {
+    if (!_clockHigh)
+    {
+      //delay(1);
+      SetReadWrite(true);
+      bWrite = false;
+      if(Serial.available() > 0)
+      {
+        int b = Serial.read();
+        if (b != -1)
+        {
+          SetReadWrite(false);
+          WriteData(b);
+          Serial.print((char)b);
+          bWrite = true;
+        }
+      }
+    }
+    else  
+    {
+      if (!bWrite)
+      {
+        //delay(1);
+        uint8_t c = ReadData();
+
+        if(c != 0)
+        {
+          sprintf(_buf, "%c", c);
+          Serial.print(_buf);
+        }
+      }
+    }
+    
+    _clockHigh = !_clockHigh;
+    digitalWrite(_phi2, _clockHigh);
+
+  }
+
+}
+
+void testread()
+{
+    delay(1000);
+    SetReadWrite(true);
+    while(true)
+    {
+      if (_clockHigh)
+      {
+        uint8_t d = ReadData();
+        sprintf(_buf,"%d: data=%02x", _count++, d);
+        Serial.println(_buf);
+      }
+      else
+      {
+        WriteAddress(0xF);
+        delay(7);
+      }
+
+
+      _clockHigh = !_clockHigh;
+      digitalWrite(_phi2, _clockHigh);
+
+    }
+}
+
+void testwrite()
+{
+      delay(1000);
+
+    SetReadWrite(false);
+    WriteAddress(0x0);
+    WriteData(_count++);
+
+    while(true)
+    {
+      if (!_clockHigh)
+      {
+        WriteData(_count++);
+        delay(1000);
+      }
+      else
+      {
+        delay(1000);
+      }
+
+    
+      _clockHigh = !_clockHigh;
+      digitalWrite(_phi2, _clockHigh);
+    }
+}
 void loop() {
   // put your main code here, to run repeatedly:
-
-  if (_clockHigh)
-  {
-    if (_stackpos > 0)
-    {      
-      _addr = 0;
-      WriteAddress(_addr);
-      SetReadWrite(false); // write
-      WriteData(_stack[--_stackpos]);
-    }
-    else
-    {
-      _addr = 0;
-      WriteAddress(_addr);
-      SetReadWrite(true); // read
-      uint8_t b = ReadData();
-      Serial.write(b);
-    }
-  }
-  
-  if(Serial.available())
-  {
-      int byte = Serial.read();
-      // read a byte from the PC console
-      // send byte by writing to appropriate address
-      _stack[_stackpos++] = byte;
-  }
-
-
-  digitalWrite(_phi2, _clockHigh);
-  _clockHigh = !_clockHigh;
-
-  delay(200);
-
-//  uint8_t val = ReadData();
-//  sprintf(_buf,"data=%02x : addr=%02x", val, _addr);
-//  Serial.println(_buf);
+  // testwrite();
+  // testread();
+  testconsole();
 }
