@@ -49,6 +49,7 @@ public:
 
 	void InputByte(uint8_t byte);	
 	bool GetOutputByte(uint8_t *b);
+	bool GetOutputByteLocal(uint8_t *b);
 	void PrintOut(const char *format, ...);
 	void AddCommand(Command *c);
 	void ProcessInput();
@@ -64,6 +65,10 @@ private:
 	char                              _bufOut[255] = {};
 	uint8_t                           _bufPos = 0;
     uint8_t                           _bufEnd = 0;
+
+    char                              _bufOutLocal[255] = {};
+	uint8_t                           _bufPosLocal = 0;
+	uint8_t                           _bufEndLocal = 0;
 
 	std::vector<std::string>		  _params;
 	std::map<std::string, Command *>  _commands;

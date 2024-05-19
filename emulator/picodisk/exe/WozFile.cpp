@@ -3,6 +3,9 @@
 #include "stdlib.h"
 #include <string.h>
 #include <errno.h>
+#include "console.h"
+
+extern Console * _console;
 
 const char* c_WOZ2Header = "WOZ2";
 const char* c_WOZ1Header = "WOZ1";
@@ -26,7 +29,8 @@ WozFile::~WozFile()
 	CloseFile();
 }
 
-void WozFile::CloseFile()
+void 
+__not_in_flash_func(WozFile::CloseFile)()
 {
 	_track = -1;
 
@@ -46,12 +50,14 @@ void WozFile::CloseFile()
 	_Tmap = nullptr;
 }
 
-bool WozFile::IsFileLoaded()
+bool 
+__not_in_flash_func(WozFile::IsFileLoaded)()
 {
 	return _wozFile.obj.fs != 0;
 }
 
-uint32_t WozFile::OpenFile(const char * szFileName)
+uint32_t 
+__not_in_flash_func(WozFile::OpenFile)(const char * szFileName)
 {
 	FRESULT fr = FR_OK;
 	uint32_t err = 0;
@@ -77,7 +83,8 @@ exit:
 	return err;
 }
 
-uint32_t WozFile::ReadFileHeader()
+uint32_t 
+__not_in_flash_func(WozFile::ReadFileHeader)()
 {
 	FRESULT fr = FR_OK;
 	char buffer[12];
@@ -123,7 +130,8 @@ uint32_t WozFile::ReadFileHeader()
 	return 0;
 }
 
-uint32_t WozFile::ReadChunks()
+uint32_t 
+__not_in_flash_func(WozFile::ReadChunks)()
 {
 	FRESULT fr = FR_OK;
 
@@ -253,7 +261,8 @@ uint32_t WozFile::ReadChunks()
 }
 
 
-InfoChunkData* WozFile::GetInfoChunkData()
+InfoChunkData* 
+__not_in_flash_func(WozFile::GetInfoChunkData)()
 {
 	if (_wozFile.obj.fs == 0 || !_InfoChunk)
 	{
@@ -263,7 +272,8 @@ InfoChunkData* WozFile::GetInfoChunkData()
 	return (InfoChunkData*)_InfoChunk->ChunkData.data();
 }
 
-void WozFile::SetTrack(int16_t track)
+void 
+__not_in_flash_func(WozFile::SetTrack)(int16_t track)
 {
 	FRESULT fr = FR_OK;
 	UINT read = 0;
@@ -283,29 +293,67 @@ void WozFile::SetTrack(int16_t track)
 
 	_track = track;
 
-	char buf[255];
-	sprintf(buf, "changing track to %d\r\n", _track);
 	//OutputDebugStringA(buf);
 
 	uint8_t trkIndex = _Tmap[track];
+
 	if (trkIndex > 159)
 	{
 		_bitCount = 0;
+		//_console->PrintOut("trkIndex > 159 = %d\n", trkIndex);
 		return;
 	}
 
-	_bitCount = _Trk[trkIndex].BitCount;
-	uint32_t offset = _Trk[trkIndex].StartingBlock << 9;
-	uint16_t blocks = _Trk[trkIndex].BlockCount;
+	//_console->PrintOut("T:%d\n", trkIndex);
+	_trackReadCompleted = false;
+
+	// read the track
+#if 0
+	LoadTrack();
+#endif
+
+}
+
+void 
+__not_in_flash_func(WozFile::LoadTrack)()
+{
+	FRESULT fr = FR_OK;
+
+	if (_wozFile.obj.fs ==  0 || true == _trackReadCompleted)
+	{
+		return;
+	}
+
+	uint8_t trkIndex = _Tmap[_track];
+
+	if (trkIndex > 159)
+	{
+		return;
+	}
+
+	if (_trackLoaded == trkIndex)
+	{
+		return;
+	}
+
+
 	uint16_t largest = GetInfoChunkData()->LargestTrack;
 
 	//_ASSERT(offset != 0 && blocks != 0);
 
 	_trackData.resize(largest << 9, 0);
 
-	// read the track
+	_trackLoaded = trkIndex;
 
-	f_lseek(&_wozFile, offset);
+	uint16_t offset = _Trk[trkIndex].StartingBlock << 9;
+	uint16_t blocks = _Trk[trkIndex].BlockCount;
+    UINT read = 0;
+
+	fr = f_lseek(&_wozFile, offset);
+	if (FR_OK != fr)
+	{
+		_console->PrintOut("seek failed, %d\n",fr);
+	}
 
 	fr = f_read(&_wozFile,
 		_trackData.data(),
@@ -313,16 +361,22 @@ void WozFile::SetTrack(int16_t track)
 		&read);
 
 	//_ASSERT(read == 1);
+	_console->PrintOut("Read track %d: fr=%d, read=%d, blocks=%d\n", trkIndex, fr, read, blocks << 9);
 
 	if (read != blocks << 9 || FR_OK != fr) {
 		f_close(&_wozFile);
 		return;
 	}
+
+	_bitCount = _Trk[trkIndex].BitCount;
+
+	_trackReadCompleted = true;
 }
 
-bool WozFile::GetNextBit()
-{
-	if (_bitCount == 0)
+bool 
+__not_in_flash_func(WozFile::GetNextBit)()
+{		
+	if (_bitCount == 0 || false == _trackReadCompleted)
 	{
 		return rand() % 2;
 	}
@@ -331,17 +385,19 @@ bool WozFile::GetNextBit()
 
 	int32_t bitPos = _readPosition % _bitCount;
 	int32_t byteIndex = bitPos >> 3;
-	uint8_t bitInByte = bitPos - (byteIndex << 3);
+	//uint8_t bitInByte = bitPos - (byteIndex << 3);
+	uint8_t bitInByte = bitPos % 8;
+
+
 
 #if 0
 	if (bitPos == 0)
 	{
-		OutputDebugStringA("****** bitpos == 0 ******");
+		_console->PrintOut("bitpos == 0\n");
 	}
 #endif
 
-
-	uint8_t b = _trackData.data()[byteIndex];
+	uint8_t b = _trackData[byteIndex];
 
 #if 0
 	char buf[255];

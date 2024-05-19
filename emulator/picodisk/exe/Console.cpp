@@ -12,7 +12,14 @@ Console::~Console()
 void 
 Console::InputByte(uint8_t b)
 {
-	_bufIn[_bufInEnd++] = toupper(b & 0x7F);
+	if (b & 0x80)
+	{
+		_bufIn[_bufInEnd++] = b & 0x7F;
+	}
+	else
+	{
+		_bufIn[_bufInEnd++] = toupper(b);
+	}
 }
 
 void
@@ -106,6 +113,19 @@ Console::GetOutputByte(uint8_t *byte)
 	return false;
 }
 
+bool 
+Console::GetOutputByteLocal(uint8_t *byte)
+{
+	if (_bufPosLocal != _bufEndLocal)
+	{
+		*byte = _bufOutLocal[_bufPosLocal++];
+		return true;
+	}
+
+	*byte = 0;
+	return false;
+}
+
 void
 Console::PrintOut(const char *format, ...)
 {
@@ -115,17 +135,20 @@ Console::PrintOut(const char *format, ...)
 	vsprintf(buf, format, args);
 	va_end(args);
 
-	printf(buf); // temp - print to stdout
+	//printf(buf); // temp - print to stdout
 
 	char *p = &buf[0];
 	while(*p)
 	{
+
+		_bufOut[_bufEnd++] = toupper(*p);
+		_bufOutLocal[_bufEndLocal++] = toupper(*p);
+        
 		if (*p == '\n')
 		{
-			*p = '\r';
+			_bufOut[_bufEnd++] = '\r';
+			_bufOutLocal[_bufEndLocal++] = '\r';
 		}
-		
-		_bufOut[_bufEnd++] = toupper(*p);
 		p++;
 	}
 }

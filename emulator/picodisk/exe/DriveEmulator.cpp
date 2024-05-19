@@ -1,4 +1,8 @@
 #include "DriveEmulator.h"
+#include "console.h"
+
+#define _countof(x) (sizeof(x) / sizeof(x[0]))
+extern Console * _console;
 /*
 * https://stackoverflow.com/questions/69369122/apple-iie-6502-assembly-accessing-disk
 *
@@ -34,6 +38,8 @@ When done, read $C0EE.
 
 DriveEmulator::DriveEmulator()
 {
+	_D[0].SetId(1);
+	_D[1].SetId(2);
 }
 
 DriveEmulator::~DriveEmulator()
@@ -41,7 +47,8 @@ DriveEmulator::~DriveEmulator()
 
 }
 
-void __not_in_flash_func(DriveEmulator::AddCycles)(uint32_t cycles)
+void 
+__not_in_flash_func(DriveEmulator::AddCycles)(uint32_t cycles)
 {
 	_cycles += cycles;
 	_D[0].AddCycles(cycles);
@@ -53,9 +60,13 @@ void __not_in_flash_func(DriveEmulator::AddCycles)(uint32_t cycles)
 		{
 			_motorStarting = 0;
 			_motorRunning = true;
+			//_console->PrintOut("Motor started\n");
 		}
 
-		_activeDisk = _pendingActiveDisk;
+		if (_pendingActiveDisk != _activeDisk)
+		{
+			_activeDisk = _pendingActiveDisk;
+		}
 	}
 	else if (_motorStopping != 0)
 	{
@@ -64,8 +75,16 @@ void __not_in_flash_func(DriveEmulator::AddCycles)(uint32_t cycles)
 			_motorStopping = 0;
 			_motorRunning = false;
 			GetActiveDisk()->SetSpinning(false);
+			//_console->PrintOut("Motor stopped\n");
+
 		}
 		_activeDisk = _pendingActiveDisk;
+
+		if (_pendingActiveDisk != _activeDisk)
+		{
+			_activeDisk = _pendingActiveDisk;
+		}
+
 	}
 
 	if (_motorRunning)
@@ -76,19 +95,19 @@ void __not_in_flash_func(DriveEmulator::AddCycles)(uint32_t cycles)
 
 		if ((_shiftRegister & 0x80) && bitCount > 0)
 		{
-#if 0
+		#if 0
 			char buf[255];
-			sprintf_s(buf, _countof(buf), "%02x ", _shiftRegister);
+			sprintf(buf, "%02x ", _shiftRegister);
 			_debugString.append(buf);
 	
 			if (_debugString.size() > 64)
 			{
 				_debugString.append("\r\n");
-				OutputDebugStringA(_debugString.c_str());
+				_console->PrintOut(_debugString.c_str());
+				//OutputDebugStringA(_debugString.c_str());
 				_debugString.clear();
 			}
-#endif
-
+		#endif
 			_shiftRegister = 0;
 		}
 
@@ -101,18 +120,19 @@ void __not_in_flash_func(DriveEmulator::AddCycles)(uint32_t cycles)
 }
 
 WozDisk *
-DriveEmulator::GetActiveDisk()
+__not_in_flash_func(DriveEmulator::GetActiveDisk)()
 {
 	return &_D[_activeDisk];
 }
 
 WozDisk *
-DriveEmulator::GetDisk(uint8_t index)
+__not_in_flash_func(DriveEmulator::GetDisk)(uint8_t index)
 {
 	return &_D[index % 2];
 }
 
-uint8_t DriveEmulator::Read(uint8_t address)
+uint8_t
+__not_in_flash_func(DriveEmulator::Read)(uint8_t address)
 {
 	switch (address & 0xF)
 	{
@@ -168,7 +188,13 @@ uint8_t DriveEmulator::Read(uint8_t address)
 
 		if (false == _Q6 && false == _Q7)
 		{
-			return _shiftRegister;
+			uint8_t result = _shiftRegister;
+			if (_shiftRegister & 0x80)
+			{
+				_shiftRegister = 0;
+				//GetActiveDisk()->SyncCycles();				
+			}
+			return result;
 		}
 		break;
 	case 0xD:	// Q6H
@@ -186,10 +212,11 @@ uint8_t DriveEmulator::Read(uint8_t address)
 		break;
 	}
 
-	return 0;
+	return address;
 }
 
-void DriveEmulator::Write(uint8_t address, uint8_t data)
+void 
+__not_in_flash_func(DriveEmulator::Write)(uint8_t address, uint8_t data)
 {
 	switch (address & 0xF)
 	{
@@ -256,7 +283,7 @@ void DriveEmulator::Write(uint8_t address, uint8_t data)
 }
 
 void
-DriveEmulator::UpdateQ(bool Q6, bool Q7)
+__not_in_flash_func(DriveEmulator::UpdateQ)(bool Q6, bool Q7)
 {
 	if (_Q6 != Q6 || _Q7 != Q7)
 	{

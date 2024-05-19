@@ -40,5 +40,5 @@ private:
 
 	bool        _byteRead = false;
 
-	//std::string _debugString;
+	std::string _debugString;
 };
