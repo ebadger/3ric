@@ -24,6 +24,8 @@ const uint UART_RX_PIN = 1;
 // CCS   : GPIO 17      - Communication chip select
 // A0-A4 : GPIO 18-21   - Address lines
 
+#define GPIO_READY   0
+
 #define GPIO_FIRST   6
 #define GPIO_D0      6
 #define GPIO_D1      7
@@ -173,11 +175,6 @@ __not_in_flash_func(HandleDrive)(uint32_t value, uint8_t addr, uint8_t data, boo
     }
 }
 
-void gpio_callback(uint gpio, uint32_t eventmask)
-{
-    _cycleCount++;
-}
-
 void init_GPIO()
 {
 /*
@@ -186,6 +183,10 @@ void init_GPIO()
         _maskData |= (1 << i);
     }
 */
+    gpio_init(GPIO_READY);
+    gpio_set_dir(GPIO_READY, GPIO_OUT);
+    gpio_put(GPIO_READY, true);
+
     gpio_init(GPIO_LED);
     gpio_set_dir(GPIO_LED, GPIO_OUT);
 
@@ -278,11 +279,13 @@ void init_console()
 
         if(pData)
         {
-            _console->PrintOut("Version: %d\nCreator: %s\nCompat HW: %d\nReq RAM: %d\n", 
+            _console->PrintOut("Version: %d\nCreator: %s\nCompat HW: %d\nReq RAM: %d\nLargest Track: %d\n", 
                     pData->Version,
                     pData->Creator,
                     pData->CompatibleHardware,
-                    pData->RequiredRAM);
+                    pData->RequiredRAM,
+                    pData->LargestTrack);
+            
         }
         else 
         {
@@ -359,11 +362,16 @@ __not_in_flash_func(core1)()
         value = pio_sm_get_blocking(_pio, _sm_addr);
         _cycleCount++;
 
+
         if (IS_NOT_DEVICE(value))
         {
             //neither device is active
             //pio_sm_drain_rx_fifo(_pio, _sm_data);           
             pio_sm_get(_pio, _sm_data);
+
+            // pio_sm_clear_fifos(_pio, _sm_addr);
+            // pio_sm_clear_fifos(_pio, _sm_data);
+
             //_driveEmulator->AddCycles(1);
 #if 0            
             if (_cycleCount - lastCycle > 20)
@@ -377,6 +385,9 @@ __not_in_flash_func(core1)()
 
         addr =  ((value >> 4) & 0xF);
 
+        _driveEmulator->AddCycles(_cycleCount - lastCycle);
+        lastCycle = _cycleCount;
+
 
         rw = IS_RW(value);
 
@@ -389,7 +400,6 @@ __not_in_flash_func(core1)()
             //pio_sm_get(_pio, _sm_data);
         }
 
-
         if(!IS_DCS(value))
         {
             HandleDrive(value, addr, (uint8_t)data, rw);
@@ -398,9 +408,8 @@ __not_in_flash_func(core1)()
         {
             HandleCommunication(value, addr, (uint8_t)data, rw);
         }
-        
-        _driveEmulator->AddCycles(_cycleCount - lastCycle);
-        lastCycle = _cycleCount;
+
+        //pio_sm_clear_fifos(_pio, _sm_addr);
 
 #if 0
         printf("%d: %08x, addr=%x, dcs=%d, ccs=%d, rw=%d, phi2=%d\n", 
@@ -447,6 +456,16 @@ int __not_in_flash_func(main)()
 
     while(true)
     {
+        /*
+        if (_driveEmulator->GetActiveDisk())
+        {
+            if (_driveEmulator->GetActiveDisk()->GetFile()->ReadReady())
+            {
+                //sleep_us(32);
+                _driveEmulator->GetActiveDisk()->GetFile()->LoadTrack();
+            }
+        }
+        */
 #if 0
         if (phi != gpio_get(GPIO_PHI2))
         {
@@ -493,7 +512,7 @@ int __not_in_flash_func(main)()
             printf("%c", c);
         }
 */
-//        if(counter++ % 2000 == 0)
+        if(counter++ % 2000 == 0)
         {
             uint8_t b = 0;
 
@@ -523,10 +542,8 @@ int __not_in_flash_func(main)()
             }
         }
 
-        if(counter++ % 200000 == 0)
+        if(counter % 500000 == 0)
         {
-            _driveEmulator->GetActiveDisk()->DeferredLoad();
-
             gpio_put(GPIO_LED, fOn);
             fOn = !fOn;
         }

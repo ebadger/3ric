@@ -8,6 +8,7 @@ public:
 
 	void SetId(uint8_t id);
 	void AddCycles(uint32_t cycles);
+	void DoRotation();
 	void PhaseOn(uint8_t iPhase);
 	void PhaseOff(uint8_t iPhase);
 	int8_t MoveTrackPosition(int iDiff);
@@ -23,7 +24,6 @@ public:
 	int8_t UpdateWheel();
 	WozFile *GetFile();
 	void SyncCycles();
-	void DeferredLoad();
 	
 private:
 	uint8_t      _id;
@@ -36,4 +36,5 @@ private:
 	uint64_t    _lastShiftCycle = 0;
 	uint64_t    _lastTrackCycle = 0;
 	bool		_spinning = false;
+	int32_t     _pendingRotation = 0;
 };

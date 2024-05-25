@@ -96,6 +96,8 @@ public:
 	bool GetNextBit();
 	void SetTrack(int16_t track);
     void LoadTrack();
+	bool ReadReady(); 
+	void AddCycles(uint32_t cycles);
 private:
 
 	uint32_t ReadFileHeader();
@@ -117,7 +119,7 @@ private:
 
 	FIL     _wozFile = {};
 		
-	int16_t _track = -1;
+	int16_t _trackIndex = -1;
     int16_t _trackLoaded = -1;
 	uint16_t _blocks = 0;
 	bool     _trackReadCompleted = false;

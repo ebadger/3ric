@@ -4,8 +4,14 @@
 #include <string.h>
 #include <errno.h>
 #include "console.h"
+#include <hardware/pio.h>
+
+#define GPIO_READY  0
 
 extern Console * _console;
+extern PIO _pio;
+extern uint32_t _sm_addr;
+extern uint32_t _sm_data;
 
 const char* c_WOZ2Header = "WOZ2";
 const char* c_WOZ1Header = "WOZ1";
@@ -32,7 +38,7 @@ WozFile::~WozFile()
 void 
 __not_in_flash_func(WozFile::CloseFile)()
 {
-	_track = -1;
+	_trackIndex = -1;
 
 	_vecChunks.clear();
 	_trackData.clear();
@@ -175,6 +181,10 @@ __not_in_flash_func(WozFile::ReadChunks)()
 			f_close(&_wozFile);
 			return INVALID_INFO_CHUNK_DATA;
 		}
+
+		uint16_t largest = GetInfoChunkData()->LargestTrack;
+		_trackData.resize(largest << 9, 0);
+		//_ASSERT(offset != 0 && blocks != 0);
 	} 
 	else if (pChunk->ChunkID.value == Chunk::META_CHUNK_ID)
 	{
@@ -273,7 +283,7 @@ __not_in_flash_func(WozFile::GetInfoChunkData)()
 }
 
 void 
-__not_in_flash_func(WozFile::SetTrack)(int16_t track)
+__not_in_flash_func(WozFile::SetTrack)(int16_t trackIdx)
 {
 	FRESULT fr = FR_OK;
 	UINT read = 0;
@@ -286,32 +296,54 @@ __not_in_flash_func(WozFile::SetTrack)(int16_t track)
 		return;
 	}
 
-	if (track > 159 || _track == track)
+	if (trackIdx > 159 || _trackIndex == trackIdx)
 	{
 		return;
 	}
 
-	_track = track;
+	_trackIndex = trackIdx;
 
 	//OutputDebugStringA(buf);
 
-	uint8_t trkIndex = _Tmap[track];
+	uint8_t track = _Tmap[trackIdx];
 
-	if (trkIndex > 159)
+	if (track > 39)
 	{
 		_bitCount = 0;
 		//_console->PrintOut("trkIndex > 159 = %d\n", trkIndex);
 		return;
 	}
 
+	if (_trackLoaded == track)
+	{
+		return;
+	}
+
 	//_console->PrintOut("T:%d\n", trkIndex);
 	_trackReadCompleted = false;
 
+//#if 0
 	// read the track
-#if 0
 	LoadTrack();
-#endif
+//#endif
+}
 
+bool
+__not_in_flash_func(WozFile::ReadReady)()
+{ 
+	if (_wozFile.obj.fs ==  0 || true == _trackReadCompleted)
+	{
+		return false;
+	}
+
+	uint8_t track = _Tmap[_trackIndex];
+
+	if (track > 39 || _trackLoaded == track)
+	{
+		return false;
+	}
+
+	return !_trackReadCompleted; 
 }
 
 void 
@@ -324,29 +356,19 @@ __not_in_flash_func(WozFile::LoadTrack)()
 		return;
 	}
 
-	uint8_t trkIndex = _Tmap[_track];
+	uint8_t track = _Tmap[_trackIndex];
 
-	if (trkIndex > 159)
+	if (track > 39)
 	{
 		return;
 	}
 
-	if (_trackLoaded == trkIndex)
-	{
-		return;
-	}
+    gpio_put(GPIO_READY, false); // stop processor
 
+	_trackLoaded = track;
 
-	uint16_t largest = GetInfoChunkData()->LargestTrack;
-
-	//_ASSERT(offset != 0 && blocks != 0);
-
-	_trackData.resize(largest << 9, 0);
-
-	_trackLoaded = trkIndex;
-
-	uint16_t offset = _Trk[trkIndex].StartingBlock << 9;
-	uint16_t blocks = _Trk[trkIndex].BlockCount;
+	uint16_t offset = _Trk[track].StartingBlock << 9;
+	uint16_t blocks = _Trk[track].BlockCount;
     UINT read = 0;
 
 	fr = f_lseek(&_wozFile, offset);
@@ -361,16 +383,28 @@ __not_in_flash_func(WozFile::LoadTrack)()
 		&read);
 
 	//_ASSERT(read == 1);
-	_console->PrintOut("Read track %d: fr=%d, read=%d, blocks=%d\n", trkIndex, fr, read, blocks << 9);
+	_console->PrintOut("Read track %d: fr=%d, read=%d, blocks=%d\n", track, fr, read, blocks << 9);
 
 	if (read != blocks << 9 || FR_OK != fr) {
+    	_console->PrintOut("Read failed fr=%d\n", fr);
 		f_close(&_wozFile);
+		gpio_put(GPIO_READY, true);
 		return;
 	}
 
-	_bitCount = _Trk[trkIndex].BitCount;
+	_bitCount = _Trk[track].BitCount;
 
-	_trackReadCompleted = true;
+	_trackReadCompleted = true;	
+
+	//pio_sm_clear_fifos(_pio, _sm_addr);
+	gpio_put(GPIO_READY, true);
+
+}
+
+void
+__not_in_flash_func(WozFile::AddCycles)(uint32_t cycles)
+{
+	_readPosition += cycles;
 }
 
 bool 
@@ -382,7 +416,6 @@ __not_in_flash_func(WozFile::GetNextBit)()
 	}
 
 	_readPosition++;
-
 	int32_t bitPos = _readPosition % _bitCount;
 	int32_t byteIndex = bitPos >> 3;
 	//uint8_t bitInByte = bitPos - (byteIndex << 3);

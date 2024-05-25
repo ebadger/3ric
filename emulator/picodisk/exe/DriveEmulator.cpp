@@ -111,7 +111,11 @@ __not_in_flash_func(DriveEmulator::AddCycles)(uint32_t cycles)
 			_shiftRegister = 0;
 		}
 
-		if (bitCount > 0)
+		if (bitCount == 255)
+		{
+			_shiftRegister = 0;
+		}
+		else if (bitCount > 0)
 		{
 			_shiftRegister = _shiftRegister << bitCount;
 			_shiftRegister |= bits;

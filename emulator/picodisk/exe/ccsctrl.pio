@@ -6,6 +6,7 @@ set pindirs, 0
 start:
   wait 0 GPIO 15            ; wait for PHI2 to go low
   wait 1 GPIO 15  side 0    ; wait for PHI2 to go high
+  wait 1 GPIO 0             ; wait for CPU ready
   jmp PIN out_mode          ; R/W pin
 
   MOV x,x [7]
