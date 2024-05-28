@@ -53,7 +53,7 @@ public:
 	void PrintOut(const char *format, ...);
 	void AddCommand(Command *c);
 	void ProcessInput();
-
+    bool HasOutput() { return _bufPosLocal != _bufEndLocal; }
 private:
 	void ProcessLine();
 	void ProcessCommand();

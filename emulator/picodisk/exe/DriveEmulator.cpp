@@ -1,6 +1,7 @@
 #include "DriveEmulator.h"
 #include "console.h"
 
+#define GPIO_READY 0
 #define _countof(x) (sizeof(x) / sizeof(x[0]))
 extern Console * _console;
 /*
@@ -36,10 +37,19 @@ a write of the next byte to $C0ED, an immediate read of $C0EC, etc.
 When done, read $C0EE.
 */
 
+#define GPIO_TIMING 1
+
+bool	DriveEmulator::_Q6 = false;
+bool	DriveEmulator::_Q7 = false;
+uint8_t	DriveEmulator::_statusRegister = 0;
+uint8_t	DriveEmulator::_shiftRegister = 0;
+uint8_t	DriveEmulator::_shiftTemp = 0;
+
 DriveEmulator::DriveEmulator()
 {
 	_D[0].SetId(1);
 	_D[1].SetId(2);
+	_activeFile = _D[_activeDisk].GetFile();
 }
 
 DriveEmulator::~DriveEmulator()
@@ -51,9 +61,13 @@ void
 __not_in_flash_func(DriveEmulator::AddCycles)(uint32_t cycles)
 {
 	_cycles += cycles;
-	_D[0].AddCycles(cycles);
-	_D[1].AddCycles(cycles);
+	_D[_activeDisk].AddCycles(cycles);
 	
+	if (_cycles - _lastShiftCycle > 13312);
+	{
+		_lastShiftCycle = _cycles - (BIT_TIME * 8);
+	}
+
 	if (_motorStarting != 0)
 	{
 		if (_cycles - _motorStarting >= ONE_SECOND)
@@ -66,6 +80,7 @@ __not_in_flash_func(DriveEmulator::AddCycles)(uint32_t cycles)
 		if (_pendingActiveDisk != _activeDisk)
 		{
 			_activeDisk = _pendingActiveDisk;
+			_activeFile = _D[_activeDisk].GetFile();
 		}
 	}
 	else if (_motorStopping != 0)
@@ -74,53 +89,41 @@ __not_in_flash_func(DriveEmulator::AddCycles)(uint32_t cycles)
 		{
 			_motorStopping = 0;
 			_motorRunning = false;
-			GetActiveDisk()->SetSpinning(false);
+			_D[_activeDisk].SetSpinning(false);
 			//_console->PrintOut("Motor stopped\n");
 
 		}
 		_activeDisk = _pendingActiveDisk;
+		_activeFile = _D[_activeDisk].GetFile();
 
 		if (_pendingActiveDisk != _activeDisk)
 		{
 			_activeDisk = _pendingActiveDisk;
+			_activeFile = _D[_activeDisk].GetFile();
 		}
-
 	}
 
 	if (_motorRunning)
 	{
-		// in read mode and the motor is running, shift in bits
-		uint8_t bitCount = 0;
-		uint8_t bits = GetActiveDisk()->GetBits(bitCount);
-
-		if ((_shiftRegister & 0x80) && bitCount > 0)
+		while (_cycles - _lastShiftCycle >= BIT_TIME)
 		{
-		#if 0
-			char buf[255];
-			sprintf(buf, "%02x ", _shiftRegister);
-			_debugString.append(buf);
-	
-			if (_debugString.size() > 64)
+			_lastShiftCycle += BIT_TIME;
+			_shiftTemp = (_shiftTemp << 1) | _activeFile->GetNextBit2();
+
+			if (_shiftTemp & 0x80)
 			{
-				_debugString.append("\r\n");
-				_console->PrintOut(_debugString.c_str());
-				//OutputDebugStringA(_debugString.c_str());
-				_debugString.clear();
+				_shiftRegister = _shiftTemp;
+				_shiftTemp = 0;
+				_lastCopy = _lastShiftCycle;
 			}
-		#endif
-			_shiftRegister = 0;
-		}
+			else if (_lastShiftCycle - _lastCopy >= BIT_HOLD)
+			{
+				_shiftRegister = 0;
+			}
 
-		if (bitCount == 255)
-		{
-			_shiftRegister = 0;
-		}
-		else if (bitCount > 0)
-		{
-			_shiftRegister = _shiftRegister << bitCount;
-			_shiftRegister |= bits;
-		}
+		}	
 	}
+	
 }
 
 WozDisk *
@@ -129,6 +132,7 @@ __not_in_flash_func(DriveEmulator::GetActiveDisk)()
 	return &_D[_activeDisk];
 }
 
+inline
 WozDisk *
 __not_in_flash_func(DriveEmulator::GetDisk)(uint8_t index)
 {
@@ -138,7 +142,9 @@ __not_in_flash_func(DriveEmulator::GetDisk)(uint8_t index)
 uint8_t
 __not_in_flash_func(DriveEmulator::Read)(uint8_t address)
 {
-	switch (address & 0xF)
+	uint8_t result = 0;
+
+	switch (address)
 	{
 	case 0x0:	// Phase 0 off
 		GetActiveDisk()->PhaseOff(0);
@@ -171,7 +177,7 @@ __not_in_flash_func(DriveEmulator::Read)(uint8_t address)
 	case 0x9:	// Motor on
 		_motorStopping = 0;
 		_motorStarting = _cycles;
-		GetActiveDisk()->SetSpinning(true);
+		_D[_activeDisk].SetSpinning(true);
 		break;
 	case 0xA:	// Select drive 1	
 		_pendingActiveDisk = 0;
@@ -190,14 +196,15 @@ __not_in_flash_func(DriveEmulator::Read)(uint8_t address)
 	case 0xC:	// Q6L - Reading this value will return drive bits on the current track
 		UpdateQ(false, _Q7);
 
+		result = _shiftRegister;
+
 		if (false == _Q6 && false == _Q7)
 		{
-			uint8_t result = _shiftRegister;
 			if (_shiftRegister & 0x80)
 			{
 				_shiftRegister = 0;
-				//GetActiveDisk()->SyncCycles();				
 			}
+
 			return result;
 		}
 		break;
@@ -222,7 +229,7 @@ __not_in_flash_func(DriveEmulator::Read)(uint8_t address)
 void 
 __not_in_flash_func(DriveEmulator::Write)(uint8_t address, uint8_t data)
 {
-	switch (address & 0xF)
+	switch (address)
 	{
 	case 0x0:	// Phase 0 off
 		GetActiveDisk()->PhaseOff(0);
@@ -255,7 +262,7 @@ __not_in_flash_func(DriveEmulator::Write)(uint8_t address, uint8_t data)
 	case 0x9:	// Motor 
 		_motorStopping = 0;
 		_motorStarting = _cycles;
-		GetActiveDisk()->SetSpinning(true);
+		_D[_activeDisk].SetSpinning(true);
 		break;
 	case 0xA:	// Select drive 1		
 		_pendingActiveDisk = 0;
@@ -286,6 +293,7 @@ __not_in_flash_func(DriveEmulator::Write)(uint8_t address, uint8_t data)
 	}
 }
 
+inline
 void
 __not_in_flash_func(DriveEmulator::UpdateQ)(bool Q6, bool Q7)
 {
@@ -301,7 +309,7 @@ __not_in_flash_func(DriveEmulator::UpdateQ)(bool Q6, bool Q7)
 
 	if (Q6)
 	{
-		if (GetActiveDisk()->GetWriteProtect())
+		if (_D[_activeDisk].GetWriteProtect())
 		{
 			_statusRegister |= 0x80;
 		}

@@ -5,8 +5,10 @@
 #include <errno.h>
 #include "console.h"
 #include <hardware/pio.h>
+#include "driveemulator.h"
 
 #define GPIO_READY  0
+
 
 extern Console * _console;
 extern PIO _pio;
@@ -40,13 +42,15 @@ __not_in_flash_func(WozFile::CloseFile)()
 {
 	_trackIndex = -1;
 
-	_vecChunks.clear();
-	_trackData.clear();
-
 	if (_wozFile.obj.fs != 0)
 	{
 		f_close(&_wozFile);
+		_wozFile.obj.fs = 0;
 	}
+
+	_vecChunks.clear();
+	_trackData.clear();
+	_trackBits.clear();
 
 	_InfoChunk = nullptr;
 	_MetaChunk = nullptr;
@@ -184,6 +188,8 @@ __not_in_flash_func(WozFile::ReadChunks)()
 
 		uint16_t largest = GetInfoChunkData()->LargestTrack;
 		_trackData.resize(largest << 9, 0);
+		_trackBits.resize(largest << 12, 0);
+
 		//_ASSERT(offset != 0 && blocks != 0);
 	} 
 	else if (pChunk->ChunkID.value == Chunk::META_CHUNK_ID)
@@ -227,7 +233,6 @@ __not_in_flash_func(WozFile::ReadChunks)()
 			TrksSize,
 			&read);
 
-		//_ASSERT(read == 1);
 
 		if (read != TrksSize || FR_OK != fr) {
 			f_close(&_wozFile);
@@ -351,10 +356,12 @@ __not_in_flash_func(WozFile::LoadTrack)()
 {
 	FRESULT fr = FR_OK;
 
+#if 0
 	if (_wozFile.obj.fs ==  0 || true == _trackReadCompleted)
 	{
 		return;
 	}
+#endif
 
 	uint8_t track = _Tmap[_trackIndex];
 
@@ -362,7 +369,6 @@ __not_in_flash_func(WozFile::LoadTrack)()
 	{
 		return;
 	}
-
     gpio_put(GPIO_READY, false); // stop processor
 
 	_trackLoaded = track;
@@ -383,7 +389,8 @@ __not_in_flash_func(WozFile::LoadTrack)()
 		&read);
 
 	//_ASSERT(read == 1);
-	_console->PrintOut("Read track %d: fr=%d, read=%d, blocks=%d\n", track, fr, read, blocks << 9);
+	//_console->PrintOut("Read track %d: fr=%d, read=%d, blocks=%d\n", track, fr, read, blocks << 9);
+	printf("Read track %d: fr=%d, read=%d, blocks=%d\n", track, fr, read, blocks << 9);
 
 	if (read != blocks << 9 || FR_OK != fr) {
     	_console->PrintOut("Read failed fr=%d\n", fr);
@@ -392,22 +399,45 @@ __not_in_flash_func(WozFile::LoadTrack)()
 		return;
 	}
 
+	int bitpos = 0;
+	for (int n = 0; n < _trackData.size(); n++)
+	{
+		uint8_t b = _trackData[n];
+		for(int i = 7; i >= 0; i--)
+		{
+			_trackBits[bitpos++] = (b >> i) & 1;
+		}
+	}
+
+	//_ASSERT(read == 1);
+
 	_bitCount = _Trk[track].BitCount;
 
 	_trackReadCompleted = true;	
 
-	//pio_sm_clear_fifos(_pio, _sm_addr);
+	pio_sm_clear_fifos(_pio, _sm_addr);
+	pio_sm_clear_fifos(_pio, _sm_data);
 	gpio_put(GPIO_READY, true);
 
 }
 
-void
-__not_in_flash_func(WozFile::AddCycles)(uint32_t cycles)
-{
-	_readPosition += cycles;
+uint8_t 
+__not_in_flash_func(WozFile::GetNextBit2)()
+{		
+	if (_bitCount == 0)
+	{
+		return rand() % 2;
+	}
+
+	if (_readPosition >= _bitCount)
+	{
+		_readPosition = 0;
+	}
+
+	return _trackBits[_readPosition++] ? 1 : 0;
 }
 
-bool 
+uint8_t 
 __not_in_flash_func(WozFile::GetNextBit)()
 {		
 	if (_bitCount == 0 || false == _trackReadCompleted)
@@ -421,25 +451,9 @@ __not_in_flash_func(WozFile::GetNextBit)()
 	//uint8_t bitInByte = bitPos - (byteIndex << 3);
 	uint8_t bitInByte = bitPos % 8;
 
-
-
-#if 0
-	if (bitPos == 0)
-	{
-		_console->PrintOut("bitpos == 0\n");
-	}
-#endif
-
 	uint8_t b = _trackData[byteIndex];
-
-#if 0
-	char buf[255];
-	sprintf_s(buf, 255, "%d\r\n", byteIndex);
-	OutputDebugStringA(buf);
-#endif
-
 
 	b = b << bitInByte;
  
-	return (b & 0x80);
+	return (b & 0x80) ? 1 : 0;
 }

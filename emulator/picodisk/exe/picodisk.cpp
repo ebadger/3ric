@@ -25,6 +25,7 @@ const uint UART_RX_PIN = 1;
 // A0-A4 : GPIO 18-21   - Address lines
 
 #define GPIO_READY   0
+#define GPIO_TIMING  1
 
 #define GPIO_FIRST   6
 #define GPIO_D0      6
@@ -161,20 +162,6 @@ __not_in_flash_func(HandleCommunication)(uint32_t value, uint8_t addr, uint8_t d
     }
 }
 
-inline void 
-__not_in_flash_func(HandleDrive)(uint32_t value, uint8_t addr, uint8_t data, bool rw)
-{
-    if (rw) // read
-    {   
-        uint32_t result = (uint32_t)_driveEmulator->Read(addr);
-        pio_sm_put(_pio, _sm_data, (uint32_t)result); 
-    }
-    else
-    {
-        _driveEmulator->Write(addr, data);
-    }
-}
-
 void init_GPIO()
 {
 /*
@@ -186,6 +173,10 @@ void init_GPIO()
     gpio_init(GPIO_READY);
     gpio_set_dir(GPIO_READY, GPIO_OUT);
     gpio_put(GPIO_READY, true);
+
+    gpio_init(GPIO_TIMING);
+    gpio_set_dir(GPIO_TIMING, GPIO_OUT);
+    gpio_put(GPIO_TIMING, false);
 
     gpio_init(GPIO_LED);
     gpio_set_dir(GPIO_LED, GPIO_OUT);
@@ -360,54 +351,59 @@ __not_in_flash_func(core1)()
     while(true)
     {        
         value = pio_sm_get_blocking(_pio, _sm_addr);
-        _cycleCount++;
+        addr =  ((value >> 4) & 0xF);
 
-
-        if (IS_NOT_DEVICE(value))
+        if(!IS_DCS(value))
+        {
+            if (IS_RW(value))
+            {
+                if (addr == 0xC && !DriveEmulator::_Q7)
+                {
+                    pio_sm_put(_pio, _sm_data, DriveEmulator::_shiftRegister);
+                    _driveEmulator->Read(addr);
+                }
+                else
+                {                    
+                    pio_sm_put(_pio, _sm_data, _driveEmulator->Read(addr)); 
+                }
+            }
+            else
+            {
+                data = pio_sm_get(_pio, _sm_data);
+                _driveEmulator->Write(addr, data);
+            }
+        } 
+        else if (!IS_CCS(value))
+        {
+            if (IS_RW(value))
+            {
+                uint8_t b = 0;
+                _console->GetOutputByte(&b);
+                pio_sm_put(_pio, _sm_data, (uint32_t)b);            
+            }
+            else
+            {
+                data = pio_sm_get(_pio, _sm_data);
+                if (data != 0)
+                {
+                    _console->InputByte(data);
+                }
+            }
+        }
+        else
         {
             //neither device is active
             //pio_sm_drain_rx_fifo(_pio, _sm_data);           
             pio_sm_get(_pio, _sm_data);
+            pio_sm_get(_pio, _sm_data);
 
-            // pio_sm_clear_fifos(_pio, _sm_addr);
-            // pio_sm_clear_fifos(_pio, _sm_data);
+            //pio_sm_clear_fifos(_pio, _sm_addr);
+            //pio_sm_clear_fifos(_pio, _sm_data);
 
             //_driveEmulator->AddCycles(1);
-#if 0            
-            if (_cycleCount - lastCycle > 20)
-            {
-                _driveEmulator->AddCycles(_cycleCount - lastCycle);
-                lastCycle = _cycleCount;
-            }
-#endif
-            continue;
         }
 
-        addr =  ((value >> 4) & 0xF);
-
-        _driveEmulator->AddCycles(_cycleCount - lastCycle);
-        lastCycle = _cycleCount;
-
-
-        rw = IS_RW(value);
-
-        if (!rw)
-        {
-            data = pio_sm_get_blocking(_pio, _sm_data);
-        }
-        else
-        {
-            //pio_sm_get(_pio, _sm_data);
-        }
-
-        if(!IS_DCS(value))
-        {
-            HandleDrive(value, addr, (uint8_t)data, rw);
-        } 
-        else
-        {
-            HandleCommunication(value, addr, (uint8_t)data, rw);
-        }
+        _cycleCount++;
 
         //pio_sm_clear_fifos(_pio, _sm_addr);
 
@@ -427,7 +423,7 @@ int __not_in_flash_func(main)()
     std::string outstring = "";
     uint32_t cycleAvg = 0;
     uint32_t cycleSamples = 0;
-    uint32_t cycleMin = -1;
+    uint32_t cycleMin = 0x7FFFFFFF;
     uint32_t cycleMax = 0;
     uint32_t cycleDeduct = 0;
 
@@ -456,73 +452,30 @@ int __not_in_flash_func(main)()
 
     while(true)
     {
-        /*
-        if (_driveEmulator->GetActiveDisk())
-        {
-            if (_driveEmulator->GetActiveDisk()->GetFile()->ReadReady())
-            {
-                //sleep_us(32);
-                _driveEmulator->GetActiveDisk()->GetFile()->LoadTrack();
-            }
-        }
-        */
-#if 0
-        if (phi != gpio_get(GPIO_PHI2))
-        {
-            phi = !phi;
-            //_cycleCount++;
-        }
-
-        uint32_t cycles = _cycleCount - _cycleProcessed;
-        if (cycles > 0)
-        {
-            if (cycleMin > cycles)
-            {
-                cycleMin = cycles;
-            }
-
-            if(cycleMax < cycles)
-            {
-                cycleMax = cycles;
-            }
-
-            //_driveEmulator->AddCycles(cycles);
-            _cycleProcessed += cycles;
-            cycleAvg += cycles;
-            cycleSamples++;
-            //printf("cycles: %d\n", (uint32_t)cycles);
-        }
-
-        if(cycleSamples == 20000000)
-        {
-            _console->PrintOut("A: %d, -%d, +%d\n", 
-                        cycleAvg / cycleSamples,
-                        cycleMin,
-                        cycleMax);
-            cycleAvg = 0;
-            cycleSamples = 0;
-            cycleMin = -1;
-            cycleMax = 0;
-        }
-#endif
-
-/*
-        if (_console->GetOutputByte(&c))
-        {
-            printf("%c", c);
-        }
-*/
-        if(counter++ % 2000 == 0)
+        if(counter++ % 50000 == 0)
         {
             uint8_t b = 0;
 
-            while (_console->GetOutputByteLocal(&b))
+            if(_console->HasOutput())
             {
-                if (b)
+                gpio_put(GPIO_READY, false);
+                while (_console->GetOutputByteLocal(&b))
                 {
-                    outstring += b;
+                    if (b)
+                    {
+                        outstring += b;
+                    }
                 }
+
+                if(outstring.size() > 0)
+                {
+                    printf(outstring.c_str());
+                    outstring = "";
+                }
+
+                gpio_put(GPIO_READY, true);
             }
+
 
             uint8_t c = 0;
             int ch = getchar_timeout_us(0);
@@ -533,20 +486,54 @@ int __not_in_flash_func(main)()
                 printf("%c", ch);
             }        
 
-            _console->ProcessInput();
-            
-            if(outstring.size() > 0)
-            {
-                printf(outstring.c_str());
-                outstring = "";
-            }
+            _console->ProcessInput(); 
         }
 
-        if(counter % 500000 == 0)
+        if(counter % 2000000 == 0)
         {
             gpio_put(GPIO_LED, fOn);
             fOn = !fOn;
         }
+
+        uint32_t cycles = _cycleCount - _cycleProcessed;
+
+        if(cycles >= 4)
+        {
+            gpio_put(GPIO_TIMING, true);
+            _driveEmulator->AddCycles(cycles);
+            _cycleProcessed += cycles;
+            gpio_put(GPIO_TIMING, false);
+        }
+/*
+            if (cycles < cycleMin)
+            {
+                cycleMin = cycles;
+            }
+
+            if(cycles > cycleMax)
+            {
+                cycleMax = cycles;
+            }
+
+            cycleAvg += cycles;
+            cycleSamples++;
+*/
+        
+
+/*
+        if(cycleSamples == 50000000)
+        {
+            _console->PrintOut("Avg:%d,Min:%d,Max:%d\n", 
+                        cycleAvg / cycleSamples,
+                        cycleMin,
+                        cycleMax);
+            cycleAvg = 0;
+            cycleSamples = 0;
+            cycleMin = 0x7FFFFFFF;
+            cycleMax = 0;
+        }
+*/
+
     }
 
     return 0;

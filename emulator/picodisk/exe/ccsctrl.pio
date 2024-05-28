@@ -16,8 +16,11 @@ start:
   MOV x,x [7]
 
   IN pins, 8      side 1
-  jmp start  
+  jmp start
+
 out_mode:
+  MOV x,x [7]
+  MOV x,x [7]
   MOV x,x [7]
   MOV x,x [7]
   MOV x,x [7]

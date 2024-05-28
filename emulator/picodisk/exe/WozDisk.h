@@ -14,6 +14,7 @@ public:
 	int8_t MoveTrackPosition(int iDiff);
 	bool GetWriteProtect();
 	uint8_t GetBits(uint8_t &bits);
+	bool GetNextBit(uint8_t &bit);
 	void SetSpinning(bool spinning);
 	bool InsertDisk(const char* filename);
 	void RemoveDisk();
@@ -23,7 +24,6 @@ public:
 	uint8_t ToothAfter();
 	int8_t UpdateWheel();
 	WozFile *GetFile();
-	void SyncCycles();
 	
 private:
 	uint8_t      _id;
@@ -37,4 +37,5 @@ private:
 	uint64_t    _lastTrackCycle = 0;
 	bool		_spinning = false;
 	int32_t     _pendingRotation = 0;
+	uint8_t     _odd = 0;
 };
