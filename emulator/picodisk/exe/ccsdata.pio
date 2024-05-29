@@ -6,22 +6,23 @@
 set pindirs, 0
 .wrap_target
 start:
-  ;wait 0 GPIO 17
-  wait 0 GPIO 15       ; wait for PHI2 to go low
-  set pindirs, 0   side 0    ; quit asserting data pins
-  wait 1 GPIO 15       ; wait for PHI2 to go high  
-  jmp PIN out_mode     ; R/W pin
+  wait 1 GPIO 27        ; wait for addr read to go high 
+  jmp PIN out_mode      ; R/W pin
 
 in_mode:
-   mov x,x          [3]     ; write in the tMDS period of 6502
-   mov x,x          side 1
-   in pins, 8  
-   jmp start        side 0
+  in pins, 8        ; side 1  
+  wait 0 GPIO 15    
+  jmp start         ; side 0
 
 out_mode:
   set pindirs, 1            ; within tDSR period of 6502
-  out pins, 8
-  mov x,x           side 1
+  jmp !OSRE out_mode_start  ; only continue of there is something in the OSRE
+  jmp start
+
+out_mode_start:
+  out pins, 8       side 1
+  wait 0 GPIO 15    
+  set pindirs, 0    side 0     ; quit asserting data pins
   .wrap             
 
 % c-sdk {
@@ -41,6 +42,8 @@ static inline void ccsdata_program_init(PIO pio, uint sm, uint offset, uint pin)
   pio_gpio_init(pio, 26);
   gpio_pull_down(26);
 
+  pio_gpio_init(pio, 16);
+
   sm_config_set_jmp_pin(&config, 16);  // pin 16 is RW - for jmp
   sm_config_set_out_pins(&config, pin, 8); // for out
   sm_config_set_in_pins(&config, pin);
@@ -51,7 +54,7 @@ static inline void ccsdata_program_init(PIO pio, uint sm, uint offset, uint pin)
   sm_config_set_fifo_join(&config, PIO_FIFO_JOIN_NONE);
   sm_config_set_sideset_pins(&config, 26);
 
-  sm_config_set_clkdiv(&config, 8);
+  //sm_config_set_clkdiv(&config, 8);
 
   // 3. Apply the configuration & activate the State Machine
   pio_sm_init(pio, sm, offset, &config);

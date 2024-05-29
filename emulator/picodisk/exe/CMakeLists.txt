@@ -1,4 +1,8 @@
+
 add_executable(picodrive)
+
+#pico_set_binary_type(picodrive no_flash)
+pico_set_binary_type(picodrive copy_to_ram)
 
 target_sources( picodrive PRIVATE
     picodisk.cpp
@@ -8,7 +12,6 @@ target_sources( picodrive PRIVATE
     sdcard.cpp 
     hw_config.c 
     console.cpp )
-
 
 pico_generate_pio_header(picodrive ${CMAKE_CURRENT_LIST_DIR}/ccsctrl.pio)
 pico_generate_pio_header(picodrive ${CMAKE_CURRENT_LIST_DIR}/ccsdata.pio)

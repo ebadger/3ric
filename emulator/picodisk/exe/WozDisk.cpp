@@ -1,6 +1,10 @@
 #include "WozDisk.h"
 #include <stdlib.h>
 #include <cstring>
+#include "Console.h"
+
+#define GPIO_READY   0
+extern Console * _console;
 
 char buf[255];
 
@@ -12,23 +16,47 @@ WozDisk::WozDisk()
 	_toothPosition = _trackPosition % 4;
 }
 
-void __not_in_flash_func(WozDisk::AddCycles)(uint32_t cycles)
+void 
+__not_in_flash_func(WozDisk::SetId)(uint8_t id)
 {
-	_cycles += cycles;
+	_id = id;
 }
 
-uint8_t WozDisk::ToothBefore()
+void 
+__not_in_flash_func(WozDisk::AddCycles)(uint32_t cycles)
+{
+	_cycles += cycles;
+
+	if (_pendingRotation > 0)
+	{
+		_pendingRotation -= cycles;		
+
+		if (_pendingRotation <= 0)
+		{
+			DoRotation();
+			_pendingRotation = 0;
+		}
+	}	
+}
+
+inline
+uint8_t 
+__not_in_flash_func(WozDisk::ToothBefore)()
 {
 	return (_toothPosition + 7) % 8;
 }
 
-uint8_t WozDisk::ToothAfter()
+inline
+uint8_t 
+__not_in_flash_func(WozDisk::ToothAfter)()
 {
 	return (_toothPosition + 1) % 8;
 }
 
-void WozDisk::UpdateMagneticField()
-{
+inline
+void 
+__not_in_flash_func(WozDisk::UpdateMagneticField)()
+{	
 	memset(&_magneticField, 0, sizeof(uint8_t) * 8);
 
 	for (int i = 0; i < 4; i++)
@@ -44,9 +72,13 @@ void WozDisk::UpdateMagneticField()
 			_magneticField[after] += 2;
 		}
 	}
+
+	_pendingRotation = 1000;
 }
 
-int8_t WozDisk::UpdateWheel()
+inline
+int8_t 
+__not_in_flash_func(WozDisk::UpdateWheel)()
 {
 	int8_t move = 0;
 
@@ -74,53 +106,61 @@ int8_t WozDisk::UpdateWheel()
 	return move;
 }
 
-void WozDisk::PhaseOn(uint8_t iPhase)
+void 
+__not_in_flash_func(WozDisk::PhaseOn)(uint8_t iPhase)
 {
-	uint8_t tb = _toothPosition;
-	int8_t move = 0;
+	if (_phase[iPhase])
+	{
+		return;
+	}
 
 	_phase[iPhase] = true;
 	UpdateMagneticField();
-	move = UpdateWheel();
+}
 
+void 
+__not_in_flash_func(WozDisk::PhaseOff)(uint8_t iPhase)
+{
+	if (!_phase[iPhase])
+	{
+		return;
+	}
+
+	_phase[iPhase] = false;
+	UpdateMagneticField();
+}
+
+inline
+void
+__not_in_flash_func(WozDisk::DoRotation)()
+{
+		int8_t move = 0;
+
+		move = UpdateWheel();
+
+#if 0
+    	uint8_t tb = _toothPosition;
 	sprintf(buf, "%d,%d,%d,%d [%d,%d,%d,%d,%d,%d,%d,%d] %d->%d\r\n", 
 		_phase[0], _phase[1], _phase[2], _phase[3],
 		_magneticField[0], _magneticField[1], _magneticField[2], _magneticField[3],
 		_magneticField[4], _magneticField[5], _magneticField[6], _magneticField[7],
 		tb, _toothPosition);
+	_console->PrintOut(buf);
 	//OutputDebugStringA(buf);
-
+#endif
 	if (move != 0)
 	{
 		MoveTrackPosition(move);
 	}
+
 }
 
-void WozDisk::PhaseOff(uint8_t iPhase)
-{
-	int8_t move = 0;
-	uint8_t tb = _toothPosition;
-	_phase[iPhase] = false;
-	UpdateMagneticField();
-	move = UpdateWheel();
-
-	sprintf(buf, "%d,%d,%d,%d [%d,%d,%d,%d,%d,%d,%d,%d] %d->%d *\r\n",
-		_phase[0], _phase[1], _phase[2], _phase[3],
-		_magneticField[0], _magneticField[1], _magneticField[2], _magneticField[3],
-		_magneticField[4], _magneticField[5], _magneticField[6], _magneticField[7],
-		tb, _toothPosition);
-	//OutputDebugStringA(buf);
-
-	if (move != 0)
-	{
-		MoveTrackPosition(move);
-	}
-}
-
-
-int8_t WozDisk::MoveTrackPosition(int iDiff)
+inline
+int8_t 
+__not_in_flash_func(WozDisk::MoveTrackPosition)(int iDiff)
 {
 	int8_t moved = 0;
+    int16_t prevPosition = _trackPosition;
 
 	_trackPosition += iDiff;
 	if (_trackPosition > 159)
@@ -131,20 +171,20 @@ int8_t WozDisk::MoveTrackPosition(int iDiff)
 	{
 		_trackPosition = 0;
 	}
-	else
-	{
-		moved = iDiff;
-	}
+
+	moved = _trackPosition - prevPosition;
 
 	if (_WozFile.IsFileLoaded())
 	{
+		_lastTrackCycle = _cycles;
 		_WozFile.SetTrack(_trackPosition);
 	}
 
 	return moved;
 }
 
-bool WozDisk::GetWriteProtect()
+bool 
+__not_in_flash_func(WozDisk::GetWriteProtect)()
 {
 	InfoChunkData *pData = _WozFile.GetInfoChunkData();
 	if (pData)
@@ -155,8 +195,11 @@ bool WozDisk::GetWriteProtect()
 	return false;
 }
 
-void WozDisk::SetSpinning(bool spinning)
+void 
+__not_in_flash_func(WozDisk::SetSpinning)(bool spinning)
 {
+	//_console->PrintOut("Drive %d: Spinning: %d\n", _id, spinning);
+
 	_spinning = spinning;
 
 	if (spinning)
@@ -165,32 +208,15 @@ void WozDisk::SetSpinning(bool spinning)
 	}
 }
 
-uint8_t WozDisk::GetBits(uint8_t &bitCount)
+bool 
+__not_in_flash_func(WozDisk::InsertDisk)(const char* filename)
 {
-	uint8_t bits = 0;
+	_WozFile.CloseFile();
+	_trackPosition = (rand() % 158) + 1;
 
-	uint64_t elapsed = _cycles - _lastShiftCycle;
-
-	if (elapsed > ONE_SECOND)
-	{
-		_lastShiftCycle = _cycles;
-	}
-	
-	while (_cycles - _lastShiftCycle >= SEVEN_MICROSECONDS)
-	{
-		bitCount++;
-		_lastShiftCycle += SEVEN_MICROSECONDS;
-		bits <<= 1;
-		bits |= _WozFile.GetNextBit() ? 1 : 0;
-	}
-
-	return bits;
-}
-
-bool WozDisk::InsertDisk(const char* filename)
-{
 	if (_WozFile.OpenFile(filename) == END_OF_WOZFILE)
 	{
+		_lastTrackCycle = _cycles;
 		_WozFile.SetTrack(_trackPosition);
 		return true;
 	}
@@ -198,17 +224,20 @@ bool WozDisk::InsertDisk(const char* filename)
 	return false;
 }
 
-void WozDisk::RemoveDisk()
+void 
+__not_in_flash_func(WozDisk::RemoveDisk)()
 {
 	_WozFile.CloseFile();
 }
 
-bool WozDisk::IsDiskPresent()
+bool 
+__not_in_flash_func(WozDisk::IsDiskPresent)()
 {
 	return _WozFile.IsFileLoaded();
 }
 
-WozFile * WozDisk::GetFile()
+WozFile * 
+__not_in_flash_func(WozDisk::GetFile)()
 {
 	return &_WozFile;
 }

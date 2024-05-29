@@ -3,12 +3,28 @@
 
 set pindirs, 0
 .wrap_target
-  ;wait 0 GPIO 17
-  wait 0 GPIO 15       ; wait for PHI2 to go low
-  wait 1 GPIO 15       ; wait for PHI2 to go high
-  MOV X,X         side 1
-  IN pins, 8
-  MOV X,X         side 0
+start:
+  wait 0 GPIO 15            ; wait for PHI2 to go low
+  wait 1 GPIO 15  side 0    ; wait for PHI2 to go high
+  wait 1 GPIO 0             ; wait for CPU ready
+  jmp PIN out_mode          ; R/W pin
+
+  MOV x,x [7]
+  MOV x,x [7]
+  MOV x,x [7]
+  MOV x,x [7]
+  MOV x,x [7]
+
+  IN pins, 8      side 1
+  jmp start
+
+out_mode:
+  MOV x,x [7]
+  MOV x,x [7]
+  MOV x,x [7]
+  MOV x,x [7]
+  MOV x,x [7]
+  IN pins, 8      side 1
   .wrap
 
 % c-sdk {
@@ -26,11 +42,16 @@ static inline void ccsctrl_program_init(PIO pio, uint sm, uint offset, uint pin)
     pio_gpio_init(pio, pin + i);  
   }
   pio_gpio_init(pio, 27);
+  pio_gpio_init(pio, 16);
 
   sm_config_set_in_shift(&config, false, true, 8);
-  //sm_config_set_fifo_join(&config, PIO_FIFO_JOIN_RX);
+  sm_config_set_fifo_join(&config, PIO_FIFO_JOIN_RX);
 
   sm_config_set_sideset_pins(&config, 27);
+  sm_config_set_jmp_pin(&config, 16);  // pin 16 is RW - for jmp
+
+  //sm_config_set_clkdiv(&config, 2);
+
   // 3. Apply the configuration & activate the State Machine
   pio_sm_init(pio, sm, offset, &config);
   //pio_sm_set_enabled(pio, sm, true);

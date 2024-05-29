@@ -93,15 +93,19 @@ public:
 	InfoChunkData* GetInfoChunkData();
 	void CloseFile();
 	bool IsFileLoaded();
-	bool GetNextBit();
+	uint8_t GetNextBit();
+	uint8_t GetNextBit2();
 	void SetTrack(int16_t track);
-
+    void LoadTrack();
+	bool ReadReady(); 
+	void AddCycles(uint32_t cycles);
 private:
 
 	uint32_t ReadFileHeader();
 	uint32_t ReadChunks();
 
 	std::vector<uint8_t> _trackData;
+	std::vector<uint8_t> _trackBits;
 	std::vector<Chunk *> _vecChunks;
 
 	Chunk* _InfoChunk = nullptr;
@@ -117,9 +121,13 @@ private:
 
 	FIL     _wozFile = {};
 		
-	int16_t _track = -1;
+	int16_t _trackIndex = -1;
+    int16_t _trackLoaded = -1;
+	uint16_t _blocks = 0;
+	bool     _trackReadCompleted = false;
 
 	uint32_t _readPosition = 0;
 	uint32_t _bitCount = 0;
-
+	uint32_t _offset = 0;
+	uint32_t _byteCount = 0;
 };

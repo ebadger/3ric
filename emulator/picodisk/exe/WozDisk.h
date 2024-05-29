@@ -6,12 +6,15 @@ class WozDisk
 public:
 	WozDisk();
 
+	void SetId(uint8_t id);
 	void AddCycles(uint32_t cycles);
+	void DoRotation();
 	void PhaseOn(uint8_t iPhase);
 	void PhaseOff(uint8_t iPhase);
 	int8_t MoveTrackPosition(int iDiff);
 	bool GetWriteProtect();
 	uint8_t GetBits(uint8_t &bits);
+	bool GetNextBit(uint8_t &bit);
 	void SetSpinning(bool spinning);
 	bool InsertDisk(const char* filename);
 	void RemoveDisk();
@@ -23,6 +26,7 @@ public:
 	WozFile *GetFile();
 	
 private:
+	uint8_t      _id;
 	WozFile		_WozFile;
 	int16_t		_trackPosition;
 	bool		_phase[4] = {false};
@@ -30,5 +34,8 @@ private:
 	uint8_t     _toothPosition = 0;
 	uint64_t    _cycles = 0;
 	uint64_t    _lastShiftCycle = 0;
+	uint64_t    _lastTrackCycle = 0;
 	bool		_spinning = false;
+	int32_t     _pendingRotation = 0;
+	uint8_t     _odd = 0;
 };
