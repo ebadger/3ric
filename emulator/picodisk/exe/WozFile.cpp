@@ -390,7 +390,7 @@ __not_in_flash_func(WozFile::LoadTrack)()
 
 	//_ASSERT(read == 1);
 	//_console->PrintOut("Read track %d: fr=%d, read=%d, blocks=%d\n", track, fr, read, blocks << 9);
-	printf("Read track %d: fr=%d, read=%d, blocks=%d\n", track, fr, read, blocks << 9);
+	printf("Read track %d (%d): fr=%d, read=%d, blocks=%d\n", track, _trackIndex, fr, read, blocks << 9);
 
 	if (read != blocks << 9 || FR_OK != fr) {
     	_console->PrintOut("Read failed fr=%d\n", fr);
@@ -434,7 +434,7 @@ __not_in_flash_func(WozFile::GetNextBit2)()
 		_readPosition = 0;
 	}
 
-	return _trackBits[_readPosition++] ? 1 : 0;
+	return _trackBits[_readPosition++];
 }
 
 uint8_t 

@@ -353,6 +353,8 @@ __not_in_flash_func(core1)()
         value = pio_sm_get_blocking(_pio, _sm_addr);
         addr =  ((value >> 4) & 0xF);
 
+        _cycleCount++;
+
         if(!IS_DCS(value))
         {
             if (IS_RW(value))
@@ -372,6 +374,14 @@ __not_in_flash_func(core1)()
                 data = pio_sm_get(_pio, _sm_data);
                 _driveEmulator->Write(addr, data);
             }
+
+            //gpio_put(GPIO_TIMING, true);
+            _driveEmulator->AddCycles(_cycleCount - lastCycle);
+            //gpio_put(GPIO_TIMING, false);
+            lastCycle = _cycleCount;
+            uint8_t missed = pio_sm_get_rx_fifo_level(_pio, _sm_addr);
+            _cycleCount += missed;
+            pio_sm_clear_fifos(_pio, _sm_addr);
         } 
         else if (!IS_CCS(value))
         {
@@ -392,6 +402,17 @@ __not_in_flash_func(core1)()
         }
         else
         {
+
+            if (_cycleCount - lastCycle >= 1000)
+            {
+                //gpio_put(GPIO_TIMING, true);
+                _driveEmulator->AddCycles(_cycleCount - lastCycle);
+                //gpio_put(GPIO_TIMING, false);
+                lastCycle = _cycleCount;
+                uint8_t missed = pio_sm_get_rx_fifo_level(_pio, _sm_addr);
+                _cycleCount += missed;
+            }
+
             //neither device is active
             //pio_sm_drain_rx_fifo(_pio, _sm_data);           
             pio_sm_get(_pio, _sm_data);
@@ -403,7 +424,6 @@ __not_in_flash_func(core1)()
             //_driveEmulator->AddCycles(1);
         }
 
-        _cycleCount++;
 
         //pio_sm_clear_fifos(_pio, _sm_addr);
 
@@ -497,13 +517,6 @@ int __not_in_flash_func(main)()
 
         uint32_t cycles = _cycleCount - _cycleProcessed;
 
-        if(cycles >= 4)
-        {
-            gpio_put(GPIO_TIMING, true);
-            _driveEmulator->AddCycles(cycles);
-            _cycleProcessed += cycles;
-            gpio_put(GPIO_TIMING, false);
-        }
 /*
             if (cycles < cycleMin)
             {

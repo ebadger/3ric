@@ -63,11 +63,6 @@ __not_in_flash_func(DriveEmulator::AddCycles)(uint32_t cycles)
 	_cycles += cycles;
 	_D[_activeDisk].AddCycles(cycles);
 	
-	if (_cycles - _lastShiftCycle > 13312);
-	{
-		_lastShiftCycle = _cycles - (BIT_TIME * 8);
-	}
-
 	if (_motorStarting != 0)
 	{
 		if (_cycles - _motorStarting >= ONE_SECOND)
@@ -105,22 +100,26 @@ __not_in_flash_func(DriveEmulator::AddCycles)(uint32_t cycles)
 
 	if (_motorRunning)
 	{
+		if (_cycles - _lastShiftCycle > 2048);
+		{
+			_lastShiftCycle = _cycles - (BIT_TIME * 8);
+		}
+
 		while (_cycles - _lastShiftCycle >= BIT_TIME)
 		{
 			_lastShiftCycle += BIT_TIME;
-			_shiftTemp = (_shiftTemp << 1) | _activeFile->GetNextBit2();
+			_shiftTemp = (_shiftTemp << 1) | _activeFile->GetNextBit();
 
 			if (_shiftTemp & 0x80)
 			{
 				_shiftRegister = _shiftTemp;
 				_shiftTemp = 0;
-				_lastCopy = _lastShiftCycle;
+				_lastCopy = _cycles;
 			}
-			else if (_lastShiftCycle - _lastCopy >= BIT_HOLD)
+			else if (_cycles - _lastCopy >= BIT_HOLD)
 			{
 				_shiftRegister = 0;
 			}
-
 		}	
 	}
 	
