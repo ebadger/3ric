@@ -25,12 +25,18 @@ private:
 
 	uint8_t		_statusRegister = 0;
 	uint8_t		_shiftRegister = 0;
+	uint8_t     _shiftTemp = 0;
+
 
 	WozDisk		_D[2];
 	uint8_t		_pendingActiveDisk = 0;
 	uint8_t		_activeDisk = 0;
 
 	uint64_t	_cycles = 0;
+	uint64_t    _lastCopy = 0;
+	uint64_t    _lastRead = 0;
+	uint64_t    _lastByte = 0;
+
 	uint32_t	_cycleIncrease = 0;
 
 	uint64_t    _motorStarting = 0;

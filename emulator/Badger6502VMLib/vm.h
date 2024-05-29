@@ -175,7 +175,7 @@ public:
 	std::function<void(uint8_t)> CallbackSetMode;
 	std::function<void(uint16_t, uint8_t)> CallbackWriteMemory;
 	std::function<void(uint16_t)> CallbackReadMemory;
-	std::function<void(bool, bool, bool, bool)> CallbackSetSoftSwitches;
+	std::function<void(uint16_t, bool, bool, bool, bool)> CallbackSetSoftSwitches;
 
 	std::function<void(std::string &, std::vector<uint8_t> &, uint8_t &)> CallbackLoadFile;
 	std::function<void(std::string &, std::vector<uint8_t> &, uint8_t &)> CallbackSaveFile;

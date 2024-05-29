@@ -93,6 +93,7 @@ public:
 	void CloseFile();
 	bool IsFileLoaded();
 	bool GetNextBit();
+	bool GetNextBit2();
 	void SetTrack(int16_t track);
 
 private:
@@ -102,6 +103,8 @@ private:
 
 	std::vector<uint8_t> _trackData;
 	std::vector<Chunk *> _vecChunks;
+	std::vector<uint8_t> _bitData;
+
 	std::mutex _mutex;
 
 	Chunk* _InfoChunk = nullptr;

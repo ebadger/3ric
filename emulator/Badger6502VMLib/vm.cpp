@@ -259,7 +259,7 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 		{
 			if (address != 0xC070 && address != 0xC030) // skip joystick and speaker for now
 			{
-				CallbackSetSoftSwitches(_graphics, _page2, _mixed, _lores);
+				CallbackSetSoftSwitches(address, _graphics, _page2, _mixed, _lores);
 			}
 		}
 	}
