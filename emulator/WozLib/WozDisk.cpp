@@ -56,7 +56,8 @@ void WozDisk::UpdateMagneticField()
 		}
 	}
 
-	_delayMomentum = 1000;
+	DoRotation();
+	//_delayMomentum = 1000;
 }
 
 int8_t WozDisk::UpdateWheel()
@@ -89,7 +90,23 @@ int8_t WozDisk::UpdateWheel()
 
 void WozDisk::PhaseOn(uint8_t iPhase)
 {
+	if (_phase[iPhase])
+	{
+		return;
+	}
+
 	_phase[iPhase] = true;
+	UpdateMagneticField();
+}
+
+void WozDisk::PhaseOff(uint8_t iPhase)
+{
+	if (!_phase[iPhase])
+	{
+		return;
+	}
+
+	_phase[iPhase] = false;
 	UpdateMagneticField();
 }
 
@@ -113,16 +130,11 @@ void WozDisk::DoRotation()
 	}
 
 }
-void WozDisk::PhaseOff(uint8_t iPhase)
-{
-	_phase[iPhase] = false;
-	UpdateMagneticField();
-}
-
 
 int8_t WozDisk::MoveTrackPosition(int iDiff)
 {
 	int8_t moved = 0;
+	int16_t prevPosition = _trackPosition;
 
 	_trackPosition += iDiff;
 	if (_trackPosition > 159)
@@ -133,10 +145,8 @@ int8_t WozDisk::MoveTrackPosition(int iDiff)
 	{
 		_trackPosition = 0;
 	}
-	else
-	{
-		moved = iDiff;
-	}
+
+	moved = _trackPosition - prevPosition;
 
 	if (_WozFile.IsFileLoaded())
 	{

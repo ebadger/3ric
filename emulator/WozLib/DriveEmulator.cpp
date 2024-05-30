@@ -93,7 +93,7 @@ DriveEmulator::AddCycles(uint32_t cycles)
 			}
 		}
 
-		if (_cycles - _lastCopy >= 15)
+		if (_cycles - _lastCopy >= BIT_HOLD)
 		{
 			if (_shiftRegister != 0)
 			{

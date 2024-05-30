@@ -329,7 +329,7 @@ __not_in_flash_func(WozFile::SetTrack)(int16_t trackIdx)
 
 //#if 0
 	// read the track
-	LoadTrack();
+	LoadTrack(track);
 //#endif
 }
 
@@ -352,7 +352,7 @@ __not_in_flash_func(WozFile::ReadReady)()
 }
 
 void 
-__not_in_flash_func(WozFile::LoadTrack)()
+__not_in_flash_func(WozFile::LoadTrack)(uint8_t track)
 {
 	FRESULT fr = FR_OK;
 
@@ -363,12 +363,6 @@ __not_in_flash_func(WozFile::LoadTrack)()
 	}
 #endif
 
-	uint8_t track = _Tmap[_trackIndex];
-
-	if (track > 39)
-	{
-		return;
-	}
     gpio_put(GPIO_READY, false); // stop processor
 
 	_trackLoaded = track;

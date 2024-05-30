@@ -885,7 +885,8 @@ namespace winrt::Badger6502Emulator::implementation
             else if (address >= 0xC0E0 && address <= 0xC0EF)
             {
                 // disk
-
+                _vm.GetDriveEmulator()->AddCycles(_cycles - _lastCycle);
+                _lastCycle = _cycles;
             }
         };
 
@@ -1292,6 +1293,8 @@ namespace winrt::Badger6502Emulator::implementation
                 }
 
                 cycles += pCPU->Step();
+                _cycles += cycles;
+
                 totalcycles += cycles;
 
 
@@ -1304,9 +1307,6 @@ namespace winrt::Badger6502Emulator::implementation
                     //if (!isInInterrupt)
 
                 }
-
-                _vm.GetDriveEmulator()->AddCycles(cycles);
-
 
                 EnterCriticalSection(&_cs);
                 _vm.GetPS2Keyboard()->ProcessKeys(totalcycles);
