@@ -365,8 +365,16 @@ __not_in_flash_func(core1)()
                     _driveEmulator->Read(addr);
                 }
                 else
-                {                    
-                    pio_sm_put(_pio, _sm_data, _driveEmulator->Read(addr)); 
+                {                
+                    if(addr & 1 == 0)
+                    {
+                        pio_sm_put(_pio, _sm_data, DriveEmulator::_shiftRegister);
+                        _driveEmulator->Read(addr); 
+                    }
+                    else
+                    {
+                        pio_sm_put(_pio, _sm_data, _driveEmulator->Read(addr)); 
+                    }
                 }
             }
             else
@@ -375,6 +383,7 @@ __not_in_flash_func(core1)()
                 _driveEmulator->Write(addr, data);
             }
 
+            gpio_put(GPIO_READY, false);
             //gpio_put(GPIO_TIMING, true);
             _driveEmulator->AddCycles(_cycleCount - lastCycle);
             //gpio_put(GPIO_TIMING, false);
@@ -382,6 +391,7 @@ __not_in_flash_func(core1)()
             uint8_t missed = pio_sm_get_rx_fifo_level(_pio, _sm_addr);
             _cycleCount += missed;
             pio_sm_clear_fifos(_pio, _sm_addr);
+            gpio_put(GPIO_READY, true);
         } 
         else if (!IS_CCS(value))
         {
@@ -405,21 +415,23 @@ __not_in_flash_func(core1)()
 
             if (_cycleCount - lastCycle >= 1000)
             {
+                gpio_put(GPIO_READY, false);
                 //gpio_put(GPIO_TIMING, true);
                 _driveEmulator->AddCycles(_cycleCount - lastCycle);
                 //gpio_put(GPIO_TIMING, false);
                 lastCycle = _cycleCount;
-                uint8_t missed = pio_sm_get_rx_fifo_level(_pio, _sm_addr);
-                _cycleCount += missed;
+                //uint8_t missed = pio_sm_get_rx_fifo_level(_pio, _sm_addr);
+                //_cycleCount += missed;
+                gpio_put(GPIO_READY, true);
             }
 
             //neither device is active
             //pio_sm_drain_rx_fifo(_pio, _sm_data);           
-            pio_sm_get(_pio, _sm_data);
-            pio_sm_get(_pio, _sm_data);
+            //pio_sm_get(_pio, _sm_data);
+            //pio_sm_get(_pio, _sm_data);
 
             //pio_sm_clear_fifos(_pio, _sm_addr);
-            //pio_sm_clear_fifos(_pio, _sm_data);
+            pio_sm_clear_fifos(_pio, _sm_data);
 
             //_driveEmulator->AddCycles(1);
         }
@@ -478,7 +490,6 @@ int __not_in_flash_func(main)()
 
             if(_console->HasOutput())
             {
-                gpio_put(GPIO_READY, false);
                 while (_console->GetOutputByteLocal(&b))
                 {
                     if (b)
@@ -493,7 +504,6 @@ int __not_in_flash_func(main)()
                     outstring = "";
                 }
 
-                gpio_put(GPIO_READY, true);
             }
 
 

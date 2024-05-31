@@ -57,6 +57,7 @@ inline
 void 
 __not_in_flash_func(WozDisk::UpdateMagneticField)()
 {	
+	gpio_put(GPIO_READY, false);
 	memset(&_magneticField, 0, sizeof(uint8_t) * 8);
 
 	for (int i = 0; i < 4; i++)
@@ -72,8 +73,8 @@ __not_in_flash_func(WozDisk::UpdateMagneticField)()
 			_magneticField[after] += 2;
 		}
 	}
-
 	_pendingRotation = 1000;
+	gpio_put(GPIO_READY, true);
 }
 
 inline
