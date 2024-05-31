@@ -382,6 +382,7 @@ __not_in_flash_func(WozFile::ReadReady)()
 
 void 
 __not_in_flash_func(WozFile::LoadTrack)(uint8_t track)
+__not_in_flash_func(WozFile::LoadTrack)(uint8_t track)
 {
 	FRESULT fr = FR_OK;
 

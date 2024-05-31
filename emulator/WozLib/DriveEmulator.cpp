@@ -46,6 +46,8 @@ DriveEmulator::~DriveEmulator()
 void
 DriveEmulator::AddCycles(uint32_t cycles)
 {
+	char buf[255];
+
 	_cycles += cycles;
 	_D[0].AddCycles(cycles);
 	_D[1].AddCycles(cycles);
@@ -73,13 +75,41 @@ DriveEmulator::AddCycles(uint32_t cycles)
 
 	if (_motorRunning)
 	{
+
+		uint8_t bit = 0;
+		while (GetActiveDisk()->GetNextBit(bit))
+		{
+			_shiftTemp = _shiftTemp << 1;
+			_shiftTemp |= bit;
+
+			if (_shiftTemp & 0x80)
+			{
+				_shiftRegister = _shiftTemp;
+				_shiftTemp = 0;
+
+				//sprintf_s(buf, _countof(buf), "copy: $%02x, %d\r\n", _shiftRegister, (uint32_t)_cycles - _lastCopy);
+				//OutputDebugStringA(buf);
+				_lastCopy = _cycles;
+			}
+		}
+
+		if (_cycles - _lastCopy >= BIT_HOLD)
+		{
+			if (_shiftRegister != 0)
+			{
+				//OutputDebugStringA("Lost Byte\r\n");
+			}
+			_shiftRegister = 0;
+		}
+
+
+#if 0
 		// in read mode and the motor is running, shift in bits
 		uint8_t bitCount = 0;
 		uint8_t bits = GetActiveDisk()->GetBits(bitCount);
 
 		if ((_shiftRegister & 0x80) && bitCount > 0)
 		{
-#if 0
 			char buf[255];
 			sprintf_s(buf, _countof(buf), "%02x ", _shiftRegister);
 			_debugString.append(buf);
@@ -90,16 +120,25 @@ DriveEmulator::AddCycles(uint32_t cycles)
 				OutputDebugStringA(_debugString.c_str());
 				_debugString.clear();
 			}
-#endif
 
 			_shiftRegister = 0;
 		}
 
 		if (bitCount > 0)
 		{
-			_shiftRegister = _shiftRegister << bitCount;
-			_shiftRegister |= bits;
+			_shiftTemp = _shiftTemp << bitCount;
+			_shiftTemp |= bits;
+
+			if (_shiftTemp & 0x80)
+			{
+				_shiftRegister = _shiftTemp;
+				_shiftTemp = 0;
+			}
+
+			//_shiftRegister = _shiftRegister << bitCount;
+			//_shiftRegister |= bits;
 		}
+#endif
 	}
 }
 
@@ -117,6 +156,8 @@ DriveEmulator::GetDisk(uint8_t index)
 
 uint8_t DriveEmulator::Read(uint8_t address)
 {
+	char buf[255];
+
 	switch (address & 0xF)
 	{
 	case 0x0:	// Phase 0 off
@@ -169,9 +210,24 @@ uint8_t DriveEmulator::Read(uint8_t address)
 	case 0xC:	// Q6L - Reading this value will return drive bits on the current track
 		UpdateQ(false, _Q7);
 
+
 		if (false == _Q6 && false == _Q7)
 		{
-			return _shiftRegister;
+
+			//sprintf_s(buf, _countof(buf), "read: %d, %d, %d\r\n", (uint32_t)_cycles, (uint32_t)_cycles - _lastRead, (uint32_t)_cycles - _lastCopy);
+			//OutputDebugStringA(buf);
+			_lastRead = _cycles;
+
+			uint8_t result = _shiftRegister;
+
+			if (result & 0x80)
+			{
+				//sprintf_s(buf, _countof(buf), "$%02x, %d, %d\r\n", result, (uint32_t)_cycles - _lastByte, (uint32_t)_cycles - _lastCopy);
+				//OutputDebugStringA(buf);
+				_shiftRegister = 0;
+				_lastByte = _cycles;
+			}
+			return result;
 		}
 		break;
 	case 0xD:	// Q6H

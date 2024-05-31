@@ -248,18 +248,37 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 	case MM_SS_BASIC_ROM_ON:
 		_basicbank = true;
 		break;
+	
+	case 0xC0E0:
+	case 0xC0E1:
+	case 0xC0E2:
+	case 0xC0E3:
+	case 0xC0E4:
+	case 0xC0E5:
+	case 0xC0E6:
+	case 0xC0E7:
+	case 0xC0E8:
+	case 0xC0E9:
+	case 0xC0EA:
+	case 0xC0EB:
+	case 0xC0EC:
+	case 0xC0ED:
+	case 0xC0EE:
+	case 0xC0EF:
+		break;
+
 
 	default:
 		return;
 	}
 
-	if (address >= MM_SS_START && address <= MM_SS_END_LOW)
+	if (address >= MM_SS_START && address <= MM_SS_END_LOW || address >= MM_SS_DISK_START && address <= MM_SS_DISK_END)
 	{
 		if (CallbackSetSoftSwitches)
 		{
 			if (address != 0xC070 && address != 0xC030) // skip joystick and speaker for now
 			{
-				CallbackSetSoftSwitches(_graphics, _page2, _mixed, _lores);
+				CallbackSetSoftSwitches(address, _graphics, _page2, _mixed, _lores);
 			}
 		}
 	}
@@ -267,6 +286,8 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 
 uint8_t VM::ReadData(uint16_t address)
 {
+	uint8_t result = 0;
+
 	if (CallbackReadMemory)
 	{
 		CallbackReadMemory(address);
@@ -287,7 +308,12 @@ uint8_t VM::ReadData(uint16_t address)
 	}
 	else if (address >= MM_SS_DISK_START && address <= MM_SS_DISK_END)
 	{
-		return DoDisk(address, 0, false);
+		result = DoDisk(address, 0, false);
+		if (CallbackSetSoftSwitches)
+		{
+			DoSoftSwitches(address, false);
+		}
+		return result;
 	}
 	else if (address >= MM_SS_START && address <= MM_SS_END)
 	{
@@ -452,6 +478,10 @@ void VM::WriteData(uint16_t address, uint8_t byte)
 	}
 	else if (address >= MM_SS_DISK_START && address <= MM_SS_DISK_END)
 	{
+		if (CallbackSetSoftSwitches)
+		{
+			DoSoftSwitches(address, false);
+		}
 		DoDisk(address, byte, true);
 	}
 	else if (address >= MM_SS_START && address <= MM_SS_END)

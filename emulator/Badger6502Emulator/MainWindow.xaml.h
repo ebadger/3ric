@@ -156,6 +156,9 @@ namespace winrt::Badger6502Emulator::implementation
         bool _textDirty[2] = { false , false };
 
         uint16_t pixelindex[0x2000] = { 0 };
+
+        uint32_t _cycles = 0;
+        uint32_t _lastCycle = 0;
     };
 }
 

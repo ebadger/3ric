@@ -172,6 +172,10 @@ __not_in_flash_func(WozDisk::MoveTrackPosition)(int iDiff)
 	{
 		_trackPosition = 0;
 	}
+	else
+	{
+		moved = iDiff;
+	}
 
 	moved = _trackPosition - prevPosition;
 

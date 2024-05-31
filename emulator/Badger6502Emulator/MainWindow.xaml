@@ -117,6 +117,7 @@
 
             <muxc:MenuBarItem IsTabStop="False" Title="Emulation">
                 <ToggleMenuFlyoutItem IsTabStop="False" Text="PS2 Keyboard Emulation" IsChecked="True" x:Name="ps2EmulationItem"/>
+                <ToggleMenuFlyoutItem IsTabStop="False" Text="Apple Keyboard Emulation" x:Name="appleEmulationItem"/>
                 <MenuFlyoutSeparator/>
                 <RadioMenuFlyoutItem IsTabStop="False" x:Name="C0" Text="Unlimited" GroupName="EmulationSpeedGroup" Click="clock_OnClicked"/>
                 <RadioMenuFlyoutItem IsTabStop="False" x:Name="C1" Text="1 MHz" GroupName="EmulationSpeedGroup"  Click="clock_OnClicked"/>

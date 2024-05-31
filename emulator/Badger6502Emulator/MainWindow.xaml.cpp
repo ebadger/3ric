@@ -173,7 +173,7 @@ namespace winrt::Badger6502Emulator::implementation
 
         txtSerial().KeyDown([this](IInspectable const&, KeyRoutedEventArgs const& args)
             {
-                if (ps2EmulationItem().IsChecked())
+                if (ps2EmulationItem().IsChecked() || appleEmulationItem().IsChecked())
                 {
                     return;
                 }
@@ -237,6 +237,12 @@ namespace winrt::Badger6502Emulator::implementation
                         _vm.GetPS2Keyboard()->SignalHardwareKey(true, args.KeyStatus().ScanCode);
                         LeaveCriticalSection(&_cs);
                     }
+                }
+                else if (appleEmulationItem().IsChecked())
+                {
+                    EnterCriticalSection(&_cs);
+                    _vm.WriteData(0xC000, 0x80 | toupper((char)args.Key()));
+                    LeaveCriticalSection(&_cs);
                 }
 
                 if (args.Key() == Windows::System::VirtualKey::Pause)
@@ -855,23 +861,32 @@ namespace winrt::Badger6502Emulator::implementation
 
         //			CallbackSetSoftSwitches(_graphics, _page2, _mixed, _lores);
 
-        _vm.CallbackSetSoftSwitches = [&](bool graphics, bool page2, bool mixed, bool lores) -> void {
+        _vm.CallbackSetSoftSwitches = [&](uint16_t address, bool graphics, bool page2, bool mixed, bool lores) -> void {
 
-            bool queued = DispatcherQueue().TryEnqueue(
-                DispatcherQueuePriority::Low,
-                [&, graphics, page2, mixed, lores]() {
-                    _gfxPage = page2 ? 1 : 0;
-                    _textMode = graphics ? 0 : 1;
-                    _mixed = mixed ? 1 : 0;
-                    _lores = lores ? 1 : 0;
-
-                    //ClearVGA();
-                    //RefreshVideo();
-                });
-
-            if (!queued)
+            if (address >= 0xC050 && address <= 0xC057)
             {
-                __debugbreak();
+                bool queued = DispatcherQueue().TryEnqueue(
+                    DispatcherQueuePriority::Low,
+                    [&, graphics, page2, mixed, lores]() {
+                        _gfxPage = page2 ? 1 : 0;
+                        _textMode = graphics ? 0 : 1;
+                        _mixed = mixed ? 1 : 0;
+                        _lores = lores ? 1 : 0;
+
+                        //ClearVGA();
+                        //RefreshVideo();
+                    });
+
+                if (!queued)
+                {
+                    __debugbreak();
+                }
+            }
+            else if (address >= 0xC0E0 && address <= 0xC0EF)
+            {
+                // disk
+                _vm.GetDriveEmulator()->AddCycles(_cycles - _lastCycle);
+                _lastCycle = _cycles;
             }
         };
 
@@ -1278,6 +1293,8 @@ namespace winrt::Badger6502Emulator::implementation
                 }
 
                 cycles += pCPU->Step();
+                _cycles += cycles;
+
                 totalcycles += cycles;
 
 
@@ -1288,9 +1305,6 @@ namespace winrt::Badger6502Emulator::implementation
 
                     //bool isInInterrupt = pCPU->flags.bits.I;
                     //if (!isInInterrupt)
-                    {
-                        _vm.GetDriveEmulator()->AddCycles(1);
-                    }
 
                 }
 

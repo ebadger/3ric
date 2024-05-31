@@ -16,6 +16,16 @@ WozDisk::WozDisk()
 void WozDisk::AddCycles(uint32_t cycles)
 {
 	_cycles += cycles;
+
+	if (_delayMomentum > 0)
+	{
+		_delayMomentum -= cycles;
+		if (_delayMomentum <= 0)
+		{
+			DoRotation();
+			_delayMomentum = 0;
+		}
+	}
 }
 
 uint8_t WozDisk::ToothBefore()
@@ -45,6 +55,9 @@ void WozDisk::UpdateMagneticField()
 			_magneticField[after] += 2;
 		}
 	}
+
+	DoRotation();
+	//_delayMomentum = 1000;
 }
 
 int8_t WozDisk::UpdateWheel()
@@ -77,51 +90,51 @@ int8_t WozDisk::UpdateWheel()
 
 void WozDisk::PhaseOn(uint8_t iPhase)
 {
-	uint8_t tb = _toothPosition;
-	int8_t move = 0;
+	if (_phase[iPhase])
+	{
+		return;
+	}
 
 	_phase[iPhase] = true;
 	UpdateMagneticField();
-	move = UpdateWheel();
-
-	sprintf_s(buf, 255, "%d,%d,%d,%d [%d,%d,%d,%d,%d,%d,%d,%d] %d->%d\r\n", 
-		_phase[0], _phase[1], _phase[2], _phase[3],
-		_magneticField[0], _magneticField[1], _magneticField[2], _magneticField[3],
-		_magneticField[4], _magneticField[5], _magneticField[6], _magneticField[7],
-		tb, _toothPosition);
-	OutputDebugStringA(buf);
-
-	if (move != 0)
-	{
-		MoveTrackPosition(move);
-	}
 }
 
 void WozDisk::PhaseOff(uint8_t iPhase)
 {
-	int8_t move = 0;
-	uint8_t tb = _toothPosition;
+	if (!_phase[iPhase])
+	{
+		return;
+	}
+
 	_phase[iPhase] = false;
 	UpdateMagneticField();
+}
+
+void WozDisk::DoRotation()
+{
+	int8_t move = 0;
+	uint8_t tb = _toothPosition;
+
 	move = UpdateWheel();
 
-	sprintf_s(buf, 255, "%d,%d,%d,%d [%d,%d,%d,%d,%d,%d,%d,%d] %d->%d *\r\n",
+	sprintf_s(buf, 255, "%d,%d,%d,%d [%d,%d,%d,%d,%d,%d,%d,%d] %d->%d\r\n",
 		_phase[0], _phase[1], _phase[2], _phase[3],
 		_magneticField[0], _magneticField[1], _magneticField[2], _magneticField[3],
 		_magneticField[4], _magneticField[5], _magneticField[6], _magneticField[7],
 		tb, _toothPosition);
-	OutputDebugStringA(buf);
+	//OutputDebugStringA(buf);
 
 	if (move != 0)
 	{
 		MoveTrackPosition(move);
 	}
-}
 
+}
 
 int8_t WozDisk::MoveTrackPosition(int iDiff)
 {
 	int8_t moved = 0;
+	int16_t prevPosition = _trackPosition;
 
 	_trackPosition += iDiff;
 	if (_trackPosition > 159)
@@ -132,10 +145,8 @@ int8_t WozDisk::MoveTrackPosition(int iDiff)
 	{
 		_trackPosition = 0;
 	}
-	else
-	{
-		moved = iDiff;
-	}
+
+	moved = _trackPosition - prevPosition;
 
 	if (_WozFile.IsFileLoaded())
 	{
@@ -166,13 +177,34 @@ void WozDisk::SetSpinning(bool spinning)
 	}
 }
 
+bool WozDisk::GetNextBit(uint8_t& bit)
+{
+	bool ret = false;
+	uint64_t elapsed = _cycles - _lastShiftCycle;
+
+	if (elapsed > 3410)
+	{
+		OutputDebugStringA("clamping cycles\r\n");
+		_lastShiftCycle = _cycles - SEVEN_MICROSECONDS;
+	}
+
+	if (_cycles - _lastShiftCycle >= SEVEN_MICROSECONDS)
+	{
+		_lastShiftCycle += SEVEN_MICROSECONDS;
+		bit = _WozFile.GetNextBit2() ? 1 : 0;
+		ret = true;
+	}
+
+	return ret;
+}
+
 uint8_t WozDisk::GetBits(uint8_t &bitCount)
 {
 	uint8_t bits = 0;
 
 	uint64_t elapsed = _cycles - _lastShiftCycle;
 
-	if (elapsed > ONE_SECOND)
+	if (elapsed > 1024)
 	{
 		_lastShiftCycle = _cycles;
 	}

@@ -32,6 +32,7 @@ void WozFile::CloseFile()
 
 	_vecChunks.clear();
 	_trackData.clear();
+	_bitData.clear();
 
 	if (_wozFile != nullptr)
 	{
@@ -293,7 +294,7 @@ void WozFile::SetTrack(int16_t track)
 	_track = track;
 
 	char buf[255];
-	sprintf_s(buf, 255, "changing track to %d\r\n", _track);
+	sprintf_s(buf, 255, "TrackIndex: %d\r\n", _track);
 	OutputDebugStringA(buf);
 
 	uint8_t trkIndex = _Tmap[track];
@@ -303,6 +304,9 @@ void WozFile::SetTrack(int16_t track)
 		return;
 	}
 
+	sprintf_s(buf, 255, "Logical Track: %d\r\n", trkIndex);
+	OutputDebugStringA(buf);
+
 	_bitCount = _Trk[trkIndex].BitCount;
 	uint32_t offset = _Trk[trkIndex].StartingBlock << 9;
 	uint16_t blocks = _Trk[trkIndex].BlockCount;
@@ -311,6 +315,7 @@ void WozFile::SetTrack(int16_t track)
 	_ASSERT(offset != 0 && blocks != 0);
 
 	_trackData.resize(largest << 9, 0);
+	_bitData.resize(largest << 12, 0);
 
 	// read the track
 
@@ -329,6 +334,41 @@ void WozFile::SetTrack(int16_t track)
 		_wozFile = nullptr;
 		return;
 	}
+
+	int bitcount = 0;
+	for (int n = 0; n < _trackData.size(); n++)
+	{
+		uint8_t b = _trackData[n];
+
+		for (int i = 7; i >= 0; i--)
+		{
+			_bitData[bitcount++] = (b >> i) & 1;
+		}
+
+	}
+
+	sprintf_s(buf, _countof(buf), "_trackData[0]=$%02x, %d %d %d %d %d %d %d %d\r\n",
+		_trackData[0],
+		_bitData[0], _bitData[1], _bitData[2], _bitData[3], _bitData[4],
+		_bitData[5], _bitData[6], _bitData[7]);
+	OutputDebugStringA(buf);
+}
+
+bool WozFile::GetNextBit2()
+{
+	std::lock_guard<std::mutex> guard(_mutex);
+
+	if (_bitCount == 0)
+	{
+		return rand() % 2;
+	}
+
+	if (_readPosition >= _bitCount)
+	{
+		_readPosition = 0;
+	}
+
+	return _bitData[_readPosition++] > 0 ? true : false;
 }
 
 bool WozFile::GetNextBit()
