@@ -382,7 +382,6 @@ __not_in_flash_func(WozFile::ReadReady)()
 
 void 
 __not_in_flash_func(WozFile::LoadTrack)(uint8_t track)
-__not_in_flash_func(WozFile::LoadTrack)(uint8_t track)
 {
 	FRESULT fr = FR_OK;
 
@@ -426,7 +425,7 @@ __not_in_flash_func(WozFile::LoadTrack)(uint8_t track)
 	if (read != blocks << 9 || FR_OK != fr) {
     	_console->PrintOut("Read failed fr=%d\n", fr);
 		f_close(&_wozFile);
-		gpio_put(GPIO_READY, true);
+		//gpio_put(GPIO_READY, true);
 		return;
 	}
 	

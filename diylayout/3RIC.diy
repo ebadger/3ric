@@ -207,6 +207,83 @@
       <breadboardSize>Full</breadboardSize>
       <powerStripPosition>Inline</powerStripPosition>
     </diylc.boards.Breadboard>
+    <diylc.boards.Breadboard>
+      <name>BB9</name>
+      <orientation>_90</orientation>
+      <point x="17.6" y="11.6"/>
+      <breadboardSize>Full</breadboardSize>
+      <powerStripPosition>Inline</powerStripPosition>
+    </diylc.boards.Breadboard>
+    <diylc.boards.Breadboard>
+      <name>BB10</name>
+      <orientation>_90</orientation>
+      <point x="17.6" y="14.0"/>
+      <breadboardSize>Full</breadboardSize>
+      <powerStripPosition>Inline</powerStripPosition>
+    </diylc.boards.Breadboard>
+    <diylc.boards.Breadboard>
+      <name>BB11</name>
+      <orientation>_90</orientation>
+      <point x="17.6" y="16.4"/>
+      <breadboardSize>Full</breadboardSize>
+      <powerStripPosition>Inline</powerStripPosition>
+    </diylc.boards.Breadboard>
+    <diylc.boards.Breadboard>
+      <name>BB12</name>
+      <orientation>_90</orientation>
+      <point x="17.6" y="6.8"/>
+      <breadboardSize>Full</breadboardSize>
+      <powerStripPosition>Inline</powerStripPosition>
+    </diylc.boards.Breadboard>
+    <diylc.boards.Breadboard>
+      <name>BB13</name>
+      <orientation>_90</orientation>
+      <point x="17.6" y="4.4"/>
+      <breadboardSize>Full</breadboardSize>
+      <powerStripPosition>Inline</powerStripPosition>
+    </diylc.boards.Breadboard>
+    <diylc.boards.Breadboard>
+      <name>BB14</name>
+      <orientation>_90</orientation>
+      <point x="17.6" y="2.0"/>
+      <breadboardSize>Full</breadboardSize>
+      <powerStripPosition>Inline</powerStripPosition>
+    </diylc.boards.Breadboard>
+    <diylc.boards.Breadboard>
+      <name>BB15</name>
+      <orientation>_90</orientation>
+      <point x="32.3" y="17.8"/>
+      <breadboardSize>Full</breadboardSize>
+      <powerStripPosition>Inline</powerStripPosition>
+    </diylc.boards.Breadboard>
+    <diylc.boards.Breadboard>
+      <name>BB16</name>
+      <orientation>_90</orientation>
+      <point x="32.3" y="15.4"/>
+      <breadboardSize>Full</breadboardSize>
+      <powerStripPosition>Inline</powerStripPosition>
+    </diylc.boards.Breadboard>
+    <diylc.boards.Breadboard>
+      <name>BB17</name>
+      <orientation>_90</orientation>
+      <point x="32.3" y="13.0"/>
+      <breadboardSize>Full</breadboardSize>
+      <powerStripPosition>Inline</powerStripPosition>
+    </diylc.boards.Breadboard>
+    <diylc.boards.Breadboard>
+      <name>BB18</name>
+      <orientation>_90</orientation>
+      <point x="32.3" y="10.6"/>
+      <breadboardSize>Full</breadboardSize>
+      <powerStripPosition>Inline</powerStripPosition>
+    </diylc.boards.Breadboard>
+    <diylc.boards.Breadboard>
+      <name>BB19</name>
+      <orientation>_90</orientation>
+      <point x="32.3" y="8.2"/>
+      <breadboardSize>Full</breadboardSize>
+      <powerStripPosition>Inline</powerStripPosition>
+    </diylc.boards.Breadboard>
     <diylc.connectivity.Turret>
       <name>Turret2</name>
       <size value="0.16" unit="in"/>
@@ -13216,15 +13293,14 @@
   <groups/>
   <lockedLayers/>
   <lockedComponents>
-    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[5]"/>
-    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[11]"/>
     <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[6]"/>
-    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard"/>
-    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[4]"/>
-    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[9]"/>
-    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[10]"/>
     <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[8]"/>
+    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[4]"/>
+    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[10]"/>
+    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[9]"/>
     <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[7]"/>
+    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard"/>
+    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[5]"/>
   </lockedComponents>
   <hiddenLayers/>
   <font name="Dialog.plain" size="14" style="0"/>

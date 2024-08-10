@@ -3,7 +3,6 @@
 #include <cstring>
 #include "Console.h"
 
-#define GPIO_READY   0
 extern Console * _console;
 
 char buf[255];
@@ -57,7 +56,6 @@ inline
 void 
 __not_in_flash_func(WozDisk::UpdateMagneticField)()
 {	
-	gpio_put(GPIO_READY, false);
 	memset(&_magneticField, 0, sizeof(uint8_t) * 8);
 
 	for (int i = 0; i < 4; i++)
@@ -74,7 +72,6 @@ __not_in_flash_func(WozDisk::UpdateMagneticField)()
 		}
 	}
 	_pendingRotation = 1000;
-	gpio_put(GPIO_READY, true);
 }
 
 inline

@@ -1,7 +1,6 @@
 #include "DriveEmulator.h"
 #include "console.h"
 
-#define GPIO_READY 0
 #define _countof(x) (sizeof(x) / sizeof(x[0]))
 extern Console * _console;
 /*

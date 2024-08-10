@@ -95,7 +95,7 @@ public:
 	bool IsFileLoaded();
 	uint8_t GetNextBit();
 	uint8_t GetNextBit2();
-	void SetTrack(int16_t trackIndex);
+	bool SetTrack(int16_t trackIndex);
     void LoadTrack(uint8_t track);
 	bool ReadReady(); 
 	void AddCycles(uint32_t cycles);

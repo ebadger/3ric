@@ -229,12 +229,21 @@ void init_console()
     new Command(std::string("DIR"), 
     [&](std::vector<std::string>& params) -> void
     {
+        uint8_t b;
         std::vector<std::string> vecFiles;
         _sdCard->GetFilesInDirectory("\\", vecFiles);
 
         for (std::string s : vecFiles)
         {
             _console->PrintOut("%s\n", s.c_str());
+
+            if(_console->HasOutput())
+            {
+                while (_console->GetOutputByteLocal(&b))
+                {
+                    printf("%c",b);
+                }
+            }
         }
     }));
 
@@ -383,15 +392,13 @@ __not_in_flash_func(core1)()
                 _driveEmulator->Write(addr, data);
             }
 
-            gpio_put(GPIO_READY, false);
-            //gpio_put(GPIO_TIMING, true);
+        	gpio_put(GPIO_READY, false);
             _driveEmulator->AddCycles(_cycleCount - lastCycle);
-            //gpio_put(GPIO_TIMING, false);
             lastCycle = _cycleCount;
             uint8_t missed = pio_sm_get_rx_fifo_level(_pio, _sm_addr);
             _cycleCount += missed;
             pio_sm_clear_fifos(_pio, _sm_addr);
-            gpio_put(GPIO_READY, true);
+        	gpio_put(GPIO_READY, true);
         } 
         else if (!IS_CCS(value))
         {
@@ -420,9 +427,9 @@ __not_in_flash_func(core1)()
                 _driveEmulator->AddCycles(_cycleCount - lastCycle);
                 //gpio_put(GPIO_TIMING, false);
                 lastCycle = _cycleCount;
-                //uint8_t missed = pio_sm_get_rx_fifo_level(_pio, _sm_addr);
-                //_cycleCount += missed;
-                gpio_put(GPIO_READY, true);
+                uint8_t missed = pio_sm_get_rx_fifo_level(_pio, _sm_addr);
+                _cycleCount += missed;
+            	gpio_put(GPIO_READY, true);
             }
 
             //neither device is active
@@ -484,7 +491,7 @@ int __not_in_flash_func(main)()
 
     while(true)
     {
-        if(counter++ % 50000 == 0)
+        //if(counter++ % 50000 == 0)
         {
             uint8_t b = 0;
 
@@ -492,18 +499,8 @@ int __not_in_flash_func(main)()
             {
                 while (_console->GetOutputByteLocal(&b))
                 {
-                    if (b)
-                    {
-                        outstring += b;
-                    }
+                    printf("%c",b);
                 }
-
-                if(outstring.size() > 0)
-                {
-                    printf(outstring.c_str());
-                    outstring = "";
-                }
-
             }
 
 
