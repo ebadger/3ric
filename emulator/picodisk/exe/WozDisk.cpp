@@ -3,7 +3,6 @@
 #include <cstring>
 #include "Console.h"
 
-#define GPIO_READY   0
 extern Console * _console;
 
 char buf[255];
@@ -72,7 +71,6 @@ __not_in_flash_func(WozDisk::UpdateMagneticField)()
 			_magneticField[after] += 2;
 		}
 	}
-
 	_pendingRotation = 1000;
 }
 

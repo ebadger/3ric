@@ -1,7 +1,6 @@
 #include "DriveEmulator.h"
 #include "console.h"
 
-#define GPIO_READY 0
 #define _countof(x) (sizeof(x) / sizeof(x[0]))
 extern Console * _console;
 /*
@@ -146,28 +145,28 @@ __not_in_flash_func(DriveEmulator::Read)(uint8_t address)
 	switch (address)
 	{
 	case 0x0:	// Phase 0 off
-		&_D[_activeDisk].PhaseOff(0);
+		_D[_activeDisk].PhaseOff(0);
 		break;
 	case 0x1:	// Phase 0 on  
-		&_D[_activeDisk].PhaseOn(0);
+		_D[_activeDisk].PhaseOn(0);
 		break;
 	case 0x2:	// Phase 1 off
-		&_D[_activeDisk].PhaseOff(1);
+		_D[_activeDisk].PhaseOff(1);
 		break;
 	case 0x3:	// Phase 1 on
-		&_D[_activeDisk].PhaseOn(1);
+		_D[_activeDisk].PhaseOn(1);
 		break;
 	case 0x4:	// Phase 2 off
-		&_D[_activeDisk].PhaseOff(2);
+		_D[_activeDisk].PhaseOff(2);
 		break;
 	case 0x5:	// Phase 2 on
-		&_D[_activeDisk].PhaseOn(2);
+		_D[_activeDisk].PhaseOn(2);
 		break;
 	case 0x6:	// Phase 3 off
-		&_D[_activeDisk].PhaseOff(3);
+		_D[_activeDisk].PhaseOff(3);
 		break;
 	case 0x7:	// Phase 3 on
-		&_D[_activeDisk].PhaseOn(3);
+		_D[_activeDisk].PhaseOn(3);
 		break;
 	case 0x8:	// Motor off
 		_motorStarting = 0;
@@ -209,6 +208,7 @@ __not_in_flash_func(DriveEmulator::Read)(uint8_t address)
 		break;
 	case 0xD:	// Q6H
 		UpdateQ(true, _Q7);
+		_shiftRegister = 0;
 		break;
 	case 0xE:	// Q7L
 		UpdateQ(_Q6, false);
@@ -231,28 +231,28 @@ __not_in_flash_func(DriveEmulator::Write)(uint8_t address, uint8_t data)
 	switch (address)
 	{
 	case 0x0:	// Phase 0 off
-		&_D[_activeDisk].PhaseOff(0);
+		_D[_activeDisk].PhaseOff(0);
 		break;
 	case 0x1:	// Phase 0 on  
-		&_D[_activeDisk].PhaseOn(0);
+		_D[_activeDisk].PhaseOn(0);
 		break;
 	case 0x2:	// Phase 1 off
-		&_D[_activeDisk].PhaseOff(1);
+		_D[_activeDisk].PhaseOff(1);
 		break;
 	case 0x3:	// Phase 1 on
-		&_D[_activeDisk].PhaseOn(1);
+		_D[_activeDisk].PhaseOn(1);
 		break;
 	case 0x4:	// Phase 2 off
-		&_D[_activeDisk].PhaseOff(2);
+		_D[_activeDisk].PhaseOff(2);
 		break;
 	case 0x5:	// Phase 2 on
-		&_D[_activeDisk].PhaseOn(2);
+		_D[_activeDisk].PhaseOn(2);
 		break;
 	case 0x6:	// Phase 3 off
-		&_D[_activeDisk].PhaseOff(3);
+		_D[_activeDisk].PhaseOff(3);
 		break;
 	case 0x7:	// Phase 3 on
-		&_D[_activeDisk].PhaseOn(3);
+		_D[_activeDisk].PhaseOn(3);
 		break;
 	case 0x8:	// Motor off
 		_motorStarting = 0;
