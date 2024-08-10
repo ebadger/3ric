@@ -16,7 +16,6 @@ uint32_t Chunk::FLUX_CHUNK_ID = *(uint32_t*)"FLUX";
 
 WozFile::WozFile()
 {
-
 }
 
 WozFile::~WozFile()
@@ -46,7 +45,6 @@ void WozFile::CloseFile()
 	_TmapChunk = nullptr;
 	_Trk = nullptr;
 	_Tmap = nullptr;
-
 }
 
 bool WozFile::IsFileLoaded()

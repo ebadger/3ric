@@ -1017,6 +1017,11 @@ uint8_t CPU::NonMaskableInterrupt()
 	uint16_t addr = 0;
 	uint16_t retaddr = 0;
 
+	if (flags.bits.I == 1)
+	{
+		return 0;
+	}
+
 	waitForInterrupt = false;
 
 	retaddr = PC;

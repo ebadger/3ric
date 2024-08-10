@@ -14,6 +14,7 @@ void PS2Keyboard::Reset()
 
 void PS2Keyboard::SignalHardwareKey(bool down, uint32_t scancode)
 {
+    bool fDown = true;
     KeyEvent start = {};
     KeyEvent parity = {};
     KeyEvent stop = {};
@@ -72,7 +73,9 @@ void PS2Keyboard::SignalHardwareKey(bool down, uint32_t scancode)
 
 void PS2Keyboard::ProcessKeys(uint32_t cycles)
 {
-    if (_vecBits.size() == 0)
+    static bool fDown = true;
+
+    if (_vecBits.size() == 0 && fDown == true)
     {
         return;
     }
@@ -88,18 +91,37 @@ void PS2Keyboard::ProcessKeys(uint32_t cycles)
 	{
         _lastcycle = cycles;
 
-        KeyEvent k = *_vecBits.begin();
-        _vm->GetPS2Keyboard()->ProcessRaw(k.bit);
+        if (fDown)
+        {
+            KeyEvent k = *_vecBits.begin();
+            _vm->GetPS2Keyboard()->ProcessRaw(k.bit);
+            _vecBits.erase(_vecBits.begin());
+        }
+        /*
+        else
+        {
+            uint8_t bit = _vm->ReadData(MM_VIA1_START + VIA::ORA_IRA);
+            bit |= 0xC0; // ps2 clock and data up
+            _vm->WriteData(MM_VIA1_START + VIA::ORA_IRA_2, bit); // via2 PORTA 7 bit 
+            _vm->WriteData(MM_VIA1_START + VIA::ORA_IRA, bit); // via2 PORTA 7 bit
+        }
+        */
+        fDown = !fDown;
 
-        _vecBits.erase(_vecBits.begin());
 	}
 }
 
 // send raw bits from hardware based on clock cycle
 void PS2Keyboard::ProcessRaw(uint8_t bit)
 {
+    //uint8_t data = _vm->ReadData(MM_VIA1_START + VIA::ORA_IRA);
+    //data &= 0x3F;  // bit 6 is low
+
     bit <<= 7;
+    //data |= bit;
+
     _vm->WriteData(MM_VIA1_START + VIA::ORA_IRA_2, bit); // via2 PORTA 7 bit, 
+    //_vm->WriteData(MM_VIA1_START + VIA::ORA_IRA, data); // via2 PORTA 7 bit, 
     _vm->GetVIA1()->SignalPin(VIA::CA2);
 }
 
