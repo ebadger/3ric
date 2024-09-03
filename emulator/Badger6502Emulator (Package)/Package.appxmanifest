@@ -10,7 +10,7 @@
  <Identity
     Name="F3FAC371-FAB7-4D8A-AA68-13577F1B8E1A"
     Publisher="CN=ebadger"
-    Version="1.0.0.0" />
+    Version="1.0.7.0" />
 
   <Properties>
     <DisplayName>Badger6502Emulator (Package)</DisplayName>
@@ -39,6 +39,8 @@
         Square44x44Logo="Images\Square44x44Logo.png">
         <uap:DefaultTile Wide310x150Logo="Images\Wide310x150Logo.png" />
         <uap:SplashScreen Image="Images\SplashScreen.png" />
+        <uap:InitialRotationPreference>
+          <uap:Rotation Preference="landscape"/></uap:InitialRotationPreference>
       </uap:VisualElements>
     </Application>
   </Applications>
