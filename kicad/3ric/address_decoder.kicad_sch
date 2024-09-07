@@ -4081,7 +4081,7 @@
 	)
 	(wire
 		(pts
-			(xy 250.19 129.54) (xy 255.27 129.54)
+			(xy 252.73 129.54) (xy 255.27 129.54)
 		)
 		(stroke
 			(width 0)
@@ -4161,7 +4161,7 @@
 	)
 	(wire
 		(pts
-			(xy 250.19 134.62) (xy 255.27 134.62)
+			(xy 252.73 134.62) (xy 255.27 134.62)
 		)
 		(stroke
 			(width 0)
@@ -4585,7 +4585,7 @@
 	)
 	(global_label "R~{W}"
 		(shape input)
-		(at 250.19 129.54 180)
+		(at 252.73 129.54 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -4595,7 +4595,7 @@
 		)
 		(uuid "1baf44dc-79d6-49c3-8d01-eabe50877e75")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 244.4834 129.54 0)
+			(at 247.0234 129.54 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5596,7 +5596,7 @@
 	)
 	(global_label "SS_WRITE_SIGNAL"
 		(shape input)
-		(at 250.19 134.62 180)
+		(at 252.73 134.62 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -5606,7 +5606,7 @@
 		)
 		(uuid "ed535a3e-ad78-47cc-bba3-c8539d5f510b")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 231.4483 134.5406 0)
+			(at 233.9883 134.5406 0)
 			(effects
 				(font
 					(size 1.27 1.27)
