@@ -5267,6 +5267,27 @@
       <hideShortLeads>false</hideShortLeads>
       <value></value>
     </diylc.semiconductors.LED>
+    <diylc.semiconductors.LED>
+      <name>SS</name>
+      <alpha>127</alpha>
+      <length value="5.0" unit="mm"/>
+      <width value="5.0" unit="mm"/>
+      <points>
+        <point x="12.0" y="10.4"/>
+        <point x="11.9" y="10.8"/>
+        <point x="11.95" y="10.6"/>
+      </points>
+      <bodyColor hex="5dfc0a"/>
+      <borderColor hex="41b007"/>
+      <labelColor hex="000000"/>
+      <leadColor hex="cccccc"/>
+      <display>NAME</display>
+      <flipStanding>false</flipStanding>
+      <labelOriantation>Directional</labelOriantation>
+      <moveLabel>false</moveLabel>
+      <hideShortLeads>false</hideShortLeads>
+      <value></value>
+    </diylc.semiconductors.LED>
     <diylc.connectivity.HookupWire>
       <name>W1</name>
       <alpha>127</alpha>
@@ -19584,6 +19605,131 @@
       <striped>false</striped>
       <stripeColor hex="ffff00"/>
     </diylc.connectivity.HookupWire>
+    <diylc.connectivity.HookupWire>
+      <name>W822</name>
+      <alpha>127</alpha>
+      <controlPoints2>
+        <point x="12.0" y="9.5"/>
+        <point x="12.7" y="9.5"/>
+      </controlPoints2>
+      <color hex="ff9999"/>
+      <pointCount>TWO</pointCount>
+      <style>SOLID</style>
+      <smooth>true</smooth>
+      <lastUpdatePointIndex>-1</lastUpdatePointIndex>
+      <gauge>_22</gauge>
+      <striped>false</striped>
+      <stripeColor hex="ffff00"/>
+    </diylc.connectivity.HookupWire>
+    <diylc.connectivity.HookupWire>
+      <name>W823</name>
+      <alpha>127</alpha>
+      <controlPoints2>
+        <point x="12.0" y="9.6"/>
+        <point x="11.3" y="9.6"/>
+        <point x="11.3" y="9.9"/>
+        <point x="11.3" y="10.2"/>
+        <point x="11.9" y="10.2"/>
+      </controlPoints2>
+      <color hex="ff9999"/>
+      <pointCount>FIVE</pointCount>
+      <style>SOLID</style>
+      <smooth>true</smooth>
+      <lastUpdatePointIndex>-1</lastUpdatePointIndex>
+      <gauge>_22</gauge>
+      <striped>false</striped>
+      <stripeColor hex="ffff00"/>
+    </diylc.connectivity.HookupWire>
+    <diylc.connectivity.HookupWire>
+      <name>W824</name>
+      <alpha>127</alpha>
+      <controlPoints2>
+        <point x="12.7" y="9.6"/>
+        <point x="13.3" y="9.4"/>
+        <point x="12.6" y="11.1"/>
+        <point x="13.6" y="11.1"/>
+        <point x="14.6" y="11.1"/>
+        <point x="15.3" y="11.0"/>
+        <point x="15.3" y="11.7"/>
+      </controlPoints2>
+      <color hex="ff9999"/>
+      <pointCount>SEVEN</pointCount>
+      <style>SOLID</style>
+      <smooth>true</smooth>
+      <lastUpdatePointIndex>-1</lastUpdatePointIndex>
+      <gauge>_22</gauge>
+      <striped>false</striped>
+      <stripeColor hex="ffff00"/>
+    </diylc.connectivity.HookupWire>
+    <diylc.connectivity.HookupWire>
+      <name>W825</name>
+      <alpha>127</alpha>
+      <controlPoints2>
+        <point x="15.3" y="11.8"/>
+        <point x="16.7" y="11.8"/>
+      </controlPoints2>
+      <color hex="ff9999"/>
+      <pointCount>TWO</pointCount>
+      <style>SOLID</style>
+      <smooth>true</smooth>
+      <lastUpdatePointIndex>-1</lastUpdatePointIndex>
+      <gauge>_22</gauge>
+      <striped>false</striped>
+      <stripeColor hex="ffff00"/>
+    </diylc.connectivity.HookupWire>
+    <diylc.connectivity.HookupWire>
+      <name>W826</name>
+      <alpha>127</alpha>
+      <controlPoints2>
+        <point x="15.4" y="11.4"/>
+        <point x="15.4" y="11.7"/>
+      </controlPoints2>
+      <color hex="000000"/>
+      <pointCount>TWO</pointCount>
+      <style>SOLID</style>
+      <smooth>true</smooth>
+      <lastUpdatePointIndex>-1</lastUpdatePointIndex>
+      <gauge>_22</gauge>
+      <striped>false</striped>
+      <stripeColor hex="ffff00"/>
+    </diylc.connectivity.HookupWire>
+    <diylc.connectivity.HookupWire>
+      <name>W827</name>
+      <alpha>127</alpha>
+      <controlPoints2>
+        <point x="16.7" y="11.4"/>
+        <point x="16.8" y="11.7"/>
+      </controlPoints2>
+      <color hex="000000"/>
+      <pointCount>TWO</pointCount>
+      <style>SOLID</style>
+      <smooth>true</smooth>
+      <lastUpdatePointIndex>-1</lastUpdatePointIndex>
+      <gauge>_22</gauge>
+      <striped>false</striped>
+      <stripeColor hex="ffff00"/>
+    </diylc.connectivity.HookupWire>
+    <diylc.connectivity.HookupWire>
+      <name>W828</name>
+      <alpha>127</alpha>
+      <controlPoints2>
+        <point x="14.8" y="6.8"/>
+        <point x="14.2" y="6.7"/>
+        <point x="14.4" y="7.8"/>
+        <point x="14.2" y="8.7"/>
+        <point x="14.0" y="9.6"/>
+        <point x="11.4" y="8.8"/>
+        <point x="11.6" y="9.5"/>
+      </controlPoints2>
+      <color hex="ffff00"/>
+      <pointCount>SEVEN</pointCount>
+      <style>SOLID</style>
+      <smooth>true</smooth>
+      <lastUpdatePointIndex>-1</lastUpdatePointIndex>
+      <gauge>_22</gauge>
+      <striped>false</striped>
+      <stripeColor hex="ffff00"/>
+    </diylc.connectivity.HookupWire>
     <diylc.misc.Label>
       <name>LAB1</name>
       <point x="18.3" y="-0.4"/>
@@ -19638,12 +19784,12 @@
   <groups/>
   <lockedLayers/>
   <lockedComponents>
+    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[10]"/>
+    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard"/>
+    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[9]"/>
     <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[7]"/>
     <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[8]"/>
     <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[5]"/>
-    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[9]"/>
-    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[10]"/>
-    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard"/>
   </lockedComponents>
   <hiddenLayers/>
   <font name="Dialog.plain" size="14" style="0"/>
