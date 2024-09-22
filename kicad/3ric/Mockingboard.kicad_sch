@@ -4638,7 +4638,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "0d094648-b5aa-48b5-8871-1d93df858c89")
-		(property "Reference" "U_VIA_?"
+		(property "Reference" "T1_VIA"
 			(at 193.04 23.749 0)
 			(effects
 				(font
@@ -4804,7 +4804,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/daee66e3-1acf-4bf2-888e-d1288a5b77db"
-					(reference "U_VIA_?")
+					(reference "T1_VIA")
 					(unit 1)
 				)
 			)
@@ -4892,7 +4892,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "2a0680b5-f6ec-4ae6-8e03-79c6c245fb08")
-		(property "Reference" "U?"
+		(property "Reference" "S2"
 			(at 133.8706 101.3259 0)
 			(effects
 				(font
@@ -5060,7 +5060,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/daee66e3-1acf-4bf2-888e-d1288a5b77db"
-					(reference "U?")
+					(reference "S2")
 					(unit 1)
 				)
 			)
@@ -5531,7 +5531,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "6b0e581f-9838-4571-ae68-431a657a0b4f")
-		(property "Reference" "U_VIA_?"
+		(property "Reference" "T2_VIA"
 			(at 193.04 98.679 0)
 			(effects
 				(font
@@ -5697,7 +5697,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/daee66e3-1acf-4bf2-888e-d1288a5b77db"
-					(reference "U_VIA_?")
+					(reference "T2_VIA")
 					(unit 1)
 				)
 			)
@@ -5889,7 +5889,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "8d54c956-7152-4c23-b89e-250755b71d20")
-		(property "Reference" "U?"
+		(property "Reference" "S1"
 			(at 133.8706 26.3959 0)
 			(effects
 				(font
@@ -6057,7 +6057,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/daee66e3-1acf-4bf2-888e-d1288a5b77db"
-					(reference "U?")
+					(reference "S1")
 					(unit 1)
 				)
 			)

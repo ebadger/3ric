@@ -2508,7 +2508,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "4b9a114b-8e60-42b0-b4a3-f7fab06db815")
-		(property "Reference" "U_NOT_DECODE?"
+		(property "Reference" "N2_NOT_SIG"
 			(at 232.41 101.7102 0)
 			(effects
 				(font
@@ -2596,7 +2596,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/b61474be-3832-4b6c-a3a4-928ac814faf5"
-					(reference "U_NOT_DECODE?")
+					(reference "N2_NOT_SIG")
 					(unit 5)
 				)
 			)
@@ -2612,7 +2612,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "7eefc0d5-d36a-44f1-8909-6bf37c51e58b")
-		(property "Reference" "U_DECODE_SIGS?"
+		(property "Reference" "O1_DECODE_SIGS"
 			(at 38.8494 38.2102 0)
 			(effects
 				(font
@@ -2732,7 +2732,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/b61474be-3832-4b6c-a3a4-928ac814faf5"
-					(reference "U_DECODE_SIGS?")
+					(reference "O1_DECODE_SIGS")
 					(unit 1)
 				)
 			)
@@ -2748,7 +2748,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "8cb2b232-c5d7-4ab1-b96c-1d91e5855a85")
-		(property "Reference" "U_NOT_DECODE?"
+		(property "Reference" "N2_NOT_SIG"
 			(at 232.41 85.2002 0)
 			(effects
 				(font
@@ -2836,7 +2836,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/b61474be-3832-4b6c-a3a4-928ac814faf5"
-					(reference "U_NOT_DECODE?")
+					(reference "N2_NOT_SIG")
 					(unit 1)
 				)
 			)
@@ -2845,14 +2845,14 @@
 	(symbol
 		(lib_id "74xx:74LS14")
 		(at 233.68 143.51 0)
-		(unit 2)
+		(unit 3)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "badc9aa0-9bbb-4faa-b9d3-d5c30a49da90")
-		(property "Reference" "U_NOT_DECODE?"
+		(property "Reference" "N2_NOT_SIG"
 			(at 233.68 136.0002 0)
 			(effects
 				(font
@@ -2940,8 +2940,8 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/b61474be-3832-4b6c-a3a4-928ac814faf5"
-					(reference "U_NOT_DECODE?")
-					(unit 2)
+					(reference "N2_NOT_SIG")
+					(unit 3)
 				)
 			)
 		)
@@ -2956,7 +2956,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "bddc75e7-8a3e-4709-88ae-f43355cf81f7")
-		(property "Reference" "U_NOT_DECODE?"
+		(property "Reference" "N2_NOT_SIG"
 			(at 232.41 118.2202 0)
 			(effects
 				(font
@@ -3044,7 +3044,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/b61474be-3832-4b6c-a3a4-928ac814faf5"
-					(reference "U_NOT_DECODE?")
+					(reference "N2_NOT_SIG")
 					(unit 6)
 				)
 			)
@@ -3060,7 +3060,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "e1565daf-9e72-481a-8dcf-92c6b0679b01")
-		(property "Reference" "U_MEM_SRLATCH?"
+		(property "Reference" "N1_SigLatch"
 			(at 144.78 49.1924 0)
 			(effects
 				(font
@@ -3153,7 +3153,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/b61474be-3832-4b6c-a3a4-928ac814faf5"
-					(reference "U_MEM_SRLATCH?")
+					(reference "N1_SigLatch")
 					(unit 1)
 				)
 			)

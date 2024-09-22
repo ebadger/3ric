@@ -4759,6 +4759,16 @@
 	)
 	(wire
 		(pts
+			(xy 107.95 81.28) (xy 107.95 78.74)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "08ed28dd-805e-4a82-9671-4eef42fbda70")
+	)
+	(wire
+		(pts
 			(xy 238.76 87.63) (xy 242.57 87.63)
 		)
 		(stroke
@@ -5215,7 +5225,7 @@
 	)
 	(global_label "GC_CLOCK"
 		(shape input)
-		(at 196.85 135.89 180)
+		(at 199.39 134.62 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -5225,7 +5235,7 @@
 		)
 		(uuid "111afbf1-34c3-4576-815f-30211311d5dc")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 184.7607 135.8106 0)
+			(at 187.3007 134.5406 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5300,7 +5310,7 @@
 	)
 	(global_label "VCC"
 		(shape input)
-		(at 245.11 124.46 180)
+		(at 247.65 129.54 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -5310,7 +5320,7 @@
 		)
 		(uuid "16d6021b-3cb2-46da-a0ab-16d61d200248")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 85.09 1.27 0)
+			(at 87.63 6.35 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5712,7 +5722,7 @@
 	)
 	(global_label "GC_CLOCK"
 		(shape input)
-		(at 245.11 128.27 180)
+		(at 247.65 133.35 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -5722,7 +5732,7 @@
 		)
 		(uuid "40aa8a2c-3ab4-4d5f-98aa-56e8f2355c5e")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 233.0207 128.1906 0)
+			(at 235.5607 133.2706 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5799,7 +5809,7 @@
 	)
 	(global_label "GC_DATA1"
 		(shape input)
-		(at 196.85 143.51 180)
+		(at 199.39 142.24 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -5809,7 +5819,7 @@
 		)
 		(uuid "46a7045e-ee1c-46ad-afe1-e62b61dc371d")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 185.305 143.4306 0)
+			(at 187.845 142.1606 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5907,7 +5917,7 @@
 	)
 	(global_label "GC_LATCH"
 		(shape input)
-		(at 245.11 132.08 180)
+		(at 247.65 137.16 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -5917,7 +5927,7 @@
 		)
 		(uuid "4c03a30d-732f-40e7-8d18-44dd41e43419")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 233.5045 132.0006 0)
+			(at 236.0445 137.0806 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6185,7 +6195,7 @@
 	)
 	(global_label "GND"
 		(shape input)
-		(at 107.95 78.74 270)
+		(at 107.95 81.28 270)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -6195,7 +6205,7 @@
 		)
 		(uuid "7205cdc1-4ab9-4250-973d-326cd2f97e12")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 33.02 238.76 0)
+			(at 33.02 241.3 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6403,7 +6413,7 @@
 	)
 	(global_label "GND"
 		(shape input)
-		(at 245.11 148.59 180)
+		(at 247.65 153.67 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -6413,7 +6423,7 @@
 		)
 		(uuid "803c1fab-f15a-4291-9038-75b09f57f9bc")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 85.09 223.52 0)
+			(at 87.63 228.6 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7118,7 +7128,7 @@
 	)
 	(global_label "VCC"
 		(shape input)
-		(at 196.85 132.08 180)
+		(at 199.39 130.81 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -7128,7 +7138,7 @@
 		)
 		(uuid "b329f50b-68b1-4d07-aa51-dd427ccb3718")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 36.83 8.89 0)
+			(at 39.37 7.62 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7573,7 +7583,7 @@
 	)
 	(global_label "GC_LATCH"
 		(shape input)
-		(at 196.85 139.7 180)
+		(at 199.39 138.43 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -7583,7 +7593,7 @@
 		)
 		(uuid "de56a0e0-29fb-4fcc-a997-f4139844a0fd")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 185.2445 139.6206 0)
+			(at 187.7845 138.3506 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7703,7 +7713,7 @@
 	)
 	(global_label "GC_DATA2"
 		(shape input)
-		(at 245.11 135.89 180)
+		(at 247.65 140.97 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -7713,7 +7723,7 @@
 		)
 		(uuid "f40383f0-0fde-490b-a280-5143d7d220c8")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 233.565 135.8106 0)
+			(at 236.105 140.8906 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7811,7 +7821,7 @@
 	)
 	(global_label "GND"
 		(shape input)
-		(at 196.85 156.21 180)
+		(at 199.39 154.94 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -7821,7 +7831,7 @@
 		)
 		(uuid "f9f24be6-bf0a-4f5f-9194-bb6fd7b7f633")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 36.83 231.14 0)
+			(at 39.37 229.87 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7928,7 +7938,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "0a227e20-deae-4699-ac6a-771024f811a9")
-		(property "Reference" "J3"
+		(property "Reference" "Y_PS2_KB"
 			(at 227.33 37.6682 0)
 			(effects
 				(font
@@ -7992,7 +8002,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/817a35a7-de63-4412-ae79-57fde5eabc67"
-					(reference "J3")
+					(reference "Y_PS2_KB")
 					(unit 1)
 				)
 			)
@@ -8008,7 +8018,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "0bf471fb-401d-4f89-a4ae-577ff8a6729f")
-		(property "Reference" "J4"
+		(property "Reference" "Y_MICRO_SD"
 			(at 51.435 40.7502 0)
 			(effects
 				(font
@@ -8081,7 +8091,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/817a35a7-de63-4412-ae79-57fde5eabc67"
-					(reference "J4")
+					(reference "Y_MICRO_SD")
 					(unit 1)
 				)
 			)
@@ -8165,7 +8175,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "46671d33-d313-4844-b9c5-2cd315f7d9bd")
-		(property "Reference" "J?"
+		(property "Reference" "Y_PS2_MOUSE"
 			(at 227.33 80.8482 0)
 			(effects
 				(font
@@ -8229,7 +8239,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/817a35a7-de63-4412-ae79-57fde5eabc67"
-					(reference "J?")
+					(reference "Y_PS2_MOUSE")
 					(unit 1)
 				)
 			)
@@ -8244,7 +8254,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "4f9470d2-e211-4a44-a5a8-ceca996e499e")
-		(property "Reference" "JDEVICES?"
+		(property "Reference" "Y_DEVICE_PORT"
 			(at 118.11 111.3282 0)
 			(effects
 				(font
@@ -8410,7 +8420,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/817a35a7-de63-4412-ae79-57fde5eabc67"
-					(reference "JDEVICES?")
+					(reference "Y_DEVICE_PORT")
 					(unit 1)
 				)
 			)
@@ -8425,7 +8435,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "938dbd40-3b42-4364-bb82-e9cf7652f9ee")
-		(property "Reference" "X_CLK_ACIA?"
+		(property "Reference" "H2_ACIA_CLK"
 			(at 50.9524 163.9316 0)
 			(effects
 				(font
@@ -8485,7 +8495,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/817a35a7-de63-4412-ae79-57fde5eabc67"
-					(reference "X_CLK_ACIA?")
+					(reference "H2_ACIA_CLK")
 					(unit 1)
 				)
 			)
@@ -8500,7 +8510,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "9b926802-1c61-40d4-b172-20fd276131ec")
-		(property "Reference" "U_VIA_1"
+		(property "Reference" "I1_VIA"
 			(at 152.4 41.529 0)
 			(effects
 				(font
@@ -8666,7 +8676,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/817a35a7-de63-4412-ae79-57fde5eabc67"
-					(reference "U_VIA_1")
+					(reference "I1_VIA")
 					(unit 1)
 				)
 			)
@@ -8681,7 +8691,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "9c9e84cd-cf70-4aac-926d-ef7ef35885b4")
-		(property "Reference" "J?"
+		(property "Reference" "Y_SERIAL_PINS"
 			(at 152.4 181.1782 0)
 			(effects
 				(font
@@ -8689,7 +8699,7 @@
 				)
 			)
 		)
-		(property "Value" "Conn_02x03_Odd_Even"
+		(property "Value" "~"
 			(at 152.4 183.4896 0)
 			(effects
 				(font
@@ -8745,7 +8755,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/817a35a7-de63-4412-ae79-57fde5eabc67"
-					(reference "J?")
+					(reference "Y_SERIAL_PINS")
 					(unit 1)
 				)
 			)
@@ -8760,8 +8770,8 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "a2fb9939-5074-47b6-a3d8-5ee482f6fc93")
-		(property "Reference" "U?"
-			(at 104.14 87.63 90)
+		(property "Reference" "H1_LEVEL_SHIFT"
+			(at 107.696 36.068 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8866,7 +8876,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/817a35a7-de63-4412-ae79-57fde5eabc67"
-					(reference "U?")
+					(reference "H1_LEVEL_SHIFT")
 					(unit 1)
 				)
 			)
@@ -8874,16 +8884,16 @@
 	)
 	(symbol
 		(lib_id "SNES-port:SNES_Controller_Socket")
-		(at 203.2 144.78 0)
+		(at 205.74 143.51 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "bd26af15-a780-47d8-815c-9f5e39e87800")
-		(property "Reference" "J1"
-			(at 207.01 142.875 0)
+		(property "Reference" "Y_SNES_1"
+			(at 195.58 122.682 0)
+			(show_name yes)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8892,7 +8902,7 @@
 			)
 		)
 		(property "Value" "SNES_Controller_Socket"
-			(at 207.01 145.415 0)
+			(at 194.564 125.222 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8901,7 +8911,7 @@
 			)
 		)
 		(property "Footprint" "Nintendo:SNES_Controller_Socket"
-			(at 191.77 143.51 0)
+			(at 194.31 142.24 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8910,7 +8920,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 191.77 143.51 0)
+			(at 194.31 142.24 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8919,7 +8929,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 203.2 144.78 0)
+			(at 205.74 143.51 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8951,7 +8961,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/817a35a7-de63-4412-ae79-57fde5eabc67"
-					(reference "J1")
+					(reference "Y_SNES_1")
 					(unit 1)
 				)
 			)
@@ -8959,16 +8969,16 @@
 	)
 	(symbol
 		(lib_id "SNES-port:SNES_Controller_Socket")
-		(at 251.46 137.16 0)
+		(at 254 142.24 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "cbd8c600-0b6e-4afa-a30d-1b454cf2e969")
-		(property "Reference" "J2"
-			(at 255.27 135.255 0)
+		(property "Reference" "Y_SNES_2"
+			(at 243.84 122.428 0)
+			(show_name yes)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8977,7 +8987,7 @@
 			)
 		)
 		(property "Value" "SNES_Controller_Socket"
-			(at 255.27 137.795 0)
+			(at 242.316 124.714 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8986,7 +8996,7 @@
 			)
 		)
 		(property "Footprint" "Nintendo:SNES_Controller_Socket"
-			(at 240.03 135.89 0)
+			(at 242.57 140.97 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8995,7 +9005,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 240.03 135.89 0)
+			(at 242.57 140.97 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9004,7 +9014,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 251.46 137.16 0)
+			(at 254 142.24 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9036,7 +9046,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/817a35a7-de63-4412-ae79-57fde5eabc67"
-					(reference "J2")
+					(reference "Y_SNES_2")
 					(unit 1)
 				)
 			)
@@ -9190,7 +9200,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "f5612141-8816-4767-b72d-d83561b9f378")
-		(property "Reference" "U?"
+		(property "Reference" "J4_ACIA"
 			(at 54.61 104.3772 0)
 			(effects
 				(font
@@ -9320,7 +9330,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/817a35a7-de63-4412-ae79-57fde5eabc67"
-					(reference "U?")
+					(reference "J4_ACIA")
 					(unit 1)
 				)
 			)

@@ -5711,7 +5711,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "174c8115-5e72-48a1-8187-0255bebdbe47")
-		(property "Reference" "U_LSB_1"
+		(property "Reference" "I2_LSB"
 			(at 95.25 24.6126 0)
 			(effects
 				(font
@@ -5817,7 +5817,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "U_LSB_1")
+					(reference "I2_LSB")
 					(unit 1)
 				)
 			)
@@ -6443,7 +6443,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "37c11d08-8b3d-4938-aa89-170bbbcde9d2")
-		(property "Reference" "U_ROM_DISK1"
+		(property "Reference" "H3_ROM_DISK1"
 			(at 227.33 85.5726 0)
 			(effects
 				(font
@@ -6585,7 +6585,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "U_ROM_DISK1")
+					(reference "H3_ROM_DISK1")
 					(unit 1)
 				)
 			)
@@ -6939,7 +6939,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "4e43ed67-2bf8-4917-81e0-1cf2e62bc349")
-		(property "Reference" "U_MSB_1"
+		(property "Reference" "I3_MSB"
 			(at 157.48 24.6126 0)
 			(effects
 				(font
@@ -7045,7 +7045,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "U_MSB_1")
+					(reference "I3_MSB")
 					(unit 1)
 				)
 			)
@@ -7332,7 +7332,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "6dc00504-76d4-47ee-8c8d-2fa48eb5ec00")
-		(property "Reference" "U_VIDREG_LATCH1"
+		(property "Reference" "Z2_VIDREG_LATCH"
 			(at 95.25 100.8126 0)
 			(effects
 				(font
@@ -7438,7 +7438,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "U_VIDREG_LATCH1")
+					(reference "Z2_VIDREG_LATCH")
 					(unit 1)
 				)
 			)
@@ -7658,7 +7658,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "8d9274ee-163b-4644-ab76-f8d8f8211219")
-		(property "Reference" "U_BANK_1"
+		(property "Reference" "I4_BANK"
 			(at 222.25 23.3426 0)
 			(effects
 				(font
@@ -7764,7 +7764,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "U_BANK_1")
+					(reference "I4_BANK")
 					(unit 1)
 				)
 			)
@@ -8869,7 +8869,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "fa3081ca-5e75-4644-ae66-cd6ffebef8b7")
-		(property "Reference" "U_DECODER_1"
+		(property "Reference" "J2_DECODER_1"
 			(at 157.48 98.2726 0)
 			(effects
 				(font
@@ -8987,7 +8987,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "U_DECODER_1")
+					(reference "J2_DECODER_1")
 					(unit 1)
 				)
 			)

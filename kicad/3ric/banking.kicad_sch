@@ -4138,6 +4138,26 @@
 	)
 	(wire
 		(pts
+			(xy 68.58 163.83) (xy 73.66 163.83)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "0b540493-e4cc-4e7a-a4c1-c68e290ccc50")
+	)
+	(wire
+		(pts
+			(xy 43.18 111.76) (xy 54.61 111.76)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "0be85d34-4167-469c-b96e-2c279b2f9d23")
+	)
+	(wire
+		(pts
 			(xy 88.9 166.37) (xy 92.71 166.37)
 		)
 		(stroke
@@ -4318,16 +4338,6 @@
 	)
 	(wire
 		(pts
-			(xy 50.8 147.32) (xy 54.61 147.32)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "4ade1bd3-3d01-4e99-b7b8-03c2047dce47")
-	)
-	(wire
-		(pts
 			(xy 163.83 67.31) (xy 163.83 54.61)
 		)
 		(stroke
@@ -4405,16 +4415,6 @@
 			(type default)
 		)
 		(uuid "5a2d5288-1849-4e04-9906-4f75133243f1")
-	)
-	(wire
-		(pts
-			(xy 50.8 111.76) (xy 54.61 111.76)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "5d42fbd9-0ed0-4b67-b291-eebc5955ed4c")
 	)
 	(wire
 		(pts
@@ -4518,7 +4518,7 @@
 	)
 	(wire
 		(pts
-			(xy 67.31 168.91) (xy 73.66 168.91)
+			(xy 71.12 168.91) (xy 73.66 168.91)
 		)
 		(stroke
 			(width 0)
@@ -4598,7 +4598,7 @@
 	)
 	(wire
 		(pts
-			(xy 48.26 135.89) (xy 50.8 135.89)
+			(xy 48.26 137.16) (xy 50.8 137.16)
 		)
 		(stroke
 			(width 0)
@@ -4738,7 +4738,7 @@
 	)
 	(wire
 		(pts
-			(xy 50.8 135.89) (xy 50.8 142.24)
+			(xy 50.8 137.16) (xy 50.8 142.24)
 		)
 		(stroke
 			(width 0)
@@ -4878,6 +4878,16 @@
 	)
 	(wire
 		(pts
+			(xy 50.8 163.83) (xy 53.34 163.83)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e9419452-0c92-42f8-ada3-42bb4641313e")
+	)
+	(wire
+		(pts
 			(xy 72.39 72.39) (xy 72.39 133.35)
 		)
 		(stroke
@@ -4885,16 +4895,6 @@
 			(type default)
 		)
 		(uuid "ea571740-3ef9-4f7a-90c9-515f6a03d8ac")
-	)
-	(wire
-		(pts
-			(xy 49.53 168.91) (xy 52.07 168.91)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "ec410f90-b1fc-4455-96a2-2e490c1c90f6")
 	)
 	(wire
 		(pts
@@ -4975,6 +4975,16 @@
 			(type default)
 		)
 		(uuid "f4f6bce2-26be-48d0-aa9e-4f9286916b75")
+	)
+	(wire
+		(pts
+			(xy 45.72 147.32) (xy 54.61 147.32)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f8ed01e4-7d3e-4b2b-9f41-7dcf92bdd28c")
 	)
 	(wire
 		(pts
@@ -5104,9 +5114,9 @@
 			)
 		)
 	)
-	(global_label "XXX0"
+	(global_label "BSS"
 		(shape input)
-		(at 33.02 99.06 180)
+		(at 48.26 137.16 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -5114,9 +5124,9 @@
 			)
 			(justify right)
 		)
-		(uuid "13a52dcf-e382-49ca-adfd-2497790524cf")
+		(uuid "0cd8f9d0-ff64-4dca-8fb3-06defc6a4e74")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 25.7688 98.9806 0)
+			(at 42.1579 137.0806 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5170,28 +5180,6 @@
 			)
 		)
 	)
-	(global_label "BSS"
-		(shape input)
-		(at 50.8 111.76 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "17499ea1-9ec4-44c0-b60f-8bc1303c63e2")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 44.6979 111.6806 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-				(hide yes)
-			)
-		)
-	)
 	(global_label "FF"
 		(shape input)
 		(at 182.88 135.89 0)
@@ -5214,28 +5202,6 @@
 			)
 		)
 	)
-	(global_label "XXXB"
-		(shape input)
-		(at 33.02 138.43 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "22a0b7ff-6314-4a7c-939b-f23f858ed1b1")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 25.7083 138.3506 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-				(hide yes)
-			)
-		)
-	)
 	(global_label "VCC"
 		(shape input)
 		(at 228.6 64.77 180)
@@ -5249,28 +5215,6 @@
 		(uuid "332a26fd-adea-441b-90e8-69eead4d5a8c")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 222.5583 64.8494 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "BSS"
-		(shape input)
-		(at 49.53 168.91 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "353f4673-63f0-4ea1-97ae-3914e7950448")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 43.4279 168.8306 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5324,9 +5268,9 @@
 			)
 		)
 	)
-	(global_label "XXX8"
+	(global_label "PHI2"
 		(shape input)
-		(at 33.02 104.14 180)
+		(at 71.12 168.91 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -5334,9 +5278,9 @@
 			)
 			(justify right)
 		)
-		(uuid "4330efad-79de-4ca5-ac6b-5837d9494f40")
+		(uuid "50bfb844-9d25-4c77-9c78-1ac299129d52")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 25.7688 104.0606 0)
+			(at 64.2921 168.8306 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5368,6 +5312,28 @@
 			)
 		)
 	)
+	(global_label "XXX8"
+		(shape input)
+		(at 27.94 109.22 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "5a43ffc6-7848-41d6-a927-ca90f1999830")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 20.6888 109.1406 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
 	(global_label "NOWRITE"
 		(shape input)
 		(at 165.1 54.61 0)
@@ -5390,9 +5356,9 @@
 			)
 		)
 	)
-	(global_label "PHI2"
+	(global_label "BSS"
 		(shape input)
-		(at 73.66 163.83 180)
+		(at 50.8 163.83 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -5400,9 +5366,53 @@
 			)
 			(justify right)
 		)
-		(uuid "7c1c215d-f558-45ae-a16e-c7e7c2f8a6ba")
+		(uuid "73c8dbfc-d82f-4630-a302-37fc92b10227")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 66.8321 163.7506 0)
+			(at 44.6979 163.7506 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "XXX1"
+		(shape input)
+		(at 31.75 68.58 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "75e3c3dc-f000-4e91-8f0b-78168c16c9fc")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 24.4988 68.5006 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "XXX3"
+		(shape input)
+		(at 30.48 149.86 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "7bd582cb-90bf-4b56-b4ef-604e1c3e7a38")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 23.2288 149.7806 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5456,6 +5466,28 @@
 			)
 		)
 	)
+	(global_label "XXXB"
+		(shape input)
+		(at 30.48 144.78 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "9cbe6646-8344-4e89-aef2-759ec9ba8d63")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 23.1683 144.7006 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
 	(global_label "B2"
 		(shape input)
 		(at 139.7 186.69 0)
@@ -5500,9 +5532,9 @@
 			)
 		)
 	)
-	(global_label "XXXA"
+	(global_label "XXX0"
 		(shape input)
-		(at 31.75 26.67 180)
+		(at 27.94 114.3 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -5510,31 +5542,9 @@
 			)
 			(justify right)
 		)
-		(uuid "ad0c7afe-7fd3-4c28-a597-0f7dea2b822f")
+		(uuid "ac57e2de-4f8f-44e4-900d-8e764af9a53f")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 24.6198 26.5906 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "BSS"
-		(shape input)
-		(at 50.8 147.32 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "b201c769-9502-4821-8e5c-011663ab16d2")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 44.6979 147.2406 0)
+			(at 20.6888 114.2206 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5588,6 +5598,50 @@
 			)
 		)
 	)
+	(global_label "BSS"
+		(shape input)
+		(at 48.26 101.6 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "b8c0742d-deb6-40a0-901b-170682190fc5")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 42.1579 101.5206 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "XXXA"
+		(shape input)
+		(at 31.75 21.59 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "bbdd292d-bc8f-4f57-95f5-0cc9826f17de")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 24.6198 21.5106 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
 	(global_label "VCC"
 		(shape input)
 		(at 149.86 130.81 90)
@@ -5623,28 +5677,6 @@
 		(uuid "bebe6371-7828-482e-8457-70e0d0a768bb")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 149.7806 122.8817 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "XXX3"
-		(shape input)
-		(at 33.02 133.35 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "c4e7da09-09e1-4a33-ac64-e104eb2d1322")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 25.7688 133.2706 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5698,28 +5730,6 @@
 			)
 		)
 	)
-	(global_label "XXX2"
-		(shape input)
-		(at 31.75 21.59 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "df0e4e76-c7fa-4be2-9eb4-daa42c994d42")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 24.4988 21.5106 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-				(hide yes)
-			)
-		)
-	)
 	(global_label "CA3"
 		(shape input)
 		(at 67.31 191.77 180)
@@ -5744,7 +5754,7 @@
 	)
 	(global_label "XXX9"
 		(shape input)
-		(at 31.75 68.58 180)
+		(at 31.75 63.5 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -5752,9 +5762,9 @@
 			)
 			(justify right)
 		)
-		(uuid "ebeaf8f9-9457-4d8c-a186-af272563784f")
+		(uuid "ed753d23-05e5-402a-a4ce-8a4f4f374a63")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 24.4988 68.5006 0)
+			(at 24.4988 63.4206 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5764,9 +5774,9 @@
 			)
 		)
 	)
-	(global_label "XXX1"
+	(global_label "XXX2"
 		(shape input)
-		(at 31.75 63.5 180)
+		(at 31.75 26.67 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -5774,9 +5784,9 @@
 			)
 			(justify right)
 		)
-		(uuid "ed38f7c7-08c0-44b8-b2c8-3d18cd64b0b4")
+		(uuid "efc03b58-b117-48bc-9eed-49a1f9f4364c")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 24.4988 63.4206 0)
+			(at 24.4988 26.5906 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5796,7 +5806,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "001af440-06c0-47f9-80a2-17782e03db8c")
-		(property "Reference" "U?"
+		(property "Reference" "E1"
 			(at 63.5 24.2402 0)
 			(effects
 				(font
@@ -5884,7 +5894,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
+					(reference "E1")
 					(unit 4)
 				)
 			)
@@ -5900,7 +5910,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "0439bc38-34ca-423b-bd89-59ac892a9751")
-		(property "Reference" "U?"
+		(property "Reference" "G1"
 			(at 238.2394 58.5302 0)
 			(effects
 				(font
@@ -5996,7 +6006,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
+					(reference "G1")
 					(unit 2)
 				)
 			)
@@ -6005,14 +6015,14 @@
 	(symbol
 		(lib_id "74xx:74LS14")
 		(at 123.19 34.29 0)
-		(unit 5)
+		(unit 6)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "07176144-162f-4d47-a0e9-f37b9b75fe90")
-		(property "Reference" "U?"
+		(property "Reference" "F5"
 			(at 123.19 26.7802 0)
 			(effects
 				(font
@@ -6100,216 +6110,8 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
-					(unit 5)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "74xx:74LS08")
-		(at 312.42 151.13 0)
-		(unit 4)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "0f83667d-6139-4f22-b4ef-bff863cc7a38")
-		(property "Reference" "U?"
-			(at 312.42 143.6202 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "74LS08"
-			(at 312.42 146.1571 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 312.42 151.13 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "http://www.ti.com/lit/gpn/sn74LS08"
-			(at 312.42 151.13 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" ""
-			(at 312.42 151.13 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "9381f242-d6d3-49cb-bae9-b5594dca4423")
-		)
-		(pin "2"
-			(uuid "d8b0b20e-2102-4e5c-b056-182731b9db10")
-		)
-		(pin "3"
-			(uuid "efd98a45-a865-434a-9019-96ca5ea2bae3")
-		)
-		(pin "4"
-			(uuid "0322b512-a1c6-416e-9208-d81272cffb22")
-		)
-		(pin "5"
-			(uuid "7bbe672e-a4c0-41ba-ad8f-5b447ddeb9b0")
-		)
-		(pin "6"
-			(uuid "a10d7bd4-4ede-4c3f-b856-0bc459c7a2af")
-		)
-		(pin "10"
-			(uuid "9d378076-369a-483d-8503-19658cd824c1")
-		)
-		(pin "8"
-			(uuid "1aace8d2-4112-471f-af0d-b0e5f9e8460a")
-		)
-		(pin "9"
-			(uuid "7df12e55-764e-453e-b355-d2fcb50bcfa7")
-		)
-		(pin "11"
-			(uuid "3980c4f2-ce43-4061-8341-fd46d2f77957")
-		)
-		(pin "12"
-			(uuid "4efe75e0-cd5c-4d5f-9383-af2afc05b446")
-		)
-		(pin "13"
-			(uuid "67a1d06e-4c77-4d91-a5c4-ac56ed6869d0")
-		)
-		(pin "14"
-			(uuid "c9a732a8-12f4-4639-a588-fc10e77050f9")
-		)
-		(pin "7"
-			(uuid "4ff3cc97-1fab-493a-9c3d-fd784825ca6f")
-		)
-		(instances
-			(project "3ric"
-				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
-					(unit 4)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "74xx:74LS08")
-		(at 40.64 135.89 0)
-		(unit 4)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "1c91b5a3-dbec-4259-956a-a03192cf0ad1")
-		(property "Reference" "U?"
-			(at 40.64 128.3802 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "74LS08"
-			(at 40.64 130.9171 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 40.64 135.89 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "http://www.ti.com/lit/gpn/sn74LS08"
-			(at 40.64 135.89 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" ""
-			(at 40.64 135.89 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "d6ec7d3c-2bb2-4f14-9917-93c9766935a8")
-		)
-		(pin "2"
-			(uuid "64a087a1-82cf-464b-aa35-d057e77bc118")
-		)
-		(pin "3"
-			(uuid "c64dbec3-6c0f-4e34-9ae5-63078ef220bf")
-		)
-		(pin "4"
-			(uuid "9cd11b3b-aef8-4c57-a99c-93e366e6c906")
-		)
-		(pin "5"
-			(uuid "5e8824e8-c3f0-4934-b665-a39d6ac86e40")
-		)
-		(pin "6"
-			(uuid "8ebabb87-f78b-473a-ab9c-c7250e9dcc87")
-		)
-		(pin "10"
-			(uuid "025eec46-d8c9-483b-a925-e865972bd63c")
-		)
-		(pin "8"
-			(uuid "adfd482a-6f65-46a7-832b-bca2de2e9902")
-		)
-		(pin "9"
-			(uuid "95901f5e-1263-4ddc-b705-3cb0307eb690")
-		)
-		(pin "11"
-			(uuid "1cab694a-342c-44d5-8fec-b9cd99aa1a92")
-		)
-		(pin "12"
-			(uuid "6ec6a269-a837-4674-99a1-d280ae90855f")
-		)
-		(pin "13"
-			(uuid "b2bd7975-b4cc-4ae2-ad2c-90e989111338")
-		)
-		(pin "14"
-			(uuid "7a962468-71fe-48c1-9365-88018e382b78")
-		)
-		(pin "7"
-			(uuid "794f6437-8d28-4923-aac6-17513a120087")
-		)
-		(instances
-			(project "3ric"
-				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
-					(unit 4)
+					(reference "F5")
+					(unit 6)
 				)
 			)
 		)
@@ -6317,14 +6119,14 @@
 	(symbol
 		(lib_id "74xx:74LS08")
 		(at 81.28 166.37 0)
-		(unit 3)
+		(unit 4)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "1e5f3dc6-8401-472e-8914-27aaa5a4b2fa")
-		(property "Reference" "U?"
+		(property "Reference" "F7"
 			(at 81.28 158.8602 0)
 			(effects
 				(font
@@ -6412,8 +6214,8 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
-					(unit 3)
+					(reference "F7")
+					(unit 4)
 				)
 			)
 		)
@@ -6421,14 +6223,14 @@
 	(symbol
 		(lib_id "74xx:74LS00")
 		(at 101.6 135.89 0)
-		(unit 4)
+		(unit 2)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "21db891a-8adb-4538-b320-0a270c7f0d0a")
-		(property "Reference" "U?"
+		(property "Reference" "F1"
 			(at 101.6 128.3802 0)
 			(effects
 				(font
@@ -6516,8 +6318,8 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
-					(unit 4)
+					(reference "F1")
+					(unit 2)
 				)
 			)
 		)
@@ -6532,7 +6334,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "23f222f0-7ca2-401c-bf5e-6d39fdecd89a")
-		(property "Reference" "LS?"
+		(property "Reference" "Y_SPEAKER"
 			(at 267.208 65.2053 0)
 			(effects
 				(font
@@ -6586,7 +6388,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "LS?")
+					(reference "Y_SPEAKER")
 					(unit 1)
 				)
 			)
@@ -6595,15 +6397,15 @@
 	(symbol
 		(lib_id "74xx:74LS00")
 		(at 125.73 186.69 0)
-		(unit 3)
+		(mirror x)
+		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "2fea13bf-4f6b-4178-a418-04f41f5262a3")
-		(property "Reference" "U?"
-			(at 125.73 179.1802 0)
+		(property "Reference" "F6"
+			(at 125.73 194.1998 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6611,7 +6413,7 @@
 			)
 		)
 		(property "Value" "74LS00"
-			(at 125.73 181.7171 0)
+			(at 125.73 191.6629 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6690,8 +6492,8 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
-					(unit 3)
+					(reference "F6")
+					(unit 1)
 				)
 			)
 		)
@@ -6706,7 +6508,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "30600d39-aa82-4199-ba8f-48f2766777e3")
-		(property "Reference" "U?"
+		(property "Reference" "E1"
 			(at 62.23 64.8802 0)
 			(effects
 				(font
@@ -6794,7 +6596,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
+					(reference "E1")
 					(unit 3)
 				)
 			)
@@ -6803,14 +6605,14 @@
 	(symbol
 		(lib_id "74xx:74LS32")
 		(at 62.23 109.22 0)
-		(unit 2)
+		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "3ae6f5e8-b451-4dbf-960f-4ea76e72affc")
-		(property "Reference" "U?"
+		(property "Reference" "E1"
 			(at 62.23 101.7102 0)
 			(effects
 				(font
@@ -6898,8 +6700,8 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
-					(unit 2)
+					(reference "E1")
+					(unit 1)
 				)
 			)
 		)
@@ -6914,7 +6716,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "3b8cbb7e-b4d0-490d-b39f-ce41a948d3a1")
-		(property "Reference" "U?"
+		(property "Reference" "F4"
 			(at 151.8794 129.6502 0)
 			(effects
 				(font
@@ -7010,112 +6812,8 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
+					(reference "F4")
 					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "74xx:74LS14")
-		(at 59.69 168.91 0)
-		(unit 3)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "3ecc29e9-9ad4-4b0c-8b6b-c77b5a6a2735")
-		(property "Reference" "U?"
-			(at 59.69 161.4002 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "74LS14"
-			(at 59.69 163.9371 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 59.69 168.91 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "http://www.ti.com/lit/gpn/sn74LS14"
-			(at 59.69 168.91 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" ""
-			(at 59.69 168.91 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "cf218b6b-8df9-477c-bd66-76ff423ee01d")
-		)
-		(pin "2"
-			(uuid "8515e696-1e15-481a-86d3-b0f9f7f58848")
-		)
-		(pin "3"
-			(uuid "b798b908-a465-49b6-a476-6be2887a6797")
-		)
-		(pin "4"
-			(uuid "914b6b37-4e47-4c83-bf04-24856563ad94")
-		)
-		(pin "5"
-			(uuid "b4e77307-6087-4c1a-a4fb-b77bf6c18861")
-		)
-		(pin "6"
-			(uuid "81c0a595-303d-404b-8161-ac7ea7a37373")
-		)
-		(pin "8"
-			(uuid "30a7f1c9-59bc-4492-b0a1-3332abfe0a95")
-		)
-		(pin "9"
-			(uuid "f703e223-1339-4eda-a2c0-aaefeafc6789")
-		)
-		(pin "10"
-			(uuid "e8d8f9b1-b802-4336-941f-2fdb8e0c3c7a")
-		)
-		(pin "11"
-			(uuid "f41d4b84-2900-4bad-899b-b61912239811")
-		)
-		(pin "12"
-			(uuid "bcd862ec-753e-40ee-99b9-c505a3799ee9")
-		)
-		(pin "13"
-			(uuid "438033da-d7d0-4d68-b840-9787a74b40c3")
-		)
-		(pin "14"
-			(uuid "723141e6-3b70-444e-b576-fba5b37dc5b9")
-		)
-		(pin "7"
-			(uuid "1fe969c6-7563-4396-84ee-0284098f4a8a")
-		)
-		(instances
-			(project "3ric"
-				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
-					(unit 3)
 				)
 			)
 		)
@@ -7123,14 +6821,14 @@
 	(symbol
 		(lib_id "74xx:74LS32")
 		(at 62.23 144.78 0)
-		(unit 1)
+		(unit 2)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "3ff0b014-eb8e-40ec-b008-2b07ad4da944")
-		(property "Reference" "U?"
+		(property "Reference" "E1"
 			(at 62.23 137.2702 0)
 			(effects
 				(font
@@ -7218,7 +6916,111 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
+					(reference "E1")
+					(unit 2)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "74xx:74LS08")
+		(at 35.56 111.76 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "4f6bb0cb-29d9-4f8c-90a2-1958b4ee5350")
+		(property "Reference" "E2"
+			(at 35.56 104.2502 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "74LS08"
+			(at 35.56 106.7871 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 35.56 111.76 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "http://www.ti.com/lit/gpn/sn74LS08"
+			(at 35.56 111.76 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 35.56 111.76 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "95cbf07b-3fa3-4ae7-9832-f54ae3722cd9")
+		)
+		(pin "2"
+			(uuid "1b2589c4-9506-4bff-acec-fb00c53593fc")
+		)
+		(pin "3"
+			(uuid "3be3536c-8a02-4ae5-98b5-06f1f79882d3")
+		)
+		(pin "4"
+			(uuid "92f7158c-cd10-466d-8b42-4e2074151cd4")
+		)
+		(pin "5"
+			(uuid "ba953f3f-ff40-49d8-810d-4cf6fc1b19f3")
+		)
+		(pin "6"
+			(uuid "ebabf5b0-04bd-4951-9c72-79d338b3c672")
+		)
+		(pin "10"
+			(uuid "31d1ad58-24b4-4db6-9505-109fbed1700c")
+		)
+		(pin "8"
+			(uuid "3cf3d794-1328-4a51-a93c-ac13f46857dc")
+		)
+		(pin "9"
+			(uuid "d657a5c7-f508-4351-b8c0-caf046b97c66")
+		)
+		(pin "11"
+			(uuid "52756c5f-1758-44bc-8e66-f54baff92afe")
+		)
+		(pin "12"
+			(uuid "03ecb09d-a4c9-4872-84fc-e29a8f4ad4b2")
+		)
+		(pin "13"
+			(uuid "418284be-7b65-401a-a969-34883f9dc35e")
+		)
+		(pin "14"
+			(uuid "4f09892e-b806-45c0-b5df-13348b30b95f")
+		)
+		(pin "7"
+			(uuid "581c6009-d4ed-4aa0-99da-78e5c6abf798")
+		)
+		(instances
+			(project "3ric"
+				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
+					(reference "E2")
 					(unit 1)
 				)
 			)
@@ -7227,15 +7029,14 @@
 	(symbol
 		(lib_id "74xx:74LS14")
 		(at 137.16 59.69 90)
-		(unit 6)
+		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "5944e006-f8d1-485f-950f-bb1750821364")
-		(property "Reference" "U?"
-			(at 141.732 58.8553 90)
+		(property "Reference" "F5"
+			(at 129.794 53.848 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7244,7 +7045,7 @@
 			)
 		)
 		(property "Value" "74LS14"
-			(at 141.732 61.3922 90)
+			(at 128.27 56.134 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7324,8 +7125,8 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
-					(unit 6)
+					(reference "F5")
+					(unit 1)
 				)
 			)
 		)
@@ -7333,15 +7134,15 @@
 	(symbol
 		(lib_id "74xx:74LS00")
 		(at 80.01 46.99 0)
-		(unit 1)
+		(mirror x)
+		(unit 3)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "596ec4b0-6c61-4d9f-90c3-662cddadbbc9")
-		(property "Reference" "U?"
-			(at 80.01 39.4802 0)
+		(property "Reference" "F1"
+			(at 80.01 54.4998 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7349,7 +7150,7 @@
 			)
 		)
 		(property "Value" "74LS00"
-			(at 80.01 42.0171 0)
+			(at 80.01 51.9629 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7428,8 +7229,112 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
-					(unit 1)
+					(reference "F1")
+					(unit 3)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "74xx:74LS14")
+		(at 60.96 163.83 0)
+		(unit 5)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "68a9d95a-df39-432d-87ff-57f344e88f8b")
+		(property "Reference" "F5"
+			(at 60.96 156.3202 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "74LS14"
+			(at 60.96 158.8571 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 60.96 163.83 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "http://www.ti.com/lit/gpn/sn74LS14"
+			(at 60.96 163.83 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 60.96 163.83 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "cf218b6b-8df9-477c-bd66-76ff423ee01d")
+		)
+		(pin "2"
+			(uuid "8515e696-1e15-481a-86d3-b0f9f7f58848")
+		)
+		(pin "3"
+			(uuid "b798b908-a465-49b6-a476-6be2887a6797")
+		)
+		(pin "4"
+			(uuid "914b6b37-4e47-4c83-bf04-24856563ad94")
+		)
+		(pin "5"
+			(uuid "b4e77307-6087-4c1a-a4fb-b77bf6c18861")
+		)
+		(pin "6"
+			(uuid "81c0a595-303d-404b-8161-ac7ea7a37373")
+		)
+		(pin "8"
+			(uuid "30a7f1c9-59bc-4492-b0a1-3332abfe0a95")
+		)
+		(pin "9"
+			(uuid "f703e223-1339-4eda-a2c0-aaefeafc6789")
+		)
+		(pin "10"
+			(uuid "8bf09128-8349-4320-9602-2cb310b193b7")
+		)
+		(pin "11"
+			(uuid "f49cd368-da64-4553-a7f9-3913e37914aa")
+		)
+		(pin "12"
+			(uuid "bcd862ec-753e-40ee-99b9-c505a3799ee9")
+		)
+		(pin "13"
+			(uuid "438033da-d7d0-4d68-b840-9787a74b40c3")
+		)
+		(pin "14"
+			(uuid "723141e6-3b70-444e-b576-fba5b37dc5b9")
+		)
+		(pin "7"
+			(uuid "1fe969c6-7563-4396-84ee-0284098f4a8a")
+		)
+		(instances
+			(project "3ric"
+				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
+					(reference "F5")
+					(unit 5)
 				)
 			)
 		)
@@ -7444,7 +7349,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "709a52a2-f876-4e17-855c-b1b029217bd1")
-		(property "Reference" "U?"
+		(property "Reference" "F3"
 			(at 151.8794 100.4402 0)
 			(effects
 				(font
@@ -7540,7 +7445,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
+					(reference "F3")
 					(unit 2)
 				)
 			)
@@ -7548,34 +7453,32 @@
 	)
 	(symbol
 		(lib_id "74xx:74LS08")
-		(at 313.69 173.99 0)
-		(unit 5)
+		(at 38.1 147.32 0)
+		(unit 2)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced yes)
-		(uuid "7ec8ea15-7753-4f47-9da6-8a8b0d7f54e9")
-		(property "Reference" "U?"
-			(at 319.532 173.1553 0)
+		(uuid "8732223d-e1d6-4b93-90b6-7132138ee6c1")
+		(property "Reference" "E2"
+			(at 38.1 139.8102 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
 		(property "Value" "74LS08"
-			(at 319.532 175.6922 0)
+			(at 38.1 142.3471 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
 		(property "Footprint" ""
-			(at 313.69 173.99 0)
+			(at 38.1 147.32 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7584,7 +7487,7 @@
 			)
 		)
 		(property "Datasheet" "http://www.ti.com/lit/gpn/sn74LS08"
-			(at 313.69 173.99 0)
+			(at 38.1 147.32 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7593,7 +7496,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 313.69 173.99 0)
+			(at 38.1 147.32 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7602,52 +7505,52 @@
 			)
 		)
 		(pin "1"
-			(uuid "6be14815-4a7d-42d1-90c7-04c36a9fc25e")
+			(uuid "d6ec7d3c-2bb2-4f14-9917-93c9766935a8")
 		)
 		(pin "2"
-			(uuid "36066699-2b17-4fc6-9733-2ef8beaa79e1")
+			(uuid "64a087a1-82cf-464b-aa35-d057e77bc118")
 		)
 		(pin "3"
-			(uuid "0491b3a8-0a88-4be8-8b7a-be3dac501142")
+			(uuid "c64dbec3-6c0f-4e34-9ae5-63078ef220bf")
 		)
 		(pin "4"
-			(uuid "8483acfa-e14d-4e40-b5cc-98bbfa95112f")
+			(uuid "9747a813-0c90-419d-9e64-f5c0b54c886e")
 		)
 		(pin "5"
-			(uuid "e67c544f-736a-4c2e-b841-ef4fe335423b")
+			(uuid "94dea076-9ee1-42e4-aeca-03967da7de1b")
 		)
 		(pin "6"
-			(uuid "2bfcedc7-3ad2-4778-bb01-7c7116e9e19f")
+			(uuid "5d66f32e-0994-45ee-a93f-d699a14a233d")
 		)
 		(pin "10"
-			(uuid "62031150-5b72-4c54-89ed-ffb52d695fcd")
+			(uuid "025eec46-d8c9-483b-a925-e865972bd63c")
 		)
 		(pin "8"
-			(uuid "da590b84-901b-45d0-98a9-faabe2342eb3")
+			(uuid "adfd482a-6f65-46a7-832b-bca2de2e9902")
 		)
 		(pin "9"
-			(uuid "e3ef5807-58eb-4367-95f0-3f1fd2976091")
+			(uuid "95901f5e-1263-4ddc-b705-3cb0307eb690")
 		)
 		(pin "11"
-			(uuid "af90c34f-c0ec-4b83-8d80-94d8c9d9b6c6")
+			(uuid "1cab694a-342c-44d5-8fec-b9cd99aa1a92")
 		)
 		(pin "12"
-			(uuid "adc15fcb-ad08-433c-aac3-855fc69caf70")
+			(uuid "6ec6a269-a837-4674-99a1-d280ae90855f")
 		)
 		(pin "13"
-			(uuid "78397a27-d0f2-4690-90a3-5cf3ab211f99")
+			(uuid "b2bd7975-b4cc-4ae2-ad2c-90e989111338")
 		)
 		(pin "14"
-			(uuid "ca834b68-c8a6-4435-b2c4-44f0aec02476")
+			(uuid "7a962468-71fe-48c1-9365-88018e382b78")
 		)
 		(pin "7"
-			(uuid "7092fb2a-c0e9-4cad-86ac-e9dc6cc7f100")
+			(uuid "794f6437-8d28-4923-aac6-17513a120087")
 		)
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
-					(unit 5)
+					(reference "E2")
+					(unit 2)
 				)
 			)
 		)
@@ -7655,15 +7558,15 @@
 	(symbol
 		(lib_id "74xx:74LS00")
 		(at 102.87 34.29 0)
-		(unit 3)
+		(mirror x)
+		(unit 4)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "9119a6f9-35f8-47c4-9cbb-79769f62936e")
-		(property "Reference" "U?"
-			(at 102.87 26.7802 0)
+		(property "Reference" "F1"
+			(at 102.87 41.7998 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7671,7 +7574,7 @@
 			)
 		)
 		(property "Value" "74LS00"
-			(at 102.87 29.3171 0)
+			(at 102.87 39.2629 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7750,8 +7653,8 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
-					(unit 3)
+					(reference "F1")
+					(unit 4)
 				)
 			)
 		)
@@ -7766,7 +7669,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "a7db357e-e78a-4f74-aaa3-a4c611930627")
-		(property "Reference" "U?"
+		(property "Reference" "F5"
 			(at 80.01 184.2602 0)
 			(effects
 				(font
@@ -7854,216 +7757,8 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
+					(reference "F5")
 					(unit 4)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "74xx:74LS08")
-		(at 312.42 134.62 0)
-		(unit 3)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "b265845e-564e-461b-bfbe-9c69ed2fce16")
-		(property "Reference" "U?"
-			(at 312.42 127.1102 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "74LS08"
-			(at 312.42 129.6471 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 312.42 134.62 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "http://www.ti.com/lit/gpn/sn74LS08"
-			(at 312.42 134.62 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" ""
-			(at 312.42 134.62 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "5125b1fa-f3d0-4937-becd-5995174cf5cf")
-		)
-		(pin "2"
-			(uuid "d7d24801-ae1d-4381-8c8f-0176ba0c5a9d")
-		)
-		(pin "3"
-			(uuid "b12f49e9-532f-4f78-be17-29f4e8125936")
-		)
-		(pin "4"
-			(uuid "d5b74078-6e9f-4edf-8c54-9b2040e2699c")
-		)
-		(pin "5"
-			(uuid "f21bde96-7505-4433-a5af-41a811b7ecc7")
-		)
-		(pin "6"
-			(uuid "3d3a2106-b26a-4900-9b48-45d3e22277d9")
-		)
-		(pin "10"
-			(uuid "87c1984a-6028-4609-bb55-5d049a4ee67e")
-		)
-		(pin "8"
-			(uuid "cb20e55d-944e-40dd-9a90-383c726a4908")
-		)
-		(pin "9"
-			(uuid "cef4cd86-1435-4112-b0e9-8f28de51526c")
-		)
-		(pin "11"
-			(uuid "2b39378b-a9fa-48f6-9951-82fe0678b8fd")
-		)
-		(pin "12"
-			(uuid "c392993e-8d42-4382-9b1b-c5fd638b1074")
-		)
-		(pin "13"
-			(uuid "abe621d4-889b-45d7-98c3-089faa9131bf")
-		)
-		(pin "14"
-			(uuid "96e09055-e844-4573-b36f-818fed84f329")
-		)
-		(pin "7"
-			(uuid "fc59d7e7-f5b1-4ff7-bd43-f9696ae45076")
-		)
-		(instances
-			(project "3ric"
-				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
-					(unit 3)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "74xx:74LS08")
-		(at 40.64 101.6 0)
-		(unit 3)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "b75d8c90-2f3e-4c90-a936-ef9b34627542")
-		(property "Reference" "U?"
-			(at 40.64 94.0902 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "74LS08"
-			(at 40.64 96.6271 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 40.64 101.6 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "http://www.ti.com/lit/gpn/sn74LS08"
-			(at 40.64 101.6 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" ""
-			(at 40.64 101.6 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "44777b82-62ad-42a5-a232-7ddcee20b95f")
-		)
-		(pin "2"
-			(uuid "cf16103b-df24-455a-a2ab-301ed1fca0ec")
-		)
-		(pin "3"
-			(uuid "8de965ed-2097-476a-8c18-ca36e1bc008d")
-		)
-		(pin "4"
-			(uuid "92f7158c-cd10-466d-8b42-4e2074151cd4")
-		)
-		(pin "5"
-			(uuid "ba953f3f-ff40-49d8-810d-4cf6fc1b19f3")
-		)
-		(pin "6"
-			(uuid "ebabf5b0-04bd-4951-9c72-79d338b3c672")
-		)
-		(pin "10"
-			(uuid "31d1ad58-24b4-4db6-9505-109fbed1700c")
-		)
-		(pin "8"
-			(uuid "3cf3d794-1328-4a51-a93c-ac13f46857dc")
-		)
-		(pin "9"
-			(uuid "d657a5c7-f508-4351-b8c0-caf046b97c66")
-		)
-		(pin "11"
-			(uuid "52756c5f-1758-44bc-8e66-f54baff92afe")
-		)
-		(pin "12"
-			(uuid "03ecb09d-a4c9-4872-84fc-e29a8f4ad4b2")
-		)
-		(pin "13"
-			(uuid "418284be-7b65-401a-a969-34883f9dc35e")
-		)
-		(pin "14"
-			(uuid "4f09892e-b806-45c0-b5df-13348b30b95f")
-		)
-		(pin "7"
-			(uuid "581c6009-d4ed-4aa0-99da-78e5c6abf798")
-		)
-		(instances
-			(project "3ric"
-				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
-					(unit 3)
 				)
 			)
 		)
@@ -8071,15 +7766,15 @@
 	(symbol
 		(lib_id "74xx:74LS00")
 		(at 105.41 168.91 0)
-		(unit 1)
+		(mirror x)
+		(unit 3)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "beb9bb04-9b35-4412-ab88-c053da97f89e")
-		(property "Reference" "U?"
-			(at 105.41 161.4002 0)
+		(property "Reference" "F6"
+			(at 105.41 176.4198 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8087,7 +7782,7 @@
 			)
 		)
 		(property "Value" "74LS00"
-			(at 105.41 163.9371 0)
+			(at 105.41 173.8829 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8166,8 +7861,8 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
-					(unit 1)
+					(reference "F6")
+					(unit 3)
 				)
 			)
 		)
@@ -8182,7 +7877,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "c63f114b-3a66-4f5b-90b6-7c3e727a90bd")
-		(property "Reference" "U?"
+		(property "Reference" "F3"
 			(at 155.6894 43.2902 0)
 			(effects
 				(font
@@ -8278,112 +7973,8 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
+					(reference "F3")
 					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "74xx:74LS08")
-		(at 312.42 116.84 0)
-		(unit 2)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "ca953057-ffcb-44c9-bb7e-db6e840ceb8f")
-		(property "Reference" "U?"
-			(at 312.42 109.3302 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "74LS08"
-			(at 312.42 111.8671 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 312.42 116.84 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "http://www.ti.com/lit/gpn/sn74LS08"
-			(at 312.42 116.84 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" ""
-			(at 312.42 116.84 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "4816b946-dfad-490b-b7c4-49c09b29fdbe")
-		)
-		(pin "2"
-			(uuid "19e4d4cc-9bde-4051-88b5-44b9978de6b4")
-		)
-		(pin "3"
-			(uuid "0700a721-e632-401e-ac76-476d2a737ce8")
-		)
-		(pin "4"
-			(uuid "a8b7b39a-273f-41e9-a8e6-8032da655c3f")
-		)
-		(pin "5"
-			(uuid "fea5533d-abef-41be-a549-2822bf2ac716")
-		)
-		(pin "6"
-			(uuid "c2d5a51a-22e1-417a-9408-288163dc6dc3")
-		)
-		(pin "10"
-			(uuid "8a462ee1-3c40-4947-b6a8-88984a3c3437")
-		)
-		(pin "8"
-			(uuid "0bbf21fe-adcd-4c0f-98d3-d7a264914219")
-		)
-		(pin "9"
-			(uuid "d60c2d56-9344-4cf9-89b0-70936748dd72")
-		)
-		(pin "11"
-			(uuid "00a43d60-8137-4b56-8f92-caead4ef0623")
-		)
-		(pin "12"
-			(uuid "a5741158-55c2-4eb7-8ae6-eee32119923d")
-		)
-		(pin "13"
-			(uuid "d3c75bf6-ded9-445a-9ba2-ae79e6f56c2c")
-		)
-		(pin "14"
-			(uuid "5f7401bb-73e7-47f5-8545-f181ef801dc8")
-		)
-		(pin "7"
-			(uuid "d0fda603-cc20-412f-8464-32c48c85aa56")
-		)
-		(instances
-			(project "3ric"
-				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
-					(unit 2)
 				)
 			)
 		)
@@ -8391,14 +7982,14 @@
 	(symbol
 		(lib_id "74xx:74LS00")
 		(at 102.87 111.76 0)
-		(unit 2)
+		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "d4b00acd-89ed-422d-83e9-93b327d5d3f7")
-		(property "Reference" "U?"
+		(property "Reference" "F1"
 			(at 102.87 104.2502 0)
 			(effects
 				(font
@@ -8486,8 +8077,8 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
-					(unit 2)
+					(reference "F1")
+					(unit 1)
 				)
 			)
 		)
@@ -8495,15 +8086,15 @@
 	(symbol
 		(lib_id "74xx:74LS00")
 		(at 105.41 189.23 0)
+		(mirror x)
 		(unit 4)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "d5444728-cae1-4405-8796-821f733ad2bd")
-		(property "Reference" "U?"
-			(at 105.41 181.7202 0)
+		(property "Reference" "F6"
+			(at 105.41 196.7398 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8511,7 +8102,7 @@
 			)
 		)
 		(property "Value" "74LS00"
-			(at 105.41 184.2571 0)
+			(at 105.41 194.2029 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8590,7 +8181,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
+					(reference "F6")
 					(unit 4)
 				)
 			)
@@ -8599,14 +8190,14 @@
 	(symbol
 		(lib_id "74xx:74LS08")
 		(at 39.37 66.04 0)
-		(unit 2)
+		(unit 3)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "dfbed6a2-2278-427b-abf6-3eace3a16fde")
-		(property "Reference" "U?"
+		(property "Reference" "E2"
 			(at 39.37 58.5302 0)
 			(effects
 				(font
@@ -8694,8 +8285,8 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
-					(unit 2)
+					(reference "E2")
+					(unit 3)
 				)
 			)
 		)
@@ -8703,15 +8294,15 @@
 	(symbol
 		(lib_id "74xx:74LS00")
 		(at 125.73 171.45 0)
+		(mirror x)
 		(unit 2)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "e4ff1f00-c1fe-48c9-90bc-38bfebf37cef")
-		(property "Reference" "U?"
-			(at 125.73 163.9402 0)
+		(property "Reference" "F6"
+			(at 125.73 178.9598 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8719,7 +8310,7 @@
 			)
 		)
 		(property "Value" "74LS00"
-			(at 125.73 166.4771 0)
+			(at 125.73 176.4229 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8798,7 +8389,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
+					(reference "F6")
 					(unit 2)
 				)
 			)
@@ -8807,15 +8398,15 @@
 	(symbol
 		(lib_id "74xx:74LS32")
 		(at 129.54 76.2 0)
-		(unit 4)
+		(mirror x)
+		(unit 3)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "eb6fe1eb-59fc-4d15-acda-83903aff36f2")
-		(property "Reference" "U?"
-			(at 129.54 68.6902 0)
+		(property "Reference" "F2"
+			(at 129.54 83.7098 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8823,7 +8414,7 @@
 			)
 		)
 		(property "Value" "74LS32"
-			(at 129.54 71.2271 0)
+			(at 129.54 81.1729 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8902,8 +8493,8 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
-					(unit 4)
+					(reference "F2")
+					(unit 3)
 				)
 			)
 		)
@@ -8911,14 +8502,14 @@
 	(symbol
 		(lib_id "74xx:74LS08")
 		(at 39.37 24.13 0)
-		(unit 1)
+		(unit 4)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "f89b1101-c117-456f-9da2-5d43ec9522ce")
-		(property "Reference" "U?"
+		(property "Reference" "E2"
 			(at 39.37 16.6202 0)
 			(effects
 				(font
@@ -9006,8 +8597,8 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/c920751f-edd2-4cd3-a630-9d0b3423e6d7"
-					(reference "U?")
-					(unit 1)
+					(reference "E2")
+					(unit 4)
 				)
 			)
 		)

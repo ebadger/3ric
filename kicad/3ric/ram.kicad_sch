@@ -4975,7 +4975,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "628595c9-0050-4920-8d4b-544d174680ae")
-		(property "Reference" "U_VBUS_LOW?"
+		(property "Reference" "M2_VBUS_LOW"
 			(at 59.1694 19.1602 0)
 			(effects
 				(font
@@ -5083,7 +5083,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/24a3ac67-b632-4551-8167-d5cda39cc266"
-					(reference "U_VBUS_LOW?")
+					(reference "M2_VBUS_LOW")
 					(unit 1)
 				)
 			)
@@ -5099,7 +5099,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "67387091-bcf0-4ef6-9cd3-b3c27033e382")
-		(property "Reference" "U_BUS_A_HIGH?"
+		(property "Reference" "L3_BUS_A_HIGH"
 			(at 206.4894 71.2302 0)
 			(effects
 				(font
@@ -5207,7 +5207,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/24a3ac67-b632-4551-8167-d5cda39cc266"
-					(reference "U_BUS_A_HIGH?")
+					(reference "L3_BUS_A_HIGH")
 					(unit 1)
 				)
 			)
@@ -5223,7 +5223,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "7ad5ce38-681d-4861-9c55-0dbb4aabf7d4")
-		(property "Reference" "U_BUS_A_LOW_?"
+		(property "Reference" "L2_BUS_A_LOW"
 			(at 207.7594 20.4302 0)
 			(effects
 				(font
@@ -5331,7 +5331,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/24a3ac67-b632-4551-8167-d5cda39cc266"
-					(reference "U_BUS_A_LOW_?")
+					(reference "L2_BUS_A_LOW")
 					(unit 1)
 				)
 			)
@@ -5347,7 +5347,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "80d432af-2115-453b-ab35-7963a3c4aaa0")
-		(property "Reference" "U?"
+		(property "Reference" "L1_RAM"
 			(at 132.08 38.3372 0)
 			(effects
 				(font
@@ -5489,7 +5489,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/24a3ac67-b632-4551-8167-d5cda39cc266"
-					(reference "U?")
+					(reference "L1_RAM")
 					(unit 1)
 				)
 			)
@@ -5505,7 +5505,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "845d11a8-60ac-4f8e-85b7-9b234d16d9ee")
-		(property "Reference" "U_BUS_DATA_?"
+		(property "Reference" "L4_BUS_DATA"
 			(at 206.4894 122.0302 0)
 			(effects
 				(font
@@ -5613,7 +5613,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/24a3ac67-b632-4551-8167-d5cda39cc266"
-					(reference "U_BUS_DATA_?")
+					(reference "L4_BUS_DATA")
 					(unit 1)
 				)
 			)
@@ -5629,7 +5629,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "b23aee63-4bcf-49bc-87f3-07120af42222")
-		(property "Reference" "U_VDATA_LATCH?"
+		(property "Reference" "L5_VDATA_LATCH"
 			(at 134.0994 113.1402 0)
 			(effects
 				(font
@@ -5737,7 +5737,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/24a3ac67-b632-4551-8167-d5cda39cc266"
-					(reference "U_VDATA_LATCH?")
+					(reference "L5_VDATA_LATCH")
 					(unit 1)
 				)
 			)
@@ -5753,7 +5753,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "b81c14dc-e262-4cde-a086-db1ae95f004a")
-		(property "Reference" "U_VBUS_HIGH?"
+		(property "Reference" "M3_VBUS_HIGH"
 			(at 59.1694 86.4702 0)
 			(effects
 				(font
@@ -5861,7 +5861,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/24a3ac67-b632-4551-8167-d5cda39cc266"
-					(reference "U_VBUS_HIGH?")
+					(reference "M3_VBUS_HIGH")
 					(unit 1)
 				)
 			)

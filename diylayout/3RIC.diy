@@ -18328,8 +18328,8 @@
         <point x="11.9" y="6.0"/>
         <point x="14.6" y="6.0"/>
         <point x="17.3" y="6.0"/>
-        <point x="17.5" y="6.0"/>
-        <point x="17.5" y="6.7"/>
+        <point x="16.7" y="6.0"/>
+        <point x="16.7" y="6.6"/>
       </controlPoints2>
       <color hex="cc00cc"/>
       <pointCount>SEVEN</pointCount>
@@ -19452,27 +19452,11 @@
       <stripeColor hex="ffff00"/>
     </diylc.connectivity.HookupWire>
     <diylc.connectivity.HookupWire>
-      <name>W813</name>
-      <alpha>127</alpha>
-      <controlPoints2>
-        <point x="17.3" y="6.8"/>
-        <point x="17.4" y="6.8"/>
-      </controlPoints2>
-      <color hex="3333ff"/>
-      <pointCount>TWO</pointCount>
-      <style>SOLID</style>
-      <smooth>true</smooth>
-      <lastUpdatePointIndex>-1</lastUpdatePointIndex>
-      <gauge>_22</gauge>
-      <striped>false</striped>
-      <stripeColor hex="ffff00"/>
-    </diylc.connectivity.HookupWire>
-    <diylc.connectivity.HookupWire>
       <name>W814</name>
       <alpha>127</alpha>
       <controlPoints2>
         <point x="17.2" y="6.7"/>
-        <point x="17.3" y="6.7"/>
+        <point x="16.6" y="6.7"/>
       </controlPoints2>
       <color hex="3333ff"/>
       <pointCount>TWO</pointCount>
@@ -19785,11 +19769,11 @@
   <lockedLayers/>
   <lockedComponents>
     <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[10]"/>
-    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard"/>
-    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[9]"/>
-    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[7]"/>
     <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[8]"/>
+    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard"/>
+    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[7]"/>
     <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[5]"/>
+    <diylc.boards.Breadboard reference="../../components/diylc.boards.Breadboard[9]"/>
   </lockedComponents>
   <hiddenLayers/>
   <font name="Dialog.plain" size="14" style="0"/>
