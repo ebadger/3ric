@@ -88,8 +88,8 @@
 			)
 		)
 	)
-	(text "3RIC 9/15/2024"
-		(exclude_from_sim no)
+	(text "3RIC 9/21/2024"
+		(exclude_from_sim yes)
 		(at 189.23 177.8 0)
 		(effects
 			(font
