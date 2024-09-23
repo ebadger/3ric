@@ -6262,6 +6262,16 @@
 	)
 	(wire
 		(pts
+			(xy 100.33 29.21) (xy 120.65 29.21)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "83736174-2c2a-483f-ba5d-69de3c613031")
+	)
+	(wire
+		(pts
 			(xy 90.17 77.47) (xy 125.73 77.47)
 		)
 		(stroke
@@ -6472,16 +6482,6 @@
 	)
 	(wire
 		(pts
-			(xy 105.41 26.67) (xy 105.41 29.21)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "b8e1aa92-93b8-4c95-b72f-a9bdd8343746")
-	)
-	(wire
-		(pts
 			(xy 238.76 134.62) (xy 246.38 134.62)
 		)
 		(stroke
@@ -6532,16 +6532,6 @@
 	)
 	(wire
 		(pts
-			(xy 100.33 26.67) (xy 105.41 26.67)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "cd2df032-0367-4f5e-a42a-375a1c86654a")
-	)
-	(wire
-		(pts
 			(xy 264.16 153.67) (xy 261.62 153.67)
 		)
 		(stroke
@@ -6559,16 +6549,6 @@
 			(type default)
 		)
 		(uuid "d469d23c-82d7-412e-8d53-b9686e7d7653")
-	)
-	(wire
-		(pts
-			(xy 105.41 29.21) (xy 120.65 29.21)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "d5a8314c-ce95-4b2f-b2d8-f796f5dde1e1")
 	)
 	(wire
 		(pts
@@ -7092,7 +7072,7 @@
 			)
 		)
 	)
-	(global_label "DISPLAY4"
+	(global_label "DISPLAY3"
 		(shape input)
 		(at 248.92 52.07 180)
 		(fields_autoplaced yes)
@@ -7104,7 +7084,7 @@
 		)
 		(uuid "31fe3db1-3dc3-434e-b1d2-aeb193525dcb")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 237.7379 51.9906 0)
+			(at 237.1657 52.07 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8104,7 +8084,7 @@
 			)
 		)
 	)
-	(global_label "GFXLOAD"
+	(global_label "VIDENABLE"
 		(shape input)
 		(at 166.37 49.53 180)
 		(fields_autoplaced yes)
@@ -8116,7 +8096,7 @@
 		)
 		(uuid "82b0c6db-1293-41b5-962b-76f5a8553286")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 155.6717 49.4506 0)
+			(at 153.4062 49.53 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12449,15 +12429,14 @@
 	(symbol
 		(lib_id "74xx:74LS08")
 		(at 114.3 96.52 0)
-		(mirror x)
-		(unit 1)
+		(unit 3)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "87c4eb6f-4606-4e3a-a1bb-c1276e57243a")
 		(property "Reference" "W1"
-			(at 114.3 104.0298 0)
+			(at 114.3 89.0102 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12465,7 +12444,7 @@
 			)
 		)
 		(property "Value" "74LS08"
-			(at 114.3 101.4929 0)
+			(at 114.3 91.5471 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12545,7 +12524,7 @@
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/896392e0-4074-452d-a014-a15ee50eb391"
 					(reference "W1")
-					(unit 1)
+					(unit 3)
 				)
 			)
 		)
