@@ -3668,28 +3668,6 @@
 			)
 		)
 	)
-	(global_label "CA14&CA15"
-		(shape input)
-		(at 67.31 45.72 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "24f0c00f-88b3-49f3-b2d1-d67da4840838")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 53.1972 45.72 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-				(hide yes)
-			)
-		)
-	)
 	(global_label "XXX4"
 		(shape input)
 		(at 218.44 152.4 180)
@@ -4284,6 +4262,28 @@
 			)
 		)
 	)
+	(global_label "!CA12&!CA13"
+		(shape input)
+		(at 67.31 45.72 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "61cb8ff9-5181-4216-9b6e-2a9e704d13ec")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 51.9876 45.72 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
 	(global_label "XX7X"
 		(shape input)
 		(at 111.76 153.67 0)
@@ -4460,6 +4460,28 @@
 			)
 		)
 	)
+	(global_label "CA14&CA15"
+		(shape input)
+		(at 67.31 40.64 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "78ce608e-7766-435d-b793-dc16930e9046")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 53.1972 40.64 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
 	(global_label "LOW0"
 		(shape input)
 		(at 113.03 66.04 180)
@@ -4588,28 +4610,6 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "!CA12&!CA13"
-		(shape input)
-		(at 67.31 40.64 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "8a476a5a-985c-43b3-ac82-f15c435604d4")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 51.9876 40.64 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
 				(hide yes)
 			)
 		)
@@ -5851,15 +5851,15 @@
 	(symbol
 		(lib_id "74xx:74LS00")
 		(at 96.52 91.44 0)
+		(mirror x)
 		(unit 2)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "1f7b0cab-3551-4ee7-84e4-7ddb8c3fcc29")
 		(property "Reference" "D4"
-			(at 96.52 83.9302 0)
+			(at 96.52 98.9498 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5867,7 +5867,7 @@
 			)
 		)
 		(property "Value" "74LS00"
-			(at 96.52 86.4671 0)
+			(at 96.52 96.4129 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6995,15 +6995,15 @@
 	(symbol
 		(lib_id "74xx:74LS32")
 		(at 120.65 30.48 0)
+		(mirror x)
 		(unit 4)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "56cbe408-ee1c-452b-83bc-645b0260e070")
 		(property "Reference" "C1"
-			(at 120.65 22.9702 0)
+			(at 120.65 37.9898 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7011,7 +7011,7 @@
 			)
 		)
 		(property "Value" "74LS32"
-			(at 120.65 25.5071 0)
+			(at 120.65 35.4529 0)
 			(effects
 				(font
 					(size 1.27 1.27)
