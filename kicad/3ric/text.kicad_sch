@@ -2134,7 +2134,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "8e95ba05-1b8b-4bd9-8690-e2fc22af709e")
-		(property "Reference" "M1_VID_TXTSHIFT"
+		(property "Reference" "M1_VID_TXTSHIFT1"
 			(at 186.69 41.5724 0)
 			(effects
 				(font
@@ -2227,7 +2227,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/9c158148-99b1-450a-8b7f-3c07647c5968"
-					(reference "M1_VID_TXTSHIFT")
+					(reference "M1_VID_TXTSHIFT1")
 					(unit 1)
 				)
 			)
@@ -2242,7 +2242,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "ecfd6f60-a892-4e3f-be85-e6ce7ab893d7")
-		(property "Reference" "M4_ROM_FONTS"
+		(property "Reference" "M4_ROM_FONTS1"
 			(at 72.39 36.83 0)
 			(effects
 				(font
@@ -2384,7 +2384,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/9c158148-99b1-450a-8b7f-3c07647c5968"
-					(reference "M4_ROM_FONTS")
+					(reference "M4_ROM_FONTS1")
 					(unit 1)
 				)
 			)

@@ -2080,9 +2080,9 @@
 			)
 		)
 	)
-	(global_label "TEXTMODE"
+	(global_label "ROM2"
 		(shape input)
-		(at 270.51 43.18 90)
+		(at 107.95 130.81 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -2090,9 +2090,9 @@
 			)
 			(justify left)
 		)
-		(uuid "031e222b-faeb-4a22-9e7b-9d1e7273d01a")
+		(uuid "02f1972c-15c0-4a9f-93cc-82ef4ab6adf5")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 270.4306 31.2721 90)
+			(at 116.1966 130.81 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2337,28 +2337,6 @@
 			)
 		)
 	)
-	(global_label "GFXPAGE"
-		(shape input)
-		(at 262.89 43.18 90)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "16384f04-47af-46af-8372-346a2f6632c6")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 262.8106 32.4212 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-				(hide yes)
-			)
-		)
-	)
 	(global_label "CD3"
 		(shape input)
 		(at 82.55 120.65 180)
@@ -2550,7 +2528,7 @@
 			)
 		)
 	)
-	(global_label "FS6"
+	(global_label "ROM1"
 		(shape input)
 		(at 107.95 128.27 0)
 		(fields_autoplaced yes)
@@ -2562,7 +2540,7 @@
 		)
 		(uuid "2727442d-c839-44c9-bb57-834213978649")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 113.8707 128.1906 0)
+			(at 116.1966 128.27 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -3573,27 +3551,6 @@
 					(size 1.27 1.27)
 				)
 				(justify right)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "GND"
-		(shape input)
-		(at 262.89 58.42 270)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "7405a3f3-3447-4c3e-9d5f-bba776e7a917")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 101.6 -125.73 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
 				(hide yes)
 			)
 		)
@@ -4687,27 +4644,6 @@
 			)
 		)
 	)
-	(global_label "GND"
-		(shape input)
-		(at 270.51 58.42 270)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "d24bb670-abf9-41cf-8d9f-b4ce97524891")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 101.6 -125.73 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-	)
 	(global_label "VCC"
 		(shape input)
 		(at 222.25 27.94 180)
@@ -5439,7 +5375,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "03f12297-1c0b-4e58-9edc-c822b432d87e")
-		(property "Reference" "D4"
+		(property "Reference" "LED4"
 			(at 34.1122 146.8882 0)
 			(effects
 				(font
@@ -5491,7 +5427,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "D4")
+					(reference "LED4")
 					(unit 1)
 				)
 			)
@@ -5575,7 +5511,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "094d2d36-0510-4470-9012-46d8ba2a6acc")
-		(property "Reference" "D7"
+		(property "Reference" "LED7"
 			(at 34.1122 120.2182 0)
 			(effects
 				(font
@@ -5627,7 +5563,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "D7")
+					(reference "LED7")
 					(unit 1)
 				)
 			)
@@ -5711,7 +5647,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "174c8115-5e72-48a1-8187-0255bebdbe47")
-		(property "Reference" "I2_LSB"
+		(property "Reference" "I2_LSB1"
 			(at 95.25 24.6126 0)
 			(effects
 				(font
@@ -5817,7 +5753,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "I2_LSB")
+					(reference "I2_LSB1")
 					(unit 1)
 				)
 			)
@@ -5832,7 +5768,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "1793c263-a93c-4d51-a57b-6efd219a7201")
-		(property "Reference" "D12"
+		(property "Reference" "LED12"
 			(at 34.1122 78.3082 0)
 			(effects
 				(font
@@ -5884,7 +5820,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "D12")
+					(reference "LED12")
 					(unit 1)
 				)
 			)
@@ -5899,7 +5835,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "1be3ffbb-87a7-47e2-add7-3471b125dc29")
-		(property "Reference" "D6"
+		(property "Reference" "LED6"
 			(at 34.1122 129.1082 0)
 			(effects
 				(font
@@ -5951,7 +5887,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "D6")
+					(reference "LED6")
 					(unit 1)
 				)
 			)
@@ -6104,7 +6040,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "23fe258a-157a-4637-aaf2-00db1196d12d")
-		(property "Reference" "D9"
+		(property "Reference" "LED9"
 			(at 34.1122 103.7082 0)
 			(effects
 				(font
@@ -6156,7 +6092,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "D9")
+					(reference "LED9")
 					(unit 1)
 				)
 			)
@@ -6240,7 +6176,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "2d3b46ba-5639-466a-b24b-6efb96ed2881")
-		(property "Reference" "D14"
+		(property "Reference" "LED14"
 			(at 34.1122 61.7982 0)
 			(effects
 				(font
@@ -6292,7 +6228,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "D14")
+					(reference "LED14")
 					(unit 1)
 				)
 			)
@@ -6307,7 +6243,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "2d770a03-2374-4d9c-b946-f1ff3a16caed")
-		(property "Reference" "D3"
+		(property "Reference" "LED3"
 			(at 34.1122 154.5082 0)
 			(effects
 				(font
@@ -6359,7 +6295,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "D3")
+					(reference "LED3")
 					(unit 1)
 				)
 			)
@@ -6669,7 +6605,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "3b517730-4008-458e-b293-953fe9203e85")
-		(property "Reference" "D18"
+		(property "Reference" "LED18"
 			(at 34.1122 28.7782 0)
 			(effects
 				(font
@@ -6721,7 +6657,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "D18")
+					(reference "LED18")
 					(unit 1)
 				)
 			)
@@ -6736,7 +6672,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "41119d00-d8d6-4df4-908e-51768b21d428")
-		(property "Reference" "D10"
+		(property "Reference" "LED10"
 			(at 34.1122 94.8182 0)
 			(effects
 				(font
@@ -6788,76 +6724,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "D10")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Device:R")
-		(at 270.51 54.61 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "45d9bd8c-83e8-4963-b84f-7965ecd1326f")
-		(property "Reference" "R27"
-			(at 272.288 53.4416 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "220"
-			(at 272.288 55.753 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal"
-			(at 268.732 54.61 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "~"
-			(at 270.51 54.61 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" ""
-			(at 270.51 54.61 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "94931889-4da6-4f9c-b412-0d5d2bb1abde")
-		)
-		(pin "2"
-			(uuid "10def139-b22c-43a9-9f27-09008847ef8d")
-		)
-		(instances
-			(project "3ric"
-				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "R27")
+					(reference "LED10")
 					(unit 1)
 				)
 			)
@@ -6872,7 +6739,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "48f56e85-0f04-4c89-a8c2-80c452f2428b")
-		(property "Reference" "D2"
+		(property "Reference" "LED2"
 			(at 34.1122 163.3982 0)
 			(effects
 				(font
@@ -6924,7 +6791,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "D2")
+					(reference "LED2")
 					(unit 1)
 				)
 			)
@@ -6939,7 +6806,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "4e43ed67-2bf8-4917-81e0-1cf2e62bc349")
-		(property "Reference" "I3_MSB"
+		(property "Reference" "I3_MSB1"
 			(at 157.48 24.6126 0)
 			(effects
 				(font
@@ -7045,7 +6912,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "I3_MSB")
+					(reference "I3_MSB1")
 					(unit 1)
 				)
 			)
@@ -7129,7 +6996,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "6845ec1d-9264-4a63-88ba-0b848c0511e2")
-		(property "Reference" "D5"
+		(property "Reference" "LED5"
 			(at 34.1122 137.9982 0)
 			(effects
 				(font
@@ -7181,74 +7048,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "D5")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Device:LED")
-		(at 262.89 46.99 270)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "69571092-f342-407a-b411-590347544628")
-		(property "Reference" "DGFXPAGE1"
-			(at 268.4018 46.8122 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "LED"
-			(at 266.0904 46.8122 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "LED_THT:LED_D3.0mm"
-			(at 262.89 46.99 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "~"
-			(at 262.89 46.99 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" ""
-			(at 262.89 46.99 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "04a1fe16-364f-4db8-aef0-1f923a9f6ce7")
-		)
-		(pin "2"
-			(uuid "3b1821cb-f073-402f-997b-d22912f4892e")
-		)
-		(instances
-			(project "3ric"
-				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "DGFXPAGE1")
+					(reference "LED5")
 					(unit 1)
 				)
 			)
@@ -7332,7 +7132,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "6dc00504-76d4-47ee-8c8d-2fa48eb5ec00")
-		(property "Reference" "Z2_VIDREG_LATCH"
+		(property "Reference" "Z2_VIDREG_LATCH1"
 			(at 95.25 100.8126 0)
 			(effects
 				(font
@@ -7438,7 +7238,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "Z2_VIDREG_LATCH")
+					(reference "Z2_VIDREG_LATCH1")
 					(unit 1)
 				)
 			)
@@ -7522,7 +7322,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "79c718ad-450a-479a-8c6d-728748352223")
-		(property "Reference" "D17"
+		(property "Reference" "LED17"
 			(at 34.1122 36.3982 0)
 			(effects
 				(font
@@ -7574,7 +7374,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "D17")
+					(reference "LED17")
 					(unit 1)
 				)
 			)
@@ -7658,7 +7458,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "8d9274ee-163b-4644-ab76-f8d8f8211219")
-		(property "Reference" "I4_BANK"
+		(property "Reference" "I4_BANK1"
 			(at 222.25 23.3426 0)
 			(effects
 				(font
@@ -7764,7 +7564,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "I4_BANK")
+					(reference "I4_BANK1")
 					(unit 1)
 				)
 			)
@@ -7848,7 +7648,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "9516f9e4-ee78-4fa3-9b6b-75d4e7da2eaa")
-		(property "Reference" "D16"
+		(property "Reference" "LED16"
 			(at 34.1122 45.2882 0)
 			(effects
 				(font
@@ -7900,7 +7700,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "D16")
+					(reference "LED16")
 					(unit 1)
 				)
 			)
@@ -7915,7 +7715,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "95ab63ec-27ed-49f9-a93f-a05d47749bbb")
-		(property "Reference" "D8"
+		(property "Reference" "LED8"
 			(at 34.1122 112.5982 0)
 			(effects
 				(font
@@ -7967,7 +7767,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "D8")
+					(reference "LED8")
 					(unit 1)
 				)
 			)
@@ -7982,7 +7782,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "bc940fbb-9e09-4d4e-b8fa-86f4bce05e7f")
-		(property "Reference" "D1"
+		(property "Reference" "LED1"
 			(at 34.1122 172.2882 0)
 			(effects
 				(font
@@ -8034,7 +7834,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "D1")
+					(reference "LED1")
 					(unit 1)
 				)
 			)
@@ -8049,7 +7849,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "bcf1d2b7-4399-41d2-b1c6-dc24e4b5d027")
-		(property "Reference" "D11"
+		(property "Reference" "LED11"
 			(at 34.1122 85.9282 0)
 			(effects
 				(font
@@ -8101,7 +7901,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "D11")
+					(reference "LED11")
 					(unit 1)
 				)
 			)
@@ -8116,7 +7916,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "c74acd29-93d0-44ee-9ba5-9a435afca9d1")
-		(property "Reference" "D19"
+		(property "Reference" "LED19"
 			(at 34.1122 21.1582 0)
 			(effects
 				(font
@@ -8168,7 +7968,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "D19")
+					(reference "LED19")
 					(unit 1)
 				)
 			)
@@ -8321,7 +8121,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "e95c4d83-9345-4517-b348-b610fb29be93")
-		(property "Reference" "D13"
+		(property "Reference" "LED13"
 			(at 34.1122 69.4182 0)
 			(effects
 				(font
@@ -8373,7 +8173,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "D13")
+					(reference "LED13")
 					(unit 1)
 				)
 			)
@@ -8656,142 +8456,6 @@
 		)
 	)
 	(symbol
-		(lib_id "Device:LED")
-		(at 270.51 46.99 270)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "f3be5c4d-438d-426f-af8b-3ff2e2b113db")
-		(property "Reference" "DTEXTMODE1"
-			(at 276.0218 46.8122 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "LED"
-			(at 273.7104 46.8122 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "LED_THT:LED_D3.0mm"
-			(at 270.51 46.99 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "~"
-			(at 270.51 46.99 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" ""
-			(at 270.51 46.99 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "31cee07d-c9d8-432a-ba57-26b7a55c297a")
-		)
-		(pin "2"
-			(uuid "0c682eae-12ea-4e74-b8f1-8b46d83104ff")
-		)
-		(instances
-			(project "3ric"
-				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "DTEXTMODE1")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Device:R")
-		(at 262.89 54.61 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "f4bac083-1710-4029-b6e6-d89dfabef738")
-		(property "Reference" "R26"
-			(at 264.668 53.4416 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "220"
-			(at 264.668 55.753 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal"
-			(at 261.112 54.61 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "~"
-			(at 262.89 54.61 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" ""
-			(at 262.89 54.61 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "557bb72f-0820-4c2a-948c-b973aef1e01d")
-		)
-		(pin "2"
-			(uuid "95bab07b-e2c9-4a50-9fae-7ad6224202d3")
-		)
-		(instances
-			(project "3ric"
-				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "R26")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
 		(lib_id "Device:R")
 		(at 41.91 152.4 90)
 		(unit 1)
@@ -9002,7 +8666,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "fae469cb-441a-4d7c-9816-7729192b94fd")
-		(property "Reference" "D15"
+		(property "Reference" "LED15"
 			(at 34.1122 52.9082 0)
 			(effects
 				(font
@@ -9054,7 +8718,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/290c257d-4d63-492d-a5ad-035c64fcf51c"
-					(reference "D15")
+					(reference "LED15")
 					(unit 1)
 				)
 			)

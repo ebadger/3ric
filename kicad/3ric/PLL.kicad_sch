@@ -12,20 +12,22 @@
 			(exclude_from_sim no)
 			(in_bom yes)
 			(on_board yes)
-			(property "Reference" "U"
-				(at -7.62 13.97 0)
+			(property "Reference" "Q3"
+				(at 2.0194 16.3998 0)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
+					(justify left)
 				)
 			)
 			(property "Value" "4046"
-				(at -7.62 -16.51 0)
+				(at 2.0194 13.8629 0)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
+					(justify left)
 				)
 			)
 			(property "Footprint" ""
@@ -46,7 +48,7 @@
 					(hide yes)
 				)
 			)
-			(property "Description" "Phase Comp & VCO"
+			(property "Description" ""
 				(at 0 0 0)
 				(effects
 					(font
@@ -262,7 +264,7 @@
 						)
 					)
 				)
-				(pin input line
+				(pin output line
 					(at 12.7 10.16 180)
 					(length 5.08)
 					(name "FOUT"
@@ -1899,6 +1901,10 @@
 		(uuid "1b60ebce-5efa-4f66-8190-966d5d520b96")
 	)
 	(no_connect
+		(at 180.34 102.87)
+		(uuid "50df0690-5e70-4090-af89-42e5949f05fd")
+	)
+	(no_connect
 		(at 113.03 170.18)
 		(uuid "651873f1-bdb3-4219-883c-db0fb0818fde")
 	)
@@ -2760,7 +2766,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Package_DIP:DIP-16_W7.62mm_Socket"
 			(at 77.47 85.09 0)
 			(effects
 				(font
@@ -2870,7 +2876,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Package_DIP:DIP-14_W7.62mm_Socket"
 			(at 113.03 76.2 0)
 			(effects
 				(font
@@ -2951,7 +2957,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "2da03b11-b3a6-42b1-8272-e0b745c9f0c2")
-		(property "Reference" "R?"
+		(property "Reference" "R35"
 			(at 185.928 112.1953 0)
 			(effects
 				(font
@@ -2969,7 +2975,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal"
 			(at 182.372 113.03 90)
 			(effects
 				(font
@@ -3005,7 +3011,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/f1111e82-0abc-4d93-b82c-5bd5a885becb"
-					(reference "R?")
+					(reference "R35")
 					(unit 1)
 				)
 			)
@@ -3020,7 +3026,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "5a8a9608-1021-4a05-8d09-600ba9c0f7d4")
-		(property "Reference" "R?"
+		(property "Reference" "R36"
 			(at 202.565 102.0353 0)
 			(effects
 				(font
@@ -3038,7 +3044,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal"
 			(at 197.612 102.87 90)
 			(effects
 				(font
@@ -3074,7 +3080,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/f1111e82-0abc-4d93-b82c-5bd5a885becb"
-					(reference "R?")
+					(reference "R36")
 					(unit 1)
 				)
 			)
@@ -3090,7 +3096,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "845ad0c2-c65a-40fb-9bef-1dd4650589e7")
-		(property "Reference" "C?"
+		(property "Reference" "C4"
 			(at 202.311 113.4653 0)
 			(effects
 				(font
@@ -3108,7 +3114,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Capacitor_THT:C_Axial_L3.8mm_D2.6mm_P7.50mm_Horizontal"
 			(at 200.3552 118.11 0)
 			(effects
 				(font
@@ -3144,7 +3150,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/f1111e82-0abc-4d93-b82c-5bd5a885becb"
-					(reference "C?")
+					(reference "C4")
 					(unit 1)
 				)
 			)
@@ -3159,7 +3165,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "a8540150-a879-4fb7-941b-d00671e4e08c")
-		(property "Reference" "R?"
+		(property "Reference" "R34"
 			(at 145.415 112.1953 0)
 			(effects
 				(font
@@ -3177,7 +3183,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal"
 			(at 140.462 113.03 90)
 			(effects
 				(font
@@ -3213,7 +3219,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/f1111e82-0abc-4d93-b82c-5bd5a885becb"
-					(reference "R?")
+					(reference "R34")
 					(unit 1)
 				)
 			)
@@ -3247,7 +3253,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Package_DIP:DIP-16_W7.62mm_Socket"
 			(at 167.64 92.71 0)
 			(effects
 				(font
@@ -3357,7 +3363,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Package_DIP:DIP-14_W7.62mm_Socket"
 			(at 105.41 170.18 0)
 			(effects
 				(font
@@ -3457,7 +3463,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Package_DIP:DIP-14_W7.62mm_Socket"
 			(at 67.31 170.18 0)
 			(effects
 				(font
@@ -3539,7 +3545,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "fa488d2c-0bd2-46a6-9f55-79625a2230c5")
-		(property "Reference" "C?"
+		(property "Reference" "C3"
 			(at 142.621 90.6053 0)
 			(effects
 				(font
@@ -3557,7 +3563,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Capacitor_THT:C_Axial_L3.8mm_D2.6mm_P7.50mm_Horizontal"
 			(at 140.6652 95.25 0)
 			(effects
 				(font
@@ -3593,7 +3599,7 @@
 		(instances
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/f1111e82-0abc-4d93-b82c-5bd5a885becb"
-					(reference "C?")
+					(reference "C3")
 					(unit 1)
 				)
 			)

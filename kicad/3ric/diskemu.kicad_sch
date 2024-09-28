@@ -2,7 +2,7 @@
 	(version 20231120)
 	(generator "eeschema")
 	(generator_version "8.0")
-	(uuid "c91e36f6-edd8-4a9f-a404-ab259a1ba4fc")
+	(uuid "d72fee54-a046-461f-b506-01c3266c5489")
 	(paper "A4")
 	(lib_symbols
 		(symbol "74xx:74LS08"
@@ -2645,6 +2645,108 @@
 				)
 			)
 		)
+		(symbol "power:PWR_FLAG"
+			(power)
+			(pin_numbers hide)
+			(pin_names
+				(offset 0) hide)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "#FLG"
+				(at 0 1.905 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Value" "PWR_FLAG"
+				(at 0 3.81 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" "~"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" "Special symbol for telling ERC where power comes from"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_keywords" "flag power"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "PWR_FLAG_0_0"
+				(pin power_out line
+					(at 0 0 90)
+					(length 0)
+					(name "~"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(symbol "PWR_FLAG_0_1"
+				(polyline
+					(pts
+						(xy 0 0) (xy 0 1.27) (xy -1.016 1.905) (xy 0 2.54) (xy 1.016 1.905) (xy 0 1.27)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+		)
+	)
+	(junction
+		(at 175.26 66.04)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "e89835f5-5dc9-459b-9ab3-0ea44f9c613d")
 	)
 	(no_connect
 		(at 143.51 171.45)
@@ -2699,6 +2801,14 @@
 		(uuid "630f9e09-88bd-4c16-bbfd-edb2237ac94c")
 	)
 	(no_connect
+		(at 143.51 109.22)
+		(uuid "6e9e54f4-76a7-417a-8c2c-6bc0d11cd534")
+	)
+	(no_connect
+		(at 148.59 109.22)
+		(uuid "7b8d564e-7c46-4cde-b30e-f7095535a957")
+	)
+	(no_connect
 		(at 129.54 187.96)
 		(uuid "7f97b26b-8ce0-4e43-a305-23f42352acd0")
 	)
@@ -2749,6 +2859,26 @@
 			(type default)
 		)
 		(uuid "18ad9329-fb9b-4c4b-9c2d-07095299fbcf")
+	)
+	(wire
+		(pts
+			(xy 163.83 66.04) (xy 175.26 66.04)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "28d88299-6256-48a2-9a38-1cb78af1f834")
+	)
+	(wire
+		(pts
+			(xy 179.07 66.04) (xy 175.26 66.04)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3fae8bb2-aa63-45cf-8409-84295842fa70")
 	)
 	(wire
 		(pts
@@ -3888,7 +4018,7 @@
 	)
 	(global_label "P3.3"
 		(shape input)
-		(at 163.83 66.04 0)
+		(at 179.07 66.04 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -3898,7 +4028,7 @@
 		)
 		(uuid "dccd1f4a-3729-47d2-ae9c-9856ced73149")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 169.5073 66.04 0)
+			(at 184.7473 66.04 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4112,7 +4242,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Package_DIP:DIP-20_W7.62mm_Socket"
 			(at 220.98 93.98 0)
 			(effects
 				(font
@@ -4234,7 +4364,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Package_DIP:DIP-14_W7.62mm_Socket"
 			(at 182.88 139.7 0)
 			(effects
 				(font
@@ -4338,7 +4468,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Package_DIP:DIP-14_W7.62mm_Socket"
 			(at 135.89 171.45 0)
 			(effects
 				(font
@@ -4444,7 +4574,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Package_DIP:DIP-14_W7.62mm_Socket"
 			(at 105.41 175.26 0)
 			(effects
 				(font
@@ -4523,6 +4653,72 @@
 		)
 	)
 	(symbol
+		(lib_id "power:PWR_FLAG")
+		(at 175.26 66.04 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "d41c1ae3-3739-43c0-9992-07971d264e3b")
+		(property "Reference" "#FLG01"
+			(at 175.26 64.135 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "PWR_FLAG"
+			(at 175.26 60.96 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 175.26 66.04 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 175.26 66.04 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Special symbol for telling ERC where power comes from"
+			(at 175.26 66.04 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "2065ba33-9a1e-44e1-9ac3-884aecba7471")
+		)
+		(instances
+			(project ""
+				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/5a1a6205-4f24-44f4-8073-12a209b744c4"
+					(reference "#FLG01")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "74xx:74LS08")
 		(at 156.21 186.69 0)
 		(unit 4)
@@ -4548,7 +4744,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Package_DIP:DIP-14_W7.62mm_Socket"
 			(at 156.21 186.69 0)
 			(effects
 				(font
@@ -4652,7 +4848,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Package_DIP:DIP-14_W7.62mm_Socket"
 			(at 137.16 185.42 0)
 			(effects
 				(font
@@ -4756,7 +4952,7 @@
 				)
 			)
 		)
-		(property "Footprint" "RPi_Pico:RPi_Pico_SMD_TH"
+		(property "Footprint" "MCU_RaspberryPi_and_Boards:RPi_Pico_SMD_TH"
 			(at 146.05 80.01 90)
 			(effects
 				(font
