@@ -546,6 +546,44 @@
 		)
 	)
 	(sheet
+		(at 105.41 161.29)
+		(size 33.02 15.24)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "5a1a6205-4f24-44f4-8073-12a209b744c4")
+		(property "Sheetname" "DiskEmulator"
+			(at 105.41 160.5784 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "diskemu.kicad_sch"
+			(at 105.41 177.1146 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "3ric"
+				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55"
+					(page "20")
+				)
+			)
+		)
+	)
+	(sheet
 		(at 24.13 160.02)
 		(size 31.75 15.24)
 		(fields_autoplaced yes)

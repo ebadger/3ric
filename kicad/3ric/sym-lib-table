@@ -154,4 +154,5 @@
   (lib (name "sn74ls131")(type "Legacy")(uri "$(KIPRJMOD)/../libraries/ul_SN74LS31N/KiCAD/2022-11-21_18-06-40/2022-11-21_18-06-40.lib")(options "")(descr ""))
   (lib (name "ay-3-8910")(type "Legacy")(uri "${KIPRJMOD}/ay-3-8910.lib")(options "")(descr ""))
   (lib (name "SNES-port")(type "KiCad")(uri "${KIPRJMOD}/../libraries/snes/Nintendo.kicad_sym")(options "")(descr ""))
+  (lib (name "MCU_RaspberryPi_and_Boards")(type "KiCad")(uri "C:/3ric/kicad/libraries/KiCad-RP-Pico-main/KiCad-RP-Pico-main/RP-Pico Libraries/MCU_RaspberryPi_and_Boards.kicad_sym")(options "")(descr ""))
 )

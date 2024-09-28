@@ -3729,7 +3729,7 @@
 	)
 	(global_label "~{CA7}"
 		(shape input)
-		(at 167.64 227.33 0)
+		(at 63.5 175.26 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -3739,7 +3739,7 @@
 		)
 		(uuid "2ad7f653-2fcd-47d4-bf05-bfced700cd62")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 173.6212 227.2506 0)
+			(at 69.4812 175.1806 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -3861,7 +3861,7 @@
 	)
 	(global_label "CA7"
 		(shape input)
-		(at 152.4 227.33 180)
+		(at 48.26 175.26 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -3871,7 +3871,7 @@
 		)
 		(uuid "5183715d-ca8e-4264-a0c3-9c7c92e0038f")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 146.4188 227.2506 0)
+			(at 42.2788 175.1806 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4830,7 +4830,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "1K8"
+		(property "Value" "2k2"
 			(at 85.852 44.8822 0)
 			(effects
 				(font
@@ -6065,7 +6065,7 @@
 	)
 	(symbol
 		(lib_id "74xx:74HC14")
-		(at 160.02 227.33 0)
+		(at 55.88 175.26 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -6074,7 +6074,7 @@
 		(fields_autoplaced yes)
 		(uuid "a0a14448-352e-459e-a6c8-999b9f0eaf63")
 		(property "Reference" "U?"
-			(at 160.02 219.8202 0)
+			(at 55.88 167.7502 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6082,7 +6082,7 @@
 			)
 		)
 		(property "Value" "74HC14"
-			(at 160.02 222.3571 0)
+			(at 55.88 170.2871 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6090,7 +6090,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 160.02 227.33 0)
+			(at 55.88 175.26 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6099,7 +6099,7 @@
 			)
 		)
 		(property "Datasheet" "http://www.ti.com/lit/gpn/sn74HC14"
-			(at 160.02 227.33 0)
+			(at 55.88 175.26 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6108,7 +6108,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 160.02 227.33 0)
+			(at 55.88 175.26 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6395,7 +6395,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "1K8"
+		(property "Value" "2k2"
 			(at 88.392 118.5422 0)
 			(effects
 				(font

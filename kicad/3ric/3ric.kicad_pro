@@ -442,6 +442,7 @@
   },
   "schematic": {
     "annotate_start_num": 0,
+    "bom_export_filename": "",
     "bom_fmt_presets": [],
     "bom_fmt_settings": {
       "field_delimiter": ",",
@@ -620,6 +621,10 @@
     [
       "90cce3b8-f6c8-4528-982c-77be2de27ade",
       "LowRes"
+    ],
+    [
+      "5a1a6205-4f24-44f4-8073-12a209b744c4",
+      "DiskEmulator"
     ]
   ],
   "text_variables": {}
