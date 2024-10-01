@@ -1,0 +1,9 @@
+EESchema-DOCLIB  Version 2.0
+#
+$CMP STX-4235-3_3-N
+D Phone Connectors 3.5mm STACKED STEREO 3P OVER 3P NONTHREAD,0.3 A,16 Volts DC,500V AC RMS for 1 minute, -25C to +85C.
+K
+F https://www.kycon.com/Pub_Eng_Draw/STX-4235-3-3-N.pdf
+$ENDCMP
+#
+#End Doc Library

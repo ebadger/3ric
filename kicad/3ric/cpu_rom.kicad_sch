@@ -3142,6 +3142,10 @@
 		(uuid "95c44f79-8e08-49fd-8d42-3fd27cf87ef0")
 	)
 	(no_connect
+		(at 68.58 88.9)
+		(uuid "9d010b6b-8420-4b44-8fc4-8e03f8c31cd1")
+	)
+	(no_connect
 		(at 68.58 114.3)
 		(uuid "9f985122-d46c-4fd7-81ff-3c64f8f8dac3")
 	)
@@ -4490,27 +4494,6 @@
 			)
 		)
 	)
-	(global_label "~{CS_ROMDISK}"
-		(shape input)
-		(at 68.58 88.9 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "72d6176f-2f30-46cc-92a3-2cf5aff9f820")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at -154.94 36.83 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-	)
 	(global_label "CD0"
 		(shape input)
 		(at 152.4 110.49 0)
@@ -5012,27 +4995,6 @@
 			)
 		)
 	)
-	(global_label "GND"
-		(shape input)
-		(at 121.92 151.13 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "c2484b78-7b9a-46e6-8e05-e193900a6f64")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 165.1 193.04 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-	)
 	(global_label "CD4"
 		(shape input)
 		(at 152.4 120.65 0)
@@ -5246,6 +5208,28 @@
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "ROM3"
+		(shape input)
+		(at 121.92 151.13 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "d939a9b0-67bf-4ac6-82ba-531136332538")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 113.6734 151.13 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
 				(hide yes)
 			)
 		)
@@ -5728,7 +5712,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 240.03 137.922 90)
 			(effects
 				(font
@@ -5795,7 +5779,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 217.17 50.292 90)
 			(effects
 				(font
@@ -5862,7 +5846,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal"
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric_Pad0.72x0.64mm_HandSolder"
 			(at 111.76 42.672 90)
 			(effects
 				(font
@@ -6111,7 +6095,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 218.44 104.902 90)
 			(effects
 				(font
@@ -6471,7 +6455,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 201.93 111.252 90)
 			(effects
 				(font
@@ -6642,7 +6626,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal"
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric_Pad0.72x0.64mm_HandSolder"
 			(at 163.83 60.198 90)
 			(effects
 				(font
@@ -6813,7 +6797,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal"
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric_Pad0.72x0.64mm_HandSolder"
 			(at 163.83 48.768 90)
 			(effects
 				(font
@@ -6880,7 +6864,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 200.66 54.102 90)
 			(effects
 				(font
@@ -6947,7 +6931,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 236.22 82.042 90)
 			(effects
 				(font
