@@ -2724,16 +2724,6 @@
 	)
 	(wire
 		(pts
-			(xy 43.18 104.14) (xy 87.63 104.14)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "06c52959-e3ba-4e2e-a4f2-43a33bc318ce")
-	)
-	(wire
-		(pts
 			(xy 107.95 45.72) (xy 107.95 38.1)
 		)
 		(stroke
@@ -2834,16 +2824,6 @@
 	)
 	(wire
 		(pts
-			(xy 72.39 127) (xy 72.39 149.86)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "25c14dc6-ca6d-4e80-8fd4-e213d481f798")
-	)
-	(wire
-		(pts
 			(xy 180.34 128.27) (xy 168.91 128.27)
 		)
 		(stroke
@@ -2891,16 +2871,6 @@
 			(type default)
 		)
 		(uuid "3a7cdde7-a560-4f5c-9068-757097dddd8b")
-	)
-	(wire
-		(pts
-			(xy 43.18 132.08) (xy 43.18 104.14)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "476dcfc1-7e47-4ad9-a368-faf26379336c")
 	)
 	(wire
 		(pts
@@ -2964,23 +2934,13 @@
 	)
 	(wire
 		(pts
-			(xy 90.17 143.51) (xy 90.17 149.86)
+			(xy 90.17 143.51) (xy 90.17 144.78)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
 		(uuid "50390a0b-31f7-49f8-8478-eac9a20d464d")
-	)
-	(wire
-		(pts
-			(xy 45.72 127) (xy 72.39 127)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "5ec2b7e7-0540-48ef-b5b9-17ad41052f55")
 	)
 	(wire
 		(pts
@@ -3061,6 +3021,16 @@
 			(type default)
 		)
 		(uuid "73aa0548-dc3d-4131-ad7e-2e986789ac4d")
+	)
+	(wire
+		(pts
+			(xy 69.85 154.94) (xy 69.85 144.78)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "752e1a57-723c-40a8-8946-55ffd702f5b4")
 	)
 	(wire
 		(pts
@@ -3214,16 +3184,6 @@
 	)
 	(wire
 		(pts
-			(xy 45.72 132.08) (xy 45.72 127)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "bdb9115a-0e38-4f8b-8dbd-5b5c975b0e3c")
-	)
-	(wire
-		(pts
 			(xy 154.94 115.57) (xy 180.34 115.57)
 		)
 		(stroke
@@ -3314,6 +3274,26 @@
 	)
 	(wire
 		(pts
+			(xy 72.39 97.79) (xy 72.39 154.94)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d8b7e860-f181-41f5-9c4c-417af5a9b03e")
+	)
+	(wire
+		(pts
+			(xy 69.85 144.78) (xy 90.17 144.78)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "dae0c1cd-0019-4426-8d21-4c1c8c865568")
+	)
+	(wire
+		(pts
 			(xy 154.94 118.11) (xy 180.34 118.11)
 		)
 		(stroke
@@ -3354,6 +3334,16 @@
 	)
 	(wire
 		(pts
+			(xy 72.39 97.79) (xy 87.63 97.79)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e999d849-6af1-4efa-8e06-bf43da1a3fdf")
+	)
+	(wire
+		(pts
 			(xy 87.63 46.99) (xy 87.63 52.07)
 		)
 		(stroke
@@ -3361,16 +3351,6 @@
 			(type default)
 		)
 		(uuid "ec08a057-d0bc-4ec9-8376-c96ddaa4165d")
-	)
-	(wire
-		(pts
-			(xy 90.17 149.86) (xy 72.39 149.86)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "ee22cfa3-d641-4f95-8940-52b02845341d")
 	)
 	(wire
 		(pts
@@ -3394,7 +3374,7 @@
 	)
 	(wire
 		(pts
-			(xy 87.63 73.66) (xy 87.63 104.14)
+			(xy 87.63 73.66) (xy 87.63 97.79)
 		)
 		(stroke
 			(width 0)
@@ -3514,6 +3494,28 @@
 	)
 	(global_label "GND"
 		(shape input)
+		(at 67.31 177.8 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "0bca66e8-9cb6-4840-97d1-eb910b538a4d")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 67.31 184.6557 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "GND"
+		(shape input)
 		(at 180.34 30.48 180)
 		(fields_autoplaced yes)
 		(effects
@@ -3574,28 +3576,6 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "BEEP"
-		(shape input)
-		(at 45.72 154.94 270)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "0e076b83-542b-4358-af94-be5bde1c6c9d")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 45.72 162.7632 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
 				(hide yes)
 			)
 		)
@@ -3732,6 +3712,28 @@
 			)
 		)
 	)
+	(global_label "BEEP"
+		(shape input)
+		(at 69.85 177.8 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "285258d6-ea0a-4abc-bf03-1bc1ce5e3162")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 69.85 185.6232 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
 	(global_label "VCC"
 		(shape input)
 		(at 135.89 25.4 90)
@@ -3864,28 +3866,6 @@
 			)
 		)
 	)
-	(global_label "GND"
-		(shape input)
-		(at 48.26 132.08 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "41fa4445-f786-4eec-befd-e5af58a860a0")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 54.5436 132.0006 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-				(hide yes)
-			)
-		)
-	)
 	(global_label "CD4"
 		(shape input)
 		(at 205.74 58.42 0)
@@ -3899,6 +3879,28 @@
 		(uuid "4b8711bb-2b4a-4692-9035-9268539e4317")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 211.9026 58.3406 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "GND"
+		(shape input)
+		(at 67.31 154.94 90)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "506e8a6d-94d4-4719-9173-c76872c5e342")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 67.31 148.0843 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4370,6 +4372,28 @@
 			)
 		)
 	)
+	(global_label "BEEP"
+		(shape input)
+		(at 72.39 177.8 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "9a96a225-677d-4cd5-bf2e-c21fd7161b6d")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 72.39 185.6232 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
 	(global_label "FS0"
 		(shape input)
 		(at 116.84 66.04 180)
@@ -4480,28 +4504,6 @@
 			)
 		)
 	)
-	(global_label "BEEP"
-		(shape input)
-		(at 43.18 154.94 270)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "ac7af030-326f-403c-9f0b-28ee7fa51fe5")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 43.18 162.7632 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-				(hide yes)
-			)
-		)
-	)
 	(global_label "CD6"
 		(shape input)
 		(at 205.74 138.43 0)
@@ -4603,28 +4605,6 @@
 		(uuid "be9fa292-3d1f-4922-985c-263d4d964ede")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 135.8106 172.6536 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "GND"
-		(shape input)
-		(at 48.26 154.94 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "c5e1d013-1c76-4892-bd9d-75e3613fd330")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 54.5436 154.8606 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5143,6 +5123,140 @@
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/daee66e3-1acf-4bf2-888e-d1288a5b77db"
 					(reference "R37")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "STX-4235-3_3-N:STX-4235-3_3-N")
+		(at 67.31 177.8 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "23badb89-333f-4ade-a2ef-b68c0cfd33d0")
+		(property "Reference" "J3"
+			(at 76.2 165.0999 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Value" "STX-4235-3_3-N"
+			(at 76.2 167.6399 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Footprint" "audiojack:STX423533N"
+			(at 162.23 158.75 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "https://www.kycon.com/Pub_Eng_Draw/STX-4235-3-3-N.pdf"
+			(at 262.23 158.75 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(property "Description" "Phone Connectors 3.5mm STACKED STEREO 3P OVER 3P NONTHREAD,0.3 A,16 Volts DC,500V AC RMS for 1 minute, -25C to +85C."
+			(at 67.31 177.8 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Height" "26.3"
+			(at 462.23 158.75 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(property "Mouser Part Number" "806-STX-4235-3/3-N"
+			(at 562.23 158.75 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(property "Mouser Price/Stock" "https://www.mouser.co.uk/ProductDetail/Kycon/STX-4235-3-3-N?qs=ZTSmt56lTDBfkW0yztFGwg%3D%3D"
+			(at 662.23 158.75 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(property "Manufacturer_Name" "Kycon"
+			(at 762.23 158.75 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(property "Manufacturer_Part_Number" "STX-4235-3/3-N"
+			(at 862.23 158.75 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(pin "B2"
+			(uuid "85339356-7b9d-4554-9f8a-9d3aa2bea96b")
+		)
+		(pin "B1"
+			(uuid "cda9bda4-e20f-47e8-92d1-adfcc18f6edf")
+		)
+		(pin "B5"
+			(uuid "3a8985d4-e910-4504-a756-61341e5858af")
+		)
+		(pin "A2"
+			(uuid "bb8b892f-00b4-4b7c-a7a8-a5129da54e9f")
+		)
+		(pin "A5"
+			(uuid "8682cbbd-a0e4-4b37-94c7-34a3b344bbb7")
+		)
+		(pin "A1"
+			(uuid "8f9a7ea7-ea01-4e40-a8ff-598b03ceb7d5")
+		)
+		(instances
+			(project "3ric"
+				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/daee66e3-1acf-4bf2-888e-d1288a5b77db"
+					(reference "J3")
 					(unit 1)
 				)
 			)
@@ -6503,140 +6617,6 @@
 			(project ""
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/daee66e3-1acf-4bf2-888e-d1288a5b77db"
 					(reference "J1")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "STX-4235-3_3-N:STX-4235-3_3-N")
-		(at 43.18 154.94 90)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "d8473a70-9575-48d6-b4a0-86e90a174e51")
-		(property "Reference" "J3"
-			(at 52.07 142.2399 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-		(property "Value" "STX-4235-3_3-N"
-			(at 52.07 144.7799 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-		(property "Footprint" "audiojack:STX423533N"
-			(at 138.1 135.89 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left top)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "https://www.kycon.com/Pub_Eng_Draw/STX-4235-3-3-N.pdf"
-			(at 238.1 135.89 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left top)
-				(hide yes)
-			)
-		)
-		(property "Description" "Phone Connectors 3.5mm STACKED STEREO 3P OVER 3P NONTHREAD,0.3 A,16 Volts DC,500V AC RMS for 1 minute, -25C to +85C."
-			(at 43.18 154.94 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Height" "26.3"
-			(at 438.1 135.89 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left top)
-				(hide yes)
-			)
-		)
-		(property "Mouser Part Number" "806-STX-4235-3/3-N"
-			(at 538.1 135.89 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left top)
-				(hide yes)
-			)
-		)
-		(property "Mouser Price/Stock" "https://www.mouser.co.uk/ProductDetail/Kycon/STX-4235-3-3-N?qs=ZTSmt56lTDBfkW0yztFGwg%3D%3D"
-			(at 638.1 135.89 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left top)
-				(hide yes)
-			)
-		)
-		(property "Manufacturer_Name" "Kycon"
-			(at 738.1 135.89 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left top)
-				(hide yes)
-			)
-		)
-		(property "Manufacturer_Part_Number" "STX-4235-3/3-N"
-			(at 838.1 135.89 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left top)
-				(hide yes)
-			)
-		)
-		(pin "B2"
-			(uuid "5036658c-02d8-46f7-a5b0-54d98e9e7cf9")
-		)
-		(pin "B1"
-			(uuid "01da62bf-110f-4b6d-be8f-d6ee53d3906b")
-		)
-		(pin "B5"
-			(uuid "05d9e039-d13f-447b-8f53-543435929ed6")
-		)
-		(pin "A2"
-			(uuid "ee4044ab-deda-4cd1-a615-f76092700444")
-		)
-		(pin "A5"
-			(uuid "9472b187-7938-49e4-81a1-b4885ffcf0ec")
-		)
-		(pin "A1"
-			(uuid "1b205f7c-7848-4437-8999-797986c06688")
-		)
-		(instances
-			(project ""
-				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/daee66e3-1acf-4bf2-888e-d1288a5b77db"
-					(reference "J3")
 					(unit 1)
 				)
 			)
