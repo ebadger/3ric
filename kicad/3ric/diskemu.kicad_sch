@@ -4636,15 +4636,15 @@
 	(symbol
 		(lib_id "74xx:74LS08")
 		(at 182.88 139.7 0)
+		(mirror x)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "217d0d07-54b4-4ba1-9b77-bba905ad6773")
 		(property "Reference" "R1"
-			(at 182.8717 130.81 0)
+			(at 182.8717 148.59 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4652,7 +4652,7 @@
 			)
 		)
 		(property "Value" "74LS08"
-			(at 182.8717 133.35 0)
+			(at 182.8717 146.05 0)
 			(effects
 				(font
 					(size 1.27 1.27)

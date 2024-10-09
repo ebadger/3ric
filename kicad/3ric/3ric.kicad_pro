@@ -565,7 +565,7 @@
       "gencad": "",
       "idf": "",
       "netlist": "",
-      "plot": "",
+      "plot": "../../schematic_pdf/",
       "pos_files": "",
       "specctra_dsn": "spectra-dsn/3ric_45.dsn",
       "step": "",
