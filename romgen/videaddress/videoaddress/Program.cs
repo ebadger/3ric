@@ -180,7 +180,7 @@ namespace videoaddress
 
                 }
 
-                ushort elem = (ushort)(y + mode + page);
+                ushort elem = (ushort)(y | mode | page);
 
                 if (full)
                 {

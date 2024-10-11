@@ -181,24 +181,24 @@ namespace fontrom
                     for(int iPal = 0; iPal < 64; iPal++)  
                     {
                         // iPal == the color palette, for now, leave them all the same
-                        byte c = 0;
-                        byte b = 0;
+                        byte c;
+                        byte b;
                         
                         byte red = 0;
                         byte green = 0;
                         byte blue = 0;
                         byte intensity = 0;
 
-                        if (r < 8)
-                        {
-                            c = (byte)(i >> 4);
-                        }
-                        else
+                        if (r > 0 && r < 9) // wtf is this off by 1?
                         {
                             c = (byte)(i & 0xF);
                         }
+                        else
+                        {
+                            c = (byte)(i >> 4);
+                        }
 
-                        int address = (NotReverseBits((byte)i)) | (r & 0xF) << 8 | (iPal & 0xFF) << 12 | 1 << 18;
+                        int address = (NotReverseBits((byte)i)) | r << 8 | iPal << 12 | 1 << 18;
                         if (address > maxaddress)
                         {
                             maxaddress = address;
@@ -212,10 +212,10 @@ namespace fontrom
                                 blue = 0;
                                 intensity = 0;
                                 break;
-                            case 1: // red
+                            case 1: // magenta
                                 red = 3;
                                 green = 0;
-                                blue = 0;
+                                blue = 1;
                                 intensity = 0;
                                 break;
                             case 2:  // dark blue
@@ -224,9 +224,9 @@ namespace fontrom
                                 blue = 3;
                                 intensity = 0;
                                 break;
-                            case 3: // purple
+                            case 3: // violet
                                 red = 3;
-                                green = 0;
+                                green = 1;
                                 blue = 3;
                                 intensity = 0;
                                 break;
@@ -249,7 +249,7 @@ namespace fontrom
                                 intensity = 0;
                                 break;
                             case 7: // Light Blue
-                                red = 2;
+                                red = 1;
                                 green = 2;
                                 blue = 3;
                                 intensity = 1;
@@ -279,9 +279,9 @@ namespace fontrom
                                 intensity = 0;
                                 break;
                             case 12: // Light Green
-                                red = 2;
+                                red = 1;
                                 green = 3;
-                                blue = 2;
+                                blue = 1;
                                 intensity = 0;
                                 break;
                             case 13: // Yellow
@@ -291,7 +291,7 @@ namespace fontrom
                                 intensity = 0;
                                 break;
                             case 14: // Aqua
-                                red = 0;
+                                red = 1;
                                 green = 3;
                                 blue = 3;
                                 intensity = 0;
