@@ -4903,12 +4903,6 @@
 		(uuid "150575ca-dc76-4b91-bf5a-7694ff1bae52")
 	)
 	(junction
-		(at 71.12 74.93)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "15581e2b-88fa-4665-8373-0e1caad31756")
-	)
-	(junction
 		(at 62.23 33.02)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -5291,12 +5285,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "69aea7f8-a831-4163-9467-4da4756a6361")
-	)
-	(junction
-		(at 217.17 74.93)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "6a738919-c61e-4385-ab52-2358b4d4622e")
 	)
 	(junction
 		(at 115.57 26.67)
@@ -5725,12 +5713,6 @@
 		(uuid "ca8feb51-0938-4c38-818a-be68676b0b45")
 	)
 	(junction
-		(at 71.12 82.55)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "cc044683-2717-4d96-8db2-c34f9ce9de17")
-	)
-	(junction
 		(at 196.85 82.55)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -5915,12 +5897,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "f3c8d79f-382c-4439-adff-302047850cbc")
-	)
-	(junction
-		(at 217.17 82.55)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "f426123b-c74a-4db4-b9f1-43783deb821b")
 	)
 	(junction
 		(at 179.07 33.02)
@@ -6500,16 +6476,6 @@
 	)
 	(wire
 		(pts
-			(xy 217.17 74.93) (xy 227.33 74.93)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "37b4379b-d4a7-4161-817b-a1e4eb58ea39")
-	)
-	(wire
-		(pts
 			(xy 55.88 189.23) (xy 76.2 189.23)
 		)
 		(stroke
@@ -6700,7 +6666,7 @@
 	)
 	(wire
 		(pts
-			(xy 71.12 74.93) (xy 83.82 74.93)
+			(xy 60.96 74.93) (xy 83.82 74.93)
 		)
 		(stroke
 			(width 0)
@@ -6737,16 +6703,6 @@
 			(type default)
 		)
 		(uuid "4f82dc48-b68e-4d50-b739-8aa874905885")
-	)
-	(wire
-		(pts
-			(xy 60.96 74.93) (xy 71.12 74.93)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "50e8ee10-79b4-4eeb-b6c5-d4a6c591162a")
 	)
 	(wire
 		(pts
@@ -6797,16 +6753,6 @@
 			(type default)
 		)
 		(uuid "54b420d4-865b-4ecb-ba57-85f7a58f5c65")
-	)
-	(wire
-		(pts
-			(xy 60.96 82.55) (xy 71.12 82.55)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "55632225-54c4-4ad4-8684-45ac8d07623d")
 	)
 	(wire
 		(pts
@@ -6870,7 +6816,7 @@
 	)
 	(wire
 		(pts
-			(xy 71.12 82.55) (xy 83.82 82.55)
+			(xy 60.96 82.55) (xy 83.82 82.55)
 		)
 		(stroke
 			(width 0)
@@ -7367,16 +7313,6 @@
 			(type default)
 		)
 		(uuid "8c11e7ec-5b3a-4ce8-907d-0c3c7a56d260")
-	)
-	(wire
-		(pts
-			(xy 217.17 82.55) (xy 227.33 82.55)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "8c85fd30-b2cc-4cc6-8487-7bbfa619acc9")
 	)
 	(wire
 		(pts
@@ -13624,75 +13560,6 @@
 	)
 	(symbol
 		(lib_id "Device:C")
-		(at 71.12 78.74 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "77db1729-33b9-4f1e-8d29-20c809e9cb2c")
-		(property "Reference" "C13"
-			(at 74.041 77.5716 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "0.1µ"
-			(at 74.041 79.883 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "Capacitor_SMD:C_1206_3216Metric_Pad1.33x1.80mm_HandSolder"
-			(at 72.0852 82.55 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "~"
-			(at 71.12 78.74 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" ""
-			(at 71.12 78.74 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "0f3028d0-7d68-4d43-a458-071b8bbab8c4")
-		)
-		(pin "2"
-			(uuid "cd07fc39-f5b3-4859-9a8b-a5a0cade47e5")
-		)
-		(instances
-			(project "3ric"
-				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/764b565a-6190-4617-a6c7-5dd4a5c3617c"
-					(reference "C13")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Device:C")
 		(at 83.82 78.74 0)
 		(unit 1)
 		(exclude_from_sim no)
@@ -16377,75 +16244,6 @@
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/764b565a-6190-4617-a6c7-5dd4a5c3617c"
 					(reference "C103")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Device:C")
-		(at 227.33 78.74 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "d07f9b8b-4112-49e6-8bea-31796a04d5b7")
-		(property "Reference" "C105"
-			(at 230.251 77.5716 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "0.1µ"
-			(at 230.251 79.883 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "Capacitor_SMD:C_1206_3216Metric_Pad1.33x1.80mm_HandSolder"
-			(at 228.2952 82.55 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "~"
-			(at 227.33 78.74 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" ""
-			(at 227.33 78.74 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "216f36a7-6e10-4d07-9b4b-c70b065d0f2d")
-		)
-		(pin "2"
-			(uuid "18c5fab6-ec2f-48c4-9c32-ca2dcf0a8481")
-		)
-		(instances
-			(project "3ric"
-				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/764b565a-6190-4617-a6c7-5dd4a5c3617c"
-					(reference "C105")
 					(unit 1)
 				)
 			)

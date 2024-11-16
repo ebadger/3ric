@@ -661,7 +661,7 @@
 				)
 			)
 		)
-		(property "Value" "1K"
+		(property "Value" "1K_0402"
 			(at 107.95 140.5636 90)
 			(effects
 				(font
@@ -729,7 +729,7 @@
 				(hide yes)
 			)
 		)
-		(property "Value" "1K"
+		(property "Value" "1K_0402"
 			(at 107.95 132.9436 90)
 			(effects
 				(font
@@ -796,7 +796,7 @@
 				)
 			)
 		)
-		(property "Value" "1K"
+		(property "Value" "1K_0402"
 			(at 107.95 148.1836 90)
 			(effects
 				(font

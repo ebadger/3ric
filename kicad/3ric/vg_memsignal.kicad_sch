@@ -1719,17 +1719,6 @@
 		)
 		(uuid "f03aa304-522d-4069-a3b5-0b6e847c5da6")
 	)
-	(text "todo: update from breadboard\n"
-		(exclude_from_sim no)
-		(at 67.31 90.17 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "b5927650-3066-4493-b1b5-dd74f117f0a2")
-	)
 	(global_label "S4"
 		(shape input)
 		(at 49.53 54.61 0)

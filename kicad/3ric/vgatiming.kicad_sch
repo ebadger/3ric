@@ -1206,6 +1206,142 @@
 				)
 			)
 		)
+		(symbol "Device:C"
+			(pin_numbers hide)
+			(pin_names
+				(offset 0.254)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "C"
+				(at 0.635 2.54 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Value" "C"
+				(at 0.635 -2.54 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Footprint" ""
+				(at 0.9652 -3.81 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" "~"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" "Unpolarized capacitor"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_keywords" "cap capacitor"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_fp_filters" "C_*"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "C_0_1"
+				(polyline
+					(pts
+						(xy -2.032 -0.762) (xy 2.032 -0.762)
+					)
+					(stroke
+						(width 0.508)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -2.032 0.762) (xy 2.032 0.762)
+					)
+					(stroke
+						(width 0.508)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "C_1_1"
+				(pin passive line
+					(at 0 3.81 270)
+					(length 2.794)
+					(name "~"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -3.81 90)
+					(length 2.794)
+					(name "~"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+		)
 		(symbol "Memory_Flash:SST39SF040"
 			(exclude_from_sim no)
 			(in_bom yes)
@@ -2102,6 +2238,16 @@
 	)
 	(wire
 		(pts
+			(xy 105.41 96.52) (xy 96.52 96.52)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "07f89dda-9520-49c4-9670-69abee0ca4f3")
+	)
+	(wire
+		(pts
 			(xy 128.27 128.27) (xy 128.27 146.05)
 		)
 		(stroke
@@ -2209,6 +2355,16 @@
 			(type default)
 		)
 		(uuid "80dc106c-b7dc-4689-81b6-1daf8dce89e8")
+	)
+	(wire
+		(pts
+			(xy 105.41 93.98) (xy 96.52 93.98)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9821b906-ac0d-4942-a410-423b3157f9ce")
 	)
 	(wire
 		(pts
@@ -2462,6 +2618,28 @@
 			)
 		)
 	)
+	(global_label "PHI16"
+		(shape input)
+		(at 83.82 66.04 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "11dc2b14-0fbc-41d8-b24e-a4c83d734054")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 75.2105 66.04 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
 	(global_label "DISPLAY3"
 		(shape input)
 		(at 265.43 88.9 0)
@@ -2563,6 +2741,28 @@
 		(uuid "2af324bd-a2dc-411e-bbbb-483a4bdd6925")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 65.0783 119.4594 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "PHI8"
+		(shape input)
+		(at 83.82 73.66 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "2ee8e433-955e-4372-a79d-29e992eaf024")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 76.42 73.66 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -3212,7 +3412,7 @@
 	)
 	(global_label "PHI16"
 		(shape input)
-		(at 96.52 93.98 0)
+		(at 105.41 93.98 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -3222,7 +3422,7 @@
 		)
 		(uuid "86d59212-e059-4113-bcac-cfd4877e8335")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 104.5574 93.9006 0)
+			(at 113.4474 93.9006 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -3938,7 +4138,7 @@
 	)
 	(global_label "PHI8"
 		(shape input)
-		(at 96.52 96.52 0)
+		(at 105.41 96.52 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -3948,7 +4148,7 @@
 		)
 		(uuid "dc8a0ace-74dd-47a1-a09f-ec6092eb9ce6")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 103.3479 96.4406 0)
+			(at 112.2379 96.4406 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4497,6 +4697,75 @@
 			(project "3ric"
 				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/16ecb62b-433c-4b3d-ae08-a168010e2dc7"
 					(reference "O4_VidSigLatch1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:C")
+		(at 83.82 69.85 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "9142be4d-f8db-42e5-9e9a-cc3572da3398")
+		(property "Reference" "C13"
+			(at 86.868 68.58 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "C60"
+			(at 86.614 70.866 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
+			(at 84.7852 73.66 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 83.82 69.85 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 83.82 69.85 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "1601b549-27a1-44ac-ad6c-5166093abe52")
+		)
+		(pin "2"
+			(uuid "29856483-b47d-48ca-b116-e7a8d6f2ea96")
+		)
+		(instances
+			(project "3ric"
+				(path "/e63e39d7-6ac0-4ffd-8aa3-1841a4541b55/16ecb62b-433c-4b3d-ae08-a168010e2dc7"
+					(reference "C13")
 					(unit 1)
 				)
 			)

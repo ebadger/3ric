@@ -14,7 +14,7 @@ namespace fontrom
 {
     internal class Program
     {
-        static bool consoleOutput = false;
+        static bool consoleOutput = true;
 
         static byte NotReverseBits(byte b)
         {
@@ -163,7 +163,7 @@ namespace fontrom
                                 }
                             }
 
-
+                            Console.Write ("   ${0:X}", b);
                             Console.WriteLine("");
                         }
                     }

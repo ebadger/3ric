@@ -19246,14 +19246,16 @@
       <name>W811</name>
       <alpha>127</alpha>
       <controlPoints2>
-        <point x="15.1" y="9.6"/>
-        <point x="13.2" y="9.4"/>
-        <point x="13.2" y="9.9"/>
-        <point x="13.2" y="10.4"/>
+        <point x="26.5" y="7.2"/>
+        <point x="25.1" y="0.2"/>
+        <point x="28.0" y="0.0"/>
+        <point x="17.1" y="1.0"/>
+        <point x="6.2" y="2.0"/>
+        <point x="10.4" y="10.6"/>
         <point x="11.7" y="10.2"/>
       </controlPoints2>
       <color hex="000000"/>
-      <pointCount>FIVE</pointCount>
+      <pointCount>SEVEN</pointCount>
       <style>SOLID</style>
       <smooth>true</smooth>
       <lastUpdatePointIndex>-1</lastUpdatePointIndex>
@@ -27739,6 +27741,43 @@
       <lastUpdatePointIndex>-1</lastUpdatePointIndex>
       <gauge>_22</gauge>
       <striped>false</striped>
+      <stripeColor hex="ffff00"/>
+    </diylc.connectivity.HookupWire>
+    <diylc.connectivity.HookupWire>
+      <name>W1261</name>
+      <alpha>127</alpha>
+      <controlPoints2>
+        <point x="22.8" y="7.3"/>
+        <point x="23.8" y="7.5"/>
+        <point x="25.6" y="7.6"/>
+        <point x="26.4" y="7.2"/>
+      </controlPoints2>
+      <color hex="ffffff"/>
+      <pointCount>FOUR</pointCount>
+      <style>SOLID</style>
+      <smooth>true</smooth>
+      <lastUpdatePointIndex>-1</lastUpdatePointIndex>
+      <gauge>_22</gauge>
+      <striped>false</striped>
+      <stripeColor hex="ffff00"/>
+    </diylc.connectivity.HookupWire>
+    <diylc.connectivity.HookupWire>
+      <name>W1262</name>
+      <alpha>127</alpha>
+      <controlPoints2>
+        <point x="15.1" y="9.5"/>
+        <point x="13.2" y="9.3"/>
+        <point x="13.2" y="9.8"/>
+        <point x="13.2" y="10.3"/>
+        <point x="11.7" y="10.1"/>
+      </controlPoints2>
+      <color hex="000000"/>
+      <pointCount>FIVE</pointCount>
+      <style>SOLID</style>
+      <smooth>true</smooth>
+      <lastUpdatePointIndex>-1</lastUpdatePointIndex>
+      <gauge>_22</gauge>
+      <striped>true</striped>
       <stripeColor hex="ffff00"/>
     </diylc.connectivity.HookupWire>
   </components>
