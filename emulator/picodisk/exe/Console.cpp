@@ -14,22 +14,20 @@ Console::InputByte(uint8_t b)
 {
 	if (b & 0x80)
 	{
-		_bufIn[_bufInEnd++] = b & 0x7F;
+		_vecBufIn.push_back(b & 0x7F);
 	}
 	else
 	{
-		_bufIn[_bufInEnd++] = toupper(b);
+		_vecBufIn.push_back(toupper(b));
 	}
 }
 
 void
 Console::ProcessInput()
 {
-	uint8_t bufInLine = _bufInPos;
-	while(bufInLine != _bufInEnd)
+	for (char c : _vecBufIn)
 	{
-		uint8_t c = _bufIn[bufInLine++];
-		if(c == '\n' || c == '\r')
+		if (c == '\n' || c == '\r')
 		{
 			ProcessLine();
 			return;
@@ -46,9 +44,11 @@ Console::ProcessLine()
 
 	_params.clear();
 
-	while( _bufInPos != _bufInEnd)
+	while( _vecBufIn.size() != 0)
 	{
-		uint8_t c = _bufIn[_bufInPos];
+		char c = _vecBufIn.front();
+		_vecBufIn.erase(_vecBufIn.begin());
+		
 		bool bQuote = (c == '\"');
         bool bLF = (c == '\n');
 		bool bCR = (c == '\r');
@@ -77,23 +77,16 @@ Console::ProcessLine()
 		{
 			p += c;
 		}
-
-		_bufInPos++;
-
-		while((c == '\n' || c == '\r') && _bufInPos != _bufInEnd)
-		{
-			_bufIn[_bufInPos] = ' ';
-			// skip line endings
-			c = _bufIn[_bufInPos++];
-		}
 	}
 
-	PrintOut("\n");
+	PrintOut("\r");
 
+#if 0
 	for (int i = 0; i < _params.size(); i++)
 	{
-		PrintOut("argv[%d] = %s, len=%d, p[0]=%d\n", i, _params[i].c_str(), _params[i].size(), _params[i].c_str()[0]);
+		PrintOut("argv[%d] = %s, len=%d, p[0]=%d\r", i, _params[i].c_str(), _params[i].size(), _params[i].c_str()[0]);
 	}
+#endif
 
 	if (_params.size() > 0)
 	{
@@ -104,9 +97,11 @@ Console::ProcessLine()
 bool 
 Console::GetOutputByte(uint8_t *byte)
 {
-	if (_bufPos != _bufEnd)
+	if (_vecBufOut.size() > 0)
 	{
-		*byte = _bufOut[_bufPos++];
+		*byte = _vecBufOut.front();
+		_vecBufOut.erase(_vecBufOut.begin());
+
 		return true;
 	}
 
@@ -116,9 +111,10 @@ Console::GetOutputByte(uint8_t *byte)
 bool 
 Console::GetOutputByteLocal(uint8_t *byte)
 {
-	if (_bufPosLocal != _bufEndLocal)
+	if (!_vecBufLocal.empty())
 	{
-		*byte = _bufOutLocal[_bufPosLocal++];
+		*byte = _vecBufLocal.front();
+		_vecBufLocal.erase(_vecBufLocal.begin());
 		return true;
 	}
 
@@ -140,15 +136,14 @@ Console::PrintOut(const char *format, ...)
 	char *p = &buf[0];
 	while(*p)
 	{
+		_vecBufOut.push_back(toupper(*p));
+		_vecBufLocal.push_back(toupper(*p));
 
-		_bufOut[_bufEnd++] = toupper(*p);
-		_bufOutLocal[_bufEndLocal++] = toupper(*p);
-        
 		if (*p == '\n')
 		{
-			_bufOut[_bufEnd++] = '\r';
-			_bufOutLocal[_bufEndLocal++] = '\r';
+			_vecBufLocal.push_back('\r');
 		}
+
 		p++;
 	}
 }

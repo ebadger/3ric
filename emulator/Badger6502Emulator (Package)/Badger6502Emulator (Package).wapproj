@@ -49,6 +49,7 @@
     <GenerateTestArtifacts>True</GenerateTestArtifacts>
     <AppxBundlePlatforms>x64</AppxBundlePlatforms>
     <AppInstallerUri>http://ebadger.com</AppInstallerUri>
+    <PackageCertificateThumbprint>442E4FF5FA0D75C02A2AE66DAA73B234EF6734A7</PackageCertificateThumbprint>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <AppxBundle>Always</AppxBundle>
@@ -80,9 +81,7 @@
     <Content Include="Images\Square150x150Logo.scale-200.png" />
     <Content Include="Images\Square44x44Logo.scale-200.png" />
     <Content Include="Images\Square44x44Logo.targetsize-24_altform-unplated.png" />
-    <Content Include="Images\Wide310x150Logo.png" />
     <Content Include="Images\StoreLogo.png" />
-    <Content Include="Wide310x150Logo.scale-200.png" />
     <Content Include="Package.appinstaller" />
   </ItemGroup>
   <ItemGroup>

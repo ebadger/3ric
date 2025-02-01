@@ -1,4 +1,5 @@
 
+project(picodrive)
 add_executable(picodrive)
 
 #pico_set_binary_type(picodrive no_flash)

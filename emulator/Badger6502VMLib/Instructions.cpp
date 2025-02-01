@@ -1019,7 +1019,8 @@ uint8_t CPU::NonMaskableInterrupt()
 
 	if (flags.bits.I == 1)
 	{
-		return 0;
+		// NMI ignores the interrupt flag
+		// return 0;
 	}
 
 	waitForInterrupt = false;

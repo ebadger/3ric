@@ -46,7 +46,7 @@ const uint UART_RX_PIN = 1;
 #define GPIO_A2      20
 #define GPIO_A3      21
 #define GPIO_LAST    21
-#define GPIO_OE      22
+#define GPIO_HDDLED  22
 #define GPIO_LED     25
 #define GPIO_PHIO    26
 #define GPIO_PHIO2   27
@@ -192,9 +192,9 @@ void init_GPIO()
         //gpio_pull_down(i);
     }
 
-    gpio_init(GPIO_OE);
-    gpio_set_dir(GPIO_OE, GPIO_OUT);
-    gpio_put(GPIO_OE, false);
+    gpio_init(GPIO_HDDLED);
+    gpio_set_dir(GPIO_HDDLED, GPIO_OUT);
+    gpio_put(GPIO_HDDLED, false);
     
     gpio_init(GPIO_PHIO);
     gpio_set_dir(GPIO_PHIO, GPIO_OUT);
@@ -221,7 +221,7 @@ void init_console()
     {
         for(int i = 0; i < params.size(); i++)
         {
-            _console->PrintOut("echo: %s\n", params[i].c_str());
+            _console->PrintOut("echo: %s\r", params[i].c_str());
         }
     }));
 
@@ -235,7 +235,7 @@ void init_console()
 
         for (std::string s : vecFiles)
         {
-            _console->PrintOut("%s\n", s.c_str());
+            _console->PrintOut("%s\r", s.c_str());
 
             if(_console->HasOutput())
             {
@@ -251,11 +251,11 @@ void init_console()
     new Command(std::string("LOAD"), 
     [&](std::vector<std::string>& params) -> void
     {
-        _console->PrintOut("params=%d\n", params.size());
+        //_console->PrintOut("params=%d\n", params.size());
 
         if (params.size() != 2)
         {
-            _console->PrintOut("usage: load [filename]\n");
+            _console->PrintOut("usage: load [filename]\r");
             return;
         }
 
@@ -263,11 +263,11 @@ void init_console()
         
         if (_driveEmulator->GetActiveDisk()->InsertDisk(params[1].c_str()))
         {
-            _console->PrintOut("WOZ2 disk image loaded\n");
+            _console->PrintOut("WOZ2 disk image loaded\r");
         }
         else
         {
-            _console->PrintOut("WOZ2 disk image load failed\n");
+            _console->PrintOut("WOZ2 disk image load failed\r");
         }
     }));
 
@@ -279,7 +279,7 @@ void init_console()
 
         if(pData)
         {
-            _console->PrintOut("Version: %d\nCreator: %s\nCompat HW: %d\nReq RAM: %d\nLargest Track: %d\n", 
+            _console->PrintOut("Version: %d\rCreator: %s\rCompat HW: %d\rReq RAM: %d\rLargest Track: %d\r", 
                     pData->Version,
                     pData->Creator,
                     pData->CompatibleHardware,
@@ -289,7 +289,7 @@ void init_console()
         }
         else 
         {
-            _console->PrintOut("No disk loaded in active drive\n");
+            _console->PrintOut("No disk loaded in active drive\r");
         }
     }));
 
@@ -297,7 +297,7 @@ void init_console()
     new Command(std::string("RUN"), 
     [&](std::vector<std::string>& params) -> void
     {
-            _console->PrintOut("%cJ C600\n", 
+            _console->PrintOut("%cJ C600\r", 
                     0x84);
     }));
 

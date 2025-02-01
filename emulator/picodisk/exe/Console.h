@@ -53,22 +53,14 @@ public:
 	void PrintOut(const char *format, ...);
 	void AddCommand(Command *c);
 	void ProcessInput();
-    bool HasOutput() { return _bufPosLocal != _bufEndLocal; }
+    bool HasOutput() { return _vecBufLocal.size() > 0; }
 private:
 	void ProcessLine();
 	void ProcessCommand();
 
-	char                              _bufIn[255] = {0};
-	uint8_t                           _bufInPos = 0;
-    uint8_t                           _bufInEnd = 0;
-
-	char                              _bufOut[255] = {};
-	uint8_t                           _bufPos = 0;
-    uint8_t                           _bufEnd = 0;
-
-    char                              _bufOutLocal[255] = {};
-	uint8_t                           _bufPosLocal = 0;
-	uint8_t                           _bufEndLocal = 0;
+	std::vector<char>                 _vecBufIn;
+	std::vector<char>                 _vecBufOut;
+	std::vector<char>                 _vecBufLocal;
 
 	std::vector<std::string>		  _params;
 	std::map<std::string, Command *>  _commands;

@@ -8,7 +8,7 @@
 #include <functional>
 #include <unordered_map>
 #include "badgervmpal.h"
-#include "DriveEmulator.h"
+#include <DriveEmulator.h>
 
 using namespace std;
 

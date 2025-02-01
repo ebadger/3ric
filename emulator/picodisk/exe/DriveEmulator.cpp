@@ -68,6 +68,7 @@ __not_in_flash_func(DriveEmulator::AddCycles)(uint32_t cycles)
 		{
 			_motorStarting = 0;
 			_motorRunning = true;
+			gpio_put(22, true);
 			//_console->PrintOut("Motor started\n");
 		}
 
@@ -81,6 +82,8 @@ __not_in_flash_func(DriveEmulator::AddCycles)(uint32_t cycles)
 	{
 		if (_cycles - _motorStopping >= ONE_SECOND)
 		{
+			gpio_put(22, false);
+			
 			_motorStopping = 0;
 			_motorRunning = false;
 			_D[_activeDisk].SetSpinning(false);
