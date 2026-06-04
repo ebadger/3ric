@@ -241,7 +241,7 @@ namespace winrt::Badger6502Emulator::implementation
                 else if (appleEmulationItem().IsChecked())
                 {
                     EnterCriticalSection(&_cs);
-                    _vm.WriteData(0xC000, 0x80 | toupper((char)args.Key()));
+                    _vm.WriteData(0xC000, 0x80 | (uint8_t)toupper((int)args.Key()));
                     LeaveCriticalSection(&_cs);
                 }
 
@@ -1005,8 +1005,8 @@ namespace winrt::Badger6502Emulator::implementation
 
         _vm.CallbackWriteMemory = [&](uint16_t address, uint8_t byte) -> void
         {
-            if (address == MM_VIA1_START + VIA::ORA_IRA_2
-                || address == MM_VIA1_START + VIA::ORA_IRA)
+            if (address == MM_VIA1_START + (uint16_t)VIA::ORA_IRA_2
+                || address == MM_VIA1_START + (uint16_t)VIA::ORA_IRA)
             {
                 // SD Card
                 uint8_t reg = _vm.GetVIA1()->ReadRegister(VIA::ORA_IRA);
@@ -1145,9 +1145,9 @@ namespace winrt::Badger6502Emulator::implementation
         WCHAR dir[MAX_PATH] = {};
         GetCurrentDirectoryW(MAX_PATH, (LPWSTR)dir);
         
-        _sdcard.LoadImageFile(L"\\3ric\\emulator\\data\\sd.001");
+        _sdcard.LoadImageFile(const_cast<wchar_t*>(L"\\3ric\\emulator\\data\\sd.001"));
 
-        uint32_t retval = _fontFile.MapFile(L"\\3ric\\emulator\\data\\fontrom.dat");
+        uint32_t retval = _fontFile.MapFile(const_cast<wchar_t*>(L"\\3ric\\emulator\\data\\fontrom.dat"));
         if (retval != 0)
         {
             __debugbreak();
