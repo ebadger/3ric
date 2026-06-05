@@ -52,4 +52,21 @@
       </CppWinRTPlatformWinMDReferences>
     </ItemGroup>
   </Target>
+  <!-- Decompress sd.zip to output data directory at build time -->
+  <Target Name="DecompressSdCard" AfterTargets="Link" Inputs="$(MSBuildThisFileDirectory)..\Data\sd.zip" Outputs="$(OutDir)data\sd.001">
+    <MakeDir Directories="$(OutDir)data" />
+    <Exec Command="tar -xf &quot;$(MSBuildThisFileDirectory)..\Data\sd.zip&quot; -C &quot;$(OutDir)data&quot;" />
+  </Target>
+  <!-- Copy other data files to output directory for packaging -->
+  <Target Name="CopyDataFiles" AfterTargets="Link">
+    <MakeDir Directories="$(OutDir)data" />
+    <ItemGroup>
+      <DataFiles Include="$(MSBuildThisFileDirectory)..\Data\fontrom.dat" />
+      <DataFiles Include="$(MSBuildThisFileDirectory)..\Data\badger6502.bin" />
+      <DataFiles Include="$(MSBuildThisFileDirectory)..\Data\badger6502.dbg" />
+      <DataFiles Include="$(MSBuildThisFileDirectory)..\Data\loderun.bin" />
+      <DataFiles Include="$(MSBuildThisFileDirectory)..\Data\loderun.dbg" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DataFiles)" DestinationFolder="$(OutDir)data" SkipUnchangedFiles="true" />
+  </Target>
 </Project>
