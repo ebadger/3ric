@@ -28,6 +28,49 @@ using namespace winrt::Windows::Graphics::Imaging;
 using namespace Badger6502Emulator;
 using namespace Badger6502Emulator::implementation;
 
+// Resolve a relative path against the package install location
+static std::wstring GetPackagePath(const wchar_t* relativePath)
+{
+    auto package = winrt::Windows::ApplicationModel::Package::Current();
+    std::wstring basePath{ package.InstalledLocation().Path() };
+    basePath += L"\\";
+    basePath += relativePath;
+    return basePath;
+}
+
+static std::string GetPackagePathNarrow(const char* relativePath)
+{
+    auto package = winrt::Windows::ApplicationModel::Package::Current();
+    auto installedPath = package.InstalledLocation().Path();
+    std::string basePath;
+    for (auto ch : installedPath)
+        basePath += static_cast<char>(ch);
+    basePath += "\\";
+    basePath += relativePath;
+    return basePath;
+}
+
+// Get a writable path in the app's local data folder, copying from the package if needed
+static std::wstring GetWritableDataPath(const wchar_t* relativePath)
+{
+    auto localFolder = winrt::Windows::Storage::ApplicationData::Current().LocalFolder().Path();
+    std::wstring destPath{ localFolder };
+    destPath += L"\\";
+    destPath += relativePath;
+
+    // If the file doesn't exist in local data, copy from package
+    if (GetFileAttributesW(destPath.c_str()) == INVALID_FILE_ATTRIBUTES)
+    {
+        // Ensure directory exists
+        std::wstring destDir = destPath.substr(0, destPath.find_last_of(L'\\'));
+        CreateDirectoryW(destDir.c_str(), nullptr);
+
+        auto srcPath = GetPackagePath(relativePath);
+        CopyFileW(srcPath.c_str(), destPath.c_str(), TRUE);
+    }
+    return destPath;
+}
+
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
 
@@ -1145,27 +1188,33 @@ namespace winrt::Badger6502Emulator::implementation
         WCHAR dir[MAX_PATH] = {};
         GetCurrentDirectoryW(MAX_PATH, (LPWSTR)dir);
         
-        _sdcard.LoadImageFile(const_cast<wchar_t*>(L"\\3ric\\emulator\\data\\sd.001"));
+        auto sdPath = GetWritableDataPath(L"data\\sd.001");
+        _sdcard.LoadImageFile(const_cast<wchar_t*>(sdPath.c_str()));
 
-        uint32_t retval = _fontFile.MapFile(const_cast<wchar_t*>(L"\\3ric\\emulator\\data\\fontrom.dat"));
+        auto fontPath = GetPackagePath(L"data\\fontrom.dat");
+        uint32_t retval = _fontFile.MapFile(const_cast<wchar_t*>(fontPath.c_str()));
         if (retval != 0)
         {
             __debugbreak();
         }
 
         //if (vm.LoadBinaryFile("c:\\6502_65C02_functional_tests\\6502_functional_test.bin", 0))
-        if (_vm.LoadBinaryFile("\\3ric\\emulator\\data\\badger6502.bin", 0x0000))
+        auto binPath = GetPackagePathNarrow("data\\badger6502.bin");
+        if (_vm.LoadBinaryFile(binPath.c_str(), 0x0000))
         {
             memcpy(_vm.GetBasicRom(), &_vm.GetData()[0x9000], sizeof(uint8_t) * 0x3000);
 
-            _vm.LoadRomDiskFile("\\3ric\\emulator\\data\\loderun.bin");
+            auto loderunPath = GetPackagePathNarrow("data\\loderun.bin");
+            _vm.LoadRomDiskFile(loderunPath.c_str());
 
             // load Loderunner into RAM
             //memcpy(&_vm.GetData()[0x800], &_vm.GetRomDisk()[0], sizeof(uint8_t) * 0xB600);
 
 
-            _fHasSymbols = DebugSymbols::LoadDebugFile("\\3ric\\emulator\\data\\badger6502.dbg");
-            DebugSymbols::LoadDebugFile("\\3ric\\emulator\\data\\loderun.dbg");
+            auto dbgPath = GetPackagePathNarrow("data\\badger6502.dbg");
+            _fHasSymbols = DebugSymbols::LoadDebugFile(dbgPath.c_str());
+            auto loderunDbgPath = GetPackagePathNarrow("data\\loderun.dbg");
+            DebugSymbols::LoadDebugFile(loderunDbgPath.c_str());
 
             //_vm.LoadBinaryFile("c:\\eb6502\\targets\\breakout_0803.bin", 0x4000);
             //_vm.LoadBinaryFile("c:\\eb6502\\targets\\gomoku.bin", 0x4000);
