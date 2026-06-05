@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- Stub targets for Desktop Bridge / Windows Application Packaging -->
+  <Target Name="GetPackagingOutputs" />
+  <Target Name="_GenerateAppxPackage" />
+  <Target Name="_CopyFilesToPackageLayout" />
+  <Target Name="Build" DependsOnTargets="$(BuildDependsOn)">
+    <Message Text="Badger6502Emulator (Package): Packaging build skipped (DesktopBridge stub)." Importance="high" />
+  </Target>
+  <PropertyGroup>
+    <BuildDependsOn></BuildDependsOn>
+  </PropertyGroup>
+</Project>
