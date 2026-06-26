@@ -50,7 +50,6 @@
   <header>
     <h1>3ric&nbsp;&mdash;&nbsp;Apple-II-clone&nbsp;65C02&nbsp;(WebAssembly)</h1>
     <button id="reset">Reset</button>
-    <button id="loderun">Load Lode Runner</button>
     <button id="bootdisk">Boot Disk</button>
     <label class="filebtn">Insert .woz&hellip;<input type="file" id="diskfile" accept=".woz" /></label>
     <button id="mountsd">Mount SD (DIR)</button>
@@ -73,9 +72,9 @@
   <footer>
     65C02 emulator core (C++) + WozLib compiled to WebAssembly via Emscripten. Boots the real 512KB ROM,
     renders Apple-II text/hi-res to the canvas, and feeds keystrokes through the memory-mapped keyboard ($C000).
-    Click the screen and type. &ldquo;Load Lode Runner&rdquo; launches the romdisk game. &ldquo;Boot Disk&rdquo;
-    boots the bundled 5.25&Prime; floppy (or pick a .woz with &ldquo;Insert&rdquo;) through the Disk&nbsp;II ROM at
-    $C600. &ldquo;Mount SD&rdquo; enters the DOS shell (prompt &ldquo;&gt;&rdquo;) and lists the micro-SD card.
+    Click the screen and type. &ldquo;Boot Disk&rdquo; boots the bundled 5.25&Prime; floppy (or pick a .woz with
+    &ldquo;Insert&rdquo;) through the Disk&nbsp;II ROM at $C600. &ldquo;Mount SD&rdquo; enters the DOS shell
+    (prompt &ldquo;&gt;&rdquo;) and lists the micro-SD card &mdash; load games and programs from there.
     &ldquo;Speed&rdquo; sets the CPU clock (1&times; &asymp; 1&nbsp;MHz; &ldquo;Max&rdquo; runs as fast as the frame allows).
   </footer>
 
@@ -96,7 +95,6 @@
 
     let vm = null;
     let imageData = null;
-    let romdiskLen = 0;
     let sdLoaded = false;
     let sdLoading = null;
     let demoDisk = null;
@@ -104,7 +102,29 @@
 
     function hex(n, w) { return (n >>> 0).toString(16).toUpperCase().padStart(w, "0"); }
 
-    async function fetchBytes(url) {
+    // Optional CDN/R2 offload for the large static assets (the .wasm binary and
+    // everything under data/, especially the ~11.5MB SD image). Leave ASSET_BASE
+    // empty to serve them from this same origin (e.g. the Raspberry Pi). To take
+    // the heavy files off your home uplink, upload badger6502.wasm and the data/
+    // folder to a Cloudflare R2 bucket (free tier, zero egress) preserving paths,
+    // and point this at the bucket's public URL:
+    //     window.ASSET_BASE = "https://pub-<hash>.r2.dev";
+    // Set it before this script runs, or pass ?assets=<url> in the page URL.
+    // (A cross-origin bucket must send CORS headers and serve .wasm as
+    // Content-Type: application/wasm.)
+    const ASSET_BASE = (
+      new URLSearchParams(location.search).get("assets") ||
+      window.ASSET_BASE || ""
+    ).replace(/\/+$/, "");
+
+    // Resolve an asset path (e.g. "data/sd.sparse" or "badger6502.wasm") against
+    // ASSET_BASE, falling back to this origin when ASSET_BASE is empty.
+    function assetUrl(path) {
+      return ASSET_BASE ? `${ASSET_BASE}/${path}` : path;
+    }
+
+    async function fetchBytes(path) {
+      const url = assetUrl(path);
       const resp = await fetch(url);
       if (!resp.ok) throw new Error(`fetch ${url}: ${resp.status}`);
       return new Uint8Array(await resp.arrayBuffer());
@@ -181,21 +201,18 @@
     }
 
     async function loadRom() {
-      // Fetch the ROM/font/romdisk once, then reuse the cached bytes so Reset and
-      // Boot Disk re-seed the machine instantly (no re-download).
+      // Fetch the ROM + font once, then reuse the cached bytes so Reset and Boot
+      // Disk re-seed the machine instantly (no re-download).
       if (!loadRom.cache) {
-        const [rom, romdisk, font] = await Promise.all([
+        const [rom, font] = await Promise.all([
           fetchBytes("data/badger6502.bin"),
-          fetchBytes("data/loderun.bin"),
           fetchBytes("data/fontrom.dat"),
         ]);
-        loadRom.cache = { rom, romdisk, font };
+        loadRom.cache = { rom, font };
       }
-      const { rom, romdisk, font } = loadRom.cache;
+      const { rom, font } = loadRom.cache;
       vm.loadData(0x0000, rom.subarray(0, 0x10000)); // first 64KB -> address space
       vm.seedBasicRom();
-      vm.loadRomDisk(romdisk);
-      romdiskLen = romdisk.length;
       vm.loadFont(font);
       vm.reset();
     }
@@ -236,17 +253,6 @@
       document.getElementById("reset").addEventListener("click", async () => {
         inputQueue.length = 0;
         await loadRom();
-        canvas.focus();
-      });
-
-      // Launch Lode Runner from the romdisk the way the WinUI host's dev path
-      // does: copy the romdisk image into RAM at $0800 (its first bytes are
-      // JMP $6000) and jump there.
-      document.getElementById("loderun").addEventListener("click", () => {
-        inputQueue.length = 0;
-        vm.romDiskToRam(0x0800, 0x0000, romdiskLen);
-        vm.setPC(0x0800);
-        statusEl.textContent = "running Lode Runner";
         canvas.focus();
       });
 
@@ -298,7 +304,13 @@
       requestAnimationFrame(frame);
     }
 
-    createBadgerVM().then(boot).catch((err) => {
+    // Relocate the .wasm fetch through ASSET_BASE too (the small .js bootstrap
+    // stays on this origin). When ASSET_BASE is empty this is Emscripten's exact
+    // default; only a configured bucket diverts the .wasm.
+    createBadgerVM({
+      locateFile: (p, prefix) =>
+        (ASSET_BASE && p.endsWith(".wasm")) ? assetUrl(p) : prefix + p,
+    }).then(boot).catch((err) => {
       statusEl.textContent = "failed to load: " + err;
       console.error(err);
     });

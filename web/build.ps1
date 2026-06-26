@@ -76,11 +76,11 @@ $cmd = "call `"$envBat`" >nul 2>&1 && `"$empp`" $argList"
 & $env:ComSpec /c $cmd
 if ($LASTEXITCODE -ne 0) { throw "Build failed with exit code $LASTEXITCODE" }
 
-# Stage the ROM/font/romdisk images next to the page for fetch() at runtime.
+# Stage the ROM + font images next to the page for fetch() at runtime.
 # These copies are gitignored (the originals live in emulator\Data).
 $webData = Join-Path $web "data"
 New-Item -ItemType Directory -Force -Path $webData | Out-Null
-foreach ($f in @("badger6502.bin", "fontrom.dat", "loderun.bin")) {
+foreach ($f in @("badger6502.bin", "fontrom.dat")) {
     $src = Join-Path $data $f
     if (Test-Path $src) {
         Copy-Item $src (Join-Path $webData $f) -Force

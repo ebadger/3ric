@@ -2,5 +2,5 @@
 badger6502.js
 badger6502.wasm
 
-# Staged copies of ROM/font/romdisk images (originals live in emulator/Data)
+# Staged copies of ROM/font/disk/SD images (originals live in emulator/Data)
 data/

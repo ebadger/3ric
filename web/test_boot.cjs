@@ -1,7 +1,7 @@
 // Milestone 1 — headless boot smoke test for the 3ric WASM build.
 //
 // Loads the real 512KB ROM (first 64KB into the address space), seeds the BASIC
-// bank, loads the romdisk + font, resets, and runs the CPU for a while. Confirms
+// bank, loads the font, resets, and runs the CPU for a while. Confirms
 // the reset vector lands in ROM, the CPU executes sane PC ranges, the display
 // mode soft-switches get touched, and video RAM ($400-$BFF text / $2000-$5FFF
 // hi-res) receives writes — i.e. the ROM is really running.
@@ -15,7 +15,6 @@ const createBadgerVM = require("./badger6502.js");
 
 const DATA = path.join(__dirname, "data");
 const rom = fs.readFileSync(path.join(DATA, "badger6502.bin"));
-const romdisk = fs.readFileSync(path.join(DATA, "loderun.bin"));
 const font = fs.readFileSync(path.join(DATA, "fontrom.dat"));
 
 function hex(n, w = 4) {
@@ -30,9 +29,7 @@ createBadgerVM().then((Module) => {
   vm.loadData(0x0000, new Uint8Array(rom.subarray(0, 0x10000)));
   // 2) seed the BASIC ROM bank from $9000.
   vm.seedBasicRom();
-  // 3) romdisk image (Disk II / romdisk path).
-  vm.loadRomDisk(new Uint8Array(romdisk));
-  // 4) font ROM for the text renderer.
+  // 3) font ROM for the text renderer.
   vm.loadFont(new Uint8Array(font));
   // 5) reset -> PC loaded from $FFFC/$FFFD.
   vm.reset();

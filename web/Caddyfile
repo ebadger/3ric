@@ -1,0 +1,41 @@
+# Production static server for the 3ric web emulator — intended for a Raspberry
+# Pi behind a Cloudflare Tunnel.
+#
+# The tunnel (cloudflared) terminates TLS at Cloudflare's edge and forwards plain
+# HTTP to this port, so there is no TLS block here. Point the tunnel's public
+# hostname at http://localhost:8080, e.g. in ~/.cloudflared/config.yml:
+#
+#   ingress:
+#     - hostname: 3ric.example.com
+#       service: http://localhost:8080
+#     - service: http_status:404
+#
+# Run from the web/ directory (so "." is this folder, next to index.html):
+#
+#   caddy run --config Caddyfile
+#
+# Caching strategy: index.html must always revalidate so new builds appear
+# immediately; the content files (wasm/js + data/) are cached for a day, which
+# keeps Cloudflare's edge serving repeat downloads and spares the Pi's uplink.
+# If you adopt hashed/versioned asset filenames you can safely raise this to
+# "public, max-age=31536000, immutable".
+
+:8080 {
+	root * .
+	encode zstd gzip
+	file_server
+
+	# index.html: always revalidate so a rebuild is picked up right away.
+	@html path / /index.html
+	header @html Cache-Control "no-cache"
+
+	# Build output + staged data: cache hard (a day) at the browser and the
+	# Cloudflare edge. Covers badger6502.wasm/.js and everything under data/
+	# (ROM, font, disk.woz, the ~11.5MB sd.sparse).
+	@assets path *.wasm *.js /data/*
+	header @assets Cache-Control "public, max-age=86400"
+
+	# Serve WebAssembly with the correct type so the browser can stream-compile.
+	@wasm path *.wasm
+	header @wasm Content-Type "application/wasm"
+}

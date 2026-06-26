@@ -168,16 +168,6 @@ public:
         memcpy(_vm->GetBasicRom(), &_vm->GetData()[0x9000], 0x3000);
     }
 
-    // Load the 512KB romdisk image (e.g. loderun.bin) used by the Disk II /
-    // romdisk path.
-    void loadRomDisk(val bytes)
-    {
-        std::vector<uint8_t> v = convertJSArrayToNumberVector<uint8_t>(bytes);
-        uint8_t* rd = _vm->GetRomDisk();
-        size_t n = v.size() > 0x80000 ? 0x80000 : v.size();
-        if (n) memcpy(rd, v.data(), n);
-    }
-
     // Load the 512KB font ROM (fontrom.dat) used by the text renderer.
     void loadFont(val bytes)
     {
@@ -289,26 +279,10 @@ public:
     int  peek(int addr)            { return _vm->GetData()[addr & 0xFFFF]; }
 
     // Bus-level access that runs through the full memory map (soft switches,
-    // ACIA/VIA, romdisk window at $C300, Disk II, language-card banking). Use
-    // this to drive memory-mapped devices the way the CPU would.
+    // ACIA/VIA, Disk II, language-card banking). Use this to drive
+    // memory-mapped devices the way the CPU would.
     int  readBus(int addr)            { return _vm->ReadData((uint16_t)(addr & 0xFFFF)); }
     void writeBus(int addr, int value) { _vm->WriteData((uint16_t)(addr & 0xFFFF), (uint8_t)(value & 0xFF)); }
-
-    // Copy a slice of the loaded romdisk image straight into RAM (mirrors the
-    // host's dev shortcut `memcpy(&GetData()[dst], &GetRomDisk()[src], len)`)
-    // so a romdisk program (e.g. loderun.bin -> $0800) can be launched.
-    void romDiskToRam(int dst, int src, int len)
-    {
-        uint8_t* ram = _vm->GetData();
-        uint8_t* rd  = _vm->GetRomDisk();
-        for (int i = 0; i < len; i++)
-        {
-            int d = dst + i;
-            int s = src + i;
-            if (d < 0 || d > 0xFFFF || s < 0 || s >= 0x80000) break;
-            ram[d] = rd[s];
-        }
-    }
 
     // Set the program counter (e.g. to launch a freshly loaded program).
     void setPC(int addr) { _vm->GetCPU()->PC = (uint16_t)(addr & 0xFFFF); }
@@ -550,7 +524,6 @@ EMSCRIPTEN_BINDINGS(badger6502)
         .function("reset",        &WebVM::reset)
         .function("loadData",     &WebVM::loadData)
         .function("seedBasicRom", &WebVM::seedBasicRom)
-        .function("loadRomDisk",  &WebVM::loadRomDisk)
         .function("loadFont",     &WebVM::loadFont)
         .function("loadSD",       &WebVM::loadSD)
         .function("sdReadCount",  &WebVM::sdReadCount)
@@ -564,7 +537,6 @@ EMSCRIPTEN_BINDINGS(badger6502)
         .function("peek",         &WebVM::peek)
         .function("readBus",      &WebVM::readBus)
         .function("writeBus",     &WebVM::writeBus)
-        .function("romDiskToRam",  &WebVM::romDiskToRam)
         .function("setPC",        &WebVM::setPC)
         .function("drainOutput",  &WebVM::drainOutput)
         .function("pc",           &WebVM::pc)
