@@ -89,6 +89,17 @@ foreach ($f in @("badger6502.bin", "fontrom.dat", "loderun.bin")) {
     }
 }
 
+# Stage a bootable 5.25" floppy as the one-click "Boot Disk" demo. The Apple-II
+# clone has no Applesoft, so DOS-3.3 disks trap; this self-booting machine-code
+# game runs straight into a hi-res title. Copied from the in-repo WOZ test
+# images to data\disk.woz (gitignored, like the other data copies).
+$diskSrc = Join-Path $root "emulator\WozFileTestApp\testdata\WOZ 2.0\Dino Eggs - Disk 1, Side A.woz"
+if (Test-Path $diskSrc) {
+    Copy-Item $diskSrc (Join-Path $webData "disk.woz") -Force
+} else {
+    Write-Warning "demo disk missing: $diskSrc (Boot Disk button will be unavailable)."
+}
+
 # Generate the compact sparse micro-SD image (data\sd.sparse) straight from
 # emulator\Data\sd.zip. The raw image is a 2GB, mostly-zero FAT32 disk; the
 # sparse form keeps only the ~11.5MB of non-zero sectors. Skipped if already

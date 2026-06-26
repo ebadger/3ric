@@ -28,6 +28,7 @@
 
 #include <cctype>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -199,6 +200,51 @@ public:
     // Number of SD sector reads/writes the guest has issued. Proves the ROM's
     // FAT32 driver reached the card (used by test_sd.cjs).
     int sdReadCount() { return (int)_sd.GetSectorAccessCount(); }
+
+    // --- Disk II (5.25" floppy) emulation ----------------------------------
+
+    // Insert a .woz disk image into drive 0 or 1, mirroring the host's
+    // disk{1,2}Insert handlers (MainWindow.xaml.cpp): RemoveDisk() if one is
+    // present, then InsertDisk(). WozLib's loader (WozFile::OpenFile) reads
+    // through a FILE*, so the bytes are first written to Emscripten's in-memory
+    // filesystem (MEMFS) and opened by path. Returns true once a disk is
+    // present. Boot it from the monitor with "C600G" (the Disk II boot ROM is
+    // at $C600) or from BASIC with "PR#6".
+    bool insertDisk(int drive, val bytes)
+    {
+        if (drive < 0 || drive > 1) return false;
+
+        std::vector<uint8_t> v = convertJSArrayToNumberVector<uint8_t>(bytes);
+        if (v.empty()) return false;
+
+        char path[32];
+        snprintf(path, sizeof(path), "/disk%d.woz", drive);
+
+        FILE* f = fopen(path, "wb");
+        if (!f) return false;
+        size_t wrote = fwrite(v.data(), 1, v.size(), f);
+        fclose(f);
+        if (wrote != v.size()) return false;
+
+        WozDisk* disk = _vm->GetDriveEmulator()->GetDisk((uint8_t)drive);
+        if (disk->IsDiskPresent()) disk->RemoveDisk();
+        return disk->InsertDisk(path);
+    }
+
+    // Eject the disk in drive 0 or 1.
+    void removeDisk(int drive)
+    {
+        if (drive < 0 || drive > 1) return;
+        WozDisk* disk = _vm->GetDriveEmulator()->GetDisk((uint8_t)drive);
+        if (disk->IsDiskPresent()) disk->RemoveDisk();
+    }
+
+    // True if a disk is currently inserted in drive 0 or 1.
+    bool diskPresent(int drive)
+    {
+        if (drive < 0 || drive > 1) return false;
+        return _vm->GetDriveEmulator()->GetDisk((uint8_t)drive)->IsDiskPresent();
+    }
 
     // --- execution ---------------------------------------------------------
 
@@ -508,6 +554,9 @@ EMSCRIPTEN_BINDINGS(badger6502)
         .function("loadFont",     &WebVM::loadFont)
         .function("loadSD",       &WebVM::loadSD)
         .function("sdReadCount",  &WebVM::sdReadCount)
+        .function("insertDisk",   &WebVM::insertDisk)
+        .function("removeDisk",   &WebVM::removeDisk)
+        .function("diskPresent",  &WebVM::diskPresent)
         .function("run",          &WebVM::run)
         .function("waiting",      &WebVM::waiting)
         .function("keyDown",      &WebVM::keyDown)
