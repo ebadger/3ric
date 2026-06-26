@@ -14,6 +14,7 @@ $web  = $PSScriptRoot
 $root = Split-Path $web -Parent
 $lib  = Join-Path $root "emulator\Badger6502VMLib"
 $woz  = Join-Path $root "emulator\WozLib"
+$sd   = Join-Path $root "emulator\MockMicroSD"
 $data = Join-Path $root "emulator\Data"
 
 $emsdk  = if ($env:EMSDK) { $env:EMSDK } else { Join-Path $env:USERPROFILE "emsdk" }
@@ -37,6 +38,9 @@ $sources = @(
     (Join-Path $woz "DriveEmulator.cpp"),
     (Join-Path $woz "WozDisk.cpp"),
     (Join-Path $woz "WozFile.cpp"),
+    # MockMicroSD: bit-banged SPI SD card (web branch = sparse in-memory image).
+    (Join-Path $sd "SDCard.cpp"),
+    (Join-Path $sd "MappedFile.cpp"),
     # Web bridge.
     (Join-Path $web "web_bridge.cpp")
 )
@@ -54,6 +58,7 @@ $flags = @(
     "-lembind",
     "-I", $lib,
     "-I", $woz,
+    "-I", $sd,
     "-I", $web,
     "-sMODULARIZE=1",
     "-sEXPORT_NAME=createBadgerVM",
@@ -81,6 +86,28 @@ foreach ($f in @("badger6502.bin", "fontrom.dat", "loderun.bin")) {
         Copy-Item $src (Join-Path $webData $f) -Force
     } else {
         Write-Warning "data file missing: $src"
+    }
+}
+
+# Generate the compact sparse micro-SD image (data\sd.sparse) straight from
+# emulator\Data\sd.zip. The raw image is a 2GB, mostly-zero FAT32 disk; the
+# sparse form keeps only the ~11.5MB of non-zero sectors. Skipped if already
+# present (regeneration takes ~20s). Gitignored like the other data copies.
+$sparse = Join-Path $webData "sd.sparse"
+if (-not (Test-Path $sparse)) {
+    $sdScript = Join-Path $web "make_sd_sparse.py"
+    $sdZip    = Join-Path $data "sd.zip"
+    if (Test-Path $sdZip) {
+        $py = Get-Command python -ErrorAction SilentlyContinue
+        if ($py) {
+            Write-Host "Generating $sparse from sd.zip (~20s)..." -ForegroundColor Cyan
+            & $py.Source $sdScript $sdZip $sparse
+            if ($LASTEXITCODE -ne 0) { Write-Warning "sd.sparse generation failed ($LASTEXITCODE); SD card will be unavailable." }
+        } else {
+            Write-Warning "python not found; skipping sd.sparse generation (SD card will be unavailable)."
+        }
+    } else {
+        Write-Warning "SD image missing: $sdZip (SD card will be unavailable)."
     }
 }
 

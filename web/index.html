@@ -23,8 +23,11 @@
   header .hint { color: var(--dim); font-size: 12px; }
   main { flex: 1; display: flex; justify-content: center; align-items: flex-start; padding: 16px; }
   #screen {
-    /* 320x384 internal, displayed 2x with crisp pixels */
-    width: 640px; height: 768px;
+    /* Internal framebuffer is 320x384 (non-square pixels). A real Apple-II
+       display is 4:3, so the canvas element is shown at 640x480 — the buffer is
+       stretched to 4:3 exactly like the original CRT (2x horizontal, 1.25x
+       vertical). */
+    width: 640px; height: 480px;
     image-rendering: pixelated; image-rendering: crisp-edges;
     background: #000; border: 1px solid var(--dim); outline: none;
     max-width: 100%;
@@ -37,6 +40,7 @@
     <h1>3ric&nbsp;&mdash;&nbsp;Apple-II-clone&nbsp;65C02&nbsp;(WebAssembly)</h1>
     <button id="reset">Reset</button>
     <button id="loderun">Load Lode Runner</button>
+    <button id="mountsd">Mount SD (DIR)</button>
     <span class="regs" id="regs">PC:---- A:-- X:-- Y:-- SP:-- P:--</span>
     <span class="regs" id="mode">mode:---</span>
     <span class="hint" id="status">loading wasm&hellip;</span>
@@ -47,7 +51,9 @@
   <footer>
     65C02 emulator core (C++) + WozLib compiled to WebAssembly via Emscripten. Boots the real 512KB ROM,
     renders Apple-II text/hi-res to the canvas, and feeds keystrokes through the memory-mapped keyboard ($C000).
-    Click the screen and type. &ldquo;Load Lode Runner&rdquo; launches the romdisk game.
+    Click the screen and type. &ldquo;Load Lode Runner&rdquo; launches the romdisk game. &ldquo;Mount SD&rdquo;
+    enters the DOS shell (prompt &ldquo;&gt;&rdquo;) and lists the micro-SD card &mdash; then type
+    DIR, CAT, CD &lt;dir&gt;, or BRUN &lt;file&gt;.
   </footer>
 
   <script src="badger6502.js"></script>
@@ -65,6 +71,8 @@
     let vm = null;
     let imageData = null;
     let romdiskLen = 0;
+    let sdLoaded = false;
+    let sdLoading = null;
     const inputQueue = [];
 
     function hex(n, w) { return (n >>> 0).toString(16).toUpperCase().padStart(w, "0"); }
@@ -73,6 +81,26 @@
       const resp = await fetch(url);
       if (!resp.ok) throw new Error(`fetch ${url}: ${resp.status}`);
       return new Uint8Array(await resp.arrayBuffer());
+    }
+
+    // Queue an ASCII string for the memory-mapped keyboard (CR = 0x0D). The
+    // frame loop feeds one byte per strobe-clear, exactly like real typing.
+    function typeString(s) {
+      for (const ch of s) inputQueue.push(ch === "\r" ? 0x0d : ch.charCodeAt(0) & 0x7f);
+    }
+
+    // Fetch + load the sparse micro-SD image once. The card persists across CPU
+    // resets (it lives in the bridge, not the VM), so this only runs a single
+    // time. ~11.5MB, so it is loaded lazily on first "Mount SD" rather than at
+    // boot. Returns true when the image is available.
+    function ensureSD() {
+      if (sdLoaded) return Promise.resolve(true);
+      if (!sdLoading) {
+        sdLoading = fetchBytes("data/sd.sparse")
+          .then((bytes) => { sdLoaded = vm.loadSD(bytes); return sdLoaded; })
+          .catch((err) => { console.error(err); sdLoading = null; return false; });
+      }
+      return sdLoading;
     }
 
     // Apple-II key codes. The bridge ORs in bit 7 and uppercases letters.
@@ -165,6 +193,24 @@
         statusEl.textContent = "running Lode Runner";
         canvas.focus();
       });
+
+      // Mount the micro-SD card and drop into the ROM's DOS shell. "EC5CG" is
+      // the monitor's Go command pointed at $EC5C (the `dos` routine), which
+      // mounts the FAT32 card (fat32_start) and shows the ">" prompt; the
+      // trailing DIR lists the root directory. From there: CAT, CD <dir>,
+      // BLOAD/BRUN <file>, etc.
+      document.getElementById("mountsd").addEventListener("click", async () => {
+        statusEl.textContent = "loading SD image\u2026";
+        const ok = await ensureSD();
+        if (!ok) { statusEl.textContent = "SD image unavailable (run build.ps1)"; return; }
+        inputQueue.length = 0;
+        typeString("EC5CG\rDIR\r");
+        statusEl.textContent = "SD mounted \u2014 DOS shell";
+        canvas.focus();
+      });
+
+      // Warm the SD image in the background so the first "Mount SD" is instant.
+      ensureSD();
 
       requestAnimationFrame(frame);
     }

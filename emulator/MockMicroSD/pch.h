@@ -8,9 +8,21 @@
 #define PCH_H
 
 
+#if defined(__EMSCRIPTEN__)
+// Web build: no Win32. Pull in the portable shims and the standard containers
+// used by the in-memory (sparse) SD backing.
+#include <stdint.h>
+#include <cstring>
+#include <vector>
+#include <unordered_map>
+#include "web_compat.h"
+#include "MappedFile.h"
+#include "SDCard.h"
+#else
 #include <windows.h>
 #include <stdint.h>
 #include "framework.h"
 #include "mappedfile.h"
 #include "sdcard.h"
+#endif
 #endif //PCH_H

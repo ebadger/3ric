@@ -19,6 +19,10 @@
 // vm.h transitively includes cpu.h, via.h, ps2keyboard.h and DriveEmulator.h.
 #include "vm.h"
 
+// SD-card SPI mock (emulator/MockMicroSD). Its pch.h has an additive web branch
+// that pulls in web_compat.h + the in-memory sparse sector backing.
+#include "SDCard.h"
+
 #include <emscripten/bind.h>
 #include <emscripten/val.h>
 
@@ -107,6 +111,30 @@ public:
 
         // Character generator / font bank selection ($C300 control writes).
         _vm->CallbackSetMode = [this](uint8_t flags) { _font = flags & 0x3F; };
+
+        // Bit-banged SPI micro-SD card, wired exactly like the host
+        // (MainWindow.xaml.cpp): every CPU write to the VIA1 port-A register
+        // ($C201 = ORA_IRA, $C20F = ORA_IRA_2) clocks the SD state machine.
+        // CS=bit4, SCK=bit3, MOSI=bit2, MISO=bit1. The MISO result is folded
+        // back into the register so the next read of the port returns it.
+        _vm->CallbackWriteMemory = [this](uint16_t address, uint8_t /*byte*/) {
+            if (address == (uint16_t)(MM_VIA1_START + (uint16_t)VIA::ORA_IRA)
+                || address == (uint16_t)(MM_VIA1_START + (uint16_t)VIA::ORA_IRA_2))
+            {
+                uint8_t reg = _vm->GetVIA1()->ReadRegister(VIA::ORA_IRA);
+
+                _sd.SetCS(reg & 0x10);
+                _sd.SetMOSI(reg & 0x04);
+                _sd.SetSCK(reg & 0x08);
+
+                if (_sd.GetMISO())
+                    reg |= 0x02;
+                else
+                    reg &= (uint8_t)~0x02;
+
+                _vm->GetVIA1()->WriteRegister(VIA::ORA_IRA, reg);
+            }
+        };
     }
 
     ~WebVM() { delete _vm; }
@@ -156,6 +184,21 @@ public:
         size_t n = v.size() > _fontRom.size() ? _fontRom.size() : v.size();
         if (n) memcpy(_fontRom.data(), v.data(), n);
     }
+
+    // Load the micro-SD card image in the compact "SDSP" sparse format produced
+    // by web/make_sd_sparse.py (the raw image is a 2GB, mostly-zero FAT32 disk).
+    // Returns true on success. Safe to call before or after reset; the SD
+    // handshake works without it, only sector reads need the image.
+    bool loadSD(val bytes)
+    {
+        std::vector<uint8_t> v = convertJSArrayToNumberVector<uint8_t>(bytes);
+        if (v.empty()) return false;
+        return _sd.LoadSparseImage(v.data(), (uint32_t)v.size());
+    }
+
+    // Number of SD sector reads/writes the guest has issued. Proves the ROM's
+    // FAT32 driver reached the card (used by test_sd.cjs).
+    int sdReadCount() { return (int)_sd.GetSectorAccessCount(); }
 
     // --- execution ---------------------------------------------------------
 
@@ -450,6 +493,8 @@ private:
 
     uint64_t _cycles        = 0;
     uint64_t _lastDiskCycle = 0;
+
+    SDCard _sd;     // bit-banged SPI micro-SD card (sparse-backed image)
 };
 
 EMSCRIPTEN_BINDINGS(badger6502)
@@ -461,6 +506,8 @@ EMSCRIPTEN_BINDINGS(badger6502)
         .function("seedBasicRom", &WebVM::seedBasicRom)
         .function("loadRomDisk",  &WebVM::loadRomDisk)
         .function("loadFont",     &WebVM::loadFont)
+        .function("loadSD",       &WebVM::loadSD)
+        .function("sdReadCount",  &WebVM::sdReadCount)
         .function("run",          &WebVM::run)
         .function("waiting",      &WebVM::waiting)
         .function("keyDown",      &WebVM::keyDown)

@@ -1,12 +1,13 @@
 // web_compat.h — Emscripten/WebAssembly compatibility shims for the shared
-// WozLib sources, which were written against the Win32 API.
+// WozLib + MockMicroSD sources, which were written against the Win32 API.
 //
-// This header is ONLY pulled in when compiling for Emscripten (the WozLib .cpp
-// files include it under `#if defined(__EMSCRIPTEN__)`), so the existing
-// Windows / MSVC build is completely unaffected.
+// This header is ONLY pulled in when compiling for Emscripten (the affected
+// .cpp / pch files include it under `#if defined(__EMSCRIPTEN__)`), so the
+// existing Windows / MSVC build is completely unaffected.
 //
 // It provides no-op / portable stand-ins for the handful of Win32 helpers the
-// WozLib debug paths reference: OutputDebugStringA, sprintf_s and _countof.
+// debug / file paths reference: OutputDebugString(A/W), sprintf_s, swprintf_s,
+// _countof, fopen_s/fread_s and _ASSERT.
 #pragma once
 
 #if defined(__EMSCRIPTEN__)
@@ -14,6 +15,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cerrno>
+#include <cwchar>
 
 // Debug tracing → drop on the floor in the browser build.
 #ifndef OutputDebugStringA
@@ -22,10 +24,20 @@
 #ifndef OutputDebugStringW
 #define OutputDebugStringW(s) ((void)(s))
 #endif
+// Win32 OutputDebugString resolves to the wide variant under UNICODE builds;
+// the SD-card mock calls it with a wchar_t buffer.
+#ifndef OutputDebugString
+#define OutputDebugString OutputDebugStringW
+#endif
 
 // MSVC bounds-checked sprintf → portable snprintf (identical (buf, size, fmt, ...) shape).
 #ifndef sprintf_s
 #define sprintf_s snprintf
+#endif
+
+// MSVC bounds-checked wide sprintf → portable swprintf (same (buf, count, fmt, ...) shape).
+#ifndef swprintf_s
+#define swprintf_s swprintf
 #endif
 
 // MSVC array-length helper.

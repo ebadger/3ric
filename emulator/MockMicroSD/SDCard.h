@@ -4,11 +4,22 @@
 class SDCard
 {	
 public:
+#if defined(__EMSCRIPTEN__)
+	// Web build: load the compact sparse image produced by make_sd_sparse.py
+	// (SDSP container) into the in-memory sector map. Returns true on success.
+	bool LoadSparseImage(const uint8_t* data, uint32_t len);
+#else
 	uint32_t LoadImageFile(wchar_t* filename);
+#endif
 	void SetCS(bool high);
 	void SetMOSI(bool high);
 	void SetSCK(bool high);
 	bool GetMISO();
+#if defined(__EMSCRIPTEN__)
+	// Number of sector reads/writes issued by the guest (CMD17/CMD24). Lets the
+	// web test prove the ROM's FAT32 driver actually touched the SD image.
+	uint32_t GetSectorAccessCount() const { return _sectorAccessCount; }
+#endif
 
 private:
 
@@ -49,6 +60,10 @@ private:
 	
 	uint32_t _sector = 0;
 	uint32_t _pos    = 0;
+
+#if defined(__EMSCRIPTEN__)
+	uint32_t _sectorAccessCount = 0;
+#endif
 
 	MMappedFile _mappedFile;
 };
