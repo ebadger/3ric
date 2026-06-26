@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>3ric — Apple-II-clone 65C02 (WebAssembly)</title>
+<style>
+  :root { --bg:#0b0e0c; --fg:#33ff66; --dim:#1d6b33; --panel:#11140f; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: "Cascadia Code", "Consolas", ui-monospace, monospace;
+    display: flex; flex-direction: column; min-height: 100vh;
+  }
+  header { padding: 10px 16px; border-bottom: 1px solid var(--dim); display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+  header h1 { font-size: 14px; margin: 0; letter-spacing: 1px; }
+  header .regs { font-size: 12px; color: var(--dim); white-space: pre; }
+  header button {
+    background: transparent; color: var(--fg); border: 1px solid var(--dim);
+    padding: 4px 10px; cursor: pointer; font-family: inherit; font-size: 12px; border-radius: 3px;
+  }
+  header button:hover { background: var(--panel); }
+  header .hint { color: var(--dim); font-size: 12px; }
+  main { flex: 1; display: flex; justify-content: center; align-items: flex-start; padding: 16px; }
+  #screen {
+    /* Internal framebuffer is 320x384 (non-square pixels). A real Apple-II
+       display is 4:3, so the canvas element is shown at 640x480 — the buffer is
+       stretched to 4:3 exactly like the original CRT (2x horizontal, 1.25x
+       vertical). */
+    width: 640px; height: 480px;
+    image-rendering: pixelated; image-rendering: crisp-edges;
+    background: #000; border: 1px solid var(--dim); outline: none;
+    max-width: 100%;
+  }
+  footer { padding: 8px 16px; border-top: 1px solid var(--dim); font-size: 11px; color: var(--dim); }
+</style>
+</head>
+<body>
+  <header>
+    <h1>3ric&nbsp;&mdash;&nbsp;Apple-II-clone&nbsp;65C02&nbsp;(WebAssembly)</h1>
+    <button id="reset">Reset</button>
+    <button id="loderun">Load Lode Runner</button>
+    <button id="mountsd">Mount SD (DIR)</button>
+    <span class="regs" id="regs">PC:---- A:-- X:-- Y:-- SP:-- P:--</span>
+    <span class="regs" id="mode">mode:---</span>
+    <span class="hint" id="status">loading wasm&hellip;</span>
+  </header>
+  <main>
+    <canvas id="screen" width="320" height="384" tabindex="0" aria-label="emulator video"></canvas>
+  </main>
+  <footer>
+    65C02 emulator core (C++) + WozLib compiled to WebAssembly via Emscripten. Boots the real 512KB ROM,
+    renders Apple-II text/hi-res to the canvas, and feeds keystrokes through the memory-mapped keyboard ($C000).
+    Click the screen and type. &ldquo;Load Lode Runner&rdquo; launches the romdisk game. &ldquo;Mount SD&rdquo;
+    enters the DOS shell (prompt &ldquo;&gt;&rdquo;) and lists the micro-SD card &mdash; then type
+    DIR, CAT, CD &lt;dir&gt;, or BRUN &lt;file&gt;.
+  </footer>
+
+  <script src="badger6502.js"></script>
+  <script>
+    // ~1.02 MHz at 60 fps. Mirrors the host: run instructions, ticking VIAs per
+    // cycle, until roughly one frame's worth of cycles has elapsed.
+    const CYCLES_PER_FRAME = 17030;
+
+    const canvas  = document.getElementById("screen");
+    const ctx     = canvas.getContext("2d", { alpha: false });
+    const regsEl  = document.getElementById("regs");
+    const modeEl  = document.getElementById("mode");
+    const statusEl = document.getElementById("status");
+
+    let vm = null;
+    let imageData = null;
+    let romdiskLen = 0;
+    let sdLoaded = false;
+    let sdLoading = null;
+    const inputQueue = [];
+
+    function hex(n, w) { return (n >>> 0).toString(16).toUpperCase().padStart(w, "0"); }
+
+    async function fetchBytes(url) {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`fetch ${url}: ${resp.status}`);
+      return new Uint8Array(await resp.arrayBuffer());
+    }
+
+    // Queue an ASCII string for the memory-mapped keyboard (CR = 0x0D). The
+    // frame loop feeds one byte per strobe-clear, exactly like real typing.
+    function typeString(s) {
+      for (const ch of s) inputQueue.push(ch === "\r" ? 0x0d : ch.charCodeAt(0) & 0x7f);
+    }
+
+    // Fetch + load the sparse micro-SD image once. The card persists across CPU
+    // resets (it lives in the bridge, not the VM), so this only runs a single
+    // time. ~11.5MB, so it is loaded lazily on first "Mount SD" rather than at
+    // boot. Returns true when the image is available.
+    function ensureSD() {
+      if (sdLoaded) return Promise.resolve(true);
+      if (!sdLoading) {
+        sdLoading = fetchBytes("data/sd.sparse")
+          .then((bytes) => { sdLoaded = vm.loadSD(bytes); return sdLoaded; })
+          .catch((err) => { console.error(err); sdLoading = null; return false; });
+      }
+      return sdLoading;
+    }
+
+    // Apple-II key codes. The bridge ORs in bit 7 and uppercases letters.
+    function keyToByte(e) {
+      switch (e.key) {
+        case "Enter":      return 0x0d;
+        case "Backspace":  return 0x08; // left arrow / BS
+        case "Tab":        return 0x09;
+        case "Escape":     return 0x1b;
+        case "ArrowLeft":  return 0x08;
+        case "ArrowRight": return 0x15;
+        case "ArrowUp":    return 0x0b;
+        case "ArrowDown":  return 0x0a;
+      }
+      if (e.key.length === 1) return e.key.charCodeAt(0) & 0x7f;
+      return null;
+    }
+
+    function updateRegs() {
+      regsEl.textContent =
+        `PC:${hex(vm.pc(),4)} A:${hex(vm.regA(),2)} X:${hex(vm.regX(),2)} ` +
+        `Y:${hex(vm.regY(),2)} SP:${hex(vm.sp(),2)} P:${hex(vm.status(),2)}`;
+      const m = vm.textMode() ? "TEXT" : (vm.lores() ? "LORES" : "HIRES");
+      modeEl.textContent =
+        `mode:${m} pg${vm.gfxPage()+1}${vm.mixed() ? " MIX" : ""} font:${vm.font()}`;
+    }
+
+    function frame() {
+      // Feed one queued key when the keyboard strobe is clear (bit 7 of $C000).
+      if (inputQueue.length && (vm.peek(0xC000) & 0x80) === 0) {
+        vm.keyDown(inputQueue.shift());
+      }
+
+      let cyc = 0;
+      while (cyc < CYCLES_PER_FRAME) cyc += vm.run(1000);
+
+      const fb = vm.renderFrame(); // Uint8Array RGBA view over wasm heap
+      imageData.data.set(fb);
+      ctx.putImageData(imageData, 0, 0);
+
+      updateRegs();
+      requestAnimationFrame(frame);
+    }
+
+    async function loadRom() {
+      const [rom, romdisk, font] = await Promise.all([
+        fetchBytes("data/badger6502.bin"),
+        fetchBytes("data/loderun.bin"),
+        fetchBytes("data/fontrom.dat"),
+      ]);
+      vm.loadData(0x0000, rom.subarray(0, 0x10000)); // first 64KB -> address space
+      vm.seedBasicRom();
+      vm.loadRomDisk(romdisk);
+      romdiskLen = romdisk.length;
+      vm.loadFont(font);
+      vm.reset();
+    }
+
+    async function boot(Module) {
+      vm = new Module.WebVM();
+      imageData = ctx.createImageData(vm.frameWidth(), vm.frameHeight());
+
+      statusEl.textContent = "loading ROM\u2026";
+      await loadRom();
+      statusEl.textContent = "running";
+      canvas.focus();
+
+      canvas.addEventListener("keydown", (e) => {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        // Ignore OS key-repeat so a held key doesn't flood the queue; the ROM
+        // re-reads the latched $C000 char until it touches $C010.
+        if (e.repeat) { e.preventDefault(); return; }
+        const b = keyToByte(e);
+        if (b !== null) { inputQueue.push(b); e.preventDefault(); }
+      });
+
+      document.getElementById("reset").addEventListener("click", async () => {
+        inputQueue.length = 0;
+        await loadRom();
+        canvas.focus();
+      });
+
+      // Launch Lode Runner from the romdisk the way the WinUI host's dev path
+      // does: copy the romdisk image into RAM at $0800 (its first bytes are
+      // JMP $6000) and jump there.
+      document.getElementById("loderun").addEventListener("click", () => {
+        inputQueue.length = 0;
+        vm.romDiskToRam(0x0800, 0x0000, romdiskLen);
+        vm.setPC(0x0800);
+        statusEl.textContent = "running Lode Runner";
+        canvas.focus();
+      });
+
+      // Mount the micro-SD card and drop into the ROM's DOS shell. "EC5CG" is
+      // the monitor's Go command pointed at $EC5C (the `dos` routine), which
+      // mounts the FAT32 card (fat32_start) and shows the ">" prompt; the
+      // trailing DIR lists the root directory. From there: CAT, CD <dir>,
+      // BLOAD/BRUN <file>, etc.
+      document.getElementById("mountsd").addEventListener("click", async () => {
+        statusEl.textContent = "loading SD image\u2026";
+        const ok = await ensureSD();
+        if (!ok) { statusEl.textContent = "SD image unavailable (run build.ps1)"; return; }
+        inputQueue.length = 0;
+        typeString("EC5CG\rDIR\r");
+        statusEl.textContent = "SD mounted \u2014 DOS shell";
+        canvas.focus();
+      });
+
+      // Warm the SD image in the background so the first "Mount SD" is instant.
+      ensureSD();
+
+      requestAnimationFrame(frame);
+    }
+
+    createBadgerVM().then(boot).catch((err) => {
+      statusEl.textContent = "failed to load: " + err;
+      console.error(err);
+    });
+  </script>
+</body>
+</html>

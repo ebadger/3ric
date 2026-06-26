@@ -1,4 +1,6 @@
+#if defined(PLATFORM_WINDOWS)
 #include "windows.h"
+#endif
 
 #include "vm.h"
 #include "badgervmpal.h"
@@ -124,6 +126,12 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 	{
 	case MM_SS_KEYBD_STROBE:
 		_via1->SignalPin(VIA::CB1);
+#if defined(PLATFORM_WEB)
+		// Apple II semantics: any access to $C010 clears the keyboard strobe
+		// (bit 7 of $C000). The Windows/Pico hosts manage this differently, so
+		// this is web-only and additive.
+		_data[MM_SS_KEYBOARD] &= 0x7F;
+#endif
 		break;
 
 	case MM_SS_JOYSTICK:

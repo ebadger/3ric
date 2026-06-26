@@ -16,10 +16,59 @@ sd_cmd41_bytes
 
 const int c_clusterSize = 512;
 
+#if defined(__EMSCRIPTEN__)
+bool SDCard::LoadSparseImage(const uint8_t* data, uint32_t len)
+{
+	// SDSP container (see web/make_sd_sparse.py):
+	//   "SDSP" | u32 secSize | u32 totalSectors | u32 entries
+	//   then entries * (u32 sectorIndex + secSize bytes)
+	if (data == nullptr || len < 16)
+	{
+		return false;
+	}
+	if (!(data[0] == 'S' && data[1] == 'D' && data[2] == 'S' && data[3] == 'P'))
+	{
+		return false;
+	}
+
+	auto rd32 = [](const uint8_t* p) -> uint32_t {
+		return (uint32_t)p[0] | ((uint32_t)p[1] << 8)
+			| ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+	};
+
+	uint32_t secSize = rd32(data + 4);
+	uint32_t totalSectors = rd32(data + 8);
+	uint32_t entries = rd32(data + 12);
+
+	if (secSize != (uint32_t)c_clusterSize)
+	{
+		return false;
+	}
+
+	_mappedFile.InitLogical(totalSectors * secSize);
+
+	uint32_t off = 16;
+	for (uint32_t i = 0; i < entries; i++)
+	{
+		if (off + 4 + secSize > len)
+		{
+			return false;
+		}
+		uint32_t sectorIndex = rd32(data + off);
+		off += 4;
+		_mappedFile.LoadSector(sectorIndex, data + off, secSize);
+		off += secSize;
+	}
+
+	_initialized = true;
+	return true;
+}
+#else
 uint32_t SDCard::LoadImageFile(wchar_t* filename)
 {
 	return _mappedFile.MapFile(filename);
 }
+#endif
 
 void SDCard::SetCS(bool level)
 {
@@ -291,4 +340,8 @@ void SDCard::SetSector()
 	{
 		_pos = _mappedFile.GetFileSize() - 1;
 	}
+
+#if defined(__EMSCRIPTEN__)
+	_sectorAccessCount++;
+#endif
 }

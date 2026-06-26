@@ -1,6 +1,10 @@
 #include "wozfile.h"
+#if defined(__EMSCRIPTEN__)
+#include "web_compat.h"
+#else
 #include <Windows.h>
 #include <debugapi.h>
+#endif
 
 const char* c_WOZ2Header = "WOZ2";
 const char* c_WOZ1Header = "WOZ1";
