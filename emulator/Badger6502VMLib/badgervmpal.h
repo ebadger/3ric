@@ -1,4 +1,9 @@
 #pragma once
+
+#if defined(__EMSCRIPTEN__) && !defined(PLATFORM_WEB)
+#define PLATFORM_WEB
+#endif
+
 #include "vm.h"
 
 

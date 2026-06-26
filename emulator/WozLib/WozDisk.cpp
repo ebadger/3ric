@@ -1,6 +1,10 @@
 #include "WozDisk.h"
+#if defined(__EMSCRIPTEN__)
+#include "web_compat.h"
+#else
 #include <Windows.h>
 #include <debugapi.h>
+#endif
 
 char buf[255];
 

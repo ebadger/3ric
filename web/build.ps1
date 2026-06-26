@@ -1,0 +1,89 @@
+# Builds the 3ric Apple-II-clone VM core + WozLib + web bridge to WebAssembly
+# using Emscripten.
+#
+# All shared-library changes are additive and guarded with PLATFORM_WEB /
+# __EMSCRIPTEN__, so the existing Windows/Pico builds are unaffected.
+#
+# Prerequisites: the Emscripten SDK installed (see web/README.md). By default
+# this looks for emsdk at $env:EMSDK, else %USERPROFILE%\emsdk.
+#
+# Usage:  pwsh -File web\build.ps1   (run from anywhere; paths are script-relative)
+
+$ErrorActionPreference = "Stop"
+$web  = $PSScriptRoot
+$root = Split-Path $web -Parent
+$lib  = Join-Path $root "emulator\Badger6502VMLib"
+$woz  = Join-Path $root "emulator\WozLib"
+$data = Join-Path $root "emulator\Data"
+
+$emsdk  = if ($env:EMSDK) { $env:EMSDK } else { Join-Path $env:USERPROFILE "emsdk" }
+$envBat = Join-Path $emsdk "emsdk_env.bat"
+$empp   = Join-Path $emsdk "upstream\emscripten\em++.exe"
+
+if (-not (Test-Path $envBat)) { throw "emsdk not found at '$emsdk'. Set `$env:EMSDK or install per web/README.md." }
+if (-not (Test-Path $empp))   { throw "em++ not found at '$empp'. Did you run 'emsdk install/activate latest'?" }
+
+# Core VM sources. symbols.cpp (debugger) and Disassemble.cpp (Windows-only
+# VM::Disassemble) are excluded; nothing compiled for the web references them.
+$sources = @(
+    (Join-Path $lib "vm.cpp"),
+    (Join-Path $lib "cpu.cpp"),
+    (Join-Path $lib "Instructions.cpp"),
+    (Join-Path $lib "acia.cpp"),
+    (Join-Path $lib "via.cpp"),
+    (Join-Path $lib "PS2Keyboard.cpp"),
+    (Join-Path $lib "badgervmpal.cpp"),
+    # WozLib (DriveEmulator is embedded in VM; WozDisk/WozFile are needed to link).
+    (Join-Path $woz "DriveEmulator.cpp"),
+    (Join-Path $woz "WozDisk.cpp"),
+    (Join-Path $woz "WozFile.cpp"),
+    # Web bridge.
+    (Join-Path $web "web_bridge.cpp")
+)
+
+foreach ($s in $sources) {
+    if (-not (Test-Path $s)) { throw "source not found: $s" }
+}
+
+$out = Join-Path $web "badger6502.js"
+
+$flags = @(
+    "-std=c++17",
+    "-O2",
+    "-DPLATFORM_WEB",
+    "-lembind",
+    "-I", $lib,
+    "-I", $woz,
+    "-I", $web,
+    "-sMODULARIZE=1",
+    "-sEXPORT_NAME=createBadgerVM",
+    "-sALLOW_MEMORY_GROWTH=1",
+    "-sENVIRONMENT=web,node",
+    "-o", $out
+)
+
+# Quote each path argument so spaces in the path survive the cmd round-trip.
+$quoted = ($flags + $sources) | ForEach-Object { '"' + $_ + '"' }
+$argList = $quoted -join " "
+
+Write-Host "Building -> $out" -ForegroundColor Cyan
+$cmd = "call `"$envBat`" >nul 2>&1 && `"$empp`" $argList"
+& $env:ComSpec /c $cmd
+if ($LASTEXITCODE -ne 0) { throw "Build failed with exit code $LASTEXITCODE" }
+
+# Stage the ROM/font/romdisk images next to the page for fetch() at runtime.
+# These copies are gitignored (the originals live in emulator\Data).
+$webData = Join-Path $web "data"
+New-Item -ItemType Directory -Force -Path $webData | Out-Null
+foreach ($f in @("badger6502.bin", "fontrom.dat", "loderun.bin")) {
+    $src = Join-Path $data $f
+    if (Test-Path $src) {
+        Copy-Item $src (Join-Path $webData $f) -Force
+    } else {
+        Write-Warning "data file missing: $src"
+    }
+}
+
+Write-Host "Build succeeded:" -ForegroundColor Green
+Get-ChildItem $web -Filter "badger6502.*" | ForEach-Object { "  {0,-22} {1,10:N0} bytes" -f $_.Name, $_.Length }
+Get-ChildItem $webData | ForEach-Object { "  data\{0,-16} {1,10:N0} bytes" -f $_.Name, $_.Length }

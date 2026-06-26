@@ -1,6 +1,10 @@
 #include "DriveEmulator.h"
+#if defined(__EMSCRIPTEN__)
+#include "web_compat.h"
+#else
 #include <Windows.h>
 #include <debugapi.h>
+#endif
 /*
 * https://stackoverflow.com/questions/69369122/apple-iie-6502-assembly-accessing-disk
 *

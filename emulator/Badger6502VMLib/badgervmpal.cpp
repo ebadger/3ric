@@ -9,8 +9,10 @@
 #elif defined(PLATFORM_WINDOWS)
 #include <chrono>
 #include <thread>
+#elif defined(PLATFORM_WEB)
+#include <cstring>
 #else
-#error Must define either PLATFORM_PICO or PLATFORM_WINDOWS
+#error Must define either PLATFORM_PICO, PLATFORM_WINDOWS or PLATFORM_WEB
 #endif
 
 
@@ -20,6 +22,9 @@ void pal_sleep(uint32_t milliseconds)
     sleep_ms(milliseconds);
 #elif defined(PLATFORM_WINDOWS)
     this_thread::sleep_for(chrono::milliseconds(milliseconds));
+#elif defined(PLATFORM_WEB)
+    // The browser drives timing via requestAnimationFrame; blocking would freeze the tab.
+    (void)milliseconds;
 #endif
 }
 
@@ -38,6 +43,8 @@ void pal_sprintf(char *dest, const char *fmt, ...)
 #pragma warning (restore : 4996)
 #elif defined(PLATFORM_PICO)
     vsprintf(dest, fmt, ap);
+#elif defined(PLATFORM_WEB)
+    vsprintf(dest, fmt, ap);
 #endif
     va_end(ap);
 }
@@ -48,6 +55,8 @@ void pal_debugbreak()
     __debugbreak();
 #elif defined(PLATFORM_PICO)
     
+#elif defined(PLATFORM_WEB)
+
 #endif
 }
 
@@ -56,6 +65,8 @@ void pal_strncpy(char *dest, const char *src, int cch)
 #if defined(PLATFORM_WINDOWS)
     strncpy_s(dest, _pal_countof(dest), src, cch);
 #elif defined(PLATFORM_PICO)
+    strncpy(dest, src, cch);
+#elif defined(PLATFORM_WEB)
     strncpy(dest, src, cch);
 #endif
 }
@@ -92,6 +103,12 @@ bool pal_loadbinary(const char *szFileName, uint8_t *dest)
         memcpy(&dest[0x8000], pFile, dataSize);
         return true;  
 
+    #elif defined(PLATFORM_WEB)
+
+        // The web bridge loads ROM bytes directly into VM::GetData(); no filesystem.
+        (void)szFileName; (void)dest;
+        return false;
+
     #endif
 }
 
@@ -123,6 +140,12 @@ bool pal_loadromdisk(const char *szFileName, uint8_t *dest)
 
         return false;
 
+    #elif defined(PLATFORM_WEB)
+
+        // The web bridge loads the romdisk image directly into VM::GetRomDisk().
+        (void)szFileName; (void)dest;
+        return false;
+
     #endif
 }
 
@@ -134,6 +157,9 @@ void pal_initromdisk(uint8_t **romdisk)
         memset(*romdisk, 0, sizeof(int8_t) * _pal_countof(*romdisk));
     #elif defined(PLATFORM_PICO)
         *romdisk = (uint8_t *) find_embedded_file("data/loderun.bin", nullptr);
+    #elif defined(PLATFORM_WEB)
+        *romdisk = new uint8_t[0x80000];
+        memset(*romdisk, 0, 0x80000);
     #endif
 }
 
@@ -142,5 +168,7 @@ void pal_freeromdisk(uint8_t **romdisk)
     #if defined(PLATFORM_WINDOWS)
         delete [] *romdisk;
     #elif defined(PLATFORM_PICO)
+    #elif defined(PLATFORM_WEB)
+        delete [] *romdisk;
     #endif
 }
