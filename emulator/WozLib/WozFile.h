@@ -3,7 +3,7 @@
 #include <vector>
 #include <mutex>
 #include "WozErrors.h"
-#include "timing.h"
+#include "Timing.h"
 
 // https://applesaucefdc.com/woz/reference2/
 

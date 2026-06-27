@@ -1,4 +1,4 @@
-#include "wozfile.h"
+#include "WozFile.h"
 #if defined(__EMSCRIPTEN__)
 #include "web_compat.h"
 #else
