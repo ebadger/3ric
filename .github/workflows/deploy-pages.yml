@@ -1,0 +1,83 @@
+# Builds the 3ric Apple-II-clone WebAssembly emulator (web/) with Emscripten and
+# publishes it to GitHub Pages. The emulator is 100% client-side, so Pages hosts
+# the whole thing as static files — visitors need no GitHub account.
+#
+# The live site is served at the repo's project Pages URL:
+#   https://ebadger.github.io/3ric/
+name: Deploy emulator to Pages
+
+on:
+  push:
+    branches: [main]
+    # Only rebuild when something the emulator is compiled from changes.
+    paths:
+      - 'web/**'
+      - 'emulator/Badger6502VMLib/**'
+      - 'emulator/WozLib/**'
+      - 'emulator/MockMicroSD/**'
+      - 'emulator/Data/**'
+      - 'emulator/WozFileTestApp/testdata/**'
+      - '.github/workflows/deploy-pages.yml'
+  # Allow manual runs from the Actions tab.
+  workflow_dispatch:
+
+# Least-privilege token plus the permissions the Pages deploy needs.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two deployments at once; let an in-flight deploy finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # make_sd_sparse.py + build.ps1's sd.sparse generation need `python`.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Pins the same Emscripten the project is developed against (web/README.md).
+      # Adds em++ to PATH for later steps and caches the toolchain between runs.
+      - name: Set up Emscripten
+        uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: 6.0.1
+          actions-cache-folder: emsdk-cache
+
+      # pwsh is preinstalled on ubuntu-latest. build.ps1 detects the non-Windows
+      # host and invokes em++ directly (no emsdk_env.bat / cmd.exe round-trip).
+      - name: Build WebAssembly emulator
+        run: pwsh -File web/build.ps1
+
+      # Stage only what the page needs (not the C++/test sources) as the site root.
+      - name: Stage site
+        run: |
+          mkdir -p _site
+          cp web/index.html web/badger6502.js web/badger6502.wasm _site/
+          cp -r web/data _site/data
+          ls -la _site _site/data
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
