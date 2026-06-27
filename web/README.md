@@ -17,11 +17,16 @@ Pico builds compile and behave exactly as before.
   the WinUI host renderer (`MainWindow.xaml.cpp`) into the bridge so the color /
   fringe logic is identical.
 - Keyboard input via the Apple-II `$C000` / `$C010` strobe mechanism.
-- Romdisk access through the `$C300` hardware window, and a **Load Lode Runner**
-  button that launches `loderun.bin` from the romdisk.
 - **Micro-SD card** (bit-banged SPI through VIA1) backing a FAT32 disk image. A
   **Mount SD** button drops into the ROM's DOS shell (`>` prompt) and lists the
   card; from there `DIR`, `CAT`, `CD <dir>`, `BLOAD`/`BRUN <file>` all work.
+- **Disk II 5.25″ floppy** emulation (WozLib) through the standard boot ROM at
+  `$C600`. A **Boot Disk** button boots the bundled `.woz`, and **Insert .woz…**
+  boots any WOZ image you pick. Self-booting machine-code game disks run into
+  their hi-res title; DOS 3.3 / Quick-DOS disks don't (this clone has no
+  Applesoft for their auto-run greeting — see below).
+- **Adjustable CPU clock** (**Speed** selector): 0.5× / 1× (≈1 MHz) / 2× / 4× /
+  8× / Max, with a per-frame wall-clock cap so the page stays responsive.
 
 ## Layout
 
@@ -30,10 +35,11 @@ Pico builds compile and behave exactly as before.
 | `web_bridge.cpp` | embind bridge: wraps `VM`, exposes load/run/keyboard/registers, drives the SD card, and produces the RGBA framebuffer. |
 | `web_compat.h` | Tiny shims so `WozLib` + `MockMicroSD`'s MSVC-isms (`OutputDebugString`, `sprintf_s`, `swprintf_s`, `fopen_s`, `_ASSERT`, …) compile under Emscripten. |
 | `make_sd_sparse.py` | Streams `emulator/Data/sd.zip` (a 2GB, mostly-zero FAT32 image) into a compact `data/sd.sparse` keeping only the ~11.5MB of non-zero sectors. |
-| `build.ps1` | Compiles the core + WozLib + MockMicroSD + bridge to `badger6502.js` / `.wasm`, stages the data files, and generates `sd.sparse`. |
-| `index.html` | Canvas UI + `requestAnimationFrame` driver + keyboard. |
-| `serve.ps1` | Starts `python -m http.server` (defaults to port 8011). |
-| `test_*.cjs` | Headless Node validations (boot, render, keyboard, screen decode, loderun, SD). |
+| `build.ps1` | Compiles the core + WozLib + MockMicroSD + bridge to `badger6502.js` / `.wasm`, stages the data files, generates `sd.sparse`, and stages the demo `disk.woz`. |
+| `index.html` | Canvas UI + `requestAnimationFrame` driver + keyboard + clock-speed/disk controls. Honors an optional `ASSET_BASE` (R2/CDN offload). |
+| `serve.ps1` | Starts `python -m http.server` (defaults to port 8011) for local dev. |
+| `Caddyfile` | Production static server config (compression + cache headers) for hosting behind a Cloudflare Tunnel. |
+| `test_*.cjs` | Headless Node validations (boot, render, keyboard, screen decode, SD, disk). |
 
 Build outputs (`badger6502.js`, `badger6502.wasm`) and the staged `data/`
 copies are git-ignored; regenerate them with `build.ps1`.
@@ -67,9 +73,10 @@ bridge:          web_bridge.cpp
 `symbols.cpp` and `Disassemble.cpp` are excluded (Windows-only). Key flags:
 `-std=c++17 -O2 -lembind -sMODULARIZE=1 -sEXPORT_NAME=createBadgerVM
 -sALLOW_MEMORY_GROWTH=1 -sENVIRONMENT=web,node`. The data files
-(`badger6502.bin`, `fontrom.dat`, `loderun.bin`) are copied from
-`emulator/Data` into `web/data`, and `sd.sparse` is generated from
-`emulator/Data/sd.zip` (first run only; ~20s).
+(`badger6502.bin`, `fontrom.dat`) are copied from
+`emulator/Data` into `web/data`, `sd.sparse` is generated from
+`emulator/Data/sd.zip` (first run only; ~20s), and the demo `disk.woz` is staged
+from the in-repo WOZ test images.
 
 ## Run in the browser
 
@@ -79,11 +86,12 @@ cd web
 ```
 
 Open <http://localhost:8011/index.html>, click the canvas, and type. Press
-**Load Lode Runner** to launch the game from the romdisk. Press **Mount SD** to
-mount the micro-SD card and enter the DOS shell — it runs the monitor command
-`EC5CG` (Go to `$EC5C`, the `dos` routine) which mounts the FAT32 image and
-prints a `>` prompt, then auto-runs `DIR`. Type `CAT`, `CD <dir>`,
-`BRUN <file>`, etc. to use the card.
+**Boot Disk** to boot the bundled 5.25″ floppy, or **Insert .woz…** to boot one
+of your own WOZ images. Press **Mount SD** to mount the micro-SD card and enter
+the DOS shell — it runs the monitor command `EC5CG` (Go to `$EC5C`, the `dos`
+routine) which mounts the FAT32 image and prints a `>` prompt, then auto-runs
+`DIR`. Type `CAT`, `CD <dir>`, `BRUN <file>`, etc. to load games and programs
+from the card. The **Speed** selector sets the CPU clock (0.5×–8× or Max).
 
 > Port 8011 is used because 8000 is taken on this machine.
 
@@ -95,8 +103,8 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web\test_render.cjs      # framebuffer has lit pixels
 & $node web\test_keyboard.cjs    # monitor echoes typed commands
 & $node web\test_screen_text.cjs # decode the text screen to ASCII
-& $node web\test_loderun.cjs     # romdisk $C300 readback + Lode Runner runs in hi-res
 & $node web\test_sd.cjs          # mount the SD card + DIR lists the FAT32 root
+& $node web\test_disk.cjs        # boot a WOZ floppy via C600G into a hi-res title
 ```
 
 ## ROM load recipe (mirrors the WinUI host)
@@ -105,21 +113,12 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
    (`loadData(0, bytes)`) — provides the reset vector at `$FFFC` and ROM/OS at
    `$D000-$FFFF`.
 2. `seedBasicRom()` — `memcpy(GetBasicRom(), &GetData()[0x9000], 0x3000)`.
-3. `loadRomDisk(loderunBytes)` — fills the 512KB romdisk buffer.
-4. `loadFont(fontromBytes)` — used by the text renderer.
-5. `reset()` — loads PC from `$FFFC/$FFFD`.
+3. `loadFont(fontromBytes)` — used by the text renderer.
+4. `reset()` — loads PC from `$FFFC/$FFFD`.
 
 The CPU is driven cooperatively: each animation frame calls `run(maxSteps)`,
 which `Step()`s the CPU and ticks the VIAs/keyboard per returned cycle (the
 blocking `VM::Run()` is never used).
-
-## How Lode Runner boots
-
-`loderun.bin` is a raw RAM image (`4C 00 60` = `JMP $6000`) that the WinUI host
-loads into the romdisk and, in its dev path, copies into RAM at `$0800`. The web
-bridge mirrors this: `romDiskToRam(0x0800, 0, len)` then `setPC(0x0800)`. The
-program switches into hi-res and paints the screen. The same romdisk is also
-readable through the `$C300` hardware window (`writeBus`/`readBus`).
 
 ## How the micro-SD card works
 
@@ -142,3 +141,111 @@ At runtime the page lazily fetches `sd.sparse`, hands it to `loadSD()`
 `fat32_dir`) reads the card over SPI. `test_sd.cjs` proves the round trip: it
 enters the shell, runs `DIR`, and asserts real `<DIR>` folders and `PRG` files
 come back along with a non-zero sector-read count.
+
+## How the Disk II floppy boots
+
+The 5.25″ drive is the WinUI host's `WozLib` emulator (`DriveEmulator` +
+`WozDisk` + `WozFile`), already embedded in `VM`. The CPU reaches it through the
+standard hardware path: the Disk II boot PROM lives at `$C600` (part of the ROM
+image), and the data registers at `$C0E0-$C0EF` route to `DriveEmulator` via
+`VM::DoDisk`. The bridge advances the drive on every `$C0E0-$C0EF` access
+(`AddCycles(elapsed)`), exactly like the host.
+
+`insertDisk(drive, bytes)` writes the WOZ bytes to Emscripten's in-memory
+filesystem and calls `WozDisk::InsertDisk(path)` (the loader reads through a
+`FILE*`, which MEMFS provides) — no changes to WozLib were needed. **Boot Disk**
+and **Insert .woz…** re-seed a clean machine, insert the image into drive 1, and
+type `C600G` (the monitor "Go" command) to jump to the boot ROM, just like
+booting on real hardware.
+
+This clone's `$E000` BASIC is a generic Microsoft BASIC (it prompts
+`MEMORY SIZE?`), **not** Applesoft, so disks whose boot auto-runs an Applesoft
+greeting — DOS 3.3 / Quick-DOS System Masters, and games that chain through them
+— load DOS but then trap to `$0000`. Self-booting machine-code game disks (the
+bundled demo and most of the WOZ test images) bring their own code and run fine.
+`test_disk.cjs` boots one through `C600G` and asserts it reaches a painted hi-res
+screen without trapping.
+
+## CPU clock speed
+
+The frame loop runs `BASE_CYCLES_PER_FRAME` (≈17030, i.e. ~1 MHz at 60 fps) times
+the **Speed** multiplier each animation frame, bounded by a ~12 ms wall-clock
+budget so the tab never locks up. `Max` sets the multiplier to `Infinity`, so the
+CPU runs as many cycles as fit in that budget. Clock speed is purely a frontend
+concern — the VM core is unchanged.
+
+## Serving in production (Raspberry Pi + Cloudflare)
+
+The emulator is **100% client-side** — the server only hands out static files,
+and all 65C02/video/disk emulation runs in the visitor's browser. So a tiny
+origin (e.g. a Raspberry Pi behind a Cloudflare Tunnel) can serve a large number
+of concurrent users; the only real constraint is bandwidth for *first-time*
+downloads, which Cloudflare's edge cache absorbs.
+
+Per fresh visit the mandatory payload is ~1.26 MB (`index.html` + `badger6502.js`
++ `.wasm` + `badger6502.bin` + `fontrom.dat`). `disk.woz` (~230 KB) and
+`sd.sparse` (~11.5 MB) are fetched lazily, only when the user clicks **Boot Disk**
+or **Mount SD**.
+
+### Caddy (static origin)
+
+Use the included `Caddyfile` instead of the dev `serve.ps1` — it adds gzip/zstd
+compression, long cache headers for the immutable assets, and `no-cache` for
+`index.html` so rebuilds appear immediately:
+
+```bash
+cd web
+caddy run --config Caddyfile      # serves :8080
+```
+
+Point your Cloudflare Tunnel's public hostname at `http://localhost:8080`.
+
+### Caching the SD image to minimize ISP upload
+
+The `Caddyfile` already sends `Cache-Control: public, max-age=31536000, immutable`
+on everything under `/data/` (including the ~11.5 MB `sd.sparse`), so a returning
+visitor's **browser** never re-downloads it. To also stop your **Pi** from
+re-uploading it to each *new* visitor, let Cloudflare's edge cache it:
+
+1. In the Cloudflare dashboard go to **Caching → Cache Rules** and add a rule:
+   - **If** URI Path starts with `/data/` (or matches `*.sparse`), **then** set
+     **Cache eligibility → Eligible for cache**, and an **Edge TTL** (e.g.
+     "Use cache-control header" since the origin already sends a year, or pin
+     "1 month").
+   - This rule is *required*: a `.sparse` file is **not** one of the extensions
+     Cloudflare caches by default, so without it the edge passes every request
+     straight through to your Pi.
+2. Verify with `curl -I https://your-host/data/sd.sparse`. After the first
+   request you should see `cf-cache-status: HIT` — meaning that download came
+   from Cloudflare, not your uplink. (Free/Pro cache objects up to 512 MB, so
+   11.5 MB is fine.)
+
+With the rule in place your Pi serves `sd.sparse` roughly **once per Cloudflare
+location per TTL** instead of once per visitor. If you change the SD contents,
+give the new image a different filename (e.g. `sd.v2.sparse`) and update the
+fetch path in `index.html`, otherwise cached copies persist for up to a year.
+
+For the strongest result — `sd.sparse` never touching your home connection at
+all — offload it to R2 (next section): zero egress fees, served straight from
+Cloudflare's network.
+
+### Offloading the heavy files to R2 (`ASSET_BASE`)
+
+If the optional 11.5 MB `sd.sparse` gets popular, serving it from your home
+connection can saturate your uplink (or hit an ISP data cap). `index.html`
+supports an **`ASSET_BASE`** that relocates the `.wasm` binary and everything
+under `data/` to any CDN — ideally a **Cloudflare R2** bucket (free tier: 10 GB
+storage + **zero egress fees**, and policy-clean for large-file distribution):
+
+1. Upload `badger6502.wasm` and the whole `data/` folder to a public R2 bucket,
+   preserving paths (so `…/badger6502.wasm` and `…/data/sd.sparse` resolve).
+2. Configure the bucket's **CORS policy** to allow your site's origin (or `*`),
+   and make sure objects are served with sensible content types — in particular
+   `badger6502.wasm` as `application/wasm` for streaming compile.
+3. Point the page at the bucket, either by editing the page or at runtime:
+   - `window.ASSET_BASE = "https://pub-<hash>.r2.dev";` before the main script, or
+   - append `?assets=https://pub-<hash>.r2.dev` to the page URL.
+
+The small `index.html` + `badger6502.js` bootstrap still come from your origin;
+everything large comes from R2. Leave `ASSET_BASE` empty to serve everything
+locally (the default).

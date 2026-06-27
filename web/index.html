@@ -20,6 +20,17 @@
     padding: 4px 10px; cursor: pointer; font-family: inherit; font-size: 12px; border-radius: 3px;
   }
   header button:hover { background: var(--panel); }
+  header select {
+    background: var(--bg); color: var(--fg); border: 1px solid var(--dim);
+    padding: 3px 6px; font-family: inherit; font-size: 12px; border-radius: 3px;
+  }
+  header .filebtn {
+    border: 1px solid var(--dim); border-radius: 3px; padding: 4px 10px;
+    font-size: 12px; cursor: pointer; color: var(--fg);
+  }
+  header .filebtn:hover { background: var(--panel); }
+  header .filebtn input { display: none; }
+  header .grp { display: flex; gap: 6px; align-items: center; }
   header .hint { color: var(--dim); font-size: 12px; }
   main { flex: 1; display: flex; justify-content: center; align-items: flex-start; padding: 16px; }
   #screen {
@@ -39,8 +50,18 @@
   <header>
     <h1>3ric&nbsp;&mdash;&nbsp;Apple-II-clone&nbsp;65C02&nbsp;(WebAssembly)</h1>
     <button id="reset">Reset</button>
-    <button id="loderun">Load Lode Runner</button>
+    <button id="bootdisk">Boot Disk</button>
+    <label class="filebtn">Insert .woz&hellip;<input type="file" id="diskfile" accept=".woz" /></label>
     <button id="mountsd">Mount SD (DIR)</button>
+    <span class="grp"><span class="hint">Speed</span>
+      <select id="speed" title="CPU clock speed">
+        <option value="0.5">0.5&times;</option>
+        <option value="1" selected>1&times; (1&nbsp;MHz)</option>
+        <option value="2">2&times;</option>
+        <option value="4">4&times;</option>
+        <option value="8">8&times;</option>
+        <option value="max">Max</option>
+      </select></span>
     <span class="regs" id="regs">PC:---- A:-- X:-- Y:-- SP:-- P:--</span>
     <span class="regs" id="mode">mode:---</span>
     <span class="hint" id="status">loading wasm&hellip;</span>
@@ -51,16 +72,20 @@
   <footer>
     65C02 emulator core (C++) + WozLib compiled to WebAssembly via Emscripten. Boots the real 512KB ROM,
     renders Apple-II text/hi-res to the canvas, and feeds keystrokes through the memory-mapped keyboard ($C000).
-    Click the screen and type. &ldquo;Load Lode Runner&rdquo; launches the romdisk game. &ldquo;Mount SD&rdquo;
-    enters the DOS shell (prompt &ldquo;&gt;&rdquo;) and lists the micro-SD card &mdash; then type
-    DIR, CAT, CD &lt;dir&gt;, or BRUN &lt;file&gt;.
+    Click the screen and type. &ldquo;Boot Disk&rdquo; boots the bundled 5.25&Prime; floppy (or pick a .woz with
+    &ldquo;Insert&rdquo;) through the Disk&nbsp;II ROM at $C600. &ldquo;Mount SD&rdquo; enters the DOS shell
+    (prompt &ldquo;&gt;&rdquo;) and lists the micro-SD card &mdash; load games and programs from there.
+    &ldquo;Speed&rdquo; sets the CPU clock (1&times; &asymp; 1&nbsp;MHz; &ldquo;Max&rdquo; runs as fast as the frame allows).
   </footer>
 
   <script src="badger6502.js"></script>
   <script>
     // ~1.02 MHz at 60 fps. Mirrors the host: run instructions, ticking VIAs per
-    // cycle, until roughly one frame's worth of cycles has elapsed.
-    const CYCLES_PER_FRAME = 17030;
+    // cycle, until roughly one frame's worth of cycles has elapsed. The "Speed"
+    // selector scales this; "Max" runs as many cycles as fit in FRAME_BUDGET_MS.
+    const BASE_CYCLES_PER_FRAME = 17030;
+    const FRAME_BUDGET_MS = 12; // wall-clock cap so the tab stays responsive
+    let speedMul = 1;           // 1x = ~1 MHz; Infinity = "Max"
 
     const canvas  = document.getElementById("screen");
     const ctx     = canvas.getContext("2d", { alpha: false });
@@ -70,14 +95,36 @@
 
     let vm = null;
     let imageData = null;
-    let romdiskLen = 0;
     let sdLoaded = false;
     let sdLoading = null;
+    let demoDisk = null;
     const inputQueue = [];
 
     function hex(n, w) { return (n >>> 0).toString(16).toUpperCase().padStart(w, "0"); }
 
-    async function fetchBytes(url) {
+    // Optional CDN/R2 offload for the large static assets (the .wasm binary and
+    // everything under data/, especially the ~11.5MB SD image). Leave ASSET_BASE
+    // empty to serve them from this same origin (e.g. the Raspberry Pi). To take
+    // the heavy files off your home uplink, upload badger6502.wasm and the data/
+    // folder to a Cloudflare R2 bucket (free tier, zero egress) preserving paths,
+    // and point this at the bucket's public URL:
+    //     window.ASSET_BASE = "https://pub-<hash>.r2.dev";
+    // Set it before this script runs, or pass ?assets=<url> in the page URL.
+    // (A cross-origin bucket must send CORS headers and serve .wasm as
+    // Content-Type: application/wasm.)
+    const ASSET_BASE = (
+      new URLSearchParams(location.search).get("assets") ||
+      window.ASSET_BASE || ""
+    ).replace(/\/+$/, "");
+
+    // Resolve an asset path (e.g. "data/sd.sparse" or "badger6502.wasm") against
+    // ASSET_BASE, falling back to this origin when ASSET_BASE is empty.
+    function assetUrl(path) {
+      return ASSET_BASE ? `${ASSET_BASE}/${path}` : path;
+    }
+
+    async function fetchBytes(path) {
+      const url = assetUrl(path);
       const resp = await fetch(url);
       if (!resp.ok) throw new Error(`fetch ${url}: ${resp.status}`);
       return new Uint8Array(await resp.arrayBuffer());
@@ -134,8 +181,16 @@
         vm.keyDown(inputQueue.shift());
       }
 
+      // Run the CPU for this frame's cycle budget, but never spend more than
+      // FRAME_BUDGET_MS of wall-clock time so the page stays responsive even at
+      // high / "Max" speeds.
+      const target = speedMul === Infinity ? Infinity : BASE_CYCLES_PER_FRAME * speedMul;
+      const start = performance.now();
       let cyc = 0;
-      while (cyc < CYCLES_PER_FRAME) cyc += vm.run(1000);
+      while (cyc < target) {
+        cyc += vm.run(1000);
+        if (performance.now() - start > FRAME_BUDGET_MS) break;
+      }
 
       const fb = vm.renderFrame(); // Uint8Array RGBA view over wasm heap
       imageData.data.set(fb);
@@ -146,17 +201,35 @@
     }
 
     async function loadRom() {
-      const [rom, romdisk, font] = await Promise.all([
-        fetchBytes("data/badger6502.bin"),
-        fetchBytes("data/loderun.bin"),
-        fetchBytes("data/fontrom.dat"),
-      ]);
+      // Fetch the ROM + font once, then reuse the cached bytes so Reset and Boot
+      // Disk re-seed the machine instantly (no re-download).
+      if (!loadRom.cache) {
+        const [rom, font] = await Promise.all([
+          fetchBytes("data/badger6502.bin"),
+          fetchBytes("data/fontrom.dat"),
+        ]);
+        loadRom.cache = { rom, font };
+      }
+      const { rom, font } = loadRom.cache;
       vm.loadData(0x0000, rom.subarray(0, 0x10000)); // first 64KB -> address space
       vm.seedBasicRom();
-      vm.loadRomDisk(romdisk);
-      romdiskLen = romdisk.length;
       vm.loadFont(font);
       vm.reset();
+    }
+
+    // Boot a 5.25" floppy: re-seed a clean machine (back to the monitor), insert
+    // the .woz into drive 1, then type "C600G" to jump to the Disk II boot ROM at
+    // $C600 -- exactly how a user boots a disk on the real hardware.
+    async function bootDisk(bytes, label) {
+      inputQueue.length = 0;
+      await loadRom();
+      if (!vm.insertDisk(0, bytes)) {
+        statusEl.textContent = "not a valid .woz image";
+        return;
+      }
+      typeString("C600G\r");
+      statusEl.textContent = "booting " + (label || "disk") + "\u2026";
+      canvas.focus();
     }
 
     async function boot(Module) {
@@ -183,17 +256,6 @@
         canvas.focus();
       });
 
-      // Launch Lode Runner from the romdisk the way the WinUI host's dev path
-      // does: copy the romdisk image into RAM at $0800 (its first bytes are
-      // JMP $6000) and jump there.
-      document.getElementById("loderun").addEventListener("click", () => {
-        inputQueue.length = 0;
-        vm.romDiskToRam(0x0800, 0x0000, romdiskLen);
-        vm.setPC(0x0800);
-        statusEl.textContent = "running Lode Runner";
-        canvas.focus();
-      });
-
       // Mount the micro-SD card and drop into the ROM's DOS shell. "EC5CG" is
       // the monitor's Go command pointed at $EC5C (the `dos` routine), which
       // mounts the FAT32 card (fat32_start) and shows the ">" prompt; the
@@ -212,10 +274,43 @@
       // Warm the SD image in the background so the first "Mount SD" is instant.
       ensureSD();
 
+      // Boot the bundled demo floppy (data/disk.woz, staged by build.ps1).
+      document.getElementById("bootdisk").addEventListener("click", async () => {
+        statusEl.textContent = "loading disk\u2026";
+        try {
+          if (!demoDisk) demoDisk = await fetchBytes("data/disk.woz");
+          await bootDisk(demoDisk, "floppy");
+        } catch (err) {
+          console.error(err);
+          statusEl.textContent = "disk unavailable (run build.ps1)";
+        }
+      });
+
+      // Boot a user-chosen .woz from disk.
+      document.getElementById("diskfile").addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        statusEl.textContent = "reading " + file.name + "\u2026";
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        await bootDisk(bytes, file.name);
+        e.target.value = ""; // allow re-selecting the same file
+      });
+
+      // CPU clock speed selector. "Max" runs unthrottled within the frame budget.
+      document.getElementById("speed").addEventListener("change", (e) => {
+        speedMul = e.target.value === "max" ? Infinity : parseFloat(e.target.value);
+      });
+
       requestAnimationFrame(frame);
     }
 
-    createBadgerVM().then(boot).catch((err) => {
+    // Relocate the .wasm fetch through ASSET_BASE too (the small .js bootstrap
+    // stays on this origin). When ASSET_BASE is empty this is Emscripten's exact
+    // default; only a configured bucket diverts the .wasm.
+    createBadgerVM({
+      locateFile: (p, prefix) =>
+        (ASSET_BASE && p.endsWith(".wasm")) ? assetUrl(p) : prefix + p,
+    }).then(boot).catch((err) => {
       statusEl.textContent = "failed to load: " + err;
       console.error(err);
     });

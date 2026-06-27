@@ -11,14 +11,12 @@ const createBadgerVM = require("./badger6502.js");
 
 const DATA = path.join(__dirname, "data");
 const rom = fs.readFileSync(path.join(DATA, "badger6502.bin"));
-const romdisk = fs.readFileSync(path.join(DATA, "loderun.bin"));
 const font = fs.readFileSync(path.join(DATA, "fontrom.dat"));
 
 createBadgerVM().then((Module) => {
   const vm = new Module.WebVM();
   vm.loadData(0x0000, new Uint8Array(rom.subarray(0, 0x10000)));
   vm.seedBasicRom();
-  vm.loadRomDisk(new Uint8Array(romdisk));
   vm.loadFont(new Uint8Array(font));
   vm.reset();
 

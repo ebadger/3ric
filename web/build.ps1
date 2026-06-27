@@ -76,17 +76,28 @@ $cmd = "call `"$envBat`" >nul 2>&1 && `"$empp`" $argList"
 & $env:ComSpec /c $cmd
 if ($LASTEXITCODE -ne 0) { throw "Build failed with exit code $LASTEXITCODE" }
 
-# Stage the ROM/font/romdisk images next to the page for fetch() at runtime.
+# Stage the ROM + font images next to the page for fetch() at runtime.
 # These copies are gitignored (the originals live in emulator\Data).
 $webData = Join-Path $web "data"
 New-Item -ItemType Directory -Force -Path $webData | Out-Null
-foreach ($f in @("badger6502.bin", "fontrom.dat", "loderun.bin")) {
+foreach ($f in @("badger6502.bin", "fontrom.dat")) {
     $src = Join-Path $data $f
     if (Test-Path $src) {
         Copy-Item $src (Join-Path $webData $f) -Force
     } else {
         Write-Warning "data file missing: $src"
     }
+}
+
+# Stage a bootable 5.25" floppy as the one-click "Boot Disk" demo. The Apple-II
+# clone has no Applesoft, so DOS-3.3 disks trap; this self-booting machine-code
+# game runs straight into a hi-res title. Copied from the in-repo WOZ test
+# images to data\disk.woz (gitignored, like the other data copies).
+$diskSrc = Join-Path $root "emulator\WozFileTestApp\testdata\WOZ 2.0\Dino Eggs - Disk 1, Side A.woz"
+if (Test-Path $diskSrc) {
+    Copy-Item $diskSrc (Join-Path $webData "disk.woz") -Force
+} else {
+    Write-Warning "demo disk missing: $diskSrc (Boot Disk button will be unavailable)."
 }
 
 # Generate the compact sparse micro-SD image (data\sd.sparse) straight from
