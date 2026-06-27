@@ -17,12 +17,20 @@ $woz  = Join-Path $root "emulator\WozLib"
 $sd   = Join-Path $root "emulator\MockMicroSD"
 $data = Join-Path $root "emulator\Data"
 
-$emsdk  = if ($env:EMSDK) { $env:EMSDK } else { Join-Path $env:USERPROFILE "emsdk" }
-$envBat = Join-Path $emsdk "emsdk_env.bat"
-$empp   = Join-Path $emsdk "upstream\emscripten\em++.exe"
+# Platform detection: $IsWindows is an automatic variable in PowerShell 7+; on
+# Windows PowerShell 5.1 it is undefined, so fall back to $env:OS. On Linux/macOS
+# (e.g. GitHub Actions CI) the emsdk environment is sourced beforehand so em++ is
+# already on PATH, and the Windows emsdk_env.bat / em++.exe lookup is skipped.
+$onWindows = $IsWindows -or ($env:OS -eq 'Windows_NT')
 
-if (-not (Test-Path $envBat)) { throw "emsdk not found at '$emsdk'. Set `$env:EMSDK or install per web/README.md." }
-if (-not (Test-Path $empp))   { throw "em++ not found at '$empp'. Did you run 'emsdk install/activate latest'?" }
+if ($onWindows) {
+    $emsdk  = if ($env:EMSDK) { $env:EMSDK } else { Join-Path $env:USERPROFILE "emsdk" }
+    $envBat = Join-Path $emsdk "emsdk_env.bat"
+    $empp   = Join-Path $emsdk "upstream\emscripten\em++.exe"
+
+    if (-not (Test-Path $envBat)) { throw "emsdk not found at '$emsdk'. Set `$env:EMSDK or install per web/README.md." }
+    if (-not (Test-Path $empp))   { throw "em++ not found at '$empp'. Did you run 'emsdk install/activate latest'?" }
+}
 
 # Core VM sources. symbols.cpp (debugger) and Disassemble.cpp (Windows-only
 # VM::Disassemble) are excluded; nothing compiled for the web references them.
@@ -72,8 +80,17 @@ $quoted = ($flags + $sources) | ForEach-Object { '"' + $_ + '"' }
 $argList = $quoted -join " "
 
 Write-Host "Building -> $out" -ForegroundColor Cyan
-$cmd = "call `"$envBat`" >nul 2>&1 && `"$empp`" $argList"
-& $env:ComSpec /c $cmd
+if ($onWindows) {
+    # Source emsdk_env.bat in the same cmd process that runs em++.exe.
+    $cmd = "call `"$envBat`" >nul 2>&1 && `"$empp`" $argList"
+    & $env:ComSpec /c $cmd
+} else {
+    # Linux/macOS (CI): em++ is already on PATH from a sourced emsdk env; allow an
+    # explicit override via $env:EMPP. PowerShell splats the argument array
+    # directly, so the manual quoting above is unnecessary here.
+    $emppCmd = if ($env:EMPP) { $env:EMPP } else { "em++" }
+    & $emppCmd @($flags + $sources)
+}
 if ($LASTEXITCODE -ne 0) { throw "Build failed with exit code $LASTEXITCODE" }
 
 # Stage the ROM + font images next to the page for fetch() at runtime.

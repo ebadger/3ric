@@ -174,6 +174,32 @@ budget so the tab never locks up. `Max` sets the multiplier to `Infinity`, so th
 CPU runs as many cycles as fit in that budget. Clock speed is purely a frontend
 concern — the VM core is unchanged.
 
+## Hosting on GitHub Pages (zero-cost, public)
+
+Because the emulator is 100% client-side, the repo publishes it straight to
+**GitHub Pages** — no server to run. The live site is:
+
+**<https://ebadger.github.io/3ric/>**
+
+Anyone with a browser can open it; **no GitHub account is required**. For a
+public repo, Pages hosting and the Actions build are free (soft limits: 1 GB
+site, 100 GB/month bandwidth).
+
+`.github/workflows/deploy-pages.yml` does it automatically on every push to
+`main` that touches the emulator sources:
+
+1. installs Python + Emscripten (`6.0.1`, matching this project),
+2. runs `web/build.ps1` (it detects Linux CI and invokes `em++` directly),
+3. stages `index.html` + `badger6502.js` + `.wasm` + `data/` as the site root,
+4. uploads it as a Pages artifact and deploys.
+
+The build outputs stay git-ignored — CI regenerates them from the committed
+sources (`emulator/Data/*`, the demo `.woz`, etc.) each run. To publish from a
+fork, enable Pages with the **GitHub Actions** source (Settings → Pages), then
+push to `main` or run the workflow manually from the Actions tab. The site is
+served under `/<repo>/`, which works because every asset path in `index.html` is
+relative.
+
 ## Serving in production (Raspberry Pi + Cloudflare)
 
 The emulator is **100% client-side** — the server only hands out static files,
