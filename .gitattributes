@@ -1,0 +1,6 @@
+# Shell scripts and the compliance-hooks extension must be LF so they run under
+# bash/Node on Linux/macOS/WSL even when authored on Windows.
+*.sh       text eol=lf
+*.example  text eol=lf
+*.mjs      text eol=lf
+.githooks/pre-push text eol=lf
