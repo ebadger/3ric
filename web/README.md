@@ -198,10 +198,36 @@ cd web
 caddy run --config Caddyfile      # serves :8080
 ```
 
-Point your Cloudflare Tunnel's public hostname at `http://localhost:8080`. With
-Cloudflare in front, enable a **Cache Rule** ("Cache Everything") for `*.wasm`,
-`*.js`, and `/data/*` so the edge — not your home uplink — serves repeat
-downloads.
+Point your Cloudflare Tunnel's public hostname at `http://localhost:8080`.
+
+### Caching the SD image to minimize ISP upload
+
+The `Caddyfile` already sends `Cache-Control: public, max-age=31536000, immutable`
+on everything under `/data/` (including the ~11.5 MB `sd.sparse`), so a returning
+visitor's **browser** never re-downloads it. To also stop your **Pi** from
+re-uploading it to each *new* visitor, let Cloudflare's edge cache it:
+
+1. In the Cloudflare dashboard go to **Caching → Cache Rules** and add a rule:
+   - **If** URI Path starts with `/data/` (or matches `*.sparse`), **then** set
+     **Cache eligibility → Eligible for cache**, and an **Edge TTL** (e.g.
+     "Use cache-control header" since the origin already sends a year, or pin
+     "1 month").
+   - This rule is *required*: a `.sparse` file is **not** one of the extensions
+     Cloudflare caches by default, so without it the edge passes every request
+     straight through to your Pi.
+2. Verify with `curl -I https://your-host/data/sd.sparse`. After the first
+   request you should see `cf-cache-status: HIT` — meaning that download came
+   from Cloudflare, not your uplink. (Free/Pro cache objects up to 512 MB, so
+   11.5 MB is fine.)
+
+With the rule in place your Pi serves `sd.sparse` roughly **once per Cloudflare
+location per TTL** instead of once per visitor. If you change the SD contents,
+give the new image a different filename (e.g. `sd.v2.sparse`) and update the
+fetch path in `index.html`, otherwise cached copies persist for up to a year.
+
+For the strongest result — `sd.sparse` never touching your home connection at
+all — offload it to R2 (next section): zero egress fees, served straight from
+Cloudflare's network.
 
 ### Offloading the heavy files to R2 (`ASSET_BASE`)
 

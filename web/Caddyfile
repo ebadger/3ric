@@ -14,11 +14,20 @@
 #
 #   caddy run --config Caddyfile
 #
-# Caching strategy: index.html must always revalidate so new builds appear
-# immediately; the content files (wasm/js + data/) are cached for a day, which
-# keeps Cloudflare's edge serving repeat downloads and spares the Pi's uplink.
-# If you adopt hashed/versioned asset filenames you can safely raise this to
-# "public, max-age=31536000, immutable".
+# Caching strategy (this is what keeps the ~11.5MB SD image off your uplink):
+#   - index.html  -> no-cache, so a rebuild is picked up immediately.
+#   - *.wasm/*.js -> 1 day; these are small and change on every rebuild.
+#   - /data/*     -> 1 year, immutable. The ROM, font, disk.woz and sd.sparse are
+#     static content blobs, so caching them hard lets the browser AND Cloudflare's
+#     edge serve repeat downloads — your Pi then uploads each file about once per
+#     edge location per TTL, not once per visitor. If you ever change a data blob
+#     (e.g. regenerate sd.sparse with new SD contents) give it a NEW filename
+#     (sd.v2.sparse) and update the fetch path, or cached copies linger for a year.
+#
+# The browser cache below only helps *repeat* visitors. The real ISP-upload saver
+# is Cloudflare's edge cache, and a ".sparse" file is NOT edge-cached by default:
+# see README "Serving in production" for the required Cache Rule (plus the R2
+# option that takes the file off your home connection entirely).
 
 :8080 {
 	root * .
@@ -29,11 +38,15 @@
 	@html path / /index.html
 	header @html Cache-Control "no-cache"
 
-	# Build output + staged data: cache hard (a day) at the browser and the
-	# Cloudflare edge. Covers badger6502.wasm/.js and everything under data/
-	# (ROM, font, disk.woz, the ~11.5MB sd.sparse).
-	@assets path *.wasm *.js /data/*
-	header @assets Cache-Control "public, max-age=86400"
+	# Build output: small and regenerated on every rebuild — a day is plenty.
+	@build path *.wasm *.js
+	header @build Cache-Control "public, max-age=86400"
+
+	# Static data blobs (ROM, font, disk.woz, the ~11.5MB sd.sparse): immutable
+	# content cached for a year so the browser/edge serve repeats and spare the
+	# Pi's uplink. Rename the file to bust this if its contents ever change.
+	@data path /data/*
+	header @data Cache-Control "public, max-age=31536000, immutable"
 
 	# Serve WebAssembly with the correct type so the browser can stream-compile.
 	@wasm path *.wasm
