@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "🚨 Urgent: critical-path problem (money / data loss / safety)"
+    url: https://github.com/ebadger/3ric/issues/new?template=report_a_problem.yml
+    about: "If the critical path looks wrong, file it AND notify ebadger directly — these are handled out-of-band, not left waiting in a queue."
