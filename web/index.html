@@ -30,6 +30,10 @@
   }
   header .filebtn:hover { background: var(--panel); }
   header .filebtn input { display: none; }
+  header input.addr {
+    background: var(--bg); color: var(--fg); border: 1px solid var(--dim);
+    padding: 3px 6px; font-family: inherit; font-size: 12px; border-radius: 3px; width: 4.5em;
+  }
   header .grp { display: flex; gap: 6px; align-items: center; }
   header .hint { color: var(--dim); font-size: 12px; }
   main { flex: 1; display: flex; justify-content: center; align-items: flex-start; padding: 16px; }
@@ -53,6 +57,9 @@
     <button id="bootdisk">Boot Disk</button>
     <label class="filebtn">Insert .woz&hellip;<input type="file" id="diskfile" accept=".woz" /></label>
     <button id="mountsd">Mount SD (DIR)</button>
+    <span class="grp"><label class="filebtn">Load .PRG&hellip;<input type="file" id="prgfile" accept=".prg,.bin" /></label>
+      <span class="hint">@&nbsp;$</span><input class="addr" id="prgaddr" value="0800" spellcheck="false"
+        title="hex load/entry address, e.g. 0800 (the BRUN address)" /></span>
     <span class="grp"><span class="hint">Speed</span>
       <select id="speed" title="CPU clock speed">
         <option value="0.5">0.5&times;</option>
@@ -75,6 +82,9 @@
     Click the screen and type. &ldquo;Boot Disk&rdquo; boots the bundled 5.25&Prime; floppy (or pick a .woz with
     &ldquo;Insert&rdquo;) through the Disk&nbsp;II ROM at $C600. &ldquo;Mount SD&rdquo; enters the DOS shell
     (prompt &ldquo;&gt;&rdquo;) and lists the micro-SD card &mdash; load games and programs from there.
+    &ldquo;Load .PRG&rdquo; loads a raw program image at the given hex address and runs it, exactly like
+    <code>BRUN FILE.PRG&nbsp;&lt;addr&gt;</code> on the hardware (or deep-link one with
+    <code>?prg=programs/hello.prg&amp;org=0800</code>).
     &ldquo;Speed&rdquo; sets the CPU clock (1&times; &asymp; 1&nbsp;MHz; &ldquo;Max&rdquo; runs as fast as the frame allows).
   </footer>
 
@@ -128,6 +138,21 @@
       const resp = await fetch(url);
       if (!resp.ok) throw new Error(`fetch ${url}: ${resp.status}`);
       return new Uint8Array(await resp.arrayBuffer());
+    }
+
+    // Fetch bytes from an explicit URL (relative to this page, or absolute).
+    // Used by the ?prg= loader — programs live on this origin, not ASSET_BASE.
+    async function fetchBytesUrl(url) {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`fetch ${url}: ${resp.status}`);
+      return new Uint8Array(await resp.arrayBuffer());
+    }
+
+    // Parse a hex address like "0800" / "$6000" / "6000"; fall back to dflt.
+    function parseAddr(s, dflt) {
+      if (!s) return dflt;
+      const v = parseInt(String(s).trim().replace(/^\$/, ""), 16);
+      return Number.isNaN(v) ? dflt : (v & 0xFFFF);
     }
 
     // Queue an ASCII string for the memory-mapped keyboard (CR = 0x0D). The
@@ -232,8 +257,25 @@
       canvas.focus();
     }
 
+    // Load a raw .PRG image at `org` and jump to it — the in-browser equivalent
+    // of `BRUN FILE.PRG <org>` on the hardware (load the raw bytes at org, then
+    // JMP org; load address == entry point). We re-seed a clean machine and let
+    // the monitor initialize first, so COUT's output vector ($36/$37) is live
+    // before the program runs; otherwise a program that calls COUT would jump
+    // through an uninitialized vector.
+    async function loadPrg(bytes, org, label) {
+      inputQueue.length = 0;
+      await loadRom();                              // clean reset to the monitor
+      for (let i = 0; i < 25; i++) vm.run(50000);   // settle into the "*" monitor
+      vm.loadData(org & 0xFFFF, bytes);
+      vm.setPC(org & 0xFFFF);
+      statusEl.textContent = `running ${label || ".PRG"} @ $${hex(org, 4)}`;
+      canvas.focus();
+    }
+
     async function boot(Module) {
       vm = new Module.WebVM();
+      window.vm = vm; // debug handle: inspect/poke the machine from the console
       imageData = ctx.createImageData(vm.frameWidth(), vm.frameHeight());
 
       statusEl.textContent = "loading ROM\u2026";
@@ -296,12 +338,37 @@
         e.target.value = ""; // allow re-selecting the same file
       });
 
+      // Load a user-chosen .PRG at the hex address in the adjacent field, the
+      // same way `BRUN FILE.PRG <addr>` works on real hardware.
+      document.getElementById("prgfile").addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const org = parseAddr(document.getElementById("prgaddr").value, 0x0800);
+        statusEl.textContent = "reading " + file.name + "\u2026";
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        await loadPrg(bytes, org, file.name);
+        e.target.value = ""; // allow re-selecting the same file
+      });
+
       // CPU clock speed selector. "Max" runs unthrottled within the frame budget.
       document.getElementById("speed").addEventListener("change", (e) => {
         speedMul = e.target.value === "max" ? Infinity : parseFloat(e.target.value);
       });
 
       requestAnimationFrame(frame);
+
+      // Deep-link loader: ?prg=<url>&org=<hex> loads and runs a raw .PRG the way
+      // BRUN would. The URL is relative to this page (e.g. programs/hello.prg)
+      // or absolute. Lets a generated program be shared as a one-click link.
+      const params = new URLSearchParams(location.search);
+      const prgUrl = params.get("prg");
+      if (prgUrl) {
+        const org = parseAddr(params.get("org"), 0x0800);
+        statusEl.textContent = "loading " + prgUrl + "\u2026";
+        fetchBytesUrl(prgUrl)
+          .then((bytes) => loadPrg(bytes, org, prgUrl.split("/").pop()))
+          .catch((err) => { statusEl.textContent = ".PRG load failed: " + err; console.error(err); });
+      }
     }
 
     // Relocate the .wasm fetch through ASSET_BASE too (the small .js bootstrap
