@@ -25,5 +25,17 @@ press **SPACE** to reseed a random field. Source, prompt, and binary live in
 node codegen/tools/asm6502.mjs emulator/AICodeGen/life/life.s web/programs/life.prg --org 0x0800
 ```
 
+`jungle.prg` is **JUNGLE QUEST**, an original hi-res jungle platformer — run and
+jump across platforms, dodge a rolling log, and grab all three gems before the
+60-second timer runs out (**A/D** move, **W/SPACE** jump; **SPACE** restarts on an
+end screen). Source, prompt, and binary live in
+[`emulator/AICodeGen/jungle/`](../../emulator/AICodeGen/jungle); deep-link it at
+`?prg=programs/jungle.prg&org=0800` (set **Speed** to **1MHz** or **2MHz** for a
+playable pace):
+
+```sh
+node codegen/tools/asm6502.mjs emulator/AICodeGen/jungle/jungle.s web/programs/jungle.prg --org 0x0800
+```
+
 The GitHub Pages workflow stages this directory to the site root under
 `programs/` (see `.github/workflows/deploy-pages.yml`).
