@@ -64,7 +64,8 @@ jobs:
           mkdir -p _site
           cp web/index.html web/badger6502.js web/badger6502.wasm _site/
           cp -r web/data _site/data
-          ls -la _site _site/data
+          cp -r web/programs _site/programs
+          ls -la _site _site/data _site/programs
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

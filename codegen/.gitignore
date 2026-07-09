@@ -1,0 +1,8 @@
+# Assembled build outputs — regenerate with codegen/tools/run6502.mjs.
+# Sources (*.s) are tracked; the .PRG images they produce are not.
+programs/*.prg
+programs/*.bin
+
+# The generated platform reference is derived from vm.h + badger6502.dbg via
+# gen_platform_ref.mjs, but we keep it committed so the guide is browsable and
+# the generator is optional. (Left tracked on purpose — no ignore here.)
