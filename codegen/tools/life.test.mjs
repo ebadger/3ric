@@ -1,4 +1,4 @@
-// life.test.mjs — cross-checks codegen/programs/life.s against a JS reference.
+// life.test.mjs — cross-checks emulator/AICodeGen/life/life.s against a JS reference.
 //
 //   A) RNG / seed field : the 6502 seed_brk hook vs an identical JS LFSR.
 //   B) Rules + wrap      : onestep_brk vs a JS reference Life on a random torus.
@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 
 const { boot } = harnessPkg;
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SRC = join(HERE, "..", "programs", "life.s");
+const SRC = join(HERE, "..", "..", "emulator", "AICodeGen", "life", "life.s");
 
 const W = 40, H = 48, STRIDE = 42;
 const bufIndex = (r, c) => r * STRIDE + c;        // r,c are 1-based inside the padded buffer

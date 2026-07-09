@@ -17,12 +17,12 @@ node codegen/tools/run6502.mjs codegen/programs/hello.s --out web/programs/hello
 ```
 
 `life.prg` is Conway's Game of Life in hi-res on a wrapping (toroidal) world;
-press **SPACE** to reseed a random field. Built from
-[`codegen/programs/life.s`](../../codegen/programs/life.s) and deep-linkable at
+press **SPACE** to reseed a random field. Source, prompt, and binary live in
+[`emulator/AICodeGen/life/`](../../emulator/AICodeGen/life); deep-link it at
 `?prg=programs/life.prg&org=0800` (set **Speed** to **Max** to run it fast):
 
 ```sh
-node codegen/tools/asm6502.mjs codegen/programs/life.s web/programs/life.prg --org 0x0800
+node codegen/tools/asm6502.mjs emulator/AICodeGen/life/life.s web/programs/life.prg --org 0x0800
 ```
 
 The GitHub Pages workflow stages this directory to the site root under
