@@ -41,6 +41,17 @@ the ROM's own symbol table, so the addresses are authoritative).
 Two-pass 65C02 assembler. Instruction sizes are frozen in pass 1, so labels are
 absolute by default; force with `z:`/`a:` prefixes.
 
+> ⚠️ **Symbols are case-INSENSITIVE.** Every label and equate is folded to
+> UPPERCASE internally, so `bombcd` (a variable) and `BOMBCD` (a constant) are
+> the **same symbol** — the later definition silently wins. This corrupts
+> `#CONSTANT` immediates without any error: e.g. defining `BOMBCD = 40` and a
+> `bombcd` storage byte makes `lda #BOMBCD` assemble as the low byte of the
+> variable's *address*, not `40`. **Give every constant a name that is unique
+> from all labels/variables case-insensitively** (a good habit: suffix cadence
+> constants with `GAP`/`MAX`/`0`, and never reuse a variable's letters for a
+> constant). This has bitten multiple projects (STAR SWARM's `BOMBCD`/`bombcd`
+> and `UFOCD`/`ufocd`; JUNGLE QUEST's state-name/constant clashes).
+
 - **Labels:** `name:` (colon optional at column 0). **Equates:** `NAME = expr`.
 - **Set location:** `.org expr` or `*= expr`.
 - **Data:** `.byte`/`.db` (bytes & `"strings"`), `.word`/`.dw` (little-endian),
