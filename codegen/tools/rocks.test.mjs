@@ -367,5 +367,102 @@ console.log("U) rocks leave no trail");
   ok(lit2 < 700, `no runaway accumulation over 40 frames (${lit1} -> ${lit2})`);
 }
 
+// ===========================================================================
+// M5) collisions : bullet-rock split + score, ship-rock death
+// ===========================================================================
+const bcd = (b) => (b >> 4) * 10 + (b & 15);
+const scoreVal = () => bcd(vm.peek(S.SCORE0)) + 100 * bcd(vm.peek(S.SCORE1)) + 10000 * bcd(vm.peek(S.SCORE2));
+const setRkCnt = (n) => vm.poke(S.RKCNT, n & 0xff);
+const clearBullets = () => { for (let i = 0; i < 5; i++) { setbull(i, "act", 0); setbull(i, "drawn", 0); } };
+const placeRock = (i, kind, x, y) => {
+  setrk(i, "act", 1); setrk(i, "kind", kind);
+  setrk(i, "xf", 0); setrk(i, "xl", x & 255); setrk(i, "xh", (x >> 8) & 255);
+  setrk(i, "yf", 0); setrk(i, "yl", y & 255); setrk(i, "yh", 0);
+  setrk(i, "vxl", 0); setrk(i, "vxh", 0); setrk(i, "vyl", 0); setrk(i, "vyh", 0);
+  setrk(i, "drawn", 0);
+};
+const placeBullet = (i, x, y) => {
+  setbull(i, "act", 1);
+  setbull(i, "xf", 0); setbull(i, "xl", x & 255); setbull(i, "xh", (x >> 8) & 255);
+  setbull(i, "yf", 0); setbull(i, "yl", y & 255); setbull(i, "yh", 0);
+  setbull(i, "vxl", 0); setbull(i, "vxh", 0); setbull(i, "vyl", 0); setbull(i, "vyh", 0);
+  setbull(i, "life", 60); setbull(i, "drawn", 0);
+};
+const rockKinds = () => { const a = []; for (let i = 0; i < 28; i++) if (rk(i, "act")) a.push(rk(i, "kind")); return a; };
+
+// V) a bullet sitting on a rock destroys it and is itself consumed
+console.log("V) a bullet destroys the rock it overlaps and is consumed");
+{
+  runHook(S.INIT_BRK, "init"); clearRocks(); clearBullets();
+  setRkCnt(1);
+  placeRock(0, 0, 100, 60);              // small rock -> destroyed outright
+  placeBullet(0, 100, 60);
+  frame();
+  ok(activeRocks() === 0, `the struck rock is gone (got ${activeRocks()})`);
+  ok(activeBullets() === 0, `the bullet is consumed (got ${activeBullets()})`);
+  ok(scoreVal() === 100, `a small rock scores 100 (got ${scoreVal()})`);
+}
+
+// W) rocks split one size down; the smallest simply vanish
+console.log("W) rocks split (large->2 medium, medium->2 small, small->0)");
+{
+  runHook(S.INIT_BRK, "init"); clearRocks(); clearBullets();
+  setRkCnt(1); placeRock(0, 2, 90, 50); placeBullet(0, 90, 50); frame();
+  let kinds = rockKinds();
+  ok(kinds.length === 2, `a large rock splits into two (got ${kinds.length})`);
+  ok(kinds.length === 2 && kinds.every(k => k % 3 === 1), `both children are medium (kinds ${kinds})`);
+
+  runHook(S.INIT_BRK, "init"); clearRocks(); clearBullets();
+  setRkCnt(1); placeRock(0, 1, 90, 50); placeBullet(0, 90, 50); frame();
+  kinds = rockKinds();
+  ok(kinds.length === 2, `a medium rock splits into two (got ${kinds.length})`);
+  ok(kinds.length === 2 && kinds.every(k => k % 3 === 0), `both children are small (kinds ${kinds})`);
+
+  runHook(S.INIT_BRK, "init"); clearRocks(); clearBullets();
+  setRkCnt(1); placeRock(0, 0, 90, 50); placeBullet(0, 90, 50); frame();
+  ok(activeRocks() === 0, `a small rock leaves no children (got ${activeRocks()})`);
+}
+
+// X) splitting a large rock nets one extra rock on the field
+console.log("X) splitting grows the field by one rock");
+{
+  runHook(S.INIT_BRK, "init"); clearRocks(); clearBullets();
+  setRkCnt(1); placeRock(0, 2, 90, 50); placeBullet(0, 90, 50);
+  const before = activeRocks();
+  frame();
+  ok(activeRocks() === before + 1, `1 large -> 2 medium is a net +1 (${before} -> ${activeRocks()})`);
+}
+
+// Y) the score awarded scales with rock size (small 100, med 50, large 20)
+console.log("Y) score value depends on rock size");
+{
+  const hit = (kind) => {
+    runHook(S.INIT_BRK, "init"); clearRocks(); clearBullets();
+    setRkCnt(1); placeRock(0, kind, 90, 50); placeBullet(0, 90, 50); frame();
+    return scoreVal();
+  };
+  let v = hit(0); ok(v === 100, `small rock scores 100 (got ${v})`);
+  v = hit(1); ok(v === 50, `medium rock scores 50 (got ${v})`);
+  v = hit(2); ok(v === 20, `large rock scores 20 (got ${v})`);
+}
+
+// Z) a rock on the ship costs a life; running out ends the game
+console.log("Z) ship-rock collision: lose a life, then game over at zero");
+{
+  runHook(S.INIT_BRK, "init"); clearRocks(); clearBullets();
+  setRkCnt(1); placeRock(0, 0, 140, 80);          // rock parked on the ship spawn point
+  ok(vm.peek(S.LIVES) === 3, `three lives at start (got ${vm.peek(S.LIVES)})`);
+  vm.poke(S.INVUL, 0); frame();                    // drop the shield, take the hit
+  ok(vm.peek(S.LIVES) === 2, `a hit costs one life (got ${vm.peek(S.LIVES)})`);
+  ok(vm.peek(S.INVUL) > 0, `respawn grants fresh invulnerability (got ${vm.peek(S.INVUL)})`);
+  ok(vm.peek(S.GAMEOVER) === 0, "still playing after the first death");
+  vm.poke(S.INVUL, 0); frame();                    // lives 2 -> 1
+  ok(vm.peek(S.LIVES) === 1, `second hit (got ${vm.peek(S.LIVES)})`);
+  vm.poke(S.INVUL, 0); frame();                    // lives 1 -> 0 -> game over
+  ok(vm.peek(S.LIVES) === 0, `third hit empties the lives (got ${vm.peek(S.LIVES)})`);
+  ok(vm.peek(S.GAMEOVER) === 1, "game over once out of ships");
+  ok(gb("act") === 0, "the ship is removed on game over");
+}
+
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

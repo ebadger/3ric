@@ -149,6 +149,32 @@ rkcnt    = $6A5C          ; rocks alive (wave bookkeeping)
 spcnt    = $6A5D          ; spawn loop counter
 rksz     = $6A5E          ; spawn_rock: requested size, kept across rand calls
 
+; ---- M5: score / lives / collision scratch ----
+score0   = $6A60          ; 6-digit BCD score (score0 low .. score2 high)
+score1   = $6A61
+score2   = $6A62
+lives    = $6A63          ; ships remaining
+invul   = $6A64          ; frames of spawn invulnerability left
+gameover = $6A65          ; nonzero once the last ship is lost
+hcx      = $6A66          ; hit_test: centre x (16-bit) ...
+hcxh     = $6A67
+hcy      = $6A68          ; ... centre y (0..159) ...
+hrad     = $6A69          ; ... collision radius
+hpx      = $6A6A          ; hit_test: test point x (16-bit) ...
+hpxh     = $6A6B
+hpy      = $6A6C          ; ... test point y
+cdxl     = $6A6D          ; hit_test scratch (|dx| 16-bit)
+cdxh     = $6A6E
+ccnt     = $6A6F          ; collision outer (rock) loop counter
+pxl      = $6A70          ; split_rock: cached parent position ...
+pxh      = $6A71
+pyl      = $6A72
+psize    = $6A73          ; ... and parent size
+save0    = $6A74          ; objptr save across spawn_child scans
+save1    = $6A75
+chsize   = $6A76          ; spawn_child: child size
+ctmp     = $6A77          ; spawn_child: velocity-doubling temp
+
 ; ---- tunables ----
 HOLD     = 4              ; frames an action stays live after its key event
 MAXVI    = 4              ; max |velocity| integer part (px/frame)
@@ -160,6 +186,9 @@ NDRIFT   = 16             ; rock drift-direction table size
 SZLARGE  = 2              ; rock size index: 0 small, 1 med, 2 large
 NSHAPE   = 3              ; rock silhouette variants
 WAVE0    = 4              ; large rocks in the opening wave
+LIVES0   = 3              ; starting ships
+INVULN   = 90             ; invulnerable frames after (re)spawn
+SHIPR    = 4              ; ship half-size added to a rock's collision radius
 
 ; ---- key codes (Apple II: bit7 set = key ready) ----
 K_A      = $C1
@@ -208,6 +237,14 @@ game_init:
         sta seed+1
         lda #0
         sta firecd
+        sta score0
+        sta score1
+        sta score2
+        sta gameover
+        lda #LIVES0
+        sta lives
+        lda #INVULN
+        sta invul              ; a moment of grace at the start
         jsr spawn_wave
         rts
 
@@ -253,11 +290,13 @@ game_frame:
         jsr wrap_ship
         jsr update_bullets
         jsr update_rocks
+        jsr collisions
         jsr draw_ship
         jsr draw_bullets
         jsr draw_rocks
         jsr decay_timers
         jsr dec_firecd
+        jsr dec_invuln
         rts
 
 ; render_ship : XOR the ship polygon at its current pos/angle.
@@ -281,11 +320,14 @@ erase_ship:
 er_ret:
         rts
 
-; draw_ship : XOR the ship on and mark it drawn.
+; draw_ship : XOR the ship on and mark it drawn (skip when destroyed).
 draw_ship:
+        lda SHIP+o_act
+        beq ds_ret
         jsr render_ship
         lda #1
         sta SHIP+o_drawn
+ds_ret:
         rts
 
 ; ---------------------------------------------------------------------------
@@ -1005,17 +1047,23 @@ spr_free:
         jsr rand
         ldy #o_xl
         sta (objptr),y
-        ; y = rand folded into 0..159 ; yf = yh = 0
+        ; y in the top/bottom bands (0..49 or 110..159), clear of the ship row
         lda #0
         ldy #o_yf
         sta (objptr),y
         ldy #o_yh
         sta (objptr),y
         jsr rand
-        cmp #160
+spr_yfold:
+        cmp #100
+        bcc spr_yband
+        sbc #100                ; fold 0..255 down into 0..99
+        jmp spr_yfold
+spr_yband:
+        cmp #50
         bcc spr_yset
-        sec
-        sbc #160
+        clc
+        adc #60                 ; 50..99 -> 110..159 (bottom band)
 spr_yset:
         ldy #o_yl
         sta (objptr),y
@@ -1045,6 +1093,347 @@ spr_yset:
         ldy #o_act
         sta (objptr),y
         inc rkcnt
+        rts
+
+; ===========================================================================
+; M5 : collisions  (bullet->rock split+score, ship->rock death/lives)
+; ===========================================================================
+
+; collisions : resolve this frame's hits (objects already moved, not yet drawn).
+collisions:
+        jsr bullet_rock_hits
+        jsr ship_rock_hits
+        rts
+
+; hit_test : is point (hpx/hpxh, hpy) within hrad of centre (hcx/hcxh, hcy)?
+;   box test on |dx|,|dy|.  Returns carry set on a hit, clear on a miss.
+hit_test:
+        ; |dx| (16-bit)
+        lda hpxh
+        cmp hcxh
+        bcc ht_pxlt
+        bne ht_pxge
+        lda hpx
+        cmp hcx
+        bcc ht_pxlt
+ht_pxge:
+        sec
+        lda hpx
+        sbc hcx
+        sta cdxl
+        lda hpxh
+        sbc hcxh
+        sta cdxh
+        jmp ht_dxok
+ht_pxlt:
+        sec
+        lda hcx
+        sbc hpx
+        sta cdxl
+        lda hcxh
+        sbc hpxh
+        sta cdxh
+ht_dxok:
+        lda cdxh
+        bne ht_miss             ; |dx| >= 256
+        lda cdxl
+        cmp hrad
+        beq ht_dxin
+        bcs ht_miss             ; |dx| > rad
+ht_dxin:
+        ; |dy| (8-bit, positions are 0..159)
+        lda hpy
+        cmp hcy
+        bcs ht_pyge
+        lda hcy
+        sec
+        sbc hpy
+        jmp ht_dyok
+ht_pyge:
+        sec
+        sbc hcy
+ht_dyok:
+        cmp hrad
+        beq ht_hit
+        bcs ht_miss             ; |dy| > rad
+ht_hit:
+        sec
+        rts
+ht_miss:
+        clc
+        rts
+
+; bullet_rock_hits : rocks outer (objptr), bullets inner (absolute,X).  A hit
+; kills the shot, scores, and splits the rock.
+bullet_rock_hits:
+        lda #<ROCKS
+        sta objptr
+        lda #>ROCKS
+        sta objptr+1
+        lda #NROCK
+        sta ccnt
+brh_rloop:
+        ldy #o_act
+        lda (objptr),y
+        beq brh_rnext
+        ; cache this rock as the collision centre
+        ldy #o_xl
+        lda (objptr),y
+        sta hcx
+        ldy #o_xh
+        lda (objptr),y
+        sta hcxh
+        ldy #o_yl
+        lda (objptr),y
+        sta hcy
+        ldy #o_kind
+        lda (objptr),y
+        tax
+        lda RADT,x
+        sta hrad
+        ldx #0
+brh_bloop:
+        lda BULLETS+o_act,x
+        beq brh_bnext
+        lda BULLETS+o_xl,x
+        sta hpx
+        lda BULLETS+o_xh,x
+        sta hpxh
+        lda BULLETS+o_yl,x
+        sta hpy
+        jsr hit_test
+        bcc brh_bnext
+        ; hit: retire the shot, split the rock, and score it
+        lda #0
+        sta BULLETS+o_act,x
+        sta BULLETS+o_drawn,x
+        jsr split_rock
+        jsr add_score
+        jmp brh_rnext
+brh_bnext:
+        txa
+        clc
+        adc #OBJ_SIZE
+        tax
+        cpx #80                 ; NBULLET(5) * OBJ_SIZE(16) = end of the bullet array
+        bcc brh_bloop
+brh_rnext:
+        jsr obj_next
+        dec ccnt
+        bne brh_rloop
+        rts
+
+; ship_rock_hits : ship (absolute) vs each rock (objptr).  A hit destroys the
+; ship unless it is currently invulnerable or the game is already over.
+ship_rock_hits:
+        lda gameover
+        bne srh_ret
+        lda invul
+        bne srh_ret
+        lda SHIP+o_act
+        beq srh_ret
+        lda SHIP+o_xl
+        sta hpx
+        lda SHIP+o_xh
+        sta hpxh
+        lda SHIP+o_yl
+        sta hpy
+        lda #<ROCKS
+        sta objptr
+        lda #>ROCKS
+        sta objptr+1
+        lda #NROCK
+        sta ccnt
+srh_loop:
+        ldy #o_act
+        lda (objptr),y
+        beq srh_next
+        ldy #o_xl
+        lda (objptr),y
+        sta hcx
+        ldy #o_xh
+        lda (objptr),y
+        sta hcxh
+        ldy #o_yl
+        lda (objptr),y
+        sta hcy
+        ldy #o_kind
+        lda (objptr),y
+        tax
+        lda RADT,x
+        clc
+        adc #SHIPR
+        sta hrad
+        jsr hit_test
+        bcc srh_next
+        jsr ship_hit
+        rts
+srh_next:
+        jsr obj_next
+        dec ccnt
+        bne srh_loop
+srh_ret:
+        rts
+
+; ship_hit : lose a ship; respawn with invulnerability, or end the game.
+ship_hit:
+        lda #0
+        sta SHIP+o_drawn        ; already erased this frame; don't redraw at old pos
+        dec lives
+        bne sh_respawn
+        lda #1
+        sta gameover
+        lda #0
+        sta SHIP+o_act
+        rts
+sh_respawn:
+        jsr init_ship
+        lda #INVULN
+        sta invul
+        rts
+
+; split_rock : destroy the rock at objptr; spawn two of the next size down at
+; its position (nothing when a small rock is destroyed).  Preserves objptr.
+split_rock:
+        ldy #o_xl
+        lda (objptr),y
+        sta pxl
+        ldy #o_xh
+        lda (objptr),y
+        sta pxh
+        ldy #o_yl
+        lda (objptr),y
+        sta pyl
+        ldy #o_kind
+        lda (objptr),y
+        tax
+        lda SIZEOF,x
+        sta psize
+        lda #0
+        ldy #o_act
+        sta (objptr),y
+        ldy #o_drawn
+        sta (objptr),y
+        dec rkcnt
+        lda objptr
+        sta save0
+        lda objptr+1
+        sta save1
+        lda psize
+        beq sr_done             ; small -> no children
+        sec
+        sbc #1
+        sta chsize
+        jsr spawn_child
+        jsr spawn_child
+sr_done:
+        lda save0
+        sta objptr
+        lda save1
+        sta objptr+1
+        rts
+
+; spawn_child : add a rock of size chsize at (pxl/pxh, pyl) with a brisk drift.
+spawn_child:
+        lda #<ROCKS
+        sta objptr
+        lda #>ROCKS
+        sta objptr+1
+        lda #NROCK
+        sta blcnt
+scd_find:
+        ldy #o_act
+        lda (objptr),y
+        beq scd_free
+        jsr obj_next
+        dec blcnt
+        bne scd_find
+        rts                     ; no room
+scd_free:
+        jsr rand
+        and #3
+        tax
+        lda SHP3,x
+        clc
+        adc chsize
+        ldy #o_kind
+        sta (objptr),y
+        lda #0
+        ldy #o_xf
+        sta (objptr),y
+        lda pxl
+        ldy #o_xl
+        sta (objptr),y
+        lda pxh
+        ldy #o_xh
+        sta (objptr),y
+        lda #0
+        ldy #o_yf
+        sta (objptr),y
+        lda pyl
+        ldy #o_yl
+        sta (objptr),y
+        lda #0
+        ldy #o_yh
+        sta (objptr),y
+        ; velocity = 2x drift[rand & 15]  (smaller rocks move livelier)
+        jsr rand
+        and #(NDRIFT-1)
+        tax
+        lda DVXL,x
+        asl a
+        sta ctmp
+        lda DVXH,x
+        rol a
+        ldy #o_vxh
+        sta (objptr),y
+        lda ctmp
+        ldy #o_vxl
+        sta (objptr),y
+        lda DVYL,x
+        asl a
+        sta ctmp
+        lda DVYH,x
+        rol a
+        ldy #o_vyh
+        sta (objptr),y
+        lda ctmp
+        ldy #o_vyl
+        sta (objptr),y
+        lda #0
+        ldy #o_drawn
+        sta (objptr),y
+        ldy #o_life
+        sta (objptr),y
+        lda #1
+        ldy #o_act
+        sta (objptr),y
+        inc rkcnt
+        rts
+
+; add_score : add the destroyed rock's value (by psize) to the BCD score.
+add_score:
+        ldx psize
+        sed
+        clc
+        lda score0
+        adc PTSL,x
+        sta score0
+        lda score1
+        adc PTSH,x
+        sta score1
+        lda score2
+        adc #0
+        sta score2
+        cld
+        rts
+
+; dec_invuln : count the spawn-invulnerability timer down toward 0.
+dec_invuln:
+        lda invul
+        beq div_ret
+        dec invul
+div_ret:
         rts
 
 ; decay_timers : count each hold-timer down toward 0.
@@ -1614,6 +2003,13 @@ DVYH:
         .byte 0,0,0,0,0,0,0,0,255,255,255,255,255,255,255,255
 SHP3:
         .byte 0,3,6,0            ; shape*3 for a random rock silhouette (rand&3)
+
+; --- M5 collision / scoring lookups (indexed by kind = shape*3 + size) -------
+SIZEOF: .byte 0,1,2,0,1,2,0,1,2 ; kind -> size (0 small, 1 med, 2 large)
+RADT:   .byte 6,11,18,6,11,18,6,11,18   ; kind -> collision radius (px)
+; points by size (psize): small=100, med=50, large=20, stored BCD little-endian
+PTSL:   .byte $00,$50,$20
+PTSH:   .byte $01,$00,$00
 
 ; ---------------------------------------------------------------------------
 ; test hooks : harness pokes state, sets PC here, runs to BRK (monitor dump).
