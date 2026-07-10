@@ -139,12 +139,19 @@ hright   = $6A51
 hthr     = $6A52
 hfire    = $6A53
 keyin    = $6A54
+firecd  = $6A55          ; frames until the next shot is allowed
+blcnt    = $6A56          ; object-iteration loop counter
+bx       = $6A57          ; plot_xy args: pixel x (16-bit) ...
+bxh      = $6A58
+by       = $6A59          ; ... pixel y (0..159)
 
 ; ---- tunables ----
 HOLD     = 4              ; frames an action stays live after its key event
 MAXVI    = 4              ; max |velocity| integer part (px/frame)
 ANGUP    = 24             ; heading that points up (-y)
 DELAYO   = 20             ; frame-delay outer count (game pacing)
+BULLET_LIFE = 60          ; frames a shot lives (~1 screen width @ 4.2 px/frame)
+FIRE_CD  = 8              ; frames between shots (auto-fire cadence while held)
 
 ; ---- key codes (Apple II: bit7 set = key ready) ----
 K_A      = $C1
@@ -185,6 +192,9 @@ game_init:
         jsr build_rows
         jsr clear_screen
         jsr init_ship
+        jsr clear_bullets
+        lda #0
+        sta firecd
         rts
 
 ; init_ship : place the ship at screen centre, at rest, pointing up.
@@ -219,13 +229,18 @@ init_ship:
 ; ---------------------------------------------------------------------------
 game_frame:
         jsr erase_ship
+        jsr erase_bullets
         jsr read_input
         jsr do_rotate
         jsr do_thrust
+        jsr do_fire
         jsr integrate_ship
         jsr wrap_ship
+        jsr update_bullets
         jsr draw_ship
+        jsr draw_bullets
         jsr decay_timers
+        jsr dec_firecd
         rts
 
 ; render_ship : XOR the ship polygon at its current pos/angle.
@@ -400,99 +415,386 @@ cvy_ok:
         rts
 
 ; ---------------------------------------------------------------------------
-; integrate_ship : pos (16.8) += vel (8.8), with sign extension.
+; integrate_obj / wrap_obj : operate on the object pointed to by objptr, so the
+; ship, bullets and rocks all share one copy of the physics.  integrate_ship /
+; wrap_ship are thin wrappers that point objptr at the ship.
 ; ---------------------------------------------------------------------------
 integrate_ship:
+        lda #<SHIP
+        sta objptr
+        lda #>SHIP
+        sta objptr+1
+        jmp integrate_obj
+
+wrap_ship:
+        lda #<SHIP
+        sta objptr
+        lda #>SHIP
+        sta objptr+1
+        jmp wrap_obj
+
+; integrate_obj : pos (16.8) += vel (8.8), with sign extension.  The fraction
+; add's carry flows into the integer add (no CLC between), and the velocity's
+; sign byte + that carry extend into the high byte.
+integrate_obj:
         clc
-        lda SHIP+o_xf
-        adc SHIP+o_vxl
-        sta SHIP+o_xf
-        lda SHIP+o_xl
-        adc SHIP+o_vxh
-        sta SHIP+o_xl
-        lda SHIP+o_vxh
+        ldy #o_xf
+        lda (objptr),y
+        ldy #o_vxl
+        adc (objptr),y
+        ldy #o_xf
+        sta (objptr),y
+        ldy #o_xl
+        lda (objptr),y
+        ldy #o_vxh
+        adc (objptr),y
+        ldy #o_xl
+        sta (objptr),y
+        ldy #o_vxh
+        lda (objptr),y
         and #$80
-        beq is_xp
+        beq io_xp
         lda #$FF
-        bne is_xa
-is_xp:
+        bne io_xa
+io_xp:
         lda #0
-is_xa:
-        adc SHIP+o_xh
-        sta SHIP+o_xh
+io_xa:
+        ldy #o_xh
+        adc (objptr),y
+        sta (objptr),y
         clc
-        lda SHIP+o_yf
-        adc SHIP+o_vyl
-        sta SHIP+o_yf
-        lda SHIP+o_yl
-        adc SHIP+o_vyh
-        sta SHIP+o_yl
-        lda SHIP+o_vyh
+        ldy #o_yf
+        lda (objptr),y
+        ldy #o_vyl
+        adc (objptr),y
+        ldy #o_yf
+        sta (objptr),y
+        ldy #o_yl
+        lda (objptr),y
+        ldy #o_vyh
+        adc (objptr),y
+        ldy #o_yl
+        sta (objptr),y
+        ldy #o_vyh
+        lda (objptr),y
         and #$80
-        beq is_yp
+        beq io_yp
         lda #$FF
-        bne is_ya
-is_yp:
+        bne io_ya
+io_yp:
         lda #0
-is_ya:
-        adc SHIP+o_yh
-        sta SHIP+o_yh
+io_ya:
+        ldy #o_yh
+        adc (objptr),y
+        sta (objptr),y
         rts
 
-; ---------------------------------------------------------------------------
-; wrap_ship : centre-wrap x mod WIDTH (280), y mod HEIGHT (160).
-; ---------------------------------------------------------------------------
-wrap_ship:
-        lda SHIP+o_xh
-        bpl ws_xpos
+; wrap_obj : centre-wrap x mod WIDTH (280), y mod HEIGHT (160).
+wrap_obj:
+        ldy #o_xh
+        lda (objptr),y
+        bpl wo_xpos
         clc                     ; x < 0 -> += WIDTH
-        lda SHIP+o_xl
+        ldy #o_xl
+        lda (objptr),y
         adc #<WIDTH
-        sta SHIP+o_xl
-        lda SHIP+o_xh
+        sta (objptr),y
+        ldy #o_xh
+        lda (objptr),y
         adc #>WIDTH
-        sta SHIP+o_xh
-        jmp ws_y
-ws_xpos:
+        sta (objptr),y
+        jmp wo_y
+wo_xpos:
         cmp #>WIDTH
-        bcc ws_y                ; xh < 1 -> x < 256 < WIDTH
-        bne ws_xsub             ; xh > 1 -> x >= 512
-        lda SHIP+o_xl
+        bcc wo_y                ; xh < 1 -> x < 256 < WIDTH
+        bne wo_xsub             ; xh > 1 -> x >= 512
+        ldy #o_xl
+        lda (objptr),y
         cmp #<WIDTH
-        bcc ws_y                ; x < WIDTH
-ws_xsub:
+        bcc wo_y                ; x < WIDTH
+wo_xsub:
         sec                     ; x >= WIDTH -> -= WIDTH
-        lda SHIP+o_xl
+        ldy #o_xl
+        lda (objptr),y
         sbc #<WIDTH
-        sta SHIP+o_xl
-        lda SHIP+o_xh
+        sta (objptr),y
+        ldy #o_xh
+        lda (objptr),y
         sbc #>WIDTH
-        sta SHIP+o_xh
-ws_y:
-        lda SHIP+o_yh
-        bpl ws_ypos
+        sta (objptr),y
+wo_y:
+        ldy #o_yh
+        lda (objptr),y
+        bpl wo_ypos
         clc                     ; y < 0 -> += HEIGHT
-        lda SHIP+o_yl
+        ldy #o_yl
+        lda (objptr),y
         adc #HEIGHT
-        sta SHIP+o_yl
-        lda SHIP+o_yh
+        sta (objptr),y
+        ldy #o_yh
+        lda (objptr),y
         adc #0
-        sta SHIP+o_yh
-        jmp ws_ret
-ws_ypos:
-        bne ws_ysub             ; yh > 0 -> y >= 256
-        lda SHIP+o_yl
+        sta (objptr),y
+        jmp wo_ret
+wo_ypos:
+        bne wo_ysub             ; yh > 0 -> y >= 256
+        ldy #o_yl
+        lda (objptr),y
         cmp #HEIGHT
-        bcc ws_ret              ; y < HEIGHT
-ws_ysub:
+        bcc wo_ret              ; y < HEIGHT
+wo_ysub:
         sec                     ; y >= HEIGHT -> -= HEIGHT
-        lda SHIP+o_yl
+        ldy #o_yl
+        lda (objptr),y
         sbc #HEIGHT
-        sta SHIP+o_yl
-        lda SHIP+o_yh
+        sta (objptr),y
+        ldy #o_yh
+        lda (objptr),y
         sbc #0
-        sta SHIP+o_yh
-ws_ret:
+        sta (objptr),y
+wo_ret:
+        rts
+
+; ===========================================================================
+; M3 : bullets  (share the object struct; up to NBULLET on screen)
+; ===========================================================================
+
+; clear_bullets : deactivate every bullet slot.
+clear_bullets:
+        lda #<BULLETS
+        sta objptr
+        lda #>BULLETS
+        sta objptr+1
+        lda #NBULLET
+        sta blcnt
+clb_loop:
+        lda #0
+        ldy #o_act
+        sta (objptr),y
+        ldy #o_drawn
+        sta (objptr),y
+        jsr obj_next
+        dec blcnt
+        bne clb_loop
+        rts
+
+; obj_next : advance objptr by one struct (OBJ_SIZE).
+obj_next:
+        clc
+        lda objptr
+        adc #OBJ_SIZE
+        sta objptr
+        bcc on_ret
+        inc objptr+1
+on_ret:
+        rts
+
+; do_fire : if fire intent is live and the cooldown has expired, launch a shot.
+do_fire:
+        lda hfire
+        beq df_ret
+        lda firecd
+        bne df_ret
+        jsr fire_bullet
+        lda #FIRE_CD
+        sta firecd
+df_ret:
+        rts
+
+; fire_bullet : find a free slot; spawn a shot at the nose, moving along the
+; heading (fixed muzzle velocity BVX/BVY[ang]).
+fire_bullet:
+        lda #<BULLETS
+        sta objptr
+        lda #>BULLETS
+        sta objptr+1
+        lda #NBULLET
+        sta blcnt
+fb_find:
+        ldy #o_act
+        lda (objptr),y
+        beq fb_free
+        jsr obj_next
+        dec blcnt
+        bne fb_find
+        rts                     ; no free slot -> no shot
+fb_free:
+        ldx SHIP+o_ang
+        ; x position = ship x + sext(NOSEX[ang]) ; frac = 0
+        lda #0
+        ldy #o_xf
+        sta (objptr),y
+        clc
+        lda SHIP+o_xl
+        adc NOSEX,x
+        ldy #o_xl
+        sta (objptr),y
+        lda NOSEX,x
+        and #$80
+        beq fb_xp
+        lda #$FF
+        bne fb_xa
+fb_xp:
+        lda #0
+fb_xa:
+        adc SHIP+o_xh
+        ldy #o_xh
+        sta (objptr),y
+        ; y position = ship y + sext(NOSEY[ang]) ; frac = 0
+        lda #0
+        ldy #o_yf
+        sta (objptr),y
+        clc
+        lda SHIP+o_yl
+        adc NOSEY,x
+        ldy #o_yl
+        sta (objptr),y
+        lda NOSEY,x
+        and #$80
+        beq fb_yp
+        lda #$FF
+        bne fb_ya
+fb_yp:
+        lda #0
+fb_ya:
+        adc SHIP+o_yh
+        ldy #o_yh
+        sta (objptr),y
+        ; velocity = BVX/BVY[ang]
+        lda BVXL,x
+        ldy #o_vxl
+        sta (objptr),y
+        lda BVXH,x
+        ldy #o_vxh
+        sta (objptr),y
+        lda BVYL,x
+        ldy #o_vyl
+        sta (objptr),y
+        lda BVYH,x
+        ldy #o_vyh
+        sta (objptr),y
+        ; flags
+        lda #BULLET_LIFE
+        ldy #o_life
+        sta (objptr),y
+        lda #0
+        ldy #o_drawn
+        sta (objptr),y
+        lda #1
+        ldy #o_act
+        sta (objptr),y
+        rts
+
+; erase_bullets : XOR-off every bullet that is currently drawn.
+erase_bullets:
+        lda #<BULLETS
+        sta objptr
+        lda #>BULLETS
+        sta objptr+1
+        lda #NBULLET
+        sta blcnt
+eb_loop:
+        ldy #o_act
+        lda (objptr),y
+        beq eb_next
+        ldy #o_drawn
+        lda (objptr),y
+        beq eb_next
+        jsr render_bullet
+eb_next:
+        jsr obj_next
+        dec blcnt
+        bne eb_loop
+        rts
+
+; update_bullets : integrate + wrap each active bullet, then age it; a shot
+; whose life reaches 0 is deactivated (it was erased at the top of the frame).
+update_bullets:
+        lda #<BULLETS
+        sta objptr
+        lda #>BULLETS
+        sta objptr+1
+        lda #NBULLET
+        sta blcnt
+ub_loop:
+        ldy #o_act
+        lda (objptr),y
+        beq ub_next
+        jsr integrate_obj
+        jsr wrap_obj
+        ldy #o_life
+        lda (objptr),y
+        sec
+        sbc #1
+        sta (objptr),y
+        bne ub_next
+        lda #0                  ; life expired -> retire the shot
+        ldy #o_act
+        sta (objptr),y
+        ldy #o_drawn
+        sta (objptr),y
+ub_next:
+        jsr obj_next
+        dec blcnt
+        bne ub_loop
+        rts
+
+; draw_bullets : XOR-on every active bullet and mark it drawn.
+draw_bullets:
+        lda #<BULLETS
+        sta objptr
+        lda #>BULLETS
+        sta objptr+1
+        lda #NBULLET
+        sta blcnt
+db_loop:
+        ldy #o_act
+        lda (objptr),y
+        beq db_next
+        jsr render_bullet
+        lda #1
+        ldy #o_drawn
+        sta (objptr),y
+db_next:
+        jsr obj_next
+        dec blcnt
+        bne db_loop
+        rts
+
+; render_bullet : XOR the single pixel at the bullet's integer position.
+render_bullet:
+        ldy #o_xl
+        lda (objptr),y
+        sta bx
+        ldy #o_xh
+        lda (objptr),y
+        sta bxh
+        ldy #o_yl
+        lda (objptr),y
+        sta by
+        jsr plot_xy
+        rts
+
+; plot_xy : XOR one pixel at (bx 16-bit, by 0..159), clipped to the playfield.
+plot_xy:
+        lda bx
+        sta cx
+        lda bxh
+        sta cxh
+        lda by
+        sta cy
+        lda #0
+        sta cyh
+        jsr seedcol
+        jsr plotcur
+        rts
+
+; dec_firecd : count the fire cooldown down toward 0.
+dec_firecd:
+        lda firecd
+        beq dfc_ret
+        dec firecd
+dfc_ret:
         rts
 
 ; decay_timers : count each hold-timer down toward 0.

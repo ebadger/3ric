@@ -134,7 +134,7 @@ console.log("E) draw_poly: ship renders and XOR-erases");
 
 // ===== M2: ship physics =====================================================
 const SHIP = S.SHIP;
-const O = { act:0, xf:1, xl:2, xh:3, yf:4, yl:5, yh:6, vxl:7, vxh:8, vyl:9, vyh:10, ang:11, drawn:12 };
+const O = { act:0, xf:1, xl:2, xh:3, yf:4, yl:5, yh:6, vxl:7, vxh:8, vyl:9, vyh:10, ang:11, drawn:12, life:13 };
 const gb = (k) => vm.peek(SHIP + O[k]);
 const sb = (k, v) => vm.poke(SHIP + O[k], v & 0xff);
 const s8 = (v) => (v & 0x80 ? v - 256 : v);           // signed byte
@@ -220,6 +220,75 @@ console.log("K) erase-redraw: a moving ship leaves no trail");
   const yl = gb("yl"), xl = gb("xl");
   const below = boxLit(Math.max(0, xl - 16), Math.min(159, yl + 12), Math.min(279, xl + 16), Math.min(159, yl + 30));
   ok(below === 0, `clean space behind the ship (residual ${below})`);
+}
+
+// ===========================================================================
+// M3) bullets
+// ===========================================================================
+const BULLETS = S.BULLETS;
+const bull = (i, k) => vm.peek(BULLETS + i * 16 + O[k]);
+const setbull = (i, k, v) => vm.poke(BULLETS + i * 16 + O[k], v & 0xff);
+const bx16 = (i) => bull(i, "xl") + 256 * bull(i, "xh");
+const activeBullets = () => { let n = 0; for (let i = 0; i < 5; i++) n += bull(i, "act") ? 1 : 0; return n; };
+const firstBullet = () => { for (let i = 0; i < 5; i++) if (bull(i, "act")) return i; return -1; };
+
+// L) firing SPACE spawns a bullet at the nose, moving in the facing direction
+console.log("L) fire: SPACE spawns a bullet at the nose moving up");
+{
+  runHook(S.INIT_BRK, "init");
+  press(0xA0); frame();                       // SPACE
+  ok(activeBullets() >= 1, `a bullet is active after firing (got ${activeBullets()})`);
+  const bi = firstBullet();
+  ok(bi >= 0, "bullet slot allocated");
+  ok(Math.abs(bx16(bi) - 140) <= 3, `bullet near ship x=140 (got ${bx16(bi)})`);
+  ok(bull(bi, "yl") < 78, `bullet above ship centre, travelling up (y=${bull(bi, "yl")})`);
+  ok(bull(bi, "life") > 0 && bull(bi, "life") <= 60, `bullet has a lifetime (got ${bull(bi, "life")})`);
+}
+
+// M) a fired bullet keeps travelling and is drawn on the playfield
+console.log("M) bullet travels and is drawn");
+{
+  runHook(S.INIT_BRK, "init");
+  press(0xA0); frame();
+  const bi = firstBullet();
+  const y1 = bull(bi, "yl");
+  for (let i = 0; i < 5; i++) frame();        // coast
+  const y2 = bull(bi, "yl");
+  ok(y2 < y1, `bullet keeps travelling up (${y1} -> ${y2})`);
+  ok(getpix(bx16(bi), bull(bi, "yl")) === 1, "bullet pixel present on screen");
+  ok(activeBullets() === 1, `still exactly one bullet (got ${activeBullets()})`);
+}
+
+// N) a bullet expires after its lifetime and leaves no trail
+console.log("N) bullet expires after its lifetime");
+{
+  runHook(S.INIT_BRK, "init");
+  press(0xA0); frame();
+  ok(activeBullets() === 1, "bullet active");
+  for (let i = 0; i < 62; i++) frame();       // outlive it
+  ok(activeBullets() === 0, "bullet retired after its lifetime");
+  ok(playfieldLit() < 50, `no leftover bullet trail, ship only (lit ${playfieldLit()})`);
+}
+
+// O) never more than NBULLET bullets, even holding fire
+console.log("O) fire cadence caps active bullets at NBULLET");
+{
+  runHook(S.INIT_BRK, "init");
+  let peak = 0;
+  for (let i = 0; i < 50; i++) { press(0xA0); frame(); peak = Math.max(peak, activeBullets()); }
+  ok(activeBullets() <= 5, `never more than 5 bullets (got ${activeBullets()})`);
+  ok(peak >= 4, `fire cadence produced several coexisting bullets (peak ${peak})`);
+}
+
+// P) bullets wrap at the screen edges like the ship
+console.log("P) bullet wraps at the top edge");
+{
+  runHook(S.INIT_BRK, "init");
+  press(0xA0); frame();
+  const bi = firstBullet();
+  setbull(bi, "yf", 0); setbull(bi, "yl", 2); setbull(bi, "yh", 0);  // just below the top
+  frame();
+  ok(bull(bi, "yl") > 150, `bullet wrapped top -> bottom (y=${bull(bi, "yl")})`);
 }
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
