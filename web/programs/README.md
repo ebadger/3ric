@@ -67,5 +67,27 @@ over). Source, prompt, and binary live in
 node codegen/tools/asm6502.mjs emulator/AICodeGen/swarm/swarm.s web/programs/swarm.prg --org 0x0800
 ```
 
+Six **text-mode games** round out the set — each an original take that runs from
+the text screen and reads the keyboard. Load any of them with **Load .PRG…** or a
+`?prg=programs/<name>.prg&org=0800` deep link (**Speed** **1MHz**–**2MHz** plays
+best); source, prompt, and binary live under
+[`emulator/AICodeGen/<name>/`](../../emulator/AICodeGen):
+
+- `snake.prg` — **SNAKE**: steer a growing snake to eat food; walls or your own
+  tail end the run (arrows/WASD, **SPACE** restarts).
+- `blocks.prg` — **BLOCK DROP**: rotate and drop four-cell shapes to clear rows
+  (**A/D** move, **W** rotate, **S** drop).
+- `paddles.prg` — **PADDLES**: paddle-and-ball tennis to seven points against a
+  ball-tracking CPU (**W/S** or arrows).
+- `bricks.prg` — **BRICK BUSTER**: bounce a ball off your paddle to clear bricks
+  across three lives (**A/D** move).
+- `2048.prg` — **2048**: slide and merge numbered tiles on a 4×4 grid (arrows/WASD).
+- `mines.prg` — **MINEFIELD**: clear a 12×12 grid without hitting a mine (arrows
+  move, **SPACE** reveals, **F** flags).
+
+Every program here is also a one-click sample in the page's **Assemble & Run**
+editor, so you can read, edit, re-assemble, and run any of them in the browser —
+or deep-link the source with `?src=programs/<name>.s`.
+
 The GitHub Pages workflow stages this directory to the site root under
 `programs/` (see `.github/workflows/deploy-pages.yml`).
