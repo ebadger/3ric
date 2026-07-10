@@ -71,6 +71,26 @@ const canx = () => vm.peek(S.CANXL) | (vm.peek(S.CANXH) << 8);
 const shtact = () => vm.peek(S.SHTACT);
 const shotx = () => vm.peek(S.SHTXL) | (vm.peek(S.SHTXH) << 8);
 const shty = () => vm.peek(S.SHTY);
+// ---- M4 formation helpers ----
+const bx = () => vm.peek(S.BXL) | (vm.peek(S.BXH) << 8);
+const by = () => vm.peek(S.BY);
+const mdir = () => vm.peek(S.MDIR);
+const mcur = () => vm.peek(S.MCUR);
+const livecnt = () => vm.peek(S.LIVECNT);
+const playfieldLit = () => boxLit(0, 0, 279, 159);
+const RANK = [0, 1, 1, 2, 2];
+const ROWY = [0, 12, 24, 36, 48];
+const SPRADDR = [S.SPR_A0, S.SPR_A1, S.SPR_B0, S.SPR_B1, S.SPR_C0, S.SPR_C1];
+// does alien `i` render exactly at origin (ox,oy) with the given frame?
+function alienExact(i, ox, oy, frame) {
+  const row = i >> 3, col = i & 7;
+  const spr = decodeSprite(SPRADDR[RANK[row] * 2 + frame]);
+  const x = ox + col * 16, y = oy + ROWY[row];
+  for (let r = 0; r < spr.H; r++)
+    for (let c = 0; c < spr.W; c++)
+      if (getpix(x + c, y + r) !== spr.rows[r][c]) return false;
+  return true;
+}
 
 // build the row table once, then reuse
 runHook(S.BUILD_BRK, "build_rows");
@@ -299,6 +319,63 @@ console.log("K) shot: expires at the top and re-arms");
   ok(lit === 0, `no bolt pixels left above the cannon (got ${lit})`);
   press(S.K_SPACE); frame();                // fire again
   ok(shtact() === 1, "can fire again once the bolt is gone");
+}
+
+// ===== L) formation: initial render =========================================
+console.log("L) formation: 40 aliens paint at their cells, ready to march");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  runHook(S.INITFORM_BRK, "init formation");
+  ok(livecnt() === 40, `40 aliens alive (got ${livecnt()})`);
+  ok(bx() === 20 && by() === 12, `block origin at (20,12) (got ${bx()},${by()})`);
+  ok(mdir() === 1, "heading right");
+  ok(mcur() === 40, "cursor primed past the end");
+  ok(alienExact(0, 20, 12, 0), "rank-A alien 0 at (20,12)");
+  ok(alienExact(7, 20, 12, 0), "rank-A alien 7 at right of top row");
+  ok(alienExact(8, 20, 12, 0), "rank-B alien 8 on row 1");
+  ok(alienExact(24, 20, 12, 0), "rank-C alien 24 on row 3");
+  const a0 = decodeSprite(S.SPR_A0).pop, b0 = decodeSprite(S.SPR_B0).pop, c0 = decodeSprite(S.SPR_C0).pop;
+  ok(playfieldLit() === 8 * a0 + 16 * b0 + 16 * c0, "exact whole-swarm pixel budget (frame 0)");
+}
+
+// ===== M) formation: ripple march ===========================================
+console.log("M) formation: one alien ripples per step; a full sweep = one move");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  runHook(S.INITFORM_BRK, "init formation");
+  runHook(S.MARCH_BRK, "step 1");           // commit pass -> block to 22, move alien 0
+  ok(bx() === 22, `first sweep-commit advances block to 22 (got ${bx()})`);
+  ok(mcur() === 1, "cursor at 1");
+  ok(alienExact(0, 22, 12, 1), "swept alien 0 at new origin, frame toggled");
+  ok(alienExact(1, 20, 12, 0), "un-swept alien 1 still at old origin, frame 0");
+  for (let i = 0; i < 39; i++) runHook(S.MARCH_BRK, "sweep");  // finish the pass
+  ok(mcur() === 40, "cursor completed the sweep");
+  ok(bx() === 22, "block still at 22 until next commit");
+  ok(alienExact(39, 22, 12, 1), "last alien swept to new origin");
+  const a1 = decodeSprite(S.SPR_A1).pop, b1 = decodeSprite(S.SPR_B1).pop, c1 = decodeSprite(S.SPR_C1).pop;
+  ok(playfieldLit() === 8 * a1 + 16 * b1 + 16 * c1, "one frame-1 copy of each alien, no trails");
+}
+
+// ===== N) formation: edge bounce + drop =====================================
+console.log("N) formation: steps, then drops and reverses at each wall");
+{
+  const setBlock = (x, yy, dir) => { pokeS16(S.BXL, x); vm.poke(S.BY, yy); vm.poke(S.MDIR, dir); };
+  // all 40 still alive from L/M -> live columns span 0..7
+  setBlock(50, 30, 1);
+  runHook(S.ADVANCE_BRK, "step right");
+  ok(bx() === 52 && by() === 30 && mdir() === 1, `steps right mid-field (${bx()},${by()},${mdir()})`);
+
+  setBlock(154, 30, 1);
+  runHook(S.ADVANCE_BRK, "right wall");
+  ok(bx() === 154 && by() === 38 && mdir() === 0xFF, `drops+reverses at right wall (${bx()},${by()},${mdir()})`);
+
+  setBlock(50, 30, 0xFF);
+  runHook(S.ADVANCE_BRK, "step left");
+  ok(bx() === 48 && mdir() === 0xFF, `steps left mid-field (got ${bx()})`);
+
+  setBlock(1, 30, 0xFF);
+  runHook(S.ADVANCE_BRK, "left wall");
+  ok(bx() === 1 && by() === 38 && mdir() === 1, `drops+reverses at left wall (${bx()},${by()},${mdir()})`);
 }
 
 // ===== summary ==============================================================

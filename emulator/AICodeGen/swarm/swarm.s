@@ -62,6 +62,18 @@ SHOT_STEP = 6           ; bolt rises this many pixels per frame
 SHOT_DX   = 7           ; muzzle offset from cannon left edge (centre)
 SHOT_Y0   = 144         ; bolt spawn y (just above the cannon barrel)
 
+; ---- alien formation ----
+NCOLS    = 8            ; columns in the swarm
+NROWS    = 5            ; ranks in the swarm
+NALIEN   = 40           ; NCOLS * NROWS
+CELLW    = 16           ; horizontal spacing between alien cells
+CELLH    = 12           ; vertical spacing between ranks
+ALIEN_W  = 12           ; alien sprite width
+BLKX0    = 20           ; formation start x (top-left of cell 0,0)
+BLKY0    = 12           ; formation start y
+MDX      = 2            ; horizontal march step (per formation advance)
+MDROP    = 8            ; drop distance when the swarm reverses
+
 ; ---- zero page (only the (zp),y pointers live here) ----
 ptr      = $06          ; screen dest pointer            (+1)
 sprptr   = $08          ; sprite-data pointer            (+1)
@@ -113,6 +125,32 @@ lshtxl   = $6A2E        ; last-drawn bolt position (for XOR erase)
 lshtxh   = $6A2F
 lshty    = $6A30
 
+; ---- M4: alien formation (two-origin ripple march) ----
+bxl      = $6A31        ; current block origin x (16-bit) — where the swarm heads
+bxh      = $6A32
+by       = $6A33        ; current block origin y
+obxl     = $6A34        ; old block origin x — where un-swept aliens still sit
+obxh     = $6A35
+oby      = $6A36        ; old block origin y
+mdir     = $6A37        ; march direction: +1 (right) / $FF (left)
+apar     = $6A38        ; animation-frame parity (flips each full sweep)
+mcur     = $6A39        ; march cursor 0..NALIEN (sweeps the formation)
+livecnt  = $6A3A        ; aliens still alive
+minc     = $6A3B        ; live-column extent (for edge detection)
+maxc     = $6A3C
+aidx     = $6A3D        ; blit_alien: which alien ...
+aframe   = $6A3E        ; ... which frame (0/1) ...
+aoxl     = $6A3F        ; ... at which origin x (16-bit) ...
+aoxh     = $6A40
+aoy      = $6A41        ; ... and origin y
+arow     = $6A42        ; blit_alien scratch: row / col / cell-x
+acol     = $6A43
+acellx   = $6A44
+t0       = $6A45        ; advance_formation scratch (16-bit)
+t1l      = $6A46
+t1h      = $6A47
+alive    = $6A80        ; NALIEN alive flags ($6A80..$6AA7)
+
         .org $0800
 
 ; ---------------------------------------------------------------------------
@@ -125,6 +163,7 @@ start:
         txs
         jsr video_init
         jsr init_cannon
+        jsr init_formation
 sg_loop:
         jsr game_frame
         jsr frame_delay
@@ -157,10 +196,11 @@ init_cannon:
         sta hfire
         sta shtact
         sta shtdrawn
+        sta livecnt             ; no formation yet -> march_step no-ops
         rts
 
 ; ---------------------------------------------------------------------------
-; game_frame : one tick — erase, read input, move, redraw, decay timers.
+; game_frame : one tick — erase, read input, move, redraw, march, decay.
 ; ---------------------------------------------------------------------------
 game_frame:
         jsr erase_cannon
@@ -169,6 +209,7 @@ game_frame:
         jsr move_cannon
         jsr do_fire
         jsr update_shot
+        jsr march_step
         jsr draw_cannon
         jsr draw_shot
         jsr decay_timers
@@ -391,6 +432,281 @@ draw_shot:
 dsh_off:
         lda #0
         sta shtdrawn
+        rts
+
+; ---------------------------------------------------------------------------
+; init_formation : fill the swarm, draw it once (frame 0), arm the ripple.
+; ---------------------------------------------------------------------------
+init_formation:
+        lda #<BLKX0
+        sta bxl
+        sta obxl
+        lda #>BLKX0
+        sta bxh
+        sta obxh
+        lda #BLKY0
+        sta by
+        sta oby
+        lda #1
+        sta mdir                ; heading right
+        lda #0
+        sta apar
+        ldx #0
+if_fill:
+        lda #1
+        sta alive,x
+        inx
+        cpx #NALIEN
+        bne if_fill
+        lda #NALIEN
+        sta livecnt
+        jsr draw_all_aliens     ; initial full paint (frame 0, old origin)
+        lda #NALIEN             ; cursor past the end -> first step commits a pass
+        sta mcur
+        rts
+
+; ---------------------------------------------------------------------------
+; draw_all_aliens : XOR every live alien on at frame 0, current origin.
+; ---------------------------------------------------------------------------
+draw_all_aliens:
+        ldx #0
+daa_l:
+        lda alive,x
+        beq daa_n
+        stx aidx
+        lda #0
+        sta aframe
+        lda bxl
+        sta aoxl
+        lda bxh
+        sta aoxh
+        lda by
+        sta aoy
+        jsr blit_alien
+        ldx aidx
+daa_n:
+        inx
+        cpx #NALIEN
+        bne daa_l
+        rts
+
+; ---------------------------------------------------------------------------
+; blit_alien : XOR alien `aidx` (frame `aframe`) at origin (aoxl/aoxh, aoy).
+;   Position = origin + (col*CELLW, ROWYOFF[row]); rank chooses the sprite.
+; ---------------------------------------------------------------------------
+blit_alien:
+        lda aidx
+        and #(NCOLS-1)          ; col = aidx mod 8
+        sta acol
+        lda aidx
+        lsr a
+        lsr a
+        lsr a                   ; row = aidx / 8
+        sta arow
+        lda acol                ; cellx = col * 16
+        asl a
+        asl a
+        asl a
+        asl a
+        sta acellx
+        clc                     ; sx = originx + cellx (16-bit)
+        lda aoxl
+        adc acellx
+        sta sx
+        lda aoxh
+        adc #0
+        sta sxh
+        ldx arow                ; sy = originy + ROWYOFF[row]
+        clc
+        lda aoy
+        adc ROWYOFF,x
+        sta sy
+        ldx arow                ; sprite = SPRxx[ ROWRANK[row]*2 + frame ]
+        lda ROWRANK,x
+        asl a
+        clc
+        adc aframe
+        tax
+        lda SPRLO,x
+        sta sprptr
+        lda SPRHI,x
+        sta sprptr+1
+        jsr draw_sprite
+        rts
+
+; ---------------------------------------------------------------------------
+; march_step : advance the ripple by one alien. When the cursor completes a
+;   sweep, commit the pass (advance the whole block) and flip the anim frame.
+;   Only live aliens cost a draw, so the swarm speeds up as ranks thin.
+; ---------------------------------------------------------------------------
+march_step:
+        lda livecnt
+        bne ms_go
+        rts
+ms_go:
+        lda mcur
+        cmp #NALIEN
+        bcc ms_have             ; cursor still inside the formation
+        lda #0                  ; wrapped: a full sweep = one formation step
+        sta mcur
+        lda bxl                 ; old origin catches up to current
+        sta obxl
+        lda bxh
+        sta obxh
+        lda by
+        sta oby
+        jsr advance_formation   ; step / drop+reverse -> new current origin
+        lda apar
+        eor #1
+        sta apar
+ms_have:
+        ldx mcur
+        lda alive,x
+        bne ms_do
+        inc mcur                ; skip dead slots (this is the speed-up)
+        jmp ms_go
+ms_do:
+        lda mcur                ; erase at OLD origin with the previous frame
+        sta aidx
+        lda apar
+        eor #1
+        sta aframe
+        lda obxl
+        sta aoxl
+        lda obxh
+        sta aoxh
+        lda oby
+        sta aoy
+        jsr blit_alien
+        lda mcur                ; redraw at NEW origin with the new frame
+        sta aidx
+        lda apar
+        sta aframe
+        lda bxl
+        sta aoxl
+        lda bxh
+        sta aoxh
+        lda by
+        sta aoy
+        jsr blit_alien
+        inc mcur
+        rts
+
+; ---------------------------------------------------------------------------
+; advance_formation : shift the block one MDX in the current direction, or —
+;   if the live edge would leave the playfield — drop MDROP and reverse.
+; ---------------------------------------------------------------------------
+advance_formation:
+        jsr live_extent
+        lda mdir
+        bmi af_left
+        lda maxc                ; right edge after step = bx + maxc*16 + ALIEN_W + MDX
+        asl a
+        asl a
+        asl a
+        asl a
+        sta t0
+        clc
+        lda bxl
+        adc t0
+        sta t1l
+        lda bxh
+        adc #0
+        sta t1h
+        clc
+        lda t1l
+        adc #(ALIEN_W+MDX)
+        sta t1l
+        lda t1h
+        adc #0
+        sta t1h
+        lda t1h                 ; compare against WIDTH (280 = $0118)
+        cmp #>WIDTH
+        bcc af_stepr
+        bne af_drop
+        lda t1l
+        cmp #<WIDTH
+        bcc af_stepr
+af_drop:
+        clc
+        lda by
+        adc #MDROP
+        sta by
+        lda mdir                ; reverse: dir = -dir
+        eor #$FF
+        clc
+        adc #1
+        sta mdir
+        rts
+af_stepr:
+        clc
+        lda bxl
+        adc #MDX
+        sta bxl
+        lda bxh
+        adc #0
+        sta bxh
+        rts
+af_left:
+        lda minc                ; left edge after step = bx + minc*16 - MDX
+        asl a
+        asl a
+        asl a
+        asl a
+        sta t0
+        clc
+        lda bxl
+        adc t0
+        sta t1l
+        lda bxh
+        adc #0
+        sta t1h
+        sec
+        lda t1l
+        sbc #MDX
+        sta t1l
+        lda t1h
+        sbc #0
+        sta t1h
+        lda t1h
+        bmi af_drop             ; went negative -> hit the left wall
+        sec                     ; step left: bx -= MDX
+        lda bxl
+        sbc #MDX
+        sta bxl
+        lda bxh
+        sbc #0
+        sta bxh
+        rts
+
+; ---------------------------------------------------------------------------
+; live_extent : scan the swarm for the leftmost/rightmost live column.
+; ---------------------------------------------------------------------------
+live_extent:
+        lda #99
+        sta minc
+        lda #0
+        sta maxc
+        ldx #0
+le_l:
+        lda alive,x
+        beq le_n
+        txa
+        and #(NCOLS-1)
+        sta t0                  ; col
+        cmp minc
+        bcs le_nomin
+        sta minc
+le_nomin:
+        lda t0
+        cmp maxc
+        bcc le_nomax
+        sta maxc
+le_nomax:
+le_n:
+        inx
+        cpx #NALIEN
+        bne le_l
         rts
 
 ; ---------------------------------------------------------------------------
@@ -670,6 +986,16 @@ SPR_SHOT:
 SPR_BOMB:
         .byte 5,3,64,0,192,0,64,0,96,0,64,0
 
+; ---- formation lookup tables ----
+ROWYOFF:                        ; pixel y offset of each rank = row * CELLH
+        .byte 0,12,24,36,48
+ROWRANK:                        ; which alien rank draws on each row
+        .byte 0,1,1,2,2
+SPRLO:                          ; sprite address low bytes: rank*2 + frame
+        .byte <SPR_A0,<SPR_A1,<SPR_B0,<SPR_B1,<SPR_C0,<SPR_C1
+SPRHI:
+        .byte >SPR_A0,>SPR_A1,>SPR_B0,>SPR_B1,>SPR_C0,>SPR_C1
+
 ; ---------------------------------------------------------------------------
 ; BRK test hooks (headless harness entry points)
 ; ---------------------------------------------------------------------------
@@ -687,4 +1013,17 @@ init_brk:
         brk
 frame_brk:
         jsr game_frame
+        brk
+initform_brk:
+        jsr init_formation
+        brk
+march_brk:
+        jsr march_step
+        brk
+advance_brk:
+        jsr advance_formation
+        brk
+initall_brk:
+        jsr init_cannon
+        jsr init_formation
         brk
