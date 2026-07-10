@@ -560,5 +560,30 @@ console.log("AF) engine flame lights under thrust and clears when it stops");
      `clean exhaust zone after release (residual ${boxLit(xR - 6, yR + 6, xR + 6, yR + 16)})`);
 }
 
+// AG) hyperspace warps the ship elsewhere, kills momentum, and rate-limits
+console.log("AG) hyperspace jumps the ship, zeros momentum, and cools down");
+{
+  runHook(S.INIT_BRK, "init"); clearRocks(); clearBullets(); clearKey();
+  vm.poke(S.INVUL, 0); vm.poke(S.HYPCD, 0);        // normal play: no grace, jump ready
+  sb("xf", 0); sb("xl", 140); sb("xh", 0);
+  sb("yf", 0); sb("yl", 80);  sb("yh", 0);
+  sb("vxl", 60); sb("vxh", 0); sb("vyl", 0); sb("vyh", 0);   // real momentum
+  press(S.K_H); frame();                            // hyperspace!
+  const x1 = gb("xl"), y1 = gb("yl");
+  ok(x1 !== 140 || y1 !== 80, `ship warps to a new spot (140,80 -> ${x1},${y1})`);
+  ok(gb("vxl") === 0 && gb("vxh") === 0 && gb("vyl") === 0 && gb("vyh") === 0,
+     `momentum is killed on arrival (v=${gb("vxl")},${gb("vxh")},${gb("vyl")},${gb("vyh")})`);
+  ok(vm.peek(S.INVUL) === S.HYP_INV - 1, `brief arrival grace (got ${vm.peek(S.INVUL)})`);
+  ok(vm.peek(S.HYPCD) === S.HYP_CD - 1, `cooldown armed (got ${vm.peek(S.HYPCD)})`);
+  // a second request while cooling down is ignored -> no teleport
+  clearKey(); press(S.K_H); frame();
+  ok(gb("xl") === x1 && gb("yl") === y1,
+     `no re-jump while cooling down (${x1},${y1} -> ${gb("xl")},${gb("yl")})`);
+  // once the cooldown clears, hyperspace fires again
+  vm.poke(S.HYPCD, 0); clearKey(); press(S.K_H); frame();
+  ok(gb("xl") !== x1 || gb("yl") !== y1,
+     `jumps again after the cooldown (${x1},${y1} -> ${gb("xl")},${gb("yl")})`);
+}
+
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

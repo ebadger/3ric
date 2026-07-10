@@ -177,6 +177,8 @@ ctmp     = $6A77          ; spawn_child: velocity-doubling temp
 gstate   = $6A78          ; game state: 0 attract, 1 playing, 2 game over
 wave     = $6A79          ; current wave number (1-based)
 fldrawn  = $6A7A          ; 1 = thrust flame currently XOR-drawn on screen
+hhyp     = $6A7B          ; momentary hyperspace request (set by input)
+hypcd    = $6A7C          ; frames until hyperspace is allowed again
 
 ; ---- tunables ----
 HOLD     = 4              ; frames an action stays live after its key event
@@ -191,6 +193,8 @@ NSHAPE   = 3              ; rock silhouette variants
 WAVE0    = 4              ; large rocks in the opening wave
 LIVES0   = 3              ; starting ships
 INVULN   = 90             ; invulnerable frames after (re)spawn
+HYP_CD   = 30             ; frames between hyperspace jumps (rate limit)
+HYP_INV  = 30             ; brief grace period after a hyperspace arrival
 SHIPR    = 4              ; ship half-size added to a rock's collision radius
 WAVEMAX  = 8              ; cap on large rocks spawned per wave
 GS_ATTRACT = 0            ; game-state values
@@ -212,6 +216,7 @@ K_RARR   = $95
 K_W      = $D7
 K_UARR   = $8B
 K_SPACE  = $A0
+K_H      = $C8            ; hyperspace
 
         .org $0800
 
@@ -301,6 +306,8 @@ init_ship:
         sta hthr
         sta hfire
         sta fldrawn
+        sta hhyp
+        sta hypcd
         rts
 
 ; ---------------------------------------------------------------------------
@@ -333,6 +340,7 @@ pf_go:
         jsr do_rotate
         jsr do_thrust
         jsr do_fire
+        jsr do_hyperspace
         jsr integrate_ship
         jsr wrap_ship
         jsr update_bullets
@@ -699,6 +707,8 @@ read_input:
         beq ri_thr
         cmp #K_SPACE
         beq ri_fire
+        cmp #K_H
+        beq ri_hyp
         rts
 ri_left:
         lda #HOLD
@@ -715,6 +725,10 @@ ri_thr:
 ri_fire:
         lda #HOLD
         sta hfire
+        rts
+ri_hyp:
+        lda #1
+        sta hhyp
 ri_ret:
         rts
 
@@ -1002,6 +1016,41 @@ do_fire:
         lda #FIRE_CD
         sta firecd
 df_ret:
+        rts
+
+; do_hyperspace : on a request (rate-limited) warp the ship to a random spot,
+;   kill its momentum, and grant a brief grace period on arrival.  A jump can
+;   still drop you onto a rock -- that's the classic risk -- but the short
+;   invuln keeps arrival survivable while it clears.
+do_hyperspace:
+        lda hhyp
+        beq dh_ret
+        lda #0
+        sta hhyp                ; consume the request whether or not it fires
+        lda hypcd
+        bne dh_ret              ; still cooling down -> ignore
+        jsr rand
+        sta SHIP+o_xl           ; new x in 0..255 (inside the 280-wide field)
+        jsr rand
+        cmp #HEIGHT
+        bcc dh_yok
+        sbc #HEIGHT             ; fold 160..255 down into 0..95
+dh_yok:
+        sta SHIP+o_yl           ; new y in 0..159
+        lda #0
+        sta SHIP+o_xf
+        sta SHIP+o_xh
+        sta SHIP+o_yf
+        sta SHIP+o_yh
+        sta SHIP+o_vxl          ; drop all momentum
+        sta SHIP+o_vxh
+        sta SHIP+o_vyl
+        sta SHIP+o_vyh
+        lda #HYP_CD
+        sta hypcd
+        lda #HYP_INV
+        sta invul
+dh_ret:
         rts
 
 ; fire_bullet : find a free slot; spawn a shot at the nose, moving along the
@@ -1803,8 +1852,12 @@ dc2:
         dec hthr
 dc3:
         lda hfire
-        beq dc_ret
+        beq dc4
         dec hfire
+dc4:
+        lda hypcd
+        beq dc_ret
+        dec hypcd
 dc_ret:
         rts
 
