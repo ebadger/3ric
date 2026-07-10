@@ -118,6 +118,20 @@ const BOMB = art([         // alien bomb: a 3x5 zigzag
   ".#.",
 ]);
 
+// ---- destructible shield / bunker (14 wide): solid dome, arch cut below -----
+const BUNKER = art([
+  "..##########..",
+  ".############.",
+  "##############",
+  "##############",
+  "##############",
+  "##############",
+  "#####....#####",
+  "####......####",
+  "####......####",
+  "###........###",
+]);
+
 const SPRITES = [
   ["SPR_CANNON", CANNON, 15],
   ["SPR_A0", A0, 12], ["SPR_A1", A1, 12],
@@ -126,6 +140,7 @@ const SPRITES = [
   ["SPR_UFO", UFO, 16],
   ["SPR_SHOT", SHOT, 1],
   ["SPR_BOMB", BOMB, 3],
+  ["SPR_BUNKER", BUNKER, 14],
 ];
 
 function encode(name, rows, W) {

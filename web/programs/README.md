@@ -52,5 +52,20 @@ vectors):
 node codegen/tools/asm6502.mjs emulator/AICodeGen/rocks/rocks.s web/programs/rocks.prg --org 0x0800
 ```
 
+`swarm.prg` is **STAR SWARM**, an original hi-res fixed-shooter — a five-row
+formation of aliens marches side to side, drops down and speeds up as its ranks
+thin, and rains bombs while you slide a cannon along the bottom and fire back up
+through four crumbling shields; a mystery saucer streaks across the top for bonus
+points. Clear the swarm for a faster wave; let it reach the shields (or lose your
+last cannon) and it's game over (**A/D** or **arrows** move, **SPACE** fires;
+**SPACE** also starts the game from the title screen and restarts after game
+over). Source, prompt, and binary live in
+[`emulator/AICodeGen/swarm/`](../../emulator/AICodeGen/swarm); deep-link it at
+`?prg=programs/swarm.prg&org=0800` (set **Speed** to **Max** for a brisk pace):
+
+```sh
+node codegen/tools/asm6502.mjs emulator/AICodeGen/swarm/swarm.s web/programs/swarm.prg --org 0x0800
+```
+
 The GitHub Pages workflow stages this directory to the site root under
 `programs/` (see `.github/workflows/deploy-pages.yml`).
