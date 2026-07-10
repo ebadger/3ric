@@ -174,6 +174,8 @@ save0    = $6A74          ; objptr save across spawn_child scans
 save1    = $6A75
 chsize   = $6A76          ; spawn_child: child size
 ctmp     = $6A77          ; spawn_child: velocity-doubling temp
+gstate   = $6A78          ; game state: 0 attract, 1 playing, 2 game over
+wave     = $6A79          ; current wave number (1-based)
 
 ; ---- tunables ----
 HOLD     = 4              ; frames an action stays live after its key event
@@ -189,6 +191,17 @@ WAVE0    = 4              ; large rocks in the opening wave
 LIVES0   = 3              ; starting ships
 INVULN   = 90             ; invulnerable frames after (re)spawn
 SHIPR    = 4              ; ship half-size added to a rock's collision radius
+WAVEMAX  = 8              ; cap on large rocks spawned per wave
+GS_ATTRACT = 0            ; game-state values
+GS_PLAY  = 1
+GS_OVER  = 2
+HUD20    = $0650          ; text page 1 row 20 (first visible mixed-mode text row)
+HUD22    = $0750          ; text page 1 row 22
+HUD23    = $07D0          ; text page 1 row 23
+SNAP20   = $6B00          ; safe copies of the HUD rows (the BRK monitor dump
+SNAP21   = $6B28          ;   overwrites the live text page, so tests read these)
+SNAP22   = $6B50
+SNAP23   = $6B78
 
 ; ---- key codes (Apple II: bit7 set = key ready) ----
 K_A      = $C1
@@ -212,22 +225,30 @@ start:
         cld
         ldx #$FF
         txs
-        jsr game_init
+        jsr video_init
+        jsr enter_attract
 sg_loop:
         jsr game_frame
         jsr frame_delay
         jmp sg_loop
 
 ; ---------------------------------------------------------------------------
-; game_init : hi-res mixed mode, row table, clear, place the ship.
+; video_init : select hi-res mixed mode, build the row table, clear the screen.
 ; ---------------------------------------------------------------------------
-game_init:
+video_init:
         lda TXTCLR              ; graphics on
         lda MIXSET              ; mixed mode (text HUD at bottom)
         lda LOWSCR              ; page 1
         lda HIRES_SW            ; hi-res
         jsr build_rows
         jsr clear_screen
+        rts
+
+; ---------------------------------------------------------------------------
+; game_init : start a fresh game — video, ship, fresh field, score/lives.
+; ---------------------------------------------------------------------------
+game_init:
+        jsr video_init
         jsr init_ship
         jsr clear_bullets
         jsr clear_rocks
@@ -245,7 +266,12 @@ game_init:
         sta lives
         lda #INVULN
         sta invul              ; a moment of grace at the start
-        jsr spawn_wave
+        lda #GS_PLAY
+        sta gstate
+        lda #1
+        sta wave
+        jsr start_wave
+        jsr hud_play
         rts
 
 ; init_ship : place the ship at screen centre, at rest, pointing up.
@@ -276,9 +302,27 @@ init_ship:
         rts
 
 ; ---------------------------------------------------------------------------
-; game_frame : advance one frame (erase, input, physics, redraw).
+; game_frame : one tick — dispatch on the current game state.
 ; ---------------------------------------------------------------------------
 game_frame:
+        lda gstate
+        cmp #GS_PLAY
+        beq gf_play
+        cmp #GS_OVER
+        beq gf_over
+        jmp attract_frame       ; GS_ATTRACT
+gf_play:
+        jmp play_frame
+gf_over:
+        jmp over_frame
+
+; play_frame : advance one frame of actual gameplay.
+play_frame:
+        lda rkcnt
+        bne pf_go
+        inc wave                ; field cleared -> next, larger wave
+        jsr start_wave
+pf_go:
         jsr erase_ship
         jsr erase_bullets
         jsr erase_rocks
@@ -297,7 +341,268 @@ game_frame:
         jsr decay_timers
         jsr dec_firecd
         jsr dec_invuln
+        jsr hud_play
+        lda gameover
+        beq pf_ret
+        jsr enter_over
+pf_ret:
         rts
+
+; attract_frame : title screen — rocks drift behind it; SPACE starts a game.
+attract_frame:
+        jsr erase_rocks
+        jsr update_rocks
+        jsr draw_rocks
+        jsr hud_attract
+        jsr poll_space
+        bcc af_ret
+        jsr game_init           ; SPACE -> play
+af_ret:
+        rts
+
+; over_frame : game-over screen — rocks keep drifting; SPACE restarts.
+over_frame:
+        jsr erase_rocks
+        jsr update_rocks
+        jsr draw_rocks
+        jsr hud_over
+        jsr poll_space
+        bcc of_ret
+        jsr game_init           ; SPACE -> restart
+of_ret:
+        rts
+
+; enter_attract : reset to the title screen with a drifting rock backdrop.
+enter_attract:
+        lda #GS_ATTRACT
+        sta gstate
+        jsr clear_screen
+        lda seed
+        ora seed+1
+        bne ea_seeded
+        lda #$A5
+        sta seed
+        lda #$3C
+        sta seed+1
+ea_seeded:
+        lda #1
+        sta wave
+        jsr clear_rocks
+        jsr start_wave
+        rts
+
+; enter_over : switch to the game-over state.
+enter_over:
+        lda #GS_OVER
+        sta gstate
+        rts
+
+; poll_space : carry set if SPACE is pressed this frame (clears the strobe).
+poll_space:
+        lda KBD
+        bpl ps_no               ; bit7 clear -> no key waiting
+        sta keyin               ; save the key before clearing the strobe
+        lda KBDSTRB             ; read of $C010 clears the strobe
+        lda keyin
+        cmp #K_SPACE
+        beq ps_yes
+ps_no:
+        clc
+        rts
+ps_yes:
+        sec
+        rts
+
+; ---------------------------------------------------------------------------
+; M6 HUD : score + ships (playing), title (attract), game over (over).
+;   Writes to text page 1 rows 20-23, visible under the mixed hi-res field.
+;   Source strings are plain ASCII; ORA #$80 gives Apple II normal-video chars.
+;   ptr ($06) = dest cell, vpx ($08) = source string (both free outside line draw)
+; ---------------------------------------------------------------------------
+
+; hud_clear : blank the four text HUD rows (20-23) with spaces.
+hud_clear:
+        ldx #0
+hc_row:
+        lda HUDBL,x
+        sta ptr
+        lda HUDBH,x
+        sta ptr+1
+        lda #$A0                ; normal-video space
+        ldy #39
+hc_col:
+        sta (ptr),y
+        dey
+        bpl hc_col
+        inx
+        cpx #4
+        bne hc_row
+        rts
+
+; puts : copy the $00-terminated ASCII string at (vpx) to (ptr), hi-bit set.
+puts:
+        ldy #0
+puts_l:
+        lda (vpx),y
+        beq puts_d
+        ora #$80
+        sta (ptr),y
+        iny
+        bne puts_l
+puts_d:
+        rts
+
+; put_score : write the 6-digit BCD score at (ptr) (cells Y=0..5).
+put_score:
+        ldy #0
+        lda score2
+        jsr sc_byte
+        lda score1
+        jsr sc_byte
+        lda score0
+        jsr sc_byte
+        rts
+sc_byte:                        ; A = BCD byte, Y = cell; writes 2 digits, Y+=2
+        pha
+        lsr a
+        lsr a
+        lsr a
+        lsr a
+        ora #$B0                ; '0' in normal video
+        sta (ptr),y
+        iny
+        pla
+        and #$0F
+        ora #$B0
+        sta (ptr),y
+        iny
+        rts
+
+; hud_play : SCORE nnnnnn ................ SHIPS n   (row 22)
+hud_play:
+        jsr hud_clear
+        lda #<HUD22
+        sta ptr
+        lda #>HUD22
+        sta ptr+1
+        lda #<MSG_SCORE
+        sta vpx
+        lda #>MSG_SCORE
+        sta vpx+1
+        jsr puts                ; "SCORE" at cols 0-4
+        lda #<(HUD22+6)
+        sta ptr
+        lda #>(HUD22+6)
+        sta ptr+1
+        jsr put_score           ; digits at cols 6-11
+        lda #<(HUD22+20)
+        sta ptr
+        lda #>(HUD22+20)
+        sta ptr+1
+        lda #<MSG_SHIPS
+        sta vpx
+        lda #>MSG_SHIPS
+        sta vpx+1
+        jsr puts                ; "SHIPS" at cols 20-24
+        lda lives
+        ora #$B0
+        ldy #6                  ; ptr = HUD22+20, so cell 26
+        sta (ptr),y
+        rts
+
+; hud_attract : the title and the start prompt.
+hud_attract:
+        jsr hud_clear
+        lda #<(HUD20+15)
+        sta ptr
+        lda #>(HUD20+15)
+        sta ptr+1
+        lda #<MSG_TITLE
+        sta vpx
+        lda #>MSG_TITLE
+        sta vpx+1
+        jsr puts                ; "ROCK STORM"
+        lda #<(HUD22+10)
+        sta ptr
+        lda #>(HUD22+10)
+        sta ptr+1
+        lda #<MSG_START
+        sta vpx
+        lda #>MSG_START
+        sta vpx+1
+        jsr puts                ; "PRESS SPACE TO PLAY"
+        rts
+
+; hud_over : GAME OVER, the final score, and the restart prompt.
+hud_over:
+        jsr hud_clear
+        lda #<(HUD20+15)
+        sta ptr
+        lda #>(HUD20+15)
+        sta ptr+1
+        lda #<MSG_OVER
+        sta vpx
+        lda #>MSG_OVER
+        sta vpx+1
+        jsr puts                ; "GAME OVER"
+        lda #<(HUD22+10)
+        sta ptr
+        lda #>(HUD22+10)
+        sta ptr+1
+        lda #<MSG_SCORE
+        sta vpx
+        lda #>MSG_SCORE
+        sta vpx+1
+        jsr puts                ; "SCORE"
+        lda #<(HUD22+16)
+        sta ptr
+        lda #>(HUD22+16)
+        sta ptr+1
+        jsr put_score           ; final score digits
+        lda #<(HUD23+10)
+        sta ptr
+        lda #>(HUD23+10)
+        sta ptr+1
+        lda #<MSG_START
+        sta vpx
+        lda #>MSG_START
+        sta vpx+1
+        jsr puts                ; "PRESS SPACE TO PLAY"
+        rts
+
+HUDBL:  .byte $50,$D0,$50,$D0    ; text rows 20,21,22,23 low bytes
+HUDBH:  .byte $06,$06,$07,$07    ; ... high bytes
+MSG_TITLE:  .asciiz "ROCK STORM"
+MSG_START:  .asciiz "PRESS SPACE TO PLAY"
+MSG_OVER:   .asciiz "GAME OVER"
+MSG_SCORE:  .asciiz "SCORE"
+MSG_SHIPS:  .asciiz "SHIPS"
+
+; hud_snapshot : copy the four live HUD rows into safe RAM so tests can read
+;   them after the BRK monitor scribbles its register dump over the text page.
+hud_snapshot:
+        ldx #0
+hsn_row:
+        lda HUDBL,x
+        sta ptr
+        lda HUDBH,x
+        sta ptr+1
+        lda SNAPL,x
+        sta vpx
+        lda SNAPH,x
+        sta vpx+1
+        ldy #39
+hsn_col:
+        lda (ptr),y
+        sta (vpx),y
+        dey
+        bpl hsn_col
+        inx
+        cpx #4
+        bne hsn_row
+        rts
+SNAPL:  .byte $00,$28,$50,$78
+SNAPH:  .byte $6B,$6B,$6B,$6B
 
 ; render_ship : XOR the ship polygon at its current pos/angle.
 render_ship:
@@ -997,11 +1302,19 @@ drk_next:
         bne drk_loop
         rts
 
-; spawn_wave : lay out the opening field of large rocks.
-spawn_wave:
+; start_wave : lay out a fresh field of large rocks; more each wave (capped).
+start_wave:
         lda #0
         sta rkcnt
-        lda #WAVE0
+        lda wave
+        clc
+        adc #(WAVE0-1)          ; wave 1 -> WAVE0 rocks, +1 per wave
+        bcs sw_capf
+        cmp #(WAVEMAX+1)
+        bcc sw_set
+sw_capf:
+        lda #WAVEMAX
+sw_set:
         sta spcnt
 sw_loop:
         lda #SZLARGE
@@ -2055,4 +2368,21 @@ frame_brk:
         ldx #$FF
         txs
         jsr game_frame
+        brk
+
+; reset to the attract/title state, then BRK (tests drive state transitions).
+attract_brk:
+        ldx #$FF
+        txs
+        jsr video_init
+        jsr enter_attract
+        brk
+
+; run one frame, then snapshot the HUD into safe RAM before BRK clobbers the
+; text page — lets tests validate the SCORE/SHIPS/title/game-over text.
+frame_hud_brk:
+        ldx #$FF
+        txs
+        jsr game_frame
+        jsr hud_snapshot
         brk

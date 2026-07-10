@@ -464,5 +464,75 @@ console.log("Z) ship-rock collision: lose a life, then game over at zero");
   ok(gb("act") === 0, "the ship is removed on game over");
 }
 
+// ===========================================================================
+// M6) game flow : waves, HUD, attract / game-over state machine
+// ===========================================================================
+const clearKey = () => vm.poke(0xC000, 0);
+const frameHud = () => runHook(S.FRAME_HUD_BRK, "frame+hud");
+const hudChar = (base, col) => vm.peek(base + col) & 0x7f;   // strip the hi (video) bit
+const hudStr = (base, col, n) => { let s = ""; for (let i = 0; i < n; i++) s += String.fromCharCode(hudChar(base, col + i)); return s; };
+
+// AA) a new game starts in the playing state on wave 1
+console.log("AA) game_init enters the playing state on wave 1");
+{
+  runHook(S.INIT_BRK, "init");
+  ok(vm.peek(S.GSTATE) === S.GS_PLAY, `play state after init (got ${vm.peek(S.GSTATE)})`);
+  ok(vm.peek(S.WAVE) === 1, `starts on wave 1 (got ${vm.peek(S.WAVE)})`);
+}
+
+// AB) clearing the field advances to a larger wave
+console.log("AB) clearing every rock spawns the next, larger wave");
+{
+  runHook(S.INIT_BRK, "init"); clearRocks(); clearKey();
+  setRkCnt(0);
+  frame();
+  ok(vm.peek(S.WAVE) === 2, `advanced to wave 2 (got ${vm.peek(S.WAVE)})`);
+  ok(activeRocks() === 5, `wave 2 has WAVE0+1 = 5 rocks (got ${activeRocks()})`);
+  clearRocks(); setRkCnt(0); frame();
+  ok(vm.peek(S.WAVE) === 3 && activeRocks() === 6, `wave 3 has 6 rocks (got w${vm.peek(S.WAVE)} n${activeRocks()})`);
+}
+
+// AC) the HUD shows the score and remaining ships
+console.log("AC) HUD renders SCORE + digits + SHIPS + lives");
+{
+  runHook(S.INIT_BRK, "init"); clearRocks(); clearBullets(); clearKey();
+  setRkCnt(1); placeRock(0, 0, 90, 50); placeBullet(0, 90, 50);   // +100 points
+  frameHud();
+  ok(hudStr(S.SNAP22, 0, 5) === "SCORE", `SCORE label on the HUD (got "${hudStr(S.SNAP22, 0, 5)}")`);
+  ok(hudStr(S.SNAP22, 6, 6) === "000100", `score reads 000100 (got "${hudStr(S.SNAP22, 6, 6)}")`);
+  ok(hudStr(S.SNAP22, 20, 5) === "SHIPS", `SHIPS label on the HUD (got "${hudStr(S.SNAP22, 20, 5)}")`);
+  ok(hudChar(S.SNAP22, 26) === "3".charCodeAt(0), `three ships shown (got ${String.fromCharCode(hudChar(S.SNAP22, 26))})`);
+}
+
+// AD) attract screen shows the title and SPACE starts a game
+console.log("AD) attract screen: title shown, SPACE starts play");
+{
+  runHook(S.ATTRACT_BRK, "attract");
+  ok(vm.peek(S.GSTATE) === S.GS_ATTRACT, `attract state after reset (got ${vm.peek(S.GSTATE)})`);
+  clearKey(); frameHud();                                // one attract frame draws the title
+  ok(hudStr(S.SNAP20, 15, 10) === "ROCK STORM", `title shown (got "${hudStr(S.SNAP20, 15, 10)}")`);
+  press(S.K_SPACE); frame();                             // SPACE -> play
+  ok(vm.peek(S.GSTATE) === S.GS_PLAY, `SPACE starts the game (got ${vm.peek(S.GSTATE)})`);
+  ok(vm.peek(S.LIVES) === 3, `fresh game has 3 lives (got ${vm.peek(S.LIVES)})`);
+}
+
+// AE) losing the last ship ends the game; SPACE restarts it
+console.log("AE) game over on the last life, then SPACE restarts");
+{
+  runHook(S.INIT_BRK, "init"); clearRocks(); clearBullets(); clearKey();
+  setRkCnt(1); placeRock(0, 0, 140, 80);                 // rock parked on the ship
+  vm.poke(S.INVUL, 0); frame();                          // 3 -> 2
+  vm.poke(S.INVUL, 0); frame();                          // 2 -> 1
+  vm.poke(S.INVUL, 0); frame();                          // 1 -> 0 -> game over
+  ok(vm.peek(S.GAMEOVER) === 1, "game-over flag set");
+  ok(vm.peek(S.GSTATE) === S.GS_OVER, `game-over state entered (got ${vm.peek(S.GSTATE)})`);
+  clearKey(); frameHud();                                // over_frame draws the banner
+  ok(hudStr(S.SNAP20, 15, 9) === "GAME OVER", `GAME OVER banner (got "${hudStr(S.SNAP20, 15, 9)}")`);
+  press(S.K_SPACE); frame();                             // SPACE -> restart
+  ok(vm.peek(S.GSTATE) === S.GS_PLAY, `restart returns to play (got ${vm.peek(S.GSTATE)})`);
+  ok(vm.peek(S.LIVES) === 3, `restart restores 3 lives (got ${vm.peek(S.LIVES)})`);
+  ok(vm.peek(S.GAMEOVER) === 0, "restart clears the game-over flag");
+}
+
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
