@@ -28,6 +28,16 @@ that validates the assembled program against a JS reference. Programs can also b
 published to the hosted emulator by copying the `.prg` into
 [`web/programs/`](../../web/programs) and deep-linking `?prg=programs/<name>.prg&org=<org>`.
 
+## Try it in the browser (no install)
+
+The hosted emulator (<https://ebadger.github.io/3ric/>) has an **Assemble & Run**
+editor that assembles 65C02 source client-side and runs it in the emulator. Each
+project here is a built-in sample in that editor's picker, so you can read, tweak,
+re-assemble, and run any of them — then **Download .PRG** to `BRUN` on hardware.
+Deep-link a specific source with `?src=programs/<name>.s` (it auto-assembles and
+runs). The editor uses the very same assembler as the CLI above
+(`codegen/tools/asm6502.mjs`), so results match byte-for-byte.
+
 ## Projects
 
 | Project | Description | Load addr |

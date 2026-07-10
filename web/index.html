@@ -36,7 +36,7 @@
   }
   header .grp { display: flex; gap: 6px; align-items: center; }
   header .hint { color: var(--dim); font-size: 12px; }
-  main { flex: 1; display: flex; justify-content: center; align-items: flex-start; padding: 16px; }
+  main { flex: 1; display: flex; gap: 16px; justify-content: center; align-items: flex-start; padding: 16px; flex-wrap: wrap; }
   #screen {
     /* Internal framebuffer is 320x384 (non-square pixels). A real Apple-II
        display is 4:3, so the canvas element is shown at 640x480 — the buffer is
@@ -48,6 +48,34 @@
     max-width: 100%;
   }
   footer { padding: 8px 16px; border-top: 1px solid var(--dim); font-size: 11px; color: var(--dim); }
+
+  /* --- in-browser assembler / editor ------------------------------------- */
+  #ide { display: flex; flex-direction: column; gap: 8px; flex: 1 1 440px; min-width: 340px; max-width: 780px; align-self: stretch; }
+  #ide .bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  #ide .bar .title { font-size: 12px; letter-spacing: 1px; margin-right: auto; }
+  #ide .bar .hint { color: var(--dim); font-size: 12px; }
+  #ide select, #ide input.addr, #ide button {
+    background: var(--bg); color: var(--fg); border: 1px solid var(--dim);
+    padding: 4px 8px; font-family: inherit; font-size: 12px; border-radius: 3px;
+  }
+  #ide input.addr { width: 4.5em; }
+  #ide button { cursor: pointer; }
+  #ide button:hover:not(:disabled) { background: var(--panel); }
+  #ide button:disabled { opacity: .45; cursor: default; }
+  #ide button.go { border-color: var(--fg); }
+  #src {
+    flex: 1; min-height: 440px; resize: vertical;
+    background: var(--panel); color: var(--fg); border: 1px solid var(--dim);
+    border-radius: 4px; padding: 8px; font-family: inherit; font-size: 12px;
+    line-height: 1.45; tab-size: 8; -moz-tab-size: 8; white-space: pre; overflow: auto;
+  }
+  #asmout {
+    margin: 0; padding: 8px; background: #000; border: 1px solid var(--dim);
+    border-radius: 4px; font-size: 12px; min-height: 2.6em; max-height: 10em;
+    overflow: auto; white-space: pre-wrap; color: var(--dim);
+  }
+  #asmout.ok  { color: var(--fg); }
+  #asmout.err { color: #ff6b6b; border-color: #7a2b2b; }
 </style>
 </head>
 <body>
@@ -75,6 +103,26 @@
   </header>
   <main>
     <canvas id="screen" width="320" height="384" tabindex="0" aria-label="emulator video"></canvas>
+    <section id="ide" aria-label="in-browser assembler">
+      <div class="bar">
+        <span class="title">ASSEMBLER</span>
+        <span class="hint">sample</span>
+        <select id="sample" title="load a sample program's source into the editor">
+          <option value="swarm">STAR SWARM</option>
+          <option value="rocks">ROCK STORM</option>
+          <option value="jungle">JUNGLE QUEST</option>
+          <option value="life">Conway&rsquo;s Life</option>
+          <option value="hello">Hello (serial)</option>
+        </select>
+        <span class="hint">org&nbsp;$</span><input class="addr" id="ideaddr" value="0800" spellcheck="false"
+          title="hex load/entry address, used only when the source has no .org directive" />
+        <button id="assemble" class="go" title="assemble the source and run it (Ctrl+Enter)">Assemble &amp; Run</button>
+        <button id="download" title="download the assembled .PRG image" disabled>Download .PRG</button>
+      </div>
+      <textarea id="src" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off"
+        aria-label="6502 assembly source" placeholder="; write 65C02 assembly here, then Assemble & Run"></textarea>
+      <pre id="asmout">Pick a sample or write 65C02 assembly, then Assemble &amp; Run.</pre>
+    </section>
   </main>
   <footer>
     65C02 emulator core (C++) + WozLib compiled to WebAssembly via Emscripten. Boots the real 512KB ROM,
@@ -86,6 +134,11 @@
     <code>BRUN FILE.PRG&nbsp;&lt;addr&gt;</code> on the hardware (or deep-link one with
     <code>?prg=programs/hello.prg&amp;org=0800</code>).
     &ldquo;Speed&rdquo; sets the CPU clock (1&times; &asymp; 1&nbsp;MHz; &ldquo;Max&rdquo; runs as fast as the frame allows).
+    The <strong>Assembler</strong> panel assembles 65C02 source in your browser (the same assembler the
+    project uses on the command line) and runs it just like &ldquo;Load&nbsp;.PRG&rdquo; &mdash; pick a sample,
+    edit it, <code>Assemble&nbsp;&amp;&nbsp;Run</code> (or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>), and download the
+    resulting <code>.PRG</code> to <code>BRUN</code> on hardware. Share a program with
+    <code>?src=programs/swarm.s</code>.
   </footer>
 
   <script src="badger6502.js"></script>
@@ -273,6 +326,126 @@
       canvas.focus();
     }
 
+    // ---- in-browser assembler / editor ------------------------------------
+    // Assemble 65C02 source with the very same asm6502.mjs the CLI uses, then
+    // run the image exactly like "Load .PRG". Everything is client-side: edit a
+    // sample (or write your own), Assemble & Run, and download the .PRG.
+    const LS_SRC = "3ric.editor.src";
+    const LS_ORG = "3ric.editor.org";
+    let lastPrg = null;      // { bytes, org, name } of the last good assembly
+    let assembleFn = null;   // asm6502.assemble, imported lazily
+
+    async function ensureAssembler() {
+      if (!assembleFn) assembleFn = (await import("./asm6502.mjs")).assemble;
+      return assembleFn;
+    }
+
+    async function loadSampleSrc(name) {
+      const resp = await fetch(`programs/${name}.s`);
+      if (!resp.ok) throw new Error(`fetch programs/${name}.s: ${resp.status}`);
+      return resp.text();
+    }
+
+    async function wireEditor() {
+      const srcEl    = document.getElementById("src");
+      const outEl    = document.getElementById("asmout");
+      const addrEl   = document.getElementById("ideaddr");
+      const dlBtn    = document.getElementById("download");
+      const asmBtn   = document.getElementById("assemble");
+      const sampleEl = document.getElementById("sample");
+      if (!srcEl) return;
+
+      const setOut = (msg, cls) => { outEl.textContent = msg; outEl.className = cls || ""; };
+      const save = () => {
+        try { localStorage.setItem(LS_SRC, srcEl.value); localStorage.setItem(LS_ORG, addrEl.value); } catch (e) {}
+      };
+      // A source with its own .org / *= is authoritative — passing an org option
+      // then would only move the base, not the layout PC, and the mismatch would
+      // corrupt the image. Only fall back to the org field when there is no .org.
+      const hasOrg = (s) => /^\s*(\.org\b|\*=)/mi.test(s);
+
+      async function assembleRun() {
+        let assemble;
+        try { assemble = await ensureAssembler(); }
+        catch (e) { setOut("could not load the assembler module: " + e, "err"); return; }
+        const src = srcEl.value;
+        let res;
+        try {
+          res = hasOrg(src) ? assemble(src) : assemble(src, { org: parseAddr(addrEl.value, 0x0800) });
+        } catch (e) {
+          setOut(String((e && e.message) || e), "err");
+          dlBtn.disabled = true; lastPrg = null;
+          return;
+        }
+        if (!res.bytes.length) { setOut("assembled 0 bytes \u2014 empty source or missing .org?", "err"); return; }
+        addrEl.value = hex(res.org, 4);
+        lastPrg = { bytes: res.bytes, org: res.org, name: (sampleEl.value || "program") };
+        dlBtn.disabled = false;
+        const nsym = Object.keys(res.symbols).length;
+        const okMsg = `assembled ${res.bytes.length} bytes @ $${hex(res.org, 4)} \u2014 ${nsym} symbols.`;
+        setOut(okMsg + " running\u2026", "ok");
+        try {
+          await loadPrg(res.bytes, res.org, "editor");
+          setOut(okMsg + " running now \u2014 click the screen and play.", "ok");
+          canvas.focus();
+        } catch (e) {
+          setOut(okMsg + " run failed: " + ((e && e.message) || e), "err");
+        }
+      }
+
+      asmBtn.addEventListener("click", assembleRun);
+      srcEl.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); assembleRun(); }
+      });
+      srcEl.addEventListener("input", save);
+      addrEl.addEventListener("change", save);
+
+      dlBtn.addEventListener("click", () => {
+        if (!lastPrg) return;
+        const blob = new Blob([lastPrg.bytes], { type: "application/octet-stream" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = (lastPrg.name || "program") + ".prg";
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      });
+
+      sampleEl.addEventListener("change", async () => {
+        try {
+          srcEl.value = await loadSampleSrc(sampleEl.value);
+          addrEl.value = "0800";
+          save();
+          setOut(`loaded sample: ${sampleEl.options[sampleEl.selectedIndex].text}. Assemble & Run to build it.`, "ok");
+        } catch (e) { setOut("could not load sample: " + e, "err"); }
+      });
+
+      // Initial content: ?src=<url> (auto-runs) > your saved source > STAR SWARM.
+      const srcUrl = new URLSearchParams(location.search).get("src");
+      if (srcUrl) {
+        try {
+          const resp = await fetch(srcUrl);
+          if (!resp.ok) throw new Error(`${resp.status}`);
+          srcEl.value = await resp.text();
+          setOut(`loaded ${srcUrl}. assembling\u2026`, "ok");
+          await assembleRun();
+        } catch (e) { setOut("could not load ?src=" + srcUrl + ": " + e, "err"); }
+        return;
+      }
+      let saved = null;
+      try { saved = localStorage.getItem(LS_SRC); } catch (e) {}
+      if (saved != null && saved.trim()) {
+        srcEl.value = saved;
+        try { const o = localStorage.getItem(LS_ORG); if (o) addrEl.value = o; } catch (e) {}
+        setOut("restored your last source. Assemble & Run to build it.", "ok");
+      } else {
+        try {
+          sampleEl.value = "swarm";
+          srcEl.value = await loadSampleSrc("swarm");
+          setOut("loaded sample: STAR SWARM. Assemble & Run to build it.", "ok");
+        } catch (e) { setOut("write 65C02 assembly, then Assemble & Run.", ""); }
+      }
+    }
+
     async function boot(Module) {
       vm = new Module.WebVM();
       window.vm = vm; // debug handle: inspect/poke the machine from the console
@@ -356,6 +529,10 @@
       });
 
       requestAnimationFrame(frame);
+
+      // Wire the in-browser assembler / editor (samples, Assemble & Run,
+      // download, localStorage autosave, and the ?src= deep link).
+      wireEditor();
 
       // Deep-link loader: ?prg=<url>&org=<hex> loads and runs a raw .PRG the way
       // BRUN would. The URL is relative to this page (e.g. programs/hello.prg)
