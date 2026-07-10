@@ -132,5 +132,95 @@ console.log("E) draw_poly: ship renders and XOR-erases");
   ok(after === 0, `ship XOR-erased on redraw (residual ${after})`);
 }
 
+// ===== M2: ship physics =====================================================
+const SHIP = S.SHIP;
+const O = { act:0, xf:1, xl:2, xh:3, yf:4, yl:5, yh:6, vxl:7, vxh:8, vyl:9, vyh:10, ang:11, drawn:12 };
+const gb = (k) => vm.peek(SHIP + O[k]);
+const sb = (k, v) => vm.poke(SHIP + O[k], v & 0xff);
+const s8 = (v) => (v & 0x80 ? v - 256 : v);           // signed byte
+const press = (k) => vm.poke(0xC000, k);              // key codes already carry bit7
+const frame = () => runHook(S.FRAME_BRK, "frame");
+const playfieldLit = () => boxLit(0, 0, 279, 159);
+
+// F) init : ship centred, at rest, pointing up
+console.log("F) init: ship centred, at rest, pointing up");
+{
+  runHook(S.INIT_BRK, "init");
+  ok(gb("act") === 1, "ship active");
+  ok(gb("xl") === 140 && gb("xh") === 0, `ship x = 140 (got ${gb("xl") + 256 * gb("xh")})`);
+  ok(gb("yl") === 80 && gb("yh") === 0, `ship y = 80 (got ${gb("yl") + 256 * gb("yh")})`);
+  ok(gb("ang") === 24, `ship heading = up/24 (got ${gb("ang")})`);
+  ok(gb("vxl") === 0 && gb("vxh") === 0 && gb("vyl") === 0 && gb("vyh") === 0, "velocity zero");
+  ok(gb("drawn") === 0, "not yet drawn");
+}
+
+// G) first frame renders the ship without moving it
+console.log("G) first frame renders the ship without moving it");
+{
+  runHook(S.INIT_BRK, "init");
+  frame();
+  ok(gb("drawn") === 1, "ship marked drawn");
+  ok(gb("xl") === 140 && gb("yl") === 80, "ship did not move (no input)");
+  ok(boxLit(128, 70, 152, 90) > 12, `ship pixels present near centre (lit ${boxLit(128, 70, 152, 90)})`);
+}
+
+// H) rotation : D/right increments, A/left decrements the heading
+console.log("H) rotate: D/right increments, A/left decrements the heading");
+{
+  runHook(S.INIT_BRK, "init");
+  press(0xC4); frame();                 // 'D'
+  ok(gb("ang") === 25, `D -> 25 (got ${gb("ang")})`);
+  press(0xC4); frame();
+  ok(gb("ang") === 26, `D -> 26 (got ${gb("ang")})`);
+  runHook(S.INIT_BRK, "init");          // fresh (clears hold-timers)
+  press(0xC1); frame();                 // 'A'
+  ok(gb("ang") === 23, `A -> 23 (got ${gb("ang")})`);
+}
+
+// I) thrust + inertia (heading 24 = pure up: ACCX[24]=0, ACCY[24]=-40)
+console.log("I) thrust builds velocity; ship coasts (inertia) after keys stop");
+{
+  runHook(S.INIT_BRK, "init");
+  for (let i = 0; i < 8; i++) { press(0xD7); frame(); } // 'W' x8
+  const vy = s8(gb("vyh"));
+  ok(vy < 0, `thrust up -> vy negative (got ${vy})`);
+  ok(s8(gb("vxh")) === 0 && gb("vxl") === 0, "no sideways velocity at heading up");
+  ok(gb("yl") < 80, `ship moved up (y=${gb("yl")})`);
+  const yA = gb("yl");
+  for (let i = 0; i < 8; i++) frame();                  // coast, no keys
+  ok(gb("yl") < yA, `ship keeps moving up under inertia (y ${yA} -> ${gb("yl")})`);
+  ok(s8(gb("vyh")) < 0, "velocity retained (no friction)");
+}
+
+// J) screen wrap : crossing an edge reappears on the opposite side
+console.log("J) wrap: crossing an edge reappears on the opposite side");
+{
+  runHook(S.INIT_BRK, "init");
+  sb("xf", 0); sb("xl", 278 & 255); sb("xh", 278 >> 8);
+  sb("vxl", 0); sb("vxh", 2); sb("vyl", 0); sb("vyh", 0);   // +2 px/frame right
+  frame();
+  const x = gb("xl") + 256 * gb("xh");
+  ok(x < 8, `x wrapped past the right edge to the left (got ${x})`);
+  runHook(S.INIT_BRK, "init");
+  sb("yf", 0); sb("yl", 2); sb("yh", 0);
+  sb("vyl", 0); sb("vyh", 256 - 3); sb("vxl", 0); sb("vxh", 0); // -3 px/frame up
+  frame();
+  const y = gb("yl") + 256 * gb("yh");
+  ok(y > 150 && y < 160, `y wrapped past the top edge to the bottom (got ${y})`);
+}
+
+// K) erase-redraw : a moving ship leaves no trail
+console.log("K) erase-redraw: a moving ship leaves no trail");
+{
+  runHook(S.INIT_BRK, "init");
+  for (let i = 0; i < 10; i++) { press(0xD7); frame(); } // thrust up
+  for (let i = 0; i < 10; i++) frame();                  // coast
+  const total = playfieldLit();
+  ok(total > 12 && total < 80, `~one ship on screen, no accumulated trail (lit ${total})`);
+  const yl = gb("yl"), xl = gb("xl");
+  const below = boxLit(Math.max(0, xl - 16), Math.min(159, yl + 12), Math.min(279, xl + 16), Math.min(159, yl + 30));
+  ok(below === 0, `clean space behind the ship (residual ${below})`);
+}
+
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

@@ -108,51 +108,424 @@ tvyh     = $6A2E
 tmpa     = $6A2F
 tmpb     = $6A30
 noend    = $6A31          ; 1 = half-open line (skip final endpoint pixel)
-m1idx    = $6A40          ; M1 demo fan loop counter (engine never touches it)
+
+; ---- object structs (array-of-structs, stride OBJ_SIZE) ----
+OBJ_SIZE = 16
+SHIP     = $6300          ; 1 ship
+BULLETS  = $6310          ; 5 bullets  ($6310..$635F)
+ROCKS    = $6360          ; 28 rocks   ($6360..$651F)
+NBULLET  = 5
+NROCK    = 28
+; struct field offsets
+o_act    = 0              ; active flag
+o_xf     = 1              ; x fraction (16.8 fixed)
+o_xl     = 2              ; x integer low
+o_xh     = 3              ; x integer high
+o_yf     = 4              ; y fraction
+o_yl     = 5              ; y integer low
+o_yh     = 6              ; y integer high
+o_vxl    = 7              ; vx 8.8 low (fraction)
+o_vxh    = 8              ; vx 8.8 high (integer, signed)
+o_vyl    = 9              ; vy 8.8 low
+o_vyh    = 10             ; vy 8.8 high (signed)
+o_ang    = 11             ; heading 0..31 (ship)
+o_drawn  = 12             ; 1 = currently XOR-drawn on screen
+o_life   = 13             ; bullet time-to-live / spare
+o_kind   = 14             ; rock shape*3+size / spare
+
+; ---- input intent hold-timers (frames remaining) + scratch ----
+hleft    = $6A50
+hright   = $6A51
+hthr     = $6A52
+hfire    = $6A53
+keyin    = $6A54
+
+; ---- tunables ----
+HOLD     = 4              ; frames an action stays live after its key event
+MAXVI    = 4              ; max |velocity| integer part (px/frame)
+ANGUP    = 24             ; heading that points up (-y)
+DELAYO   = 20             ; frame-delay outer count (game pacing)
+
+; ---- key codes (Apple II: bit7 set = key ready) ----
+K_A      = $C1
+K_LARR   = $88
+K_D      = $C4
+K_RARR   = $95
+K_W      = $D7
+K_UARR   = $8B
+K_SPACE  = $A0
 
         .org $0800
 
 ; ---------------------------------------------------------------------------
 ; entry (M1: draw a fan of ships at increasing angle to eyeball the engine)
 ; ---------------------------------------------------------------------------
+; ---------------------------------------------------------------------------
+; entry : the game.  BRUN ROCKS.PRG 0800.
+; ---------------------------------------------------------------------------
 start:
         sei
         cld
         ldx #$FF
         txs
+        jsr game_init
+sg_loop:
+        jsr game_frame
+        jsr frame_delay
+        jmp sg_loop
+
+; ---------------------------------------------------------------------------
+; game_init : hi-res mixed mode, row table, clear, place the ship.
+; ---------------------------------------------------------------------------
+game_init:
         lda TXTCLR              ; graphics on
         lda MIXSET              ; mixed mode (text HUD at bottom)
         lda LOWSCR              ; page 1
         lda HIRES_SW            ; hi-res
         jsr build_rows
         jsr clear_screen
-        ldx #0
-m1_loop:
-        stx m1idx               ; i
-        txa
-        asl a
-        asl a
-        asl a
-        asl a
-        asl a                   ; i*32
-        clc
-        adc #24
-        sta cenx
+        jsr init_ship
+        rts
+
+; init_ship : place the ship at screen centre, at rest, pointing up.
+init_ship:
+        lda #1
+        sta SHIP+o_act
         lda #0
+        sta SHIP+o_xf
+        sta SHIP+o_xh
+        sta SHIP+o_yf
+        sta SHIP+o_yh
+        sta SHIP+o_vxl
+        sta SHIP+o_vxh
+        sta SHIP+o_vyl
+        sta SHIP+o_vyh
+        sta SHIP+o_drawn
+        lda #140
+        sta SHIP+o_xl
+        lda #80
+        sta SHIP+o_yl
+        lda #ANGUP
+        sta SHIP+o_ang
+        lda #0
+        sta hleft
+        sta hright
+        sta hthr
+        sta hfire
+        rts
+
+; ---------------------------------------------------------------------------
+; game_frame : advance one frame (erase, input, physics, redraw).
+; ---------------------------------------------------------------------------
+game_frame:
+        jsr erase_ship
+        jsr read_input
+        jsr do_rotate
+        jsr do_thrust
+        jsr integrate_ship
+        jsr wrap_ship
+        jsr draw_ship
+        jsr decay_timers
+        rts
+
+; render_ship : XOR the ship polygon at its current pos/angle.
+render_ship:
+        lda SHIP+o_xl
+        sta cenx
+        lda SHIP+o_xh
         sta cenh
-        lda #40
+        lda SHIP+o_yl
         sta ceny
-        lda m1idx
-        asl a
-        asl a                   ; angle = i*4
+        lda SHIP+o_ang
         jsr set_ship_vp
         jsr draw_poly
-        ldx m1idx
+        rts
+
+; erase_ship : XOR the ship off (only if it was drawn last frame).
+erase_ship:
+        lda SHIP+o_drawn
+        beq er_ret
+        jsr render_ship
+er_ret:
+        rts
+
+; draw_ship : XOR the ship on and mark it drawn.
+draw_ship:
+        jsr render_ship
+        lda #1
+        sta SHIP+o_drawn
+        rts
+
+; ---------------------------------------------------------------------------
+; read_input : poll the keyboard; refresh the matching intent hold-timer.
+;   (Apple II reports one key at a time; the hold-timers + OS auto-repeat let
+;    rapid key alternation feel like simultaneous rotate/thrust/fire.)
+; ---------------------------------------------------------------------------
+read_input:
+        lda KBD
+        bpl ri_ret              ; bit7 clear -> no key waiting
+        sta keyin
+        lda KBDSTRB             ; clear the strobe
+        lda keyin
+        cmp #K_A
+        beq ri_left
+        cmp #K_LARR
+        beq ri_left
+        cmp #K_D
+        beq ri_right
+        cmp #K_RARR
+        beq ri_right
+        cmp #K_W
+        beq ri_thr
+        cmp #K_UARR
+        beq ri_thr
+        cmp #K_SPACE
+        beq ri_fire
+        rts
+ri_left:
+        lda #HOLD
+        sta hleft
+        rts
+ri_right:
+        lda #HOLD
+        sta hright
+        rts
+ri_thr:
+        lda #HOLD
+        sta hthr
+        rts
+ri_fire:
+        lda #HOLD
+        sta hfire
+ri_ret:
+        rts
+
+; ---------------------------------------------------------------------------
+; do_rotate : if a rotate intent is live, step the heading one notch.
+; ---------------------------------------------------------------------------
+do_rotate:
+        lda hleft
+        beq dr_r
+        ldx SHIP+o_ang
+        dex
+        txa
+        and #(NANG-1)
+        sta SHIP+o_ang
+dr_r:
+        lda hright
+        beq dr_ret
+        ldx SHIP+o_ang
         inx
-        cpx #8
-        bne m1_loop
-m1_halt:
-        jmp m1_halt
+        txa
+        and #(NANG-1)
+        sta SHIP+o_ang
+dr_ret:
+        rts
+
+; ---------------------------------------------------------------------------
+; do_thrust : if thrust intent is live, add ACC[angle] (8.8) to velocity.
+; ---------------------------------------------------------------------------
+do_thrust:
+        lda hthr
+        beq dt_ret
+        ldx SHIP+o_ang
+        clc                     ; vx += sext(ACCX[ang]) as 8.8
+        lda SHIP+o_vxl
+        adc ACCX,x
+        sta SHIP+o_vxl
+        lda ACCX,x
+        and #$80
+        beq dt_xp
+        lda #$FF
+        bne dt_xa
+dt_xp:
+        lda #0
+dt_xa:
+        adc SHIP+o_vxh
+        sta SHIP+o_vxh
+        clc                     ; vy += sext(ACCY[ang])
+        lda SHIP+o_vyl
+        adc ACCY,x
+        sta SHIP+o_vyl
+        lda ACCY,x
+        and #$80
+        beq dt_yp
+        lda #$FF
+        bne dt_ya
+dt_yp:
+        lda #0
+dt_ya:
+        adc SHIP+o_vyh
+        sta SHIP+o_vyh
+        jsr cap_vel
+dt_ret:
+        rts
+
+; cap_vel : clamp each velocity axis integer part to +/- MAXVI.
+cap_vel:
+        lda SHIP+o_vxh
+        bmi cvx_neg
+        cmp #(MAXVI+1)
+        bcc cvx_ok
+        lda #MAXVI
+        sta SHIP+o_vxh
+        lda #0
+        sta SHIP+o_vxl
+        jmp cvx_ok
+cvx_neg:
+        cmp #(256-MAXVI)
+        bcs cvx_ok
+        lda #(256-MAXVI)
+        sta SHIP+o_vxh
+        lda #0
+        sta SHIP+o_vxl
+cvx_ok:
+        lda SHIP+o_vyh
+        bmi cvy_neg
+        cmp #(MAXVI+1)
+        bcc cvy_ok
+        lda #MAXVI
+        sta SHIP+o_vyh
+        lda #0
+        sta SHIP+o_vyl
+        jmp cvy_ok
+cvy_neg:
+        cmp #(256-MAXVI)
+        bcs cvy_ok
+        lda #(256-MAXVI)
+        sta SHIP+o_vyh
+        lda #0
+        sta SHIP+o_vyl
+cvy_ok:
+        rts
+
+; ---------------------------------------------------------------------------
+; integrate_ship : pos (16.8) += vel (8.8), with sign extension.
+; ---------------------------------------------------------------------------
+integrate_ship:
+        clc
+        lda SHIP+o_xf
+        adc SHIP+o_vxl
+        sta SHIP+o_xf
+        lda SHIP+o_xl
+        adc SHIP+o_vxh
+        sta SHIP+o_xl
+        lda SHIP+o_vxh
+        and #$80
+        beq is_xp
+        lda #$FF
+        bne is_xa
+is_xp:
+        lda #0
+is_xa:
+        adc SHIP+o_xh
+        sta SHIP+o_xh
+        clc
+        lda SHIP+o_yf
+        adc SHIP+o_vyl
+        sta SHIP+o_yf
+        lda SHIP+o_yl
+        adc SHIP+o_vyh
+        sta SHIP+o_yl
+        lda SHIP+o_vyh
+        and #$80
+        beq is_yp
+        lda #$FF
+        bne is_ya
+is_yp:
+        lda #0
+is_ya:
+        adc SHIP+o_yh
+        sta SHIP+o_yh
+        rts
+
+; ---------------------------------------------------------------------------
+; wrap_ship : centre-wrap x mod WIDTH (280), y mod HEIGHT (160).
+; ---------------------------------------------------------------------------
+wrap_ship:
+        lda SHIP+o_xh
+        bpl ws_xpos
+        clc                     ; x < 0 -> += WIDTH
+        lda SHIP+o_xl
+        adc #<WIDTH
+        sta SHIP+o_xl
+        lda SHIP+o_xh
+        adc #>WIDTH
+        sta SHIP+o_xh
+        jmp ws_y
+ws_xpos:
+        cmp #>WIDTH
+        bcc ws_y                ; xh < 1 -> x < 256 < WIDTH
+        bne ws_xsub             ; xh > 1 -> x >= 512
+        lda SHIP+o_xl
+        cmp #<WIDTH
+        bcc ws_y                ; x < WIDTH
+ws_xsub:
+        sec                     ; x >= WIDTH -> -= WIDTH
+        lda SHIP+o_xl
+        sbc #<WIDTH
+        sta SHIP+o_xl
+        lda SHIP+o_xh
+        sbc #>WIDTH
+        sta SHIP+o_xh
+ws_y:
+        lda SHIP+o_yh
+        bpl ws_ypos
+        clc                     ; y < 0 -> += HEIGHT
+        lda SHIP+o_yl
+        adc #HEIGHT
+        sta SHIP+o_yl
+        lda SHIP+o_yh
+        adc #0
+        sta SHIP+o_yh
+        jmp ws_ret
+ws_ypos:
+        bne ws_ysub             ; yh > 0 -> y >= 256
+        lda SHIP+o_yl
+        cmp #HEIGHT
+        bcc ws_ret              ; y < HEIGHT
+ws_ysub:
+        sec                     ; y >= HEIGHT -> -= HEIGHT
+        lda SHIP+o_yl
+        sbc #HEIGHT
+        sta SHIP+o_yl
+        lda SHIP+o_yh
+        sbc #0
+        sta SHIP+o_yh
+ws_ret:
+        rts
+
+; decay_timers : count each hold-timer down toward 0.
+decay_timers:
+        lda hleft
+        beq dc1
+        dec hleft
+dc1:
+        lda hright
+        beq dc2
+        dec hright
+dc2:
+        lda hthr
+        beq dc3
+        dec hthr
+dc3:
+        lda hfire
+        beq dc_ret
+        dec hfire
+dc_ret:
+        rts
+
+; frame_delay : crude busy-wait to pace the game (game entry only).
+frame_delay:
+        ldy #DELAYO
+fd_o:
+        ldx #0
+fd_i:
+        dex
+        bne fd_i
+        dey
+        bne fd_o
+        rts
 
 ; ---------------------------------------------------------------------------
 ; set_ship_vp : point vpx/vpy at the ship silhouette for angle A (0..31),
@@ -664,9 +1037,9 @@ NOSEX:
 NOSEY:
         .byte 0,1,3,4,5,6,6,7,7,7,6,6,5,4,3,1,0,255,253,252,251,250,250,249,249,249,250,250,251,252,253,255
 ACCX:
-        .byte 14,14,13,12,10,8,5,3,0,253,251,248,246,244,243,242,242,242,243,244,246,248,251,253,0,3,5,8,10,12,13,14
+        .byte 40,39,37,33,28,22,15,8,0,248,241,234,228,223,219,217,216,217,219,223,228,234,241,248,0,8,15,22,28,33,37,39
 ACCY:
-        .byte 0,3,5,8,10,12,13,14,14,14,13,12,10,8,5,3,0,253,251,248,246,244,243,242,242,242,243,244,246,248,251,253
+        .byte 0,8,15,22,28,33,37,39,40,39,37,33,28,22,15,8,0,248,241,234,228,223,219,217,216,217,219,223,228,234,241,248
 BVXL:
         .byte 51,31,225,126,248,85,155,210,0,46,101,171,8,130,31,225,205,225,31,130,8,171,101,46,0,210,155,85,248,126,225,31
 BVXH:
@@ -708,4 +1081,20 @@ polyship_brk:
         lda STATE
         jsr set_ship_vp
         jsr draw_poly
+        brk
+
+; --- M2 test hooks ---
+; init the game (ship at centre, pointing up), then BRK.
+init_brk:
+        ldx #$FF
+        txs
+        jsr game_init
+        brk
+
+; run exactly one game frame (erase/input/physics/redraw), then BRK.  Tests
+; poke KBD ($C000) and/or the ship struct ($6300) before each call.
+frame_brk:
+        ldx #$FF
+        txs
+        jsr game_frame
         brk
