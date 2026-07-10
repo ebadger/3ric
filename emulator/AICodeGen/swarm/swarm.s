@@ -57,6 +57,11 @@ K_SPACE  = $A0
 HOLD     = 4            ; frames an intent stays live after its key event
 DELAYO   = 24           ; frame-pacing busy-wait outer count
 
+; ---- player shot ----
+SHOT_STEP = 6           ; bolt rises this many pixels per frame
+SHOT_DX   = 7           ; muzzle offset from cannon left edge (centre)
+SHOT_Y0   = 144         ; bolt spawn y (just above the cannon barrel)
+
 ; ---- zero page (only the (zp),y pointers live here) ----
 ptr      = $06          ; screen dest pointer            (+1)
 sprptr   = $08          ; sprite-data pointer            (+1)
@@ -97,6 +102,16 @@ hleft    = $6A25        ; move-left  intent hold-timer (frames)
 hright   = $6A26        ; move-right intent hold-timer
 hfire    = $6A27        ; fire       intent hold-timer (used from M3)
 keyin    = $6A28        ; last key read this frame
+
+; ---- M3: player shot (one bolt at a time) ----
+shtact   = $6A29        ; 1 = a bolt is in flight
+shtxl    = $6A2A        ; bolt x (16-bit; fixed for the bolt's lifetime)
+shtxh    = $6A2B
+shty     = $6A2C        ; bolt y (rises each frame)
+shtdrawn = $6A2D        ; 1 = bolt currently XOR-drawn
+lshtxl   = $6A2E        ; last-drawn bolt position (for XOR erase)
+lshtxh   = $6A2F
+lshty    = $6A30
 
         .org $0800
 
@@ -140,6 +155,8 @@ init_cannon:
         sta hleft
         sta hright
         sta hfire
+        sta shtact
+        sta shtdrawn
         rts
 
 ; ---------------------------------------------------------------------------
@@ -147,9 +164,13 @@ init_cannon:
 ; ---------------------------------------------------------------------------
 game_frame:
         jsr erase_cannon
+        jsr erase_shot
         jsr read_input
         jsr move_cannon
+        jsr do_fire
+        jsr update_shot
         jsr draw_cannon
+        jsr draw_shot
         jsr decay_timers
         rts
 
@@ -275,6 +296,101 @@ draw_cannon:
         sta lcanxh
         lda #1
         sta candrawn
+        rts
+
+; ---------------------------------------------------------------------------
+; do_fire : if fire is held and no bolt is in flight, launch one from the
+;   muzzle (one shot on screen at a time — the classic rule).
+; ---------------------------------------------------------------------------
+do_fire:
+        lda hfire
+        beq df_ret
+        lda shtact
+        bne df_ret              ; a bolt is already flying
+        clc                     ; bolt x = cannon left edge + SHOT_DX
+        lda canxl
+        adc #SHOT_DX
+        sta shtxl
+        lda canxh
+        adc #0
+        sta shtxh
+        lda #SHOT_Y0
+        sta shty
+        lda #1
+        sta shtact
+        lda #0
+        sta shtdrawn
+df_ret:
+        rts
+
+; ---------------------------------------------------------------------------
+; update_shot : raise the bolt; retire it when it leaves the top edge.
+; ---------------------------------------------------------------------------
+update_shot:
+        lda shtact
+        beq us_ret
+        lda shty
+        sec
+        sbc #SHOT_STEP
+        bcc us_off              ; ran off the top of the playfield
+        sta shty
+        rts
+us_off:
+        lda #0
+        sta shtact
+us_ret:
+        rts
+
+; ---------------------------------------------------------------------------
+; erase_shot : XOR the bolt off at its last-drawn position (if drawn).
+; ---------------------------------------------------------------------------
+erase_shot:
+        lda shtdrawn
+        beq es_ret
+        lda #<SPR_SHOT
+        sta sprptr
+        lda #>SPR_SHOT
+        sta sprptr+1
+        lda lshtxl
+        sta sx
+        lda lshtxh
+        sta sxh
+        lda lshty
+        sta sy
+        jsr draw_sprite
+es_ret:
+        rts
+
+; ---------------------------------------------------------------------------
+; draw_shot : XOR the active bolt on and remember where; clear the flag when
+;   no bolt is in flight.
+; ---------------------------------------------------------------------------
+draw_shot:
+        lda shtact
+        beq dsh_off
+        lda #<SPR_SHOT
+        sta sprptr
+        lda #>SPR_SHOT
+        sta sprptr+1
+        lda shtxl
+        sta sx
+        lda shtxh
+        sta sxh
+        lda shty
+        sta sy
+        jsr draw_sprite
+        lda shtxl
+        sta lshtxl
+        lda shtxh
+        sta lshtxh
+        lda shty
+        sta lshty
+        lda #1
+        sta shtdrawn
+        rts
+dsh_off:
+        lda #0
+        sta shtdrawn
         rts
 
 ; ---------------------------------------------------------------------------

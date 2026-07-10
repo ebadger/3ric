@@ -68,6 +68,9 @@ const clearKey = () => vm.poke(0xC000, 0);
 const frame = () => runHook(S.FRAME_BRK, "frame");
 const initCannon = () => runHook(S.INIT_BRK, "init cannon");
 const canx = () => vm.peek(S.CANXL) | (vm.peek(S.CANXH) << 8);
+const shtact = () => vm.peek(S.SHTACT);
+const shotx = () => vm.peek(S.SHTXL) | (vm.peek(S.SHTXH) << 8);
+const shty = () => vm.peek(S.SHTY);
 
 // build the row table once, then reuse
 runHook(S.BUILD_BRK, "build_rows");
@@ -227,6 +230,75 @@ console.log("G) cannon: XOR erase-redraw leaves exactly one cannon");
   let band = 0;
   for (let y = 148; y <= 155; y++) for (let x = 0; x < 280; x++) band += getpix(x, y);
   ok(band === pop, `one cannon on screen, no trail (got ${band}, want ${pop})`);
+}
+
+// ===== H) shot: fire spawns one bolt from the muzzle ========================
+console.log("H) shot: SPACE fires a bolt from the muzzle");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  initCannon();
+  clearKey(); frame();                      // cannon centred, no shot
+  ok(shtact() === 0, "no bolt before firing");
+  press(S.K_SPACE); frame();                // fire
+  ok(shtact() === 1, "SPACE spawns a bolt");
+  ok(shotx() === 132 + 7, `bolt at muzzle x = canx+7 (got ${shotx()})`);
+  ok(shty() === 144 - 6, `bolt rose one step to y=138 (got ${shty()})`);
+  // the 4-tall, 1-wide bolt is lit at its column, dark either side
+  const bx = shotx(), by = shty();
+  let col = 0; for (let r = 0; r < 4; r++) col += getpix(bx, by + r);
+  ok(col === 4, "bolt is a 4px vertical bar");
+  ok(!getpix(bx - 1, by) && !getpix(bx + 1, by), "bolt is one pixel wide");
+}
+
+// ===== I) shot: rises autonomously, leaves no trail =========================
+console.log("I) shot: climbs on its own, XOR erase leaves no trail");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  initCannon();
+  clearKey(); frame();
+  press(S.K_SPACE); frame();                // fire -> y=138
+  clearKey();
+  const y0 = shty();
+  frame();                                  // no keys: bolt still climbs
+  ok(shty() === y0 - 6, `bolt climbs unattended (${y0} -> ${shty()})`);
+  // exactly one 4px bolt anywhere on the playfield (no smear)
+  let lit = 0;
+  for (let y = 0; y < 160; y++) for (let x = 0; x < 280; x++) lit += getpix(x, y);
+  // cannon (74) + one bolt (4) = 78
+  ok(lit === 74 + 4, `one cannon + one bolt on screen, no trail (got ${lit})`);
+}
+
+// ===== J) shot: only one bolt in flight at a time ===========================
+console.log("J) shot: cannot fire a second bolt while one is flying");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  initCannon();
+  clearKey(); frame();
+  press(S.K_SPACE); frame();                // fire -> y=138
+  clearKey();
+  frame(); frame();                         // climb to y=126
+  const yMid = shty();
+  press(S.K_SPACE); frame();                // try to fire again mid-flight
+  ok(shty() === yMid - 6, `in-flight bolt keeps climbing, not restarted (${yMid} -> ${shty()})`);
+  ok(shty() !== 138, "no fresh bolt spawned at the muzzle");
+}
+
+// ===== K) shot: retires off the top, freeing the next shot ==================
+console.log("K) shot: expires at the top and re-arms");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  initCannon();
+  clearKey(); frame();
+  press(S.K_SPACE); frame();                // fire
+  clearKey();
+  for (let i = 0; i < 30; i++) frame();     // let it fly off the top
+  ok(shtact() === 0, "bolt retired after leaving the top");
+  // no bolt residue in the upper playfield (only the cannon remains)
+  let lit = 0;
+  for (let y = 0; y < 140; y++) for (let x = 0; x < 280; x++) lit += getpix(x, y);
+  ok(lit === 0, `no bolt pixels left above the cannon (got ${lit})`);
+  press(S.K_SPACE); frame();                // fire again
+  ok(shtact() === 1, "can fire again once the bolt is gone");
 }
 
 // ===== summary ==============================================================
