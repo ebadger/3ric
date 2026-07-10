@@ -380,24 +380,30 @@ export function assemble(source, opts = {}) {
   return { org, bytes: out, symbols, listing };
 }
 
-// --- CLI -------------------------------------------------------------------
-import { fileURLToPath } from "node:url";
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const fs = await import("node:fs");
-  const args = process.argv.slice(2);
-  const positional = args.filter((a) => !a.startsWith("--"));
-  const orgIdx = args.findIndex((a) => a === "--org" || a.startsWith("--org="));
-  const inFile = positional[0], outFile = positional[1];
-  if (!inFile) { console.error("usage: node asm6502.mjs in.s [out.prg] [--org 0x0800]"); process.exit(2); }
-  const src = fs.readFileSync(inFile, "utf8");
-  let org;
-  if (orgIdx >= 0) { const a = args[orgIdx]; org = Number(a.includes("=") ? a.split("=")[1] : args[orgIdx + 1]); }
-  try {
-    const { org: o, bytes, symbols } = assemble(src, org != null && !Number.isNaN(org) ? { org } : {});
-    if (outFile) fs.writeFileSync(outFile, Buffer.from(bytes));
-    console.error(`assembled ${bytes.length} bytes @ $${o.toString(16).toUpperCase().padStart(4, "0")}` + (outFile ? ` -> ${outFile}` : ""));
-    console.error("symbols:", Object.fromEntries(Object.entries(symbols).map(([k, v]) => [k, "$" + (v & 0xFFFF).toString(16).toUpperCase().padStart(4, "0")])));
-  } catch (e) {
-    console.error(String(e.message || e)); process.exit(1);
+// --- CLI (Node only) -------------------------------------------------------
+// Guarded so this module is also safe to `import { assemble }` in a browser,
+// where `process` is undefined and `node:*` specifiers do not resolve. Both the
+// guard check and the node: imports are dynamic so nothing Node-specific is
+// referenced at load time in the browser.
+if (typeof process !== "undefined" && process.argv && process.versions?.node) {
+  const { fileURLToPath } = await import("node:url");
+  if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+    const fs = await import("node:fs");
+    const args = process.argv.slice(2);
+    const positional = args.filter((a) => !a.startsWith("--"));
+    const orgIdx = args.findIndex((a) => a === "--org" || a.startsWith("--org="));
+    const inFile = positional[0], outFile = positional[1];
+    if (!inFile) { console.error("usage: node asm6502.mjs in.s [out.prg] [--org 0x0800]"); process.exit(2); }
+    const src = fs.readFileSync(inFile, "utf8");
+    let org;
+    if (orgIdx >= 0) { const a = args[orgIdx]; org = Number(a.includes("=") ? a.split("=")[1] : args[orgIdx + 1]); }
+    try {
+      const { org: o, bytes, symbols } = assemble(src, org != null && !Number.isNaN(org) ? { org } : {});
+      if (outFile) fs.writeFileSync(outFile, Buffer.from(bytes));
+      console.error(`assembled ${bytes.length} bytes @ $${o.toString(16).toUpperCase().padStart(4, "0")}` + (outFile ? ` -> ${outFile}` : ""));
+      console.error("symbols:", Object.fromEntries(Object.entries(symbols).map(([k, v]) => [k, "$" + (v & 0xFFFF).toString(16).toUpperCase().padStart(4, "0")])));
+    } catch (e) {
+      console.error(String(e.message || e)); process.exit(1);
+    }
   }
 }

@@ -27,6 +27,11 @@ Pico builds compile and behave exactly as before.
   Applesoft for their auto-run greeting — see below).
 - **Adjustable CPU clock** (**Speed** selector): 0.5× / 1× (≈1 MHz) / 2× / 4× /
   8× / Max, with a per-frame wall-clock cap so the page stays responsive.
+- **In-browser assembler** (**Assemble & Run**): edit 65C02 source in the page,
+  assemble it client-side with the very same assembler the CLI uses
+  (`codegen/tools/asm6502.mjs`), run the resulting image like **Load .PRG**, and
+  download the `.PRG`. Ships the project's sample programs; deep-linkable with
+  `?src=`.
 
 ## Layout
 
@@ -36,13 +41,15 @@ Pico builds compile and behave exactly as before.
 | `web_compat.h` | Tiny shims so `WozLib` + `MockMicroSD`'s MSVC-isms (`OutputDebugString`, `sprintf_s`, `swprintf_s`, `fopen_s`, `_ASSERT`, …) compile under Emscripten. |
 | `make_sd_sparse.py` | Streams `emulator/Data/sd.zip` (a 2GB, mostly-zero FAT32 image) into a compact `data/sd.sparse` keeping only the ~11.5MB of non-zero sectors. |
 | `build.ps1` | Compiles the core + WozLib + MockMicroSD + bridge to `badger6502.js` / `.wasm`, stages the data files, generates `sd.sparse`, and stages the demo `disk.woz`. |
-| `index.html` | Canvas UI + `requestAnimationFrame` driver + keyboard + clock-speed/disk controls. Honors an optional `ASSET_BASE` (R2/CDN offload). |
+| `index.html` | Canvas UI + `requestAnimationFrame` driver + keyboard + clock-speed/disk controls + the in-browser assembler/editor. Honors an optional `ASSET_BASE` (R2/CDN offload). |
+| `asm6502.mjs` | The 65C02 assembler, staged from `codegen/tools/asm6502.mjs` (git-ignored). Dual-use: the same file is a Node CLI and a browser ES module — `index.html` imports its `assemble()` for **Assemble & Run**. |
 | `serve.ps1` | Starts `python -m http.server` (defaults to port 8011) for local dev. |
 | `Caddyfile` | Production static server config (compression + cache headers) for hosting behind a Cloudflare Tunnel. |
 | `test_*.cjs` | Headless Node validations (boot, render, keyboard, screen decode, SD, disk). |
 
-Build outputs (`badger6502.js`, `badger6502.wasm`) and the staged `data/`
-copies are git-ignored; regenerate them with `build.ps1`.
+Build outputs (`badger6502.js`, `badger6502.wasm`), the staged `data/` copies,
+and the editor's staged `asm6502.mjs` + `programs/*.s` sample sources are
+git-ignored; regenerate them with `build.ps1`.
 
 ## Prerequisites (this machine)
 
@@ -94,6 +101,33 @@ routine) which mounts the FAT32 image and prints a `>` prompt, then auto-runs
 from the card. The **Speed** selector sets the CPU clock (0.5×–8× or Max).
 
 > Port 8011 is used because 8000 is taken on this machine.
+
+## In-browser assembler (Assemble & Run)
+
+The page includes an **Assembler** panel that assembles 65C02 source entirely in
+the browser and runs it in the emulator — no CLI, no server round-trip:
+
+1. **Pick a sample** (STAR SWARM, ROCK STORM, JUNGLE QUEST, Conway's Life, or
+   Hello) or type your own source into the editor.
+2. **Assemble & Run** (button or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>) assembles the
+   source and loads the image exactly like **Load .PRG** (`BRUN` on hardware).
+   Assembler errors show as `line N: …` and are non-fatal.
+3. **Download .PRG** saves the assembled image so you can `BRUN` it on real
+   hardware or off the SD card.
+
+Implementation notes:
+
+- The assembler is the project's own `codegen/tools/asm6502.mjs`, made *dual-use*:
+  its CLI tail is guarded by a `process`/`node` check and its lone `node:url`
+  import is dynamic, so the exact same file runs as a Node CLI **and** imports
+  cleanly as a browser ES module. `index.html` lazily `import()`s its `assemble()`.
+- A source's own `.org` / `*=` is authoritative; the **org $** field is only used
+  when the source has no origin directive (passing both would corrupt the layout).
+- The editor autosaves to `localStorage`, and a program is deep-linkable:
+  `?src=programs/swarm.s` fetches that source, fills the editor, and auto-runs it.
+- `build.ps1` stages `asm6502.mjs` and the five sample `.s` sources into
+  `web/` and `web/programs/` (git-ignored, regenerated each build; CI does the
+  same before publishing).
 
 ## Headless tests (fast iteration)
 
@@ -189,8 +223,10 @@ site, 100 GB/month bandwidth).
 `main` that touches the emulator sources:
 
 1. installs Python + Emscripten (`6.0.1`, matching this project),
-2. runs `web/build.ps1` (it detects Linux CI and invokes `em++` directly),
-3. stages `index.html` + `badger6502.js` + `.wasm` + `data/` as the site root,
+2. runs `web/build.ps1` (it detects Linux CI and invokes `em++` directly, and
+   stages `asm6502.mjs` + the `programs/*.s` sample sources for the editor),
+3. stages `index.html` + `badger6502.js` + `.wasm` + `asm6502.mjs` + `data/` +
+   `programs/` as the site root,
 4. uploads it as a Pages artifact and deploys.
 
 The build outputs stay git-ignored — CI regenerates them from the committed

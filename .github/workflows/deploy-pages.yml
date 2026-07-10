@@ -17,6 +17,11 @@ on:
       - 'emulator/MockMicroSD/**'
       - 'emulator/Data/**'
       - 'emulator/WozFileTestApp/testdata/**'
+      # The in-browser editor stages these into the site (see web/build.ps1),
+      # so republish when the assembler or the sample sources change.
+      - 'emulator/AICodeGen/**'
+      - 'codegen/tools/asm6502.mjs'
+      - 'codegen/programs/**'
       - '.github/workflows/deploy-pages.yml'
   # Allow manual runs from the Actions tab.
   workflow_dispatch:
@@ -63,6 +68,7 @@ jobs:
         run: |
           mkdir -p _site
           cp web/index.html web/badger6502.js web/badger6502.wasm _site/
+          cp web/asm6502.mjs _site/
           cp -r web/data _site/data
           cp -r web/programs _site/programs
           ls -la _site _site/data _site/programs
