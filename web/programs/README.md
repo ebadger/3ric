@@ -39,5 +39,18 @@ playable pace):
 node codegen/tools/asm6502.mjs emulator/AICodeGen/jungle/jungle.s web/programs/jungle.prg --org 0x0800
 ```
 
+`rocks.prg` is **ROCK STORM**, an original hi-res vector rock-shooter — rotate a
+ship, thrust with inertia, and blast drifting rocks that split into smaller,
+faster ones; everything wraps at the screen edges. Clear a wave to face a larger
+one; a thrust flame trails the engine and **H** triggers a hyperspace panic-jump.
+Source, prompt, and binary live in
+[`emulator/AICodeGen/rocks/`](../../emulator/AICodeGen/rocks); deep-link it at
+`?prg=programs/rocks.prg&org=0800` (set **Speed** to **Max** for full-speed
+vectors):
+
+```sh
+node codegen/tools/asm6502.mjs emulator/AICodeGen/rocks/rocks.s web/programs/rocks.prg --org 0x0800
+```
+
 The GitHub Pages workflow stages this directory to the site root under
 `programs/` (see `.github/workflows/deploy-pages.yml`).
