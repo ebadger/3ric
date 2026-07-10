@@ -69,10 +69,17 @@ NALIEN   = 40           ; NCOLS * NROWS
 CELLW    = 16           ; horizontal spacing between alien cells
 CELLH    = 12           ; vertical spacing between ranks
 ALIEN_W  = 12           ; alien sprite width
+ALIEN_H  = 8            ; alien sprite height (collision box)
 BLKX0    = 20           ; formation start x (top-left of cell 0,0)
 BLKY0    = 12           ; formation start y
 MDX      = 2            ; horizontal march step (per formation advance)
 MDROP    = 8            ; drop distance when the swarm reverses
+
+; ---- M5: combat (collisions, alien bombs, scoring, lives) ----
+MAXBOMB  = 4            ; simultaneous alien bombs
+BOMB_STEP = 3           ; bomb fall speed (pixels per frame)
+BOMBCD   = 40           ; frames between bomb drops
+LIVES0   = 3            ; starting cannons
 
 ; ---- zero page (only the (zp),y pointers live here) ----
 ptr      = $06          ; screen dest pointer            (+1)
@@ -149,7 +156,40 @@ acellx   = $6A44
 t0       = $6A45        ; advance_formation scratch (16-bit)
 t1l      = $6A46
 t1h      = $6A47
+
+; ---- M5: combat state ----
+score0   = $6A48        ; BCD score, little-endian, 6 digits
+score1   = $6A49
+score2   = $6A4A
+lives    = $6A4B        ; remaining cannons
+bombcd   = $6A4C        ; frames until the next bomb drop
+seed     = $6A4D        ; 16-bit LFSR seed (rand)   ($6A4E = seed+1)
+ccur     = $6A4F        ; check_bolt_hits loop cursor
+cframe   = $6A50        ; on-screen frame of the alien under test
+coxl     = $6A51        ; on-screen origin of the alien under test (16-bit x)
+coxh     = $6A52
+coy      = $6A53        ; ... origin y
+abx0l    = $6A54        ; alien collision box: left x (16-bit)
+abx0h    = $6A55
+aby0     = $6A56        ; alien collision box: top y
+dxl      = $6A57        ; (bolt x - alien left) 16-bit
+dxh      = $6A58
+bi       = $6A59        ; bomb loop cursor
+bcol     = $6A5A        ; spawn: chosen column
+btmp     = $6A5B        ; spawn scratch: free slot
+btmp2    = $6A5C        ; spawn scratch: firing row
+
 alive    = $6A80        ; NALIEN alive flags ($6A80..$6AA7)
+
+; ---- M5: alien bombs (parallel arrays, MAXBOMB wide) ----
+bact     = $6AB0        ; 1 = bomb active            ($6AB0..$6AB3)
+bxlo     = $6AB4        ; bomb x low                 ($6AB4..$6AB7)
+bxhi     = $6AB8        ; bomb x high                ($6AB8..$6ABB)
+byy      = $6ABC        ; bomb y                     ($6ABC..$6ABF)
+bdrawn   = $6AC0        ; 1 = bomb currently drawn   ($6AC0..$6AC3)
+lbxlo    = $6AC4        ; last-drawn x low           ($6AC4..$6AC7)
+lbxhi    = $6AC8        ; last-drawn x high          ($6AC8..$6ACB)
+lbyy     = $6ACC        ; last-drawn y               ($6ACC..$6ACF)
 
         .org $0800
 
@@ -197,6 +237,25 @@ init_cannon:
         sta shtact
         sta shtdrawn
         sta livecnt             ; no formation yet -> march_step no-ops
+        sta score0
+        sta score1
+        sta score2
+        lda #LIVES0
+        sta lives
+        lda #BOMBCD
+        sta bombcd
+        lda #$5A                ; seed the LFSR (any nonzero pattern)
+        sta seed
+        lda #$3C
+        sta seed+1
+        ldx #0
+        lda #0
+ic_bclr:
+        sta bact,x              ; no bombs in flight
+        sta bdrawn,x
+        inx
+        cpx #MAXBOMB
+        bne ic_bclr
         rts
 
 ; ---------------------------------------------------------------------------
@@ -205,13 +264,18 @@ init_cannon:
 game_frame:
         jsr erase_cannon
         jsr erase_shot
+        jsr erase_bombs
         jsr read_input
         jsr move_cannon
         jsr do_fire
         jsr update_shot
         jsr march_step
+        jsr check_bolt_hits
+        jsr update_bombs
+        jsr check_bomb_hits
         jsr draw_cannon
         jsr draw_shot
+        jsr draw_bombs
         jsr decay_timers
         rts
 
@@ -741,6 +805,410 @@ fd_i:
         bne fd_o
         rts
 
+; ===========================================================================
+; M5 : combat — bolt/alien collisions, alien bombs, scoring, lives
+; ===========================================================================
+
+; ---------------------------------------------------------------------------
+; check_bolt_hits : if the player's bolt overlaps a live alien, kill that alien
+;   (erase it, mark it dead, score) and consume the bolt.  One alien per call.
+;   The alien's on-screen box uses the NEW origin+frame if the ripple has already
+;   swept it this pass (index < mcur), else the OLD origin + previous frame — so
+;   the erase matches exactly what is on the screen.
+; ---------------------------------------------------------------------------
+check_bolt_hits:
+        lda shtact
+        bne cbh_go
+        rts
+cbh_go:
+        lda #0
+        sta ccur
+cbh_l:
+        ldx ccur
+        lda alive,x
+        bne cbh_live
+        jmp cbh_n
+cbh_live:
+        lda ccur                ; col = ccur mod 8
+        and #(NCOLS-1)
+        sta acol
+        lda ccur                ; row = ccur / 8
+        lsr a
+        lsr a
+        lsr a
+        sta arow
+        lda ccur                ; pick origin + frame by ripple sweep state
+        cmp mcur
+        bcc cbh_new
+        lda obxl                ; not yet swept -> old origin, previous frame
+        sta coxl
+        lda obxh
+        sta coxh
+        lda oby
+        sta coy
+        lda apar
+        eor #1
+        sta cframe
+        jmp cbh_pos
+cbh_new:
+        lda bxl                 ; already swept -> new origin, new frame
+        sta coxl
+        lda bxh
+        sta coxh
+        lda by
+        sta coy
+        lda apar
+        sta cframe
+cbh_pos:
+        lda acol                ; abx0 = coxl + col*16 (16-bit)
+        asl a
+        asl a
+        asl a
+        asl a
+        sta acellx
+        clc
+        lda coxl
+        adc acellx
+        sta abx0l
+        lda coxh
+        adc #0
+        sta abx0h
+        ldx arow                ; aby0 = coy + ROWYOFF[row]
+        clc
+        lda coy
+        adc ROWYOFF,x
+        sta aby0
+        sec                     ; x overlap: 0 <= (shtx - abx0) < ALIEN_W
+        lda shtxl
+        sbc abx0l
+        sta dxl
+        lda shtxh
+        sbc abx0h
+        sta dxh
+        bmi cbh_n               ; bolt is left of the alien
+        lda dxh
+        bne cbh_n               ; bolt is >=256 to the right
+        lda dxl
+        cmp #ALIEN_W
+        bcs cbh_n               ; bolt is past the alien's right edge
+        clc                     ; y overlap: not fully above, not fully below
+        lda shty
+        adc #3                  ; the bolt is 4 pixels tall
+        cmp aby0
+        bcc cbh_n               ; bolt entirely above the alien
+        clc
+        lda aby0
+        adc #(ALIEN_H-1)
+        cmp shty
+        bcc cbh_n               ; bolt entirely below the alien
+        jmp cbh_hit
+cbh_n:
+        inc ccur
+        lda ccur
+        cmp #NALIEN
+        beq cbh_done
+        jmp cbh_l
+cbh_done:
+        rts
+cbh_hit:
+        lda ccur                ; erase the alien where it is drawn
+        sta aidx
+        lda cframe
+        sta aframe
+        lda coxl
+        sta aoxl
+        lda coxh
+        sta aoxh
+        lda coy
+        sta aoy
+        jsr blit_alien
+        ldx ccur                ; mark it dead
+        lda #0
+        sta alive,x
+        dec livecnt
+        lda #0                  ; consume the bolt
+        sta shtact
+        jsr score_alien
+        rts
+
+; ---------------------------------------------------------------------------
+; score_alien : add the killed alien's rank value (BCD) to the score.
+;   arow still holds its row (blit_alien recomputed the same value).
+; ---------------------------------------------------------------------------
+score_alien:
+        ldx arow
+        lda ROWRANK,x
+        tax
+        lda RANKSCORE,x
+        sed
+        clc
+        adc score0
+        sta score0
+        lda score1
+        adc #0
+        sta score1
+        lda score2
+        adc #0
+        sta score2
+        cld
+        rts
+
+; ---------------------------------------------------------------------------
+; erase_bombs : XOR every drawn bomb off at its last position.
+; ---------------------------------------------------------------------------
+erase_bombs:
+        lda #0
+        sta bi
+eb_l:
+        ldx bi
+        lda bdrawn,x
+        beq eb_n
+        lda #<SPR_BOMB
+        sta sprptr
+        lda #>SPR_BOMB
+        sta sprptr+1
+        ldx bi
+        lda lbxlo,x
+        sta sx
+        lda lbxhi,x
+        sta sxh
+        lda lbyy,x
+        sta sy
+        jsr draw_sprite
+eb_n:
+        inc bi
+        lda bi
+        cmp #MAXBOMB
+        bne eb_l
+        rts
+
+; ---------------------------------------------------------------------------
+; update_bombs : fall every active bomb; retire ones that reach the ground; on
+;   the spawn cadence, drop a fresh bomb from a random column's lowest alien.
+; ---------------------------------------------------------------------------
+update_bombs:
+        ldx #0
+ub_l:
+        lda bact,x
+        beq ub_n
+        clc
+        lda byy,x
+        adc #BOMB_STEP
+        sta byy,x
+        cmp #HEIGHT
+        bcc ub_n
+        lda #0
+        sta bact,x              ; reached the ground line
+ub_n:
+        inx
+        cpx #MAXBOMB
+        bne ub_l
+        lda bombcd
+        beq ub_spawn
+        dec bombcd
+        rts
+ub_spawn:
+        jsr spawn_bomb
+        lda #BOMBCD
+        sta bombcd
+        rts
+
+; ---------------------------------------------------------------------------
+; spawn_bomb : find a free slot and a random column that holds a live alien,
+;   then launch a bomb from that column's lowest alien.  No-op if unavailable.
+; ---------------------------------------------------------------------------
+spawn_bomb:
+        ldx #0
+sb_slot:
+        lda bact,x
+        beq sb_free
+        inx
+        cpx #MAXBOMB
+        bne sb_slot
+        rts                     ; every bomb slot is busy
+sb_free:
+        stx btmp                ; remember the free slot
+        jsr rand
+        and #(NCOLS-1)
+        sta bcol
+        ldy #(NROWS-1)          ; scan the column bottom-up for a live alien
+sb_rowl:
+        tya
+        asl a
+        asl a
+        asl a                   ; row * 8
+        clc
+        adc bcol
+        tax
+        lda alive,x
+        bne sb_found
+        dey
+        bpl sb_rowl
+        rts                     ; column is empty -> skip this drop
+sb_found:
+        sty btmp2               ; firing alien's row
+        lda bcol                ; cellx = col * 16
+        asl a
+        asl a
+        asl a
+        asl a
+        sta acellx
+        clc                     ; bomb x = bx + cellx + 5 (roughly centred)
+        lda bxl
+        adc acellx
+        sta t1l
+        lda bxh
+        adc #0
+        sta t1h
+        clc
+        lda t1l
+        adc #5
+        sta t1l
+        lda t1h
+        adc #0
+        sta t1h
+        ldx btmp
+        lda t1l
+        sta bxlo,x
+        lda t1h
+        sta bxhi,x
+        ldy btmp2               ; bomb y = by + ROWYOFF[row] + ALIEN_H
+        clc
+        lda by
+        adc ROWYOFF,y
+        clc
+        adc #ALIEN_H
+        sta byy,x
+        lda #1
+        sta bact,x
+        lda #0
+        sta bdrawn,x
+        rts
+
+; ---------------------------------------------------------------------------
+; check_bomb_hits : any active bomb overlapping the cannon costs a life and is
+;   removed.  (Cannon respawn / game-over arrive in later milestones.)
+; ---------------------------------------------------------------------------
+check_bomb_hits:
+        lda #0
+        sta bi
+kbh_l:
+        ldx bi
+        lda bact,x
+        beq kbh_n
+        clc                     ; brl = bomb right edge = bxlo + 2
+        lda bxlo,x
+        adc #2
+        sta t0
+        lda bxhi,x
+        adc #0
+        sta t1l
+        sec                     ; bomb right edge < cannon left edge ?
+        lda t0
+        sbc canxl
+        lda t1l
+        sbc canxh
+        bmi kbh_n               ; bomb is left of the cannon
+        clc                     ; crl = cannon right edge = canx + CAN_W-1
+        lda canxl
+        adc #(CAN_W-1)
+        sta t0
+        lda canxh
+        adc #0
+        sta t1l
+        sec                     ; cannon right edge < bomb left edge ?
+        lda t0
+        sbc bxlo,x
+        lda t1l
+        sbc bxhi,x
+        bmi kbh_n               ; bomb is right of the cannon
+        clc                     ; bomb bottom = byy + 4 vs cannon top
+        lda byy,x
+        adc #4
+        cmp #CAN_Y
+        bcc kbh_n               ; bomb entirely above the cannon
+        lda #(CAN_Y+7)          ; cannon bottom vs bomb top
+        cmp byy,x
+        bcc kbh_n               ; bomb entirely below the cannon
+        jsr bomb_hit
+kbh_n:
+        inc bi
+        lda bi
+        cmp #MAXBOMB
+        bne kbh_l
+        rts
+
+; ---------------------------------------------------------------------------
+; bomb_hit : remove bomb `bi` and dock a life.
+; ---------------------------------------------------------------------------
+bomb_hit:
+        ldx bi
+        lda #0
+        sta bact,x
+        lda lives
+        beq bh_ret
+        dec lives
+bh_ret:
+        rts
+
+; ---------------------------------------------------------------------------
+; draw_bombs : XOR every active bomb on, remembering where; clear drawn flags
+;   for retired bombs so erase_bombs leaves them alone.
+; ---------------------------------------------------------------------------
+draw_bombs:
+        lda #0
+        sta bi
+db_l:
+        ldx bi
+        lda bact,x
+        beq db_off
+        lda #<SPR_BOMB
+        sta sprptr
+        lda #>SPR_BOMB
+        sta sprptr+1
+        ldx bi
+        lda bxlo,x
+        sta sx
+        lda bxhi,x
+        sta sxh
+        lda byy,x
+        sta sy
+        jsr draw_sprite
+        ldx bi
+        lda bxlo,x
+        sta lbxlo,x
+        lda bxhi,x
+        sta lbxhi,x
+        lda byy,x
+        sta lbyy,x
+        lda #1
+        sta bdrawn,x
+        jmp db_n
+db_off:
+        ldx bi
+        lda #0
+        sta bdrawn,x
+db_n:
+        inc bi
+        lda bi
+        cmp #MAXBOMB
+        bne db_l
+        rts
+
+; ---------------------------------------------------------------------------
+; rand : 16-bit Galois LFSR (poly $B400, period 65535).  Returns A = low byte.
+; ---------------------------------------------------------------------------
+rand:
+        lsr seed+1
+        ror seed
+        bcc rnd_ret
+        lda seed+1
+        eor #$B4
+        sta seed+1
+rnd_ret:
+        lda seed
+        rts
+
 ; ---------------------------------------------------------------------------
 ; draw_sprite : XOR the bitmap at (sprptr) onto the screen at (sx,sy).
 ;   sprptr -> H, W, then H rows of 2 bytes (16-bit mask, leftmost pixel=bit15).
@@ -995,6 +1463,8 @@ SPRLO:                          ; sprite address low bytes: rank*2 + frame
         .byte <SPR_A0,<SPR_A1,<SPR_B0,<SPR_B1,<SPR_C0,<SPR_C1
 SPRHI:
         .byte >SPR_A0,>SPR_A1,>SPR_B0,>SPR_B1,>SPR_C0,>SPR_C1
+RANKSCORE:                      ; BCD points awarded per rank (A/B/C)
+        .byte $30,$20,$10
 
 ; ---------------------------------------------------------------------------
 ; BRK test hooks (headless harness entry points)
@@ -1026,4 +1496,16 @@ advance_brk:
 initall_brk:
         jsr init_cannon
         jsr init_formation
+        brk
+bolthit_brk:
+        jsr check_bolt_hits
+        brk
+spawn_brk:
+        jsr spawn_bomb
+        brk
+updbomb_brk:
+        jsr update_bombs
+        brk
+bombhit_brk:
+        jsr check_bomb_hits
         brk

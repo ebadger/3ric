@@ -378,6 +378,141 @@ console.log("N) formation: steps, then drops and reverses at each wall");
   ok(bx() === 1 && by() === 38 && mdir() === 1, `drops+reverses at left wall (${bx()},${by()},${mdir()})`);
 }
 
+// ---- M5 combat helpers ----
+const initAll = () => runHook(S.INITALL_BRK, "init all");
+const score0 = () => vm.peek(S.SCORE0);
+const lives = () => vm.peek(S.LIVES);
+const aliveAt = (i) => vm.peek(S.ALIVE + i);
+const setAlive = (i, v) => vm.poke(S.ALIVE + i, v);
+const setBolt = (x, y) => { pokeS16(S.SHTXL, x); vm.poke(S.SHTY, y & 0xff); vm.poke(S.SHTACT, 1); };
+const bombCount = () => { let n = 0; for (let i = 0; i < 4; i++) n += vm.peek(S.BACT + i) ? 1 : 0; return n; };
+const bombSlot = () => { for (let i = 0; i < 4; i++) if (vm.peek(S.BACT + i)) return i; return -1; };
+const bombX = (i) => vm.peek(S.BXLO + i) | (vm.peek(S.BXHI + i) << 8);
+const bombY = (i) => vm.peek(S.BYY + i);
+const bombOn = (i) => vm.peek(S.BACT + i);
+const clearBombs = () => { for (let i = 0; i < 4; i++) { vm.poke(S.BACT + i, 0); vm.poke(S.BDRAWN + i, 0); } };
+const setBomb = (i, x, y) => {
+  vm.poke(S.BACT + i, 1);
+  vm.poke(S.BXLO + i, x & 0xff); vm.poke(S.BXHI + i, (x >> 8) & 0xff);
+  vm.poke(S.BYY + i, y & 0xff); vm.poke(S.BDRAWN + i, 0);
+};
+const A0POP = () => decodeSprite(S.SPR_A0).pop;
+
+// ===== O) bolt kills the alien it overlaps ==================================
+console.log("O) bolt: overlapping a live alien kills it, scores, and is consumed");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  initAll();
+  ok(livecnt() === 40 && lives() === 3 && score0() === 0, "clean start: 40 aliens, 3 lives, score 0");
+  const litBefore = playfieldLit(), a0 = A0POP();
+  setBolt(25, 14);                          // inside alien 0's box (x20..31, y12..19)
+  runHook(S.BOLTHIT_BRK, "bolt hit");
+  ok(livecnt() === 39, `swarm down one (got ${livecnt()})`);
+  ok(aliveAt(0) === 0, "alien 0 marked dead");
+  ok(shtact() === 0, "bolt consumed by the hit");
+  ok(score0() === 0x30, `rank-A kill scores 30 BCD (got ${score0().toString(16)})`);
+  ok(boxLit(20, 12, 31, 19) === 0, "alien 0 fully erased from the screen");
+  ok(alienExact(1, 20, 12, 0), "neighbour alien 1 untouched");
+  ok(playfieldLit() === litBefore - a0, "exactly one alien's worth of pixels removed");
+  runHook(S.BOLTHIT_BRK, "no bolt");        // shtact=0 -> nothing happens
+  ok(livecnt() === 39 && score0() === 0x30, "no bolt in flight -> no further kills");
+}
+
+// ===== P) bolt misses when it overlaps nothing ==============================
+console.log("P) bolt: a bolt clear of the swarm kills nothing");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  initAll();
+  setBolt(200, 100);                        // right of and below the whole swarm
+  runHook(S.BOLTHIT_BRK, "bolt miss");
+  ok(livecnt() === 40, "no alien removed");
+  ok(shtact() === 1, "bolt keeps flying");
+  ok(score0() === 0, "no score");
+}
+
+// ===== Q) scoring by rank, accumulated in BCD ===============================
+console.log("Q) bolt: rank A/B/C award 30/20/10, summed in BCD");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  initAll();
+  setBolt(25, 14);  runHook(S.BOLTHIT_BRK, "kill A");   // alien 0  row0 rank A
+  ok(score0() === 0x30 && livecnt() === 39, `A -> 30 (got ${score0().toString(16)})`);
+  setBolt(25, 26);  runHook(S.BOLTHIT_BRK, "kill B");   // alien 8  row1 rank B (y=24)
+  ok(score0() === 0x50 && livecnt() === 38, `+B -> 50 (got ${score0().toString(16)})`);
+  setBolt(25, 62);  runHook(S.BOLTHIT_BRK, "kill C");   // alien 32 row4 rank C (y=60)
+  ok(score0() === 0x60 && livecnt() === 37, `+C -> 60 (got ${score0().toString(16)})`);
+}
+
+// ===== R) score carries out of the low byte in BCD ==========================
+console.log("R) score: BCD carry propagates past 99");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  initAll();
+  vm.poke(S.SCORE0, 0x80); vm.poke(S.SCORE1, 0x00);
+  setBolt(25, 14);  runHook(S.BOLTHIT_BRK, "kill A");   // +30 -> 0x80+0x30 = 110
+  ok(vm.peek(S.SCORE0) === 0x10 && vm.peek(S.SCORE1) === 0x01,
+     `80 + 30 = 0110 BCD (got ${vm.peek(S.SCORE1).toString(16)}${vm.peek(S.SCORE0).toString(16).padStart(2,"0")})`);
+}
+
+// ===== S) alien bomb spawns from a column's lowest alien ====================
+console.log("S) bomb: a drop launches from the bottom rank of a live column");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  initAll();
+  clearBombs();
+  runHook(S.SPAWN_BRK, "spawn");
+  ok(bombCount() === 1, `exactly one bomb launched (got ${bombCount()})`);
+  const b = bombSlot();
+  ok(bombY(b) === 68, `bomb starts below the row-4 alien (12+48+8=68, got ${bombY(b)})`);
+  const col = (bombX(b) - 25) / 16;
+  ok(Number.isInteger(col) && col >= 0 && col <= 7, `bomb x aligns to a column (got x=${bombX(b)}, col=${col})`);
+}
+
+// ===== T) bomb comes from the lowest LIVE alien =============================
+console.log("T) bomb: with row 4 cleared, drops originate from row 3");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  initAll();
+  for (let i = 32; i < 40; i++) setAlive(i, 0);   // wipe the bottom rank
+  clearBombs();
+  runHook(S.SPAWN_BRK, "spawn");
+  ok(bombCount() === 1, "a bomb still launches");
+  ok(bombY(bombSlot()) === 56, `now from row 3 (12+36+8=56, got ${bombY(bombSlot())})`);
+}
+
+// ===== U) bomb falls and retires at the ground ==============================
+console.log("U) bomb: falls at a steady rate and dies at the ground line");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  initAll();
+  clearBombs();
+  vm.poke(S.BOMBCD, 250);                  // keep the spawner quiet during the fall
+  setBomb(0, 100, 100);
+  runHook(S.UPDBOMB_BRK, "fall 1");
+  ok(bombY(0) === 103 && bombOn(0) === 1, `descends BOMB_STEP per frame (100 -> ${bombY(0)})`);
+  for (let i = 0; i < 25; i++) runHook(S.UPDBOMB_BRK, "fall");
+  ok(bombOn(0) === 0, "bomb retired once it reaches the ground");
+}
+
+// ===== V) bomb striking the cannon costs a life ============================
+console.log("V) bomb: a hit on the cannon docks a life; a near miss does not");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  initAll();                                // cannon at x=132, lives=3
+  clearBombs();
+  setBomb(0, 138, 150);                     // inside the cannon box (132..146, 148..155)
+  runHook(S.BOMBHIT_BRK, "cannon hit");
+  ok(lives() === 2, `life lost (got ${lives()})`);
+  ok(bombOn(0) === 0, "the bomb is spent");
+
+  initAll();                                // fresh cannon + lives
+  clearBombs();
+  setBomb(0, 10, 150);                      // far to the left of the cannon
+  runHook(S.BOMBHIT_BRK, "near miss");
+  ok(lives() === 3, "clear of the cannon -> no life lost");
+  ok(bombOn(0) === 1, "the bomb keeps falling");
+}
+
 // ===== summary ==============================================================
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
