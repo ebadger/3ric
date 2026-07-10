@@ -35,3 +35,4 @@ published to the hosted emulator by copying the `.prg` into
 | [`life`](life) | Conway's Game of Life — hi-res, toroidal wrap, **SPACE** reseeds. | `$0800` |
 | [`jungle`](jungle) | JUNGLE QUEST — original hi-res jungle platformer: a four-screen world with run/jump physics, a rolling-log hazard, a swinging vine, six gems, a countdown timer, and a title screen. | `$0800` |
 | [`rocks`](rocks) | ROCK STORM — original hi-res vector rock-shooter: a rotate/thrust/inertia ship, shots that split drifting rocks, screen wrap, a thrust flame, hyperspace, escalating waves, score/lives, and attract/game-over screens. | `$0800` |
+| [`swarm`](swarm) | STAR SWARM — original hi-res fixed-shooter: a formation of aliens that marches, drops, and speeds up while raining bombs, a bottom cannon that fires up, destructible shields, a bonus saucer, escalating waves, score/lives/high score, and attract/game-over screens. | `$0800` |

@@ -233,6 +233,11 @@ export function assemble(source, opts = {}) {
     const parsed = splitLine(rawLine);
     if (!parsed) return;
 
+    // NOTE: symbol names are folded to UPPERCASE, so lookups are
+    // case-INSENSITIVE. A constant and a variable that differ only in case
+    // (e.g. `BOMBCD` and `bombcd`) collide into one symbol and the later
+    // definition silently wins — corrupting `#CONSTANT` immediates with no
+    // error. Keep constant names case-insensitively distinct from all labels.
     if (parsed.equate) {
       symbols[parsed.equate.toUpperCase()] = evalExpr(parsed.expr, symbols, pc, lineNo);
       return;
