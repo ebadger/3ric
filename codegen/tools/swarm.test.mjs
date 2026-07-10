@@ -631,6 +631,141 @@ console.log("CC) saucer: retires once it leaves the screen");
   ok(ufoOn() === 0, "saucer gone off the left edge");
 }
 
+// ---- M7 flow/HUD helpers ----
+const gstate = () => vm.peek(S.GSTATE);
+const gameover = () => vm.peek(S.GAMEOVER);
+const wave = () => vm.peek(S.WAVE);
+const respawnT = () => vm.peek(S.RESPAWN);
+const newGame = () => runHook(S.NEWGAME_BRK, "new game");
+const SNAP = [0x6B00, 0x6B28, 0x6B50, 0x6B78];   // hud_snapshot rows 20..23
+const snapStr = (row, col, len) => {
+  let str = "";
+  for (let i = 0; i < len; i++) str += String.fromCharCode(vm.peek(SNAP[row] + col + i) & 0x7F);
+  return str;
+};
+
+// ===== DD) attract -> SPACE launches a fresh game ===========================
+console.log("DD) flow: the title screen starts a clean game when SPACE is pressed");
+{
+  runHook(S.ATTRACT_BRK, "enter attract");
+  ok(gstate() === 0, "boots into the attract state");
+  clearKey();
+  runHook(S.FLOW_BRK, "attract tick, no key");
+  ok(gstate() === 0, "with no key it stays on the title screen");
+  press(0xA0);                                // SPACE
+  runHook(S.FLOW_BRK, "attract tick, SPACE");
+  ok(gstate() === 1, "SPACE switches to the play state");
+  ok(livecnt() === 40, "a full swarm is deployed");
+  ok(vm.peek(S.LIVES) === 3, "three cannons in reserve");
+  ok(wave() === 1, "starting on wave 1");
+  ok(vm.peek(S.SCORE0) === 0 && vm.peek(S.SCORE2) === 0, "score starts at zero");
+}
+
+// ===== EE) the swarm landing ends the game ==================================
+console.log("EE) flow: the swarm reaching the invasion line is game over");
+{
+  newGame();
+  vm.poke(S.BY, 80);                          // 80 + row4(48) + 8 = 136 < 140
+  vm.poke(S.GAMEOVER, 0);
+  runHook(S.LAND_BRK, "high but safe");
+  ok(gameover() === 0, "still safe above the line");
+  vm.poke(S.BY, 110);                         // 110 + 48 + 8 = 166 >= 140
+  runHook(S.LAND_BRK, "past the line");
+  ok(gameover() === 1, "the swarm has landed -> game over");
+}
+
+// ===== FF) losing a cannon: respawn, then the final life ====================
+console.log("FF) flow: a hit costs a cannon and respawns; the last one ends it");
+{
+  newGame();                                  // lives=3, cannon at 132
+  clearBombs();
+  setBomb(0, 138, 150);                       // squarely on the cannon
+  runHook(S.BOMBHIT_BRK, "cannon hit");
+  ok(vm.peek(S.LIVES) === 2, "a cannon is lost");
+  ok(gameover() === 0, "but the game continues");
+  ok(respawnT() > 0, "a respawn grace window is armed");
+  ok(canx() === 132, "the fresh cannon is re-centred");
+  ok(bombOn(0) === 0, "the incoming bombs are cleared");
+
+  vm.poke(S.LIVES, 1);
+  clearBombs();
+  setBomb(0, 138, 150);
+  runHook(S.BOMBHIT_BRK, "final cannon hit");
+  ok(vm.peek(S.LIVES) === 0, "the last cannon is gone");
+  ok(gameover() === 1, "game over");
+}
+
+// ===== GG) clearing the swarm rolls into a fresh, harder wave ===============
+console.log("GG) flow: clearing the swarm starts the next wave");
+{
+  newGame();                                  // wave=1
+  vm.poke(S.LIVECNT, 0);                       // pretend the swarm was cleared
+  vm.poke(S.BY, 99);                           // ... and had marched down
+  runHook(S.NEXTWAVE_BRK, "next wave");
+  ok(wave() === 2, "advanced to wave 2");
+  ok(livecnt() === 40, "a fresh full swarm");
+  ok(by() === 12, "the new swarm starts back at the top");
+}
+
+// ===== HH) the in-game HUD shows score, lives and wave ======================
+console.log("HH) HUD: the play HUD prints SCORE, LIVES and WAVE");
+{
+  newGame();
+  vm.poke(S.SCORE0, 0x50); vm.poke(S.SCORE1, 0x34); vm.poke(S.SCORE2, 0x12);
+  vm.poke(S.LIVES, 2); vm.poke(S.WAVE, 3);
+  runHook(S.HUD_BRK, "hud play");
+  ok(snapStr(2, 0, 5) === "SCORE", "SCORE label present");
+  ok(snapStr(2, 6, 6) === "123450", `score digits (got ${snapStr(2, 6, 6)})`);
+  ok(snapStr(2, 18, 5) === "LIVES", "LIVES label present");
+  ok(snapStr(2, 24, 1) === "2", "lives count shown");
+  ok(snapStr(2, 28, 4) === "WAVE", "WAVE label present");
+  ok(snapStr(2, 33, 1) === "3", "wave number shown");
+}
+
+// ===== II) the attract and game-over HUDs =================================
+console.log("II) HUD: attract shows the title/prompt; game over shows GAME OVER");
+{
+  runHook(S.HUDATT_BRK, "hud attract");
+  ok(snapStr(0, 15, 10) === "STAR SWARM", "title on the attract screen");
+  ok(snapStr(2, 10, 19) === "PRESS SPACE TO PLAY", "start prompt");
+  ok(snapStr(3, 13, 4) === "HIGH", "high-score label");
+
+  runHook(S.HUDOVER_BRK, "hud over");
+  ok(snapStr(0, 15, 9) === "GAME OVER", "game-over banner");
+  ok(snapStr(2, 10, 5) === "SCORE", "final score label");
+  ok(snapStr(3, 10, 19) === "PRESS SPACE TO PLAY", "restart prompt");
+}
+
+// ===== JJ) the high score only ratchets upward ==============================
+console.log("JJ) flow: the high score keeps the best run");
+{
+  newGame();
+  vm.poke(S.HISC0, 0); vm.poke(S.HISC1, 0); vm.poke(S.HISC2, 0);
+  vm.poke(S.SCORE0, 0x00); vm.poke(S.SCORE1, 0x50); vm.poke(S.SCORE2, 0x00); // 005000
+  runHook(S.HISCORE_BRK, "bank first score");
+  ok(vm.peek(S.HISC1) === 0x50, "a new best is recorded");
+  vm.poke(S.SCORE0, 0x00); vm.poke(S.SCORE1, 0x20); vm.poke(S.SCORE2, 0x00); // 002000
+  runHook(S.HISCORE_BRK, "lower score");
+  ok(vm.peek(S.HISC1) === 0x50, "a lower score does not overwrite the best");
+  vm.poke(S.SCORE0, 0x00); vm.poke(S.SCORE1, 0x00); vm.poke(S.SCORE2, 0x01); // 010000
+  runHook(S.HISCORE_BRK, "higher score");
+  ok(vm.peek(S.HISC2) === 0x01, "a higher score takes the crown");
+}
+
+// ===== KK) game over -> SPACE restarts a clean game =========================
+console.log("KK) flow: from game over, SPACE starts a brand new game");
+{
+  newGame();
+  vm.poke(S.GSTATE, 2);                        // GS_OVER
+  vm.poke(S.LIVES, 0);
+  press(0xA0);                                // SPACE
+  runHook(S.FLOW_BRK, "over tick, SPACE");
+  ok(gstate() === 1, "back to the play state");
+  ok(vm.peek(S.LIVES) === 3, "cannons restocked");
+  ok(wave() === 1, "back to wave 1");
+  ok(livecnt() === 40, "a fresh swarm");
+}
+
 // ===== summary ==============================================================
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

@@ -78,7 +78,7 @@ MDROP    = 8            ; drop distance when the swarm reverses
 ; ---- M5: combat (collisions, alien bombs, scoring, lives) ----
 MAXBOMB  = 4            ; simultaneous alien bombs
 BOMB_STEP = 3           ; bomb fall speed (pixels per frame)
-BOMBCD   = 40           ; frames between bomb drops
+BOMBGAP  = 40           ; frames between bomb drops
 LIVES0   = 3            ; starting cannons
 
 ; ---- M6: bunkers (destructible shields) + mystery saucer ----
@@ -90,7 +90,17 @@ UFO_Y    = 2            ; saucer flies along the top edge
 UFO_STEP = 2            ; saucer horizontal speed
 UFO_W    = 16           ; saucer width
 UFO_H    = 7            ; saucer height
-UFOCD    = 180          ; frames between saucer fly-bys
+UFOGAP   = 180          ; frames between saucer fly-bys
+
+; ---- M7: game flow (states, waves, HUD, high score) ----
+GS_ATTRACT = 0          ; title screen
+GS_PLAY    = 1          ; playing
+GS_OVER    = 2          ; game over
+LANDLINE   = 140        ; swarm bottom reaching this row = invasion (game over)
+RESPAWNF   = 45         ; respawn grace frames after a cannon is hit
+HUD20    = $0650        ; text page 1 row 20 (first visible mixed-mode text row)
+HUD22    = $0750        ; text page 1 row 22
+HUD23    = $07D0        ; text page 1 row 23
 
 ; ---- zero page (only the (zp),y pointers live here) ----
 ptr      = $06          ; screen dest pointer            (+1)
@@ -209,6 +219,15 @@ ecy      = $6A73        ; erosion centre y
 exi      = $6A74        ; erosion inner (column) counter
 eyi      = $6A75        ; erosion outer (row) counter
 
+; ---- M7: flow state ----
+gstate   = $6A76        ; 0 attract, 1 play, 2 over
+wave     = $6A77        ; current wave number (1-based)
+gameover = $6A78        ; nonzero once the last cannon is lost or the swarm lands
+respawn  = $6A79        ; respawn grace timer (frames; halts bomb drops)
+hisc0    = $6A7A        ; BCD high score, little-endian, 3 bytes
+hisc1    = $6A7B
+hisc2    = $6A7C
+
 alive    = $6A80        ; NALIEN alive flags ($6A80..$6AA7)
 
 ; ---- M5: alien bombs (parallel arrays, MAXBOMB wide) ----
@@ -232,9 +251,11 @@ start:
         ldx #$FF
         txs
         jsr video_init
-        jsr init_cannon
-        jsr init_formation
-        jsr init_bunkers
+        lda #0                  ; zero the high score at power-on
+        sta hisc0
+        sta hisc1
+        sta hisc2
+        jsr enter_attract
 sg_loop:
         jsr game_frame
         jsr frame_delay
@@ -273,7 +294,7 @@ init_cannon:
         sta score2
         lda #LIVES0
         sta lives
-        lda #BOMBCD
+        lda #BOMBGAP
         sta bombcd
         lda #$5A                ; seed the LFSR (any nonzero pattern)
         sta seed
@@ -282,7 +303,7 @@ init_cannon:
         lda #0
         sta ufoact              ; no saucer yet
         sta ufodrawn
-        lda #UFOCD
+        lda #UFOGAP
         sta ufocd
         ldx #0
         lda #0
@@ -295,9 +316,11 @@ ic_bclr:
         rts
 
 ; ---------------------------------------------------------------------------
-; game_frame : one tick — erase, read input, move, redraw, march, decay.
+; play_frame : one gameplay tick — erase, read input, move, redraw, march, decay.
+;   The state machine's PLAY branch (play_state) wraps this with wave/landing/
+;   life-loss handling; frame_brk exercises this raw tick directly.
 ; ---------------------------------------------------------------------------
-game_frame:
+play_frame:
         jsr erase_cannon
         jsr erase_shot
         jsr erase_bombs
@@ -1050,8 +1073,11 @@ ub_n:
         dec bombcd
         rts
 ub_spawn:
+        lda respawn             ; hold fire while a fresh cannon is respawning
+        bne ub_nofire
         jsr spawn_bomb
-        lda #BOMBCD
+ub_nofire:
+        lda #BOMBGAP
         sta bombcd
         rts
 
@@ -1181,16 +1207,41 @@ kbh_n:
         rts
 
 ; ---------------------------------------------------------------------------
-; bomb_hit : remove bomb `bi` and dock a life.
+; bomb_hit : remove bomb `bi`, dock a life.  If cannons remain, respawn (recentre
+;   + clear the incoming bombs + brief grace); otherwise flag game over.
 ; ---------------------------------------------------------------------------
 bomb_hit:
         ldx bi
         lda #0
         sta bact,x
         lda lives
-        beq bh_ret
+        beq bh_ret              ; already out of cannons
         dec lives
+        beq bh_dead
+        jsr respawn_cannon
+        rts
+bh_dead:
+        lda #1
+        sta gameover
 bh_ret:
+        rts
+
+; respawn_cannon : recentre the cannon, clear every incoming bomb, arm a short
+;   grace window so the fresh cannon is not immediately shelled again.
+respawn_cannon:
+        lda #<CAN_X0
+        sta canxl
+        lda #>CAN_X0
+        sta canxh
+        lda #RESPAWNF
+        sta respawn
+        ldx #0
+        lda #0
+rc_l:
+        sta bact,x
+        inx
+        cpx #MAXBOMB
+        bne rc_l
         rts
 
 ; ---------------------------------------------------------------------------
@@ -1524,7 +1575,7 @@ uu_move:
 uu_gone:
         lda #0
         sta ufoact
-        lda #UFOCD
+        lda #UFOGAP
         sta ufocd
         rts
 uu_left:
@@ -1578,7 +1629,7 @@ check_shot_ufo:
         lda #0                  ; hit!
         sta ufoact
         sta shtact
-        lda #UFOCD
+        lda #UFOGAP
         sta ufocd
         jsr score_ufo
 csu_ret:
@@ -1905,6 +1956,438 @@ RANKSCORE:                      ; BCD points awarded per rank (A/B/C)
 BUNKX:                          ; left-edge x of each shield
         .byte 30,100,170,240
 
+; ===========================================================================
+; M7 : game flow — attract / play / over state machine, waves, lives, HUD
+; ===========================================================================
+
+; ---------------------------------------------------------------------------
+; game_frame : dispatch one tick on the current game state.
+; ---------------------------------------------------------------------------
+game_frame:
+        lda gstate
+        cmp #GS_PLAY
+        beq gf_play
+        cmp #GS_OVER
+        beq gf_over
+        jmp attract_frame
+gf_play:
+        jmp play_state
+gf_over:
+        jmp over_frame
+
+; ---------------------------------------------------------------------------
+; play_state : the PLAY branch — run a gameplay tick, then handle respawn
+;   grace, the swarm landing, wave refills, the HUD and the game-over hand-off.
+; ---------------------------------------------------------------------------
+play_state:
+        jsr play_frame
+        lda respawn
+        beq ps_nore
+        dec respawn
+ps_nore:
+        jsr check_landing
+        lda livecnt
+        bne ps_alv
+        jsr next_wave
+ps_alv:
+        jsr hud_play
+        lda gameover
+        beq ps_ret
+        jsr enter_over
+ps_ret:
+        rts
+
+; ---------------------------------------------------------------------------
+; attract_frame : title screen — draw the HUD, wait for SPACE to launch a game.
+; ---------------------------------------------------------------------------
+attract_frame:
+        jsr hud_attract
+        jsr poll_space
+        bcc af_ret
+        jsr enter_play
+af_ret:
+        rts
+
+; ---------------------------------------------------------------------------
+; over_frame : game-over screen — show the result, wait for SPACE to restart.
+; ---------------------------------------------------------------------------
+over_frame:
+        jsr hud_over
+        jsr poll_space
+        bcc of_ret
+        jsr enter_play
+of_ret:
+        rts
+
+; ---------------------------------------------------------------------------
+; enter_attract : reset to the title screen.
+; ---------------------------------------------------------------------------
+enter_attract:
+        lda #GS_ATTRACT
+        sta gstate
+        lda #0
+        sta gameover
+        sta respawn
+        jsr clear_screen
+        rts
+
+; ---------------------------------------------------------------------------
+; enter_play : start a fresh game — clear the field, reset score/lives, build
+;   the swarm and the shields.
+; ---------------------------------------------------------------------------
+enter_play:
+        lda #GS_PLAY
+        sta gstate
+        lda #0
+        sta gameover
+        sta respawn
+        lda #1
+        sta wave
+        jsr clear_screen
+        jsr init_cannon
+        jsr init_formation
+        jsr init_bunkers
+        rts
+
+; ---------------------------------------------------------------------------
+; enter_over : switch to the game-over state, banking a new high score.
+; ---------------------------------------------------------------------------
+enter_over:
+        lda #GS_OVER
+        sta gstate
+        jsr update_hiscore
+        rts
+
+; ---------------------------------------------------------------------------
+; next_wave : the swarm was cleared — bump the wave count and rebuild the field.
+;   (Score and lives carry over; a fresh swarm at full strength speeds up again
+;   as its ranks thin.)
+; ---------------------------------------------------------------------------
+next_wave:
+        inc wave
+        jsr init_formation
+        jsr init_bunkers
+        rts
+
+; ---------------------------------------------------------------------------
+; check_landing : if the lowest live alien has descended to the invasion line,
+;   the swarm has landed — game over.
+; ---------------------------------------------------------------------------
+check_landing:
+        lda livecnt
+        bne cld_go
+        rts
+cld_go:
+        ldx #0
+        stx btmp                ; lowest live rank seen so far
+cld_l:
+        lda alive,x
+        beq cld_nx
+        txa
+        lsr a
+        lsr a
+        lsr a                   ; rank = index / NCOLS (NCOLS=8)
+        cmp btmp
+        bcc cld_nx
+        sta btmp
+cld_nx:
+        inx
+        cpx #NALIEN
+        bne cld_l
+        ldx btmp                ; bottom = by + ROWYOFF[rank] + ALIEN_H
+        lda by
+        clc
+        adc ROWYOFF,x
+        clc
+        adc #ALIEN_H
+        cmp #LANDLINE
+        bcc cld_safe
+        lda #1
+        sta gameover
+cld_safe:
+        rts
+
+; ---------------------------------------------------------------------------
+; update_hiscore : copy the score into the high score if it is now higher
+;   (6-digit BCD, little-endian: score2 is most significant).
+; ---------------------------------------------------------------------------
+update_hiscore:
+        lda score2
+        cmp hisc2
+        bcc uh_no
+        bne uh_yes
+        lda score1
+        cmp hisc1
+        bcc uh_no
+        bne uh_yes
+        lda score0
+        cmp hisc0
+        bcc uh_no
+        beq uh_no
+uh_yes:
+        lda score0
+        sta hisc0
+        lda score1
+        sta hisc1
+        lda score2
+        sta hisc2
+uh_no:
+        rts
+
+; ---------------------------------------------------------------------------
+; poll_space : carry set if SPACE is down this frame (clears the strobe).
+; ---------------------------------------------------------------------------
+poll_space:
+        lda KBD
+        bpl ps_no
+        sta keyin
+        lda KBDSTRB
+        lda keyin
+        cmp #K_SPACE
+        beq ps_yes
+ps_no:
+        clc
+        rts
+ps_yes:
+        sec
+        rts
+
+; ---------------------------------------------------------------------------
+; M7 HUD : text page 1 rows 20-23, visible under the mixed hi-res field.
+;   Source strings are plain ASCII; ORA #$80 gives normal-video characters.
+;   ptr ($06) = destination cell, sprptr ($08) = source string (both free here).
+; ---------------------------------------------------------------------------
+
+; hud_clear : blank the four text HUD rows with spaces.
+hud_clear:
+        ldx #0
+hc_row:
+        lda HUDBL,x
+        sta ptr
+        lda HUDBH,x
+        sta ptr+1
+        lda #$A0
+        ldy #39
+hc_col:
+        sta (ptr),y
+        dey
+        bpl hc_col
+        inx
+        cpx #4
+        bne hc_row
+        rts
+
+; puts : copy the $00-terminated ASCII string at (sprptr) to (ptr), hi-bit set.
+puts:
+        ldy #0
+puts_l:
+        lda (sprptr),y
+        beq puts_d
+        ora #$80
+        sta (ptr),y
+        iny
+        bne puts_l
+puts_d:
+        rts
+
+; sc_byte : A = BCD byte, Y = cell; writes two digits at (ptr),Y and Y += 2.
+sc_byte:
+        pha
+        lsr a
+        lsr a
+        lsr a
+        lsr a
+        ora #$B0
+        sta (ptr),y
+        iny
+        pla
+        and #$0F
+        ora #$B0
+        sta (ptr),y
+        iny
+        rts
+
+; put_score : write the 6-digit BCD score at (ptr) (cells 0..5).
+put_score:
+        ldy #0
+        lda score2
+        jsr sc_byte
+        lda score1
+        jsr sc_byte
+        lda score0
+        jsr sc_byte
+        rts
+
+; put_high : write the 6-digit BCD high score at (ptr).
+put_high:
+        ldy #0
+        lda hisc2
+        jsr sc_byte
+        lda hisc1
+        jsr sc_byte
+        lda hisc0
+        jsr sc_byte
+        rts
+
+; hud_play : SCORE nnnnnn ... LIVES n ... WAVE n   (row 22)
+hud_play:
+        jsr hud_clear
+        lda #<HUD22
+        sta ptr
+        lda #>HUD22
+        sta ptr+1
+        lda #<MSG_SCORE
+        sta sprptr
+        lda #>MSG_SCORE
+        sta sprptr+1
+        jsr puts
+        lda #<(HUD22+6)
+        sta ptr
+        lda #>(HUD22+6)
+        sta ptr+1
+        jsr put_score
+        lda #<(HUD22+18)
+        sta ptr
+        lda #>(HUD22+18)
+        sta ptr+1
+        lda #<MSG_LIVES
+        sta sprptr
+        lda #>MSG_LIVES
+        sta sprptr+1
+        jsr puts
+        lda lives
+        ora #$B0
+        ldy #6                  ; ptr = HUD22+18 -> col 24
+        sta (ptr),y
+        lda #<(HUD22+28)
+        sta ptr
+        lda #>(HUD22+28)
+        sta ptr+1
+        lda #<MSG_WAVE
+        sta sprptr
+        lda #>MSG_WAVE
+        sta sprptr+1
+        jsr puts
+        lda wave
+        cmp #10
+        bcc hp_w
+        lda #9
+hp_w:
+        ora #$B0
+        ldy #5                  ; ptr = HUD22+28 -> col 33
+        sta (ptr),y
+        rts
+
+; hud_attract : the title, the start prompt, and the high score.
+hud_attract:
+        jsr hud_clear
+        lda #<(HUD20+15)
+        sta ptr
+        lda #>(HUD20+15)
+        sta ptr+1
+        lda #<MSG_TITLE
+        sta sprptr
+        lda #>MSG_TITLE
+        sta sprptr+1
+        jsr puts
+        lda #<(HUD22+10)
+        sta ptr
+        lda #>(HUD22+10)
+        sta ptr+1
+        lda #<MSG_START
+        sta sprptr
+        lda #>MSG_START
+        sta sprptr+1
+        jsr puts
+        lda #<(HUD23+13)
+        sta ptr
+        lda #>(HUD23+13)
+        sta ptr+1
+        lda #<MSG_HIGH
+        sta sprptr
+        lda #>MSG_HIGH
+        sta sprptr+1
+        jsr puts
+        lda #<(HUD23+18)
+        sta ptr
+        lda #>(HUD23+18)
+        sta ptr+1
+        jsr put_high
+        rts
+
+; hud_over : GAME OVER, the final score, and the restart prompt.
+hud_over:
+        jsr hud_clear
+        lda #<(HUD20+15)
+        sta ptr
+        lda #>(HUD20+15)
+        sta ptr+1
+        lda #<MSG_OVER
+        sta sprptr
+        lda #>MSG_OVER
+        sta sprptr+1
+        jsr puts
+        lda #<(HUD22+10)
+        sta ptr
+        lda #>(HUD22+10)
+        sta ptr+1
+        lda #<MSG_SCORE
+        sta sprptr
+        lda #>MSG_SCORE
+        sta sprptr+1
+        jsr puts
+        lda #<(HUD22+16)
+        sta ptr
+        lda #>(HUD22+16)
+        sta ptr+1
+        jsr put_score
+        lda #<(HUD23+10)
+        sta ptr
+        lda #>(HUD23+10)
+        sta ptr+1
+        lda #<MSG_START
+        sta sprptr
+        lda #>MSG_START
+        sta sprptr+1
+        jsr puts
+        rts
+
+; hud_snapshot : copy the four live HUD rows into safe RAM ($6B00..) so tests
+;   can read them after the BRK monitor scribbles over the text page.
+hud_snapshot:
+        ldx #0
+hsn_row:
+        lda HUDBL,x
+        sta ptr
+        lda HUDBH,x
+        sta ptr+1
+        lda SNAPL,x
+        sta sprptr
+        lda SNAPH,x
+        sta sprptr+1
+        ldy #39
+hsn_col:
+        lda (ptr),y
+        sta (sprptr),y
+        dey
+        bpl hsn_col
+        inx
+        cpx #4
+        bne hsn_row
+        rts
+
+HUDBL:  .byte $50,$D0,$50,$D0    ; text rows 20,21,22,23 low bytes
+HUDBH:  .byte $06,$06,$07,$07    ; ... high bytes
+SNAPL:  .byte $00,$28,$50,$78    ; snapshot rows at $6B00/$6B28/$6B50/$6B78
+SNAPH:  .byte $6B,$6B,$6B,$6B
+MSG_TITLE: .asciiz "STAR SWARM"
+MSG_START: .asciiz "PRESS SPACE TO PLAY"
+MSG_OVER:  .asciiz "GAME OVER"
+MSG_SCORE: .asciiz "SCORE"
+MSG_LIVES: .asciiz "LIVES"
+MSG_WAVE:  .asciiz "WAVE"
+MSG_HIGH:  .asciiz "HIGH"
+
 ; ---------------------------------------------------------------------------
 ; BRK test hooks (headless harness entry points)
 ; ---------------------------------------------------------------------------
@@ -1921,7 +2404,7 @@ init_brk:
         jsr init_cannon
         brk
 frame_brk:
-        jsr game_frame
+        jsr play_frame
         brk
 initform_brk:
         jsr init_formation
@@ -1965,4 +2448,34 @@ updufo_brk:
         brk
 shotufo_brk:
         jsr check_shot_ufo
+        brk
+flow_brk:
+        jsr game_frame
+        brk
+attract_brk:
+        jsr enter_attract
+        brk
+newgame_brk:
+        jsr enter_play
+        brk
+land_brk:
+        jsr check_landing
+        brk
+nextwave_brk:
+        jsr next_wave
+        brk
+hiscore_brk:
+        jsr update_hiscore
+        brk
+hud_brk:
+        jsr hud_play
+        jsr hud_snapshot
+        brk
+hudatt_brk:
+        jsr hud_attract
+        jsr hud_snapshot
+        brk
+hudover_brk:
+        jsr hud_over
+        jsr hud_snapshot
         brk
