@@ -41,6 +41,22 @@ WIDTH    = 280          ; sprite playfield width  (pixels, = 40 bytes)
 HEIGHT   = 160          ; sprite playfield height (top 20 rows; rest is HUD)
 NCOL     = 40           ; screen bytes per row (280/7)
 
+; ---- player cannon geometry ----
+CAN_Y    = 148          ; cannon top row (occupies rows 148..155, just above HUD)
+CAN_W    = 15           ; cannon sprite width
+CAN_XMAX = 265          ; right-most left-edge x = WIDTH - CAN_W
+CAN_X0   = 132          ; start x (roughly centred)
+CAN_STEP = 3            ; cannon travel per frame while a move key is held
+
+; ---- keyboard (Apple II key codes carry bit7) ----
+K_A      = $C1
+K_LARR   = $88
+K_D      = $C4
+K_RARR   = $95
+K_SPACE  = $A0
+HOLD     = 4            ; frames an intent stays live after its key event
+DELAYO   = 24           ; frame-pacing busy-wait outer count
+
 ; ---- zero page (only the (zp),y pointers live here) ----
 ptr      = $06          ; screen dest pointer            (+1)
 sprptr   = $08          ; sprite-data pointer            (+1)
@@ -71,6 +87,17 @@ rowvis   = $6A13        ; 1 = this row is on-screen
 mrowh    = $6A14        ; current mask row (16-bit, shifted left per pixel)
 mrowl    = $6A15
 
+; ---- M2: player cannon state + input ----
+canxl    = $6A20        ; cannon left-edge x (16-bit; can exceed 255)
+canxh    = $6A21
+candrawn = $6A22        ; 0 until first draw (suppresses first erase)
+lcanxl   = $6A23        ; last-drawn x (for XOR erase)
+lcanxh   = $6A24
+hleft    = $6A25        ; move-left  intent hold-timer (frames)
+hright   = $6A26        ; move-right intent hold-timer
+hfire    = $6A27        ; fire       intent hold-timer (used from M3)
+keyin    = $6A28        ; last key read this frame
+
         .org $0800
 
 ; ---------------------------------------------------------------------------
@@ -82,8 +109,11 @@ start:
         ldx #$FF
         txs
         jsr video_init
-hlt:
-        jmp hlt
+        jsr init_cannon
+sg_loop:
+        jsr game_frame
+        jsr frame_delay
+        jmp sg_loop
 
 ; ---------------------------------------------------------------------------
 ; video_init : select hi-res mixed mode, build the row table, clear the screen.
@@ -95,6 +125,188 @@ video_init:
         lda HIRES_SW            ; hi-res
         jsr build_rows
         jsr clear_screen
+        rts
+
+; ---------------------------------------------------------------------------
+; init_cannon : place the cannon at centre-screen, undrawn, intents clear.
+; ---------------------------------------------------------------------------
+init_cannon:
+        lda #<CAN_X0
+        sta canxl
+        lda #>CAN_X0
+        sta canxh
+        lda #0
+        sta candrawn
+        sta hleft
+        sta hright
+        sta hfire
+        rts
+
+; ---------------------------------------------------------------------------
+; game_frame : one tick — erase, read input, move, redraw, decay timers.
+; ---------------------------------------------------------------------------
+game_frame:
+        jsr erase_cannon
+        jsr read_input
+        jsr move_cannon
+        jsr draw_cannon
+        jsr decay_timers
+        rts
+
+; ---------------------------------------------------------------------------
+; read_input : poll the keyboard; refresh the matching intent hold-timer.
+;   (Apple II reports one key at a time; held keys + OS auto-repeat keep the
+;    intent alive via the hold-timers.)
+; ---------------------------------------------------------------------------
+read_input:
+        lda KBD
+        bpl ri_ret              ; bit7 clear -> no key waiting
+        sta keyin
+        lda KBDSTRB             ; clear the strobe
+        lda keyin
+        cmp #K_A
+        beq ri_left
+        cmp #K_LARR
+        beq ri_left
+        cmp #K_D
+        beq ri_right
+        cmp #K_RARR
+        beq ri_right
+        cmp #K_SPACE
+        beq ri_fire
+        rts
+ri_left:
+        lda #HOLD
+        sta hleft
+        rts
+ri_right:
+        lda #HOLD
+        sta hright
+        rts
+ri_fire:
+        lda #HOLD
+        sta hfire
+ri_ret:
+        rts
+
+; ---------------------------------------------------------------------------
+; move_cannon : slide the cannon by CAN_STEP for each live move intent,
+;   clamped to [0, CAN_XMAX].
+; ---------------------------------------------------------------------------
+move_cannon:
+        lda hleft
+        beq mc_right
+        sec                     ; canx -= CAN_STEP  (16-bit)
+        lda canxl
+        sbc #CAN_STEP
+        sta canxl
+        lda canxh
+        sbc #0
+        sta canxh
+        lda canxh               ; underflow past 0 -> clamp to 0
+        bpl mc_right
+        lda #0
+        sta canxl
+        sta canxh
+mc_right:
+        lda hright
+        beq mc_ret
+        clc                     ; canx += CAN_STEP
+        lda canxl
+        adc #CAN_STEP
+        sta canxl
+        lda canxh
+        adc #0
+        sta canxh
+        lda canxh               ; clamp to CAN_XMAX (265 = $0109)
+        cmp #>CAN_XMAX
+        bcc mc_ret
+        bne mc_clamp
+        lda canxl
+        cmp #<CAN_XMAX
+        bcc mc_ret
+        beq mc_ret
+mc_clamp:
+        lda #<CAN_XMAX
+        sta canxl
+        lda #>CAN_XMAX
+        sta canxh
+mc_ret:
+        rts
+
+; ---------------------------------------------------------------------------
+; erase_cannon : XOR the cannon off at its last-drawn x (only if drawn).
+; ---------------------------------------------------------------------------
+erase_cannon:
+        lda candrawn
+        beq ec_ret
+        lda #<SPR_CANNON
+        sta sprptr
+        lda #>SPR_CANNON
+        sta sprptr+1
+        lda lcanxl
+        sta sx
+        lda lcanxh
+        sta sxh
+        lda #CAN_Y
+        sta sy
+        jsr draw_sprite
+ec_ret:
+        rts
+
+; ---------------------------------------------------------------------------
+; draw_cannon : XOR the cannon on at canx, and remember where.
+; ---------------------------------------------------------------------------
+draw_cannon:
+        lda #<SPR_CANNON
+        sta sprptr
+        lda #>SPR_CANNON
+        sta sprptr+1
+        lda canxl
+        sta sx
+        lda canxh
+        sta sxh
+        lda #CAN_Y
+        sta sy
+        jsr draw_sprite
+        lda canxl
+        sta lcanxl
+        lda canxh
+        sta lcanxh
+        lda #1
+        sta candrawn
+        rts
+
+; ---------------------------------------------------------------------------
+; decay_timers : count each intent hold-timer down toward 0.
+; ---------------------------------------------------------------------------
+decay_timers:
+        lda hleft
+        beq dk1
+        dec hleft
+dk1:
+        lda hright
+        beq dk2
+        dec hright
+dk2:
+        lda hfire
+        beq dk_ret
+        dec hfire
+dk_ret:
+        rts
+
+; ---------------------------------------------------------------------------
+; frame_delay : crude busy-wait to pace the game (main loop only).
+; ---------------------------------------------------------------------------
+frame_delay:
+        ldy #DELAYO
+fd_o:
+        ldx #0
+fd_i:
+        dex
+        bne fd_i
+        dey
+        bne fd_o
         rts
 
 ; ---------------------------------------------------------------------------
@@ -353,4 +565,10 @@ clear_brk:
         brk
 sprite_brk:
         jsr draw_sprite
+        brk
+init_brk:
+        jsr init_cannon
+        brk
+frame_brk:
+        jsr game_frame
         brk

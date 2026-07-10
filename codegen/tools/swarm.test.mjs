@@ -62,6 +62,13 @@ function drawSprite(sprAddr, x, y) {
   runHook(S.SPRITE_BRK, `sprite@(${x},${y})`);
 }
 
+// ---- M2 input / frame helpers ----
+const press = (k) => vm.poke(0xC000, k);      // key codes already carry bit7
+const clearKey = () => vm.poke(0xC000, 0);
+const frame = () => runHook(S.FRAME_BRK, "frame");
+const initCannon = () => runHook(S.INIT_BRK, "init cannon");
+const canx = () => vm.peek(S.CANXL) | (vm.peek(S.CANXH) << 8);
+
 // build the row table once, then reuse
 runHook(S.BUILD_BRK, "build_rows");
 
@@ -161,6 +168,65 @@ console.log("D) clip: left / right / bottom edges");
     let below = boxLit(100, 160, 111, 163);
     ok(below === 0, "bottom-clip: nothing drawn below the playfield floor");
   }
+}
+
+// ===== E) cannon: init + first draw =========================================
+console.log("E) cannon: spawns centred and renders");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  initCannon();
+  clearKey();
+  frame();                                // first frame draws the cannon
+  ok(canx() === 132, `cannon starts at x=132 (got ${canx()})`);
+  const spr = decodeSprite(S.SPR_CANNON);
+  let exact = true;
+  for (let r = 0; r < spr.H; r++)
+    for (let x = 0; x < spr.W; x++)
+      if (getpix(132 + x, 148 + r) !== spr.rows[r][x]) exact = false;
+  ok(exact, "cannon renders exactly at (132,148)");
+  ok(vm.peek(S.CANDRAWN) === 1, "cannon marked drawn");
+}
+
+// ===== F) cannon: movement + edge clamps ====================================
+console.log("F) cannon: moves under held keys and clamps at both edges");
+{
+  // a real Apple II clears the key strobe on read, so a held key re-latches
+  // via auto-repeat — simulate that by re-pressing each frame.
+  const hold = (k, n) => { for (let i = 0; i < n; i++) { press(k); frame(); } };
+
+  runHook(S.CLEAR_BRK, "clear");
+  initCannon();
+  clearKey(); frame();                     // draw at 132
+  hold(S.K_D, 5);                          // 5 * 3 px right
+  ok(canx() === 132 + 15, `held D moves right to 147 (got ${canx()})`);
+
+  hold(S.K_D, 80);                         // keep holding into the wall
+  ok(canx() === 265, `clamps at right edge 265 (got ${canx()})`);
+
+  hold(S.K_LARR, 120);                     // hold left past the wall
+  ok(canx() === 0, `clamps at left edge 0 (got ${canx()})`);
+
+  // release: cannon coasts out its hold-timer then stops for good
+  clearKey(); press(S.K_D); frame(); clearKey();
+  for (let i = 0; i < 12; i++) frame();
+  const a = canx();
+  for (let i = 0; i < 12; i++) frame();
+  ok(canx() === a, `cannon halts after key release (${a} == ${canx()})`);
+}
+
+// ===== G) cannon: erase-redraw leaves no trail ==============================
+console.log("G) cannon: XOR erase-redraw leaves exactly one cannon");
+{
+  const pop = decodeSprite(S.SPR_CANNON).pop;
+  runHook(S.CLEAR_BRK, "clear");
+  initCannon();
+  clearKey(); frame();                      // draw at 132
+  press(S.K_D);
+  for (let i = 0; i < 4; i++) frame();       // slide right a few steps
+  clearKey();
+  let band = 0;
+  for (let y = 148; y <= 155; y++) for (let x = 0; x < 280; x++) band += getpix(x, y);
+  ok(band === pop, `one cannon on screen, no trail (got ${band}, want ${pop})`);
 }
 
 // ===== summary ==============================================================
