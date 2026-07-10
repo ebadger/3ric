@@ -176,6 +176,7 @@ chsize   = $6A76          ; spawn_child: child size
 ctmp     = $6A77          ; spawn_child: velocity-doubling temp
 gstate   = $6A78          ; game state: 0 attract, 1 playing, 2 game over
 wave     = $6A79          ; current wave number (1-based)
+fldrawn  = $6A7A          ; 1 = thrust flame currently XOR-drawn on screen
 
 ; ---- tunables ----
 HOLD     = 4              ; frames an action stays live after its key event
@@ -299,6 +300,7 @@ init_ship:
         sta hright
         sta hthr
         sta hfire
+        sta fldrawn
         rts
 
 ; ---------------------------------------------------------------------------
@@ -324,6 +326,7 @@ play_frame:
         jsr start_wave
 pf_go:
         jsr erase_ship
+        jsr erase_flame
         jsr erase_bullets
         jsr erase_rocks
         jsr read_input
@@ -336,6 +339,7 @@ pf_go:
         jsr update_rocks
         jsr collisions
         jsr draw_ship
+        jsr draw_flame
         jsr draw_bullets
         jsr draw_rocks
         jsr decay_timers
@@ -633,6 +637,41 @@ draw_ship:
         lda #1
         sta SHIP+o_drawn
 ds_ret:
+        rts
+
+; render_flame / erase_flame / draw_flame : the thrust flame, drawn as its own
+;   XOR polygon behind the ship so it can blink on and off with the engine
+;   without disturbing the ship's own erase-redraw bookkeeping.
+render_flame:
+        lda SHIP+o_xl
+        sta cenx
+        lda SHIP+o_xh
+        sta cenh
+        lda SHIP+o_yl
+        sta ceny
+        lda SHIP+o_ang
+        jsr set_flame_vp
+        jsr draw_poly
+        rts
+
+erase_flame:
+        lda fldrawn
+        beq ef_ret
+        jsr render_flame
+ef_ret:
+        rts
+
+draw_flame:
+        lda #0
+        sta fldrawn             ; default: no flame this frame
+        lda SHIP+o_act
+        beq dfl_ret             ; ship gone -> no flame
+        lda hthr
+        beq dfl_ret             ; engine idle -> no flame
+        jsr render_flame
+        lda #1
+        sta fldrawn
+dfl_ret:
         rts
 
 ; ---------------------------------------------------------------------------
@@ -1808,6 +1847,33 @@ set_ship_vp:
         sta vcount
         rts
 
+; set_flame_vp : point vpx/vpy at the flame triangle for angle A (0..31),
+;                vcount = 3.
+set_flame_vp:
+        and #(NANG-1)
+        sta tmpb                ; angle
+        asl a                   ; angle*2
+        clc
+        adc tmpb                ; angle*3 (3 verts per angle)
+        sta tmpa
+        clc
+        lda #<FLAMEX
+        adc tmpa
+        sta vpx
+        lda #>FLAMEX
+        adc #0
+        sta vpx+1
+        clc
+        lda #<FLAMEY
+        adc tmpa
+        sta vpy
+        lda #>FLAMEY
+        adc #0
+        sta vpy+1
+        lda #3
+        sta vcount
+        rts
+
 ; ---------------------------------------------------------------------------
 ; draw_poly : XOR a closed ring of vcount vertices.
 ;   inputs: cenx/cenh (centre x, 16-bit signed), ceny (centre y 0..159),
@@ -2290,6 +2356,10 @@ NOSEX:
         .byte 7,7,6,6,5,4,3,1,0,255,253,252,251,250,250,249,249,249,250,250,251,252,253,255,0,1,3,4,5,6,6,7
 NOSEY:
         .byte 0,1,3,4,5,6,6,7,7,7,6,6,5,4,3,1,0,255,253,252,251,250,250,249,249,249,250,250,251,252,253,255
+FLAMEX:
+        .byte 252,247,252,252,247,252,253,248,252,254,249,252,255,250,252,255,251,252,0,253,253,1,254,253,2,0,254,3,2,255,3,3,0,4,5,1,4,6,1,4,7,2,4,8,3,4,9,4,4,9,4,4,9,4,3,8,4,2,7,4,1,6,4,1,5,4,0,3,3,255,2,3,254,0,2,253,254,1,253,253,0,252,251,255,252,250,255,252,249,254,252,248,253,252,247,252
+FLAMEY:
+        .byte 254,0,2,253,254,1,253,253,0,252,251,255,252,250,255,252,249,254,252,248,253,252,247,252,252,247,252,252,247,252,253,248,252,254,249,252,255,250,252,255,251,252,0,253,253,1,254,253,2,0,254,3,2,255,3,3,0,4,5,1,4,6,1,4,7,2,4,8,3,4,9,4,4,9,4,4,9,4,3,8,4,2,7,4,1,6,4,1,5,4,0,3,3,255,2,3
 ACCX:
         .byte 40,39,37,33,28,22,15,8,0,248,241,234,228,223,219,217,216,217,219,223,228,234,241,248,0,8,15,22,28,33,37,39
 ACCY:

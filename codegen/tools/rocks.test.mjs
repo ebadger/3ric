@@ -534,5 +534,31 @@ console.log("AE) game over on the last life, then SPACE restarts");
   ok(vm.peek(S.GAMEOVER) === 0, "restart clears the game-over flag");
 }
 
+// AF) the engine flame lights under thrust and clears without a trail
+console.log("AF) engine flame lights under thrust and clears when it stops");
+{
+  runHook(S.INIT_BRK, "init"); clearRocks(); clearBullets(); clearKey();
+  frame();                                  // draw the ship once, engine idle
+  const idle = playfieldLit();
+  // park the up-facing ship dead-centre at rest so only the flame changes the picture
+  const park = () => {
+    sb("vxl", 0); sb("vxh", 0); sb("vyl", 0); sb("vyh", 0);
+    sb("xf", 0); sb("xl", 140); sb("xh", 0);
+    sb("yf", 0); sb("yl", 80); sb("yh", 0);
+  };
+  park(); press(S.K_W); frame();            // engine on
+  const firing = playfieldLit();
+  ok(firing > idle, `flame adds pixels behind the ship (${idle} -> ${firing})`);
+  const yF = gb("yl"), xF = gb("xl");        // nose up -> exhaust points down
+  ok(boxLit(xF - 5, yF + 6, xF + 5, yF + 12) > 0,
+     `flame renders below the tail (lit ${boxLit(xF - 5, yF + 6, xF + 5, yF + 12)})`);
+  clearKey();                               // release the throttle
+  for (let i = 0; i < 12; i++) { park(); frame(); }   // hold-timer expires, flame dies
+  ok(playfieldLit() <= idle, `flame fully erased once thrust stops (${playfieldLit()} vs idle ${idle})`);
+  const yR = gb("yl"), xR = gb("xl");        // ship is back at rest here
+  ok(boxLit(xR - 6, yR + 6, xR + 6, yR + 16) === 0,
+     `clean exhaust zone after release (residual ${boxLit(xR - 6, yR + 6, xR + 6, yR + 16)})`);
+}
+
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
