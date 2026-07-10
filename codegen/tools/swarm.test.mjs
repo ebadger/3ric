@@ -513,6 +513,124 @@ console.log("V) bomb: a hit on the cannon docks a life; a near miss does not");
   ok(bombOn(0) === 1, "the bomb keeps falling");
 }
 
+// ---- M6 bunker/saucer helpers ----
+const initBunkers = () => runHook(S.INITBUNK_BRK, "init bunkers");
+const ufoOn = () => vm.peek(S.UFOACT);
+const ufoX = () => vm.peek(S.UFOXL) | (vm.peek(S.UFOXH) << 8);
+const score1 = () => vm.peek(S.SCORE1);
+const BUNKERS = [30, 100, 170, 240];
+function bunkerExact(x0) {
+  const spr = decodeSprite(S.SPR_BUNKER);
+  for (let r = 0; r < spr.H; r++)
+    for (let c = 0; c < spr.W; c++)
+      if (getpix(x0 + c, S.BUNK_Y + r) !== spr.rows[r][c]) return false;
+  return true;
+}
+const bunkerLit = (x0) => boxLit(x0, S.BUNK_Y, x0 + S.BUNK_W - 1, S.BUNK_Y + S.BUNK_H - 1);
+
+// ===== W) bunkers: four shields paint on the defensive line =================
+console.log("W) bunkers: NBUNK shields render exactly above the cannon");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  initBunkers();
+  const pop = decodeSprite(S.SPR_BUNKER).pop;
+  let allExact = true;
+  for (const x0 of BUNKERS) if (!bunkerExact(x0)) allExact = false;
+  ok(allExact, "all four shields match the bunker bitmap");
+  ok(playfieldLit() === 4 * pop, `exactly 4 shields' worth of pixels (${4 * pop})`);
+  ok(S.BUNK_Y === 128, "shields sit in the band above the cannon");
+}
+
+// ===== X) bolt bites a shield and is spent ==================================
+console.log("X) bunker: a bolt hitting a shield erodes it and is consumed");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  initBunkers();
+  const before = bunkerLit(30);
+  setBolt(35, 131);                          // solid part of shield 0
+  runHook(S.SHOTBUNK_BRK, "bolt vs bunker");
+  ok(shtact() === 0, "bolt consumed by the shield");
+  ok(getpix(35, 131) === 0, "impact point cleared");
+  ok(before - bunkerLit(30) === 16, "a 4x4 bite was taken out of the shield");
+  ok(getpix(40, 131) === 1, "shield material away from the bite is intact");
+}
+
+// ===== Y) a bolt in the arch slips past the shield ==========================
+console.log("Y) bunker: a bolt lined up with the arch gap is not stopped");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  initBunkers();
+  const before = bunkerLit(30);
+  setBolt(36, 137);                          // under the arch notch (empty)
+  runHook(S.SHOTBUNK_BRK, "bolt in the gap");
+  ok(shtact() === 1, "bolt keeps climbing through the gap");
+  ok(bunkerLit(30) === before, "shield untouched");
+}
+
+// ===== Z) an alien bomb bites a shield too ==================================
+console.log("Z) bunker: an alien bomb erodes a shield and is spent");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  initBunkers();
+  clearBombs();
+  const before = bunkerLit(100);
+  setBomb(0, 104, 128);                       // bottom edge (132) lands on shield 1
+  runHook(S.BOMBBUNK_BRK, "bomb vs bunker");
+  ok(bombOn(0) === 0, "bomb consumed by the shield");
+  ok(getpix(105, 132) === 0, "impact point cleared");
+  ok(bunkerLit(100) < before, "shield lost material to the bomb");
+}
+
+// ===== AA) mystery saucer: spawns at an edge and glides inward ==============
+console.log("AA) saucer: launches from an edge and moves at a steady speed");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  initCannon();                               // ufoact=0, ufocd armed
+  runHook(S.SPAWNUFO_BRK, "spawn saucer");
+  ok(ufoOn() === 1, "saucer is on screen");
+  const dir = vm.peek(S.UFODIR);
+  ok((dir === 1 && ufoX() === 0) || (dir === 0xFF && ufoX() === 264),
+     `saucer enters from an edge (dir=${dir}, x=${ufoX()})`);
+  vm.poke(S.UFODIR, 1); vm.poke(S.UFOXL, 0); vm.poke(S.UFOXH, 0); vm.poke(S.UFOACT, 1);
+  runHook(S.UPDUFO_BRK, "glide");
+  ok(ufoX() === 2, `advances UFO_STEP per frame (got ${ufoX()})`);
+  runHook(S.UPDUFO_BRK, "glide");
+  ok(ufoX() === 4, `keeps gliding (got ${ufoX()})`);
+}
+
+// ===== BB) saucer: a bolt knocks it down for a 100-point bonus ==============
+console.log("BB) saucer: a bolt hit banks 100 and clears the saucer; a miss does not");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  initCannon();
+  vm.poke(S.UFOACT, 1); vm.poke(S.UFOXL, 100); vm.poke(S.UFOXH, 0); vm.poke(S.UFODIR, 1);
+  vm.poke(S.SCORE1, 0);
+  setBolt(105, 4);                            // inside the saucer box (100..115, y2..8)
+  runHook(S.SHOTUFO_BRK, "bolt vs saucer");
+  ok(ufoOn() === 0, "saucer knocked out");
+  ok(shtact() === 0, "bolt consumed");
+  ok(score1() === 0x01, `+100 banked (hundreds digit, got ${score1().toString(16)})`);
+
+  vm.poke(S.UFOACT, 1); vm.poke(S.UFOXL, 200); vm.poke(S.UFOXH, 0);
+  vm.poke(S.SCORE1, 0);
+  setBolt(105, 4);                            // saucer now far to the right
+  runHook(S.SHOTUFO_BRK, "bolt misses saucer");
+  ok(ufoOn() === 1 && shtact() === 1 && score1() === 0, "a clean miss changes nothing");
+}
+
+// ===== CC) saucer: glides off either edge and is gone =======================
+console.log("CC) saucer: retires once it leaves the screen");
+{
+  runHook(S.CLEAR_BRK, "clear");
+  initCannon();
+  vm.poke(S.UFOACT, 1); vm.poke(S.UFODIR, 1); pokeS16(S.UFOXL, 278);
+  runHook(S.UPDUFO_BRK, "exit right");
+  ok(ufoOn() === 0, "saucer gone off the right edge");
+  vm.poke(S.UFOACT, 1); vm.poke(S.UFODIR, 0xFF); pokeS16(S.UFOXL, 0xFFF0); // x = -16
+  runHook(S.UPDUFO_BRK, "exit left");
+  ok(ufoOn() === 0, "saucer gone off the left edge");
+}
+
 // ===== summary ==============================================================
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

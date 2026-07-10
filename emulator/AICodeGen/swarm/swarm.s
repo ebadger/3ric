@@ -81,6 +81,17 @@ BOMB_STEP = 3           ; bomb fall speed (pixels per frame)
 BOMBCD   = 40           ; frames between bomb drops
 LIVES0   = 3            ; starting cannons
 
+; ---- M6: bunkers (destructible shields) + mystery saucer ----
+NBUNK    = 4            ; number of shields on the defensive line
+BUNK_Y   = 128          ; shield top row (band sits above the cannon)
+BUNK_H   = 10           ; shield height
+BUNK_W   = 14           ; shield width
+UFO_Y    = 2            ; saucer flies along the top edge
+UFO_STEP = 2            ; saucer horizontal speed
+UFO_W    = 16           ; saucer width
+UFO_H    = 7            ; saucer height
+UFOCD    = 180          ; frames between saucer fly-bys
+
 ; ---- zero page (only the (zp),y pointers live here) ----
 ptr      = $06          ; screen dest pointer            (+1)
 sprptr   = $08          ; sprite-data pointer            (+1)
@@ -179,6 +190,25 @@ bcol     = $6A5A        ; spawn: chosen column
 btmp     = $6A5B        ; spawn scratch: free slot
 btmp2    = $6A5C        ; spawn scratch: firing row
 
+; ---- M6: mystery saucer + bunker/pixel scratch ----
+ufoact   = $6A65        ; 1 = saucer on screen
+ufoxl    = $6A66        ; saucer x (16-bit)
+ufoxh    = $6A67
+ufodir   = $6A68        ; +1 = rightward, $FF = leftward
+ufodrawn = $6A69        ; 1 = saucer currently XOR-drawn
+lufoxl   = $6A6A        ; last-drawn saucer x (for XOR erase)
+lufoxh   = $6A6B
+ufocd    = $6A6C        ; frames until the next fly-by
+bki      = $6A6D        ; bunker/bomb pixel loop cursor
+pxx      = $6A6E        ; pixel test/clear x (16-bit)
+pxxh     = $6A6F
+pyy      = $6A70        ; pixel test/clear y
+ecxl     = $6A71        ; erosion centre x (16-bit)
+ecxh     = $6A72
+ecy      = $6A73        ; erosion centre y
+exi      = $6A74        ; erosion inner (column) counter
+eyi      = $6A75        ; erosion outer (row) counter
+
 alive    = $6A80        ; NALIEN alive flags ($6A80..$6AA7)
 
 ; ---- M5: alien bombs (parallel arrays, MAXBOMB wide) ----
@@ -204,6 +234,7 @@ start:
         jsr video_init
         jsr init_cannon
         jsr init_formation
+        jsr init_bunkers
 sg_loop:
         jsr game_frame
         jsr frame_delay
@@ -248,6 +279,11 @@ init_cannon:
         sta seed
         lda #$3C
         sta seed+1
+        lda #0
+        sta ufoact              ; no saucer yet
+        sta ufodrawn
+        lda #UFOCD
+        sta ufocd
         ldx #0
         lda #0
 ic_bclr:
@@ -265,17 +301,23 @@ game_frame:
         jsr erase_cannon
         jsr erase_shot
         jsr erase_bombs
+        jsr erase_ufo
         jsr read_input
         jsr move_cannon
         jsr do_fire
         jsr update_shot
         jsr march_step
         jsr check_bolt_hits
+        jsr check_shot_bunker
+        jsr update_ufo
+        jsr check_shot_ufo
         jsr update_bombs
+        jsr check_bomb_bunker
         jsr check_bomb_hits
         jsr draw_cannon
         jsr draw_shot
         jsr draw_bombs
+        jsr draw_ufo
         jsr decay_timers
         rts
 
@@ -1209,6 +1251,399 @@ rnd_ret:
         lda seed
         rts
 
+; ===========================================================================
+; M6 : destructible bunkers + mystery saucer
+; ===========================================================================
+
+; ---------------------------------------------------------------------------
+; pixlit : A = 1 if the screen pixel at (pxx/pxxh, pyy) is lit, else 0.
+;   Off-screen columns read as 0.  Uses seedcol (cx/cxh -> col/bitn).
+; ---------------------------------------------------------------------------
+pixlit:
+        lda pxx
+        sta cx
+        lda pxxh
+        sta cxh
+        jsr seedcol
+        lda col
+        bmi pl_zero             ; col < 0
+        cmp #NCOL
+        bcs pl_zero             ; col >= 40
+        ldy pyy
+        lda ROWL,y
+        sta ptr
+        lda ROWH,y
+        sta ptr+1
+        ldx bitn
+        ldy col
+        lda (ptr),y
+        and BITMASK,x
+        beq pl_zero
+        lda #1
+        rts
+pl_zero:
+        lda #0
+        rts
+
+; ---------------------------------------------------------------------------
+; clrpix : clear the screen pixel at (pxx/pxxh, pyy).  Off-screen -> no-op.
+; ---------------------------------------------------------------------------
+clrpix:
+        lda pyy
+        cmp #HEIGHT
+        bcs cp_ret              ; keep erosion inside the playfield
+        lda pxx
+        sta cx
+        lda pxxh
+        sta cxh
+        jsr seedcol
+        lda col
+        bmi cp_ret
+        cmp #NCOL
+        bcs cp_ret
+        ldy pyy
+        lda ROWL,y
+        sta ptr
+        lda ROWH,y
+        sta ptr+1
+        ldx bitn
+        lda BITMASK,x
+        eor #$FF                ; ~bit
+        ldy col
+        and (ptr),y
+        sta (ptr),y
+cp_ret:
+        rts
+
+; ---------------------------------------------------------------------------
+; erode : clear a 4x4 pixel bite centred on (ecxl/ecxh, ecy).
+; ---------------------------------------------------------------------------
+erode:
+        lda #0
+        sta eyi
+er_row:
+        lda #0
+        sta exi
+er_col:
+        clc                     ; pyy = ecy - 1 + eyi
+        lda ecy
+        adc eyi
+        sec
+        sbc #1
+        sta pyy
+        clc                     ; pxx = ecx - 1 + exi  (16-bit)
+        lda ecxl
+        adc exi
+        sta pxx
+        lda ecxh
+        adc #0
+        sta pxxh
+        sec
+        lda pxx
+        sbc #1
+        sta pxx
+        lda pxxh
+        sbc #0
+        sta pxxh
+        jsr clrpix
+        inc exi
+        lda exi
+        cmp #4
+        bne er_col
+        inc eyi
+        lda eyi
+        cmp #4
+        bne er_row
+        rts
+
+; ---------------------------------------------------------------------------
+; init_bunkers : paint the NBUNK shields across the defensive line (once, onto
+;   a cleared screen — erosion later clears pixels directly, never XOR).
+; ---------------------------------------------------------------------------
+init_bunkers:
+        lda #0
+        sta bki
+ibk_l:
+        lda #<SPR_BUNKER
+        sta sprptr
+        lda #>SPR_BUNKER
+        sta sprptr+1
+        ldx bki
+        lda BUNKX,x
+        sta sx
+        lda #0
+        sta sxh
+        lda #BUNK_Y
+        sta sy
+        jsr draw_sprite
+        inc bki
+        lda bki
+        cmp #NBUNK
+        bne ibk_l
+        rts
+
+; ---------------------------------------------------------------------------
+; check_shot_bunker : if the climbing bolt tip meets a shield pixel, take a
+;   bite out of the shield and spend the bolt.  (Runs after the alien check so
+;   aliens take priority.)
+; ---------------------------------------------------------------------------
+check_shot_bunker:
+        lda shtact
+        beq csb_ret
+        lda shty
+        cmp #BUNK_Y
+        bcc csb_ret             ; tip above the shield band
+        cmp #(BUNK_Y+BUNK_H)
+        bcs csb_ret             ; tip below the shield band
+        lda shtxl
+        sta pxx
+        lda shtxh
+        sta pxxh
+        lda shty
+        sta pyy
+        jsr pixlit
+        beq csb_ret
+        lda shtxl               ; erode around the impact
+        sta ecxl
+        lda shtxh
+        sta ecxh
+        lda shty
+        sta ecy
+        jsr erode
+        lda #0
+        sta shtact
+csb_ret:
+        rts
+
+; ---------------------------------------------------------------------------
+; check_bomb_bunker : any bomb whose leading edge meets a shield chews a bite
+;   and is spent.
+; ---------------------------------------------------------------------------
+check_bomb_bunker:
+        lda #0
+        sta bki
+cbb_l:
+        ldx bki
+        lda bact,x
+        bne cbb_live
+        jmp cbb_n
+cbb_live:
+        clc                     ; leading (bottom) edge = byy + 4
+        lda byy,x
+        adc #4
+        sta pyy
+        cmp #BUNK_Y
+        bcc cbb_n               ; still above the band
+        lda pyy
+        cmp #(BUNK_Y+BUNK_H)
+        bcs cbb_n               ; already past the band
+        ldx bki                 ; test pixel at (bxlo+1, pyy)
+        clc
+        lda bxlo,x
+        adc #1
+        sta pxx
+        lda bxhi,x
+        adc #0
+        sta pxxh
+        jsr pixlit
+        beq cbb_n
+        lda pxx                 ; erode around the impact
+        sta ecxl
+        lda pxxh
+        sta ecxh
+        lda pyy
+        sta ecy
+        jsr erode
+        ldx bki
+        lda #0
+        sta bact,x
+cbb_n:
+        inc bki
+        lda bki
+        cmp #MAXBOMB
+        bne cbb_l
+        rts
+
+; ---------------------------------------------------------------------------
+; spawn_ufo : launch the saucer from a random edge, heading inward.
+; ---------------------------------------------------------------------------
+spawn_ufo:
+        lda #1
+        sta ufoact
+        lda #0
+        sta ufodrawn
+        jsr rand
+        and #1
+        beq su_right
+        lda #<(WIDTH-UFO_W)     ; enter from the right, heading left
+        sta ufoxl
+        lda #>(WIDTH-UFO_W)
+        sta ufoxh
+        lda #$FF
+        sta ufodir
+        rts
+su_right:
+        lda #0                  ; enter from the left, heading right
+        sta ufoxl
+        sta ufoxh
+        lda #1
+        sta ufodir
+        rts
+
+; ---------------------------------------------------------------------------
+; update_ufo : glide the saucer across the top; retire it off either edge; when
+;   idle, count down to the next fly-by.
+; ---------------------------------------------------------------------------
+update_ufo:
+        lda ufoact
+        bne uu_move
+        lda ufocd
+        beq uu_spawn
+        dec ufocd
+        rts
+uu_spawn:
+        jsr spawn_ufo
+        rts
+uu_move:
+        lda ufodir
+        bmi uu_left
+        clc                     ; rightward
+        lda ufoxl
+        adc #UFO_STEP
+        sta ufoxl
+        lda ufoxh
+        adc #0
+        sta ufoxh
+        lda ufoxh               ; gone once the left edge passes the screen
+        cmp #>WIDTH
+        bcc uu_ret
+        bne uu_gone
+        lda ufoxl
+        cmp #<WIDTH
+        bcc uu_ret
+uu_gone:
+        lda #0
+        sta ufoact
+        lda #UFOCD
+        sta ufocd
+        rts
+uu_left:
+        sec                     ; leftward
+        lda ufoxl
+        sbc #UFO_STEP
+        sta ufoxl
+        lda ufoxh
+        sbc #0
+        sta ufoxh
+        clc                     ; gone once the right edge passes 0
+        lda ufoxl
+        adc #UFO_W
+        lda ufoxh
+        adc #0
+        bmi uu_gone
+uu_ret:
+        rts
+
+; ---------------------------------------------------------------------------
+; check_shot_ufo : bolt vs saucer box.  A hit erases nothing (the saucer isn't
+;   on screen mid-frame), just retires the saucer, banks the bonus, spends the
+;   bolt.
+; ---------------------------------------------------------------------------
+check_shot_ufo:
+        lda ufoact
+        beq csu_ret
+        lda shtact
+        beq csu_ret
+        lda shty                ; y overlap with [UFO_Y .. UFO_Y+UFO_H-1]
+        cmp #(UFO_Y+UFO_H)
+        bcs csu_ret             ; bolt tip below the saucer
+        clc
+        lda shty
+        adc #3
+        cmp #UFO_Y
+        bcc csu_ret             ; bolt entirely above the saucer
+        sec                     ; x overlap: 0 <= (shtx - ufox) < UFO_W
+        lda shtxl
+        sbc ufoxl
+        sta dxl
+        lda shtxh
+        sbc ufoxh
+        sta dxh
+        bmi csu_ret
+        lda dxh
+        bne csu_ret
+        lda dxl
+        cmp #UFO_W
+        bcs csu_ret
+        lda #0                  ; hit!
+        sta ufoact
+        sta shtact
+        lda #UFOCD
+        sta ufocd
+        jsr score_ufo
+csu_ret:
+        rts
+
+; ---------------------------------------------------------------------------
+; score_ufo : +100 (one hundreds digit, BCD).
+; ---------------------------------------------------------------------------
+score_ufo:
+        sed
+        clc
+        lda score1
+        adc #1
+        sta score1
+        lda score2
+        adc #0
+        sta score2
+        cld
+        rts
+
+; ---------------------------------------------------------------------------
+; erase_ufo / draw_ufo : XOR the saucer off / on, tracking its last position.
+; ---------------------------------------------------------------------------
+erase_ufo:
+        lda ufodrawn
+        beq eu_ret
+        lda #<SPR_UFO
+        sta sprptr
+        lda #>SPR_UFO
+        sta sprptr+1
+        lda lufoxl
+        sta sx
+        lda lufoxh
+        sta sxh
+        lda #UFO_Y
+        sta sy
+        jsr draw_sprite
+eu_ret:
+        rts
+draw_ufo:
+        lda ufoact
+        beq du_off
+        lda #<SPR_UFO
+        sta sprptr
+        lda #>SPR_UFO
+        sta sprptr+1
+        lda ufoxl
+        sta sx
+        lda ufoxh
+        sta sxh
+        lda #UFO_Y
+        sta sy
+        jsr draw_sprite
+        lda ufoxl
+        sta lufoxl
+        lda ufoxh
+        sta lufoxh
+        lda #1
+        sta ufodrawn
+        rts
+du_off:
+        lda #0
+        sta ufodrawn
+        rts
+
 ; ---------------------------------------------------------------------------
 ; draw_sprite : XOR the bitmap at (sprptr) onto the screen at (sx,sy).
 ;   sprptr -> H, W, then H rows of 2 bytes (16-bit mask, leftmost pixel=bit15).
@@ -1453,6 +1888,8 @@ SPR_SHOT:
         .byte 4,1,128,0,128,0,128,0,128,0
 SPR_BOMB:
         .byte 5,3,64,0,192,0,64,0,96,0,64,0
+SPR_BUNKER:
+        .byte 10,14,63,240,127,248,255,252,255,252,255,252,255,252,248,124,240,60,240,60,224,28
 
 ; ---- formation lookup tables ----
 ROWYOFF:                        ; pixel y offset of each rank = row * CELLH
@@ -1465,6 +1902,8 @@ SPRHI:
         .byte >SPR_A0,>SPR_A1,>SPR_B0,>SPR_B1,>SPR_C0,>SPR_C1
 RANKSCORE:                      ; BCD points awarded per rank (A/B/C)
         .byte $30,$20,$10
+BUNKX:                          ; left-edge x of each shield
+        .byte 30,100,170,240
 
 ; ---------------------------------------------------------------------------
 ; BRK test hooks (headless harness entry points)
@@ -1508,4 +1947,22 @@ updbomb_brk:
         brk
 bombhit_brk:
         jsr check_bomb_hits
+        brk
+initbunk_brk:
+        jsr init_bunkers
+        brk
+shotbunk_brk:
+        jsr check_shot_bunker
+        brk
+bombbunk_brk:
+        jsr check_bomb_bunker
+        brk
+spawnufo_brk:
+        jsr spawn_ufo
+        brk
+updufo_brk:
+        jsr update_ufo
+        brk
+shotufo_brk:
+        jsr check_shot_ufo
         brk
