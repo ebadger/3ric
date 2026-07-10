@@ -30,11 +30,18 @@ Runs in mixed hi-res mode (160px playfield + a 4-line text HUD). The engine
 builds a 192-entry hi-res row-address table, blits OR-masked sprites with a
 single x/7 division each, and erases by copying from a clean background buffer.
 The player has 8.8 fixed-point gravity/jump physics with ground- and pit-edge
-collision; falling in a pit costs a life. A rolling log hazard patrols the left
-platform and wraps. Three gems are collectible (+2000 BCD each); a 60-second
-countdown ticks in the HUD. Collect them all to **win**, run out of lives for
-**game over**, or let the clock hit zero for **time up** — press **SPACE** on any
-end screen to play again.
+collision; falling in a pit costs a life.
+
+The world is **four flip-screens** wide — walk off either edge to cross to the
+neighbouring area (the HUD shows the current **AREA**). Each screen carries its
+own pit width, hazards, and props: a **rolling log** patrols some platforms and
+wraps; one screen spans a pit too wide to jump, crossed by grabbing a **swinging
+vine** in mid-air that carries you to the far ledge. **Six gems** are scattered
+across the world (+2000 BCD each); a 60-second countdown ticks in the HUD.
+
+An **attract / title screen** opens the game (press **SPACE** to explore).
+Collect every gem to **win**, run out of lives for **game over**, or let the
+clock hit zero for **time up** — press **SPACE** on any end screen to play again.
 
 ## Build & test
 
@@ -43,7 +50,7 @@ end screen to play again.
 node codegen/tools/asm6502.mjs emulator/AICodeGen/jungle/jungle.s emulator/AICodeGen/jungle/jungle.prg --org 0x0800
 
 # headless engine + gameplay tests (row table, plot, sprite blit, physics,
-# hazard collision, treasure pickup/score, win, timer)
+# hazard collision, treasure pickup/score, win, timer, screen flips, vine swing)
 node codegen/tools/jungle.test.mjs
 ```
 
@@ -57,6 +64,7 @@ node codegen/tools/jungle.test.mjs
 ### Controls
 
 - **A / left** — run left
-- **D / right** — run right
-- **W / SPACE** — jump
-- **SPACE** — (on an end screen) start a new game
+- **D / right** — run right (walk off a screen edge to cross to the next area)
+- **W / SPACE** — jump; jump into a vine to grab it and swing across
+- **SPACE** — start the game from the title screen, or start a new game on an
+  end screen

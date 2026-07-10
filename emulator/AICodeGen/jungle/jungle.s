@@ -75,10 +75,21 @@ olog_col = STATE+30
 gamestate = STATE+31    ; 0 play, 1 win, 2 game over, 3 time up
 tsec     = STATE+32     ; countdown seconds shown in the HUD
 tframe   = STATE+33     ; frame subcounter for the timer
-trleft   = STATE+34     ; treasures still to collect
-tr_x     = STATE+35     ; NT treasure x positions (<256)
-tr_y     = STATE+38     ; NT treasure y positions
-tr_on    = STATE+41     ; NT active flags
+trleft   = STATE+34     ; treasures still to collect (whole world)
+curscr   = STATE+35     ; current jungle screen (0..NSCR-1)
+hz_active = STATE+36    ; 1 = a rolling log patrols this screen
+flipreq  = STATE+37     ; 0 none, 1 = go to next screen, $FF = previous
+cur_plc  = STATE+38     ; this screen's pit: left byte column
+cur_prc  = STATE+39     ; this screen's pit: right byte column (exclusive)
+vine_on  = STATE+40     ; 1 = this screen has a swingable vine (M7)
+vine_x   = STATE+41     ; vine anchor x (pixels)
+onvine   = STATE+42     ; 1 = player currently riding the vine
+vphase   = STATE+43     ; vine swing phase index
+; world-wide treasure table (NT entries, tagged by screen)
+tr_x     = STATE+48     ; treasure x positions (<256)
+tr_y     = STATE+54     ; treasure y positions
+tr_on    = STATE+60     ; active flags
+tr_scr   = STATE+66     ; which screen each treasure lives on
 
 ; ---- gameplay constants ----
 RUNSPEED = 2            ; px / frame
@@ -90,8 +101,9 @@ STAND_Y  = 122          ; GROUND_TOP - PLAYER_FEET
 DEATH_Y  = 170          ; falling past this = death
 SPAWN_X  = 20
 XMAX     = 267          ; 279 - PLAYER_W
-PIT_L    = 168          ; pit x-range (byte cols 24..29)
-PIT_R    = 209
+NSCR     = 4            ; number of flip-screens in the world
+ENTER_L  = 4            ; x when entering a screen from the left edge
+ENTER_R  = 263          ; x when entering a screen from the right edge (XMAX-4)
 ; GRAV = +$0030 (0.1875 px/frame^2), JUMP_V = -$0300, TERMV = +$0300
 GRAV_LO  = $30
 GRAV_HI  = $00
@@ -106,12 +118,21 @@ LOG_Y    = 128          ; sits on the ground band (bottom at row 136)
 LOG_SPD  = 2
 LOG_MAX  = 152          ; right end of its run; wraps back here at the left edge
 ; treasures, timer, scoring
-NT       = 3            ; number of treasures on the screen
+NT       = 6            ; number of treasures across the whole world
 TR_W     = 8
 TR_H     = 10
 TR_VAL_M = $20          ; +2000 (BCD) per treasure, added to score byte 1
 TSEC0    = 60           ; starting countdown value
 TICK     = 12           ; frames per countdown tick
+; swingable vine (lets the hero cross the wide pit on screen 1)
+GRAB_R   = 16           ; grab if |centre_x - vine_x| <= this and airborne
+SWING_VX = 3            ; px / frame the vine carries you to the right
+VINE_Y0  = STAND_Y-20   ; body-top y at the top of the swing arc
+SWING_HALF = 16         ; arc peaks (lowest point) at this frame...
+SWING_FULL = 32         ; ...and folds back down by this frame
+SWING_MAX = 40          ; hard release after this many frames (safety)
+VINE_TOP = 40           ; vine is drawn from this pixel row...
+VINE_BOT = 128          ; ...down to here (hangs above the swing level)
 
 ; ---- zero page (frame-transient scratch / pointers) ----
 ptr      = $06          ; screen dest pointer      (+1)
@@ -157,6 +178,11 @@ start:
         jsr clear_screen        ; blank hi-res page 1
         jsr clear_bg            ; blank background buffer
         jsr clear_text          ; blank text page (spaces)
+        jsr show_title          ; attract screen; returns when SPACE is pressed
+newgame:
+        jsr clear_screen        ; fresh playfield for a new game / restart
+        jsr clear_bg
+        jsr clear_text
         jsr init_state
         jsr draw_scene          ; static scene into BG, then copy to screen
         jsr draw_hud
@@ -189,7 +215,94 @@ mo_wait:
         jsr frame_delay
         jmp main
 mo_restart:
-        jmp start
+        jmp newgame
+
+; ---------------------------------------------------------------------------
+; show_title : attract screen.  Paints a screen-1 backdrop (ground, pit, vine)
+;   with a hero and a gem for flavour, prints the title text, and waits for
+;   SPACE before returning to start a new game.
+; ---------------------------------------------------------------------------
+show_title:
+        lda #1                  ; borrow the screen-1 backdrop (it has a vine)
+        sta curscr
+        jsr set_screen_vars
+        jsr draw_scene          ; ground + pit + vine into the hi-res page
+        lda #40                 ; a hero standing on the left ledge
+        sta sx_lo
+        lda #0
+        sta sx_hi
+        lda #STAND_Y
+        sta sy
+        lda #<hero
+        sta sprptr
+        lda #>hero
+        sta sprptr+1
+        jsr draw_sprite
+        lda #236                ; a gem glinting on the right ledge
+        sta sx_lo
+        lda #0
+        sta sx_hi
+        lda #118
+        sta sy
+        lda #<gem_spr
+        sta sprptr
+        lda #>gem_spr
+        sta sprptr+1
+        jsr draw_sprite
+        jsr draw_title_text
+st_wait:
+        lda KBD
+        bpl st_wait
+        tax
+        lda KBDSTRB             ; clear the strobe
+        txa
+        cmp #$A0                ; wait specifically for SPACE
+        bne st_wait
+        rts
+
+; draw_title_text : title / tagline / controls / prompt across the 4 HUD lines.
+draw_title_text:
+        lda #<TLINE20
+        sta ptr
+        lda #>TLINE20
+        sta ptr+1
+        jsr clear_line
+        lda #<str_ttl
+        sta sprptr
+        lda #>str_ttl
+        sta sprptr+1
+        jsr print
+        lda #<TLINE21
+        sta ptr
+        lda #>TLINE21
+        sta ptr+1
+        jsr clear_line
+        lda #<str_tag
+        sta sprptr
+        lda #>str_tag
+        sta sprptr+1
+        jsr print
+        lda #<TLINE22
+        sta ptr
+        lda #>TLINE22
+        sta ptr+1
+        jsr clear_line
+        lda #<str_ctl
+        sta sprptr
+        lda #>str_ctl
+        sta sprptr+1
+        jsr print
+        lda #<TLINE23
+        sta ptr
+        lda #>TLINE23
+        sta ptr+1
+        jsr clear_line
+        lda #<str_go
+        sta sprptr
+        lda #>str_go
+        sta sprptr+1
+        jsr print
+        rts
 
 ; ---------------------------------------------------------------------------
 ; init_state : starting player position / lives / physics vars
@@ -226,29 +339,94 @@ init_state:
         sta score2
         sta tframe
         sta gamestate
+        sta curscr              ; start in the first jungle screen
+        sta flipreq
+        sta onvine
         lda #TSEC0
         sta tsec
         jsr init_treasures
+        jsr set_screen_vars     ; cur_plc/cur_prc/hz_active + log position
         rts
 
-; init_treasures : place the collectibles (two on the left, one past the pit).
+; init_treasures : lay out the world's gems (tagged with the screen they sit on).
 init_treasures:
-        lda #60
-        sta tr_x+0
-        lda #120
-        sta tr_x+1
-        lda #230
-        sta tr_x+2
-        lda #126                ; sits on the ground (bottom row 136)
-        sta tr_y+0
-        sta tr_y+1
-        sta tr_y+2
+        ldx #0
+it_loop:
+        lda tr_x0,x
+        sta tr_x,x
+        lda tr_y0,x
+        sta tr_y,x
+        lda tr_scr0,x
+        sta tr_scr,x
         lda #1
-        sta tr_on+0
-        sta tr_on+1
-        sta tr_on+2
+        sta tr_on,x
+        inx
+        cpx #NT
+        bne it_loop
         lda #NT
         sta trleft
+        rts
+
+; set_screen_vars : load the current screen's pit / hazard / vine descriptor
+; and reset the rolling log to the right end of its run.
+set_screen_vars:
+        ldx curscr
+        lda scr_plc,x
+        sta cur_plc
+        lda scr_prc,x
+        sta cur_prc
+        lda scr_hz,x
+        sta hz_active
+        lda scr_vine,x
+        sta vine_on
+        lda scr_vx,x
+        sta vine_x
+        lda #<LOG_MAX
+        sta hz_x_lo
+        lda #>LOG_MAX
+        sta hz_x_hi
+        lda #0
+        sta onvine
+        rts
+
+; load_screen : rebuild the whole playfield for the current screen index.
+load_screen:
+        jsr set_screen_vars
+        jsr clear_screen
+        jsr clear_bg
+        jsr draw_scene
+        rts
+
+; flip_screen : cross to the neighbouring screen (flipreq: 1 next, $FF prev),
+; entering from the opposite edge, then rebuild + redraw everything.
+flip_screen:
+        lda flipreq
+        bpl fs_next
+        dec curscr
+        lda #<ENTER_R
+        sta px_lo
+        lda #>ENTER_R
+        sta px_hi
+        jmp fs_common
+fs_next:
+        inc curscr
+        lda #<ENTER_L
+        sta px_lo
+        lda #>ENTER_L
+        sta px_hi
+fs_common:
+        lda #0
+        sta flipreq
+        sta yfrac
+        sta vy_lo
+        sta vy_hi
+        sta movetmr
+        lda #STAND_Y
+        sta py
+        lda #1
+        sta onground
+        jsr load_screen
+        jsr init_render
         rts
 
 ; init_render : prime the previous-position trackers and draw the hero once.
@@ -267,6 +445,8 @@ init_render:
         lda col
         sta ocol
         jsr draw_player
+        lda hz_active           ; only prime/draw the log if this screen has one
+        beq ir_done
         lda hz_x_lo             ; prime log prev-position + draw it once
         sta olog_lo
         lda hz_x_hi
@@ -281,6 +461,7 @@ init_render:
         lda col
         sta olog_col
         jsr draw_log
+ir_done:
         rts
 
 ; ---------------------------------------------------------------------------
@@ -334,6 +515,11 @@ ri_done:
 ; update_player : one step of physics (jump, gravity, movement, collision).
 ; ---------------------------------------------------------------------------
 update_player:
+        lda onvine              ; already swinging on a vine? follow the arc
+        beq up_notvine
+        jsr vine_swing
+        rts
+up_notvine:
         lda jumpreq             ; start a jump only when standing
         beq up_nojump
         lda onground
@@ -355,6 +541,11 @@ up_nojump:
 up_left:
         jsr move_left
 up_nomove:
+        lda flipreq             ; a horizontal move can push off-screen
+        beq up_nofl
+        jsr flip_screen         ; cross to the neighbour, rebuild, redraw
+        rts                     ; fresh screen: resume physics next frame
+up_nofl:
         clc                     ; y (8.8) += vy
         lda yfrac
         adc vy_lo
@@ -379,11 +570,120 @@ up_nomove:
         sta vy_hi
 up_novc:
         jsr check_ground
+        jsr try_grab_vine       ; latch onto a vine when airborne beside it
+        lda onvine
+        bne up_done             ; on the vine now -> safe, skip the death test
         lda py                  ; death by falling into a pit
         cmp #DEATH_Y
         bcc up_done
         jsr player_die
 up_done:
+        rts
+
+; ---------------------------------------------------------------------------
+; try_grab_vine : if this screen has a vine, we're airborne, and our centre is
+;   within GRAB_R of the vine, latch on (onvine=1, vphase=0).
+; ---------------------------------------------------------------------------
+try_grab_vine:
+        lda vine_on
+        beq tg_no
+        lda onvine
+        bne tg_no               ; already swinging
+        lda onground
+        bne tg_no               ; must be airborne
+        clc                     ; centre x = px + 6
+        lda px_lo
+        adc #6
+        sta tmp
+        lda px_hi
+        adc #0
+        sta tmp2
+        sec                     ; d = centre - vine_x
+        lda tmp
+        sbc vine_x
+        sta tmp
+        lda tmp2
+        sbc #0
+        sta tmp2
+        lda tmp2
+        bpl tg_abs              ; d >= 0 already
+        sec                     ; negate 16-bit d
+        lda #0
+        sbc tmp
+        sta tmp
+        lda #0
+        sbc tmp2
+        sta tmp2
+tg_abs:
+        lda tmp2
+        bne tg_no               ; |d| >= 256 -> far away
+        lda tmp
+        cmp #GRAB_R+1
+        bcs tg_no               ; |d| > GRAB_R
+        lda #1                  ; grab!
+        sta onvine
+        lda #0
+        sta vphase
+        sta vy_lo
+        sta vy_hi
+        sta yfrac
+tg_no:
+        rts
+
+; ---------------------------------------------------------------------------
+; vine_swing : one frame on the vine.  Slide right SWING_VX px, follow a shallow
+;   pendulum arc, and let go once we clear the pit (or on a jump / timeout).
+; ---------------------------------------------------------------------------
+vine_swing:
+        clc                     ; carry the hero rightward across the pit
+        lda px_lo
+        adc #SWING_VX
+        sta px_lo
+        lda px_hi
+        adc #0
+        sta px_hi
+        inc vphase              ; arc: dip = min(vphase, SWING_FULL-vphase)
+        lda vphase
+        cmp #SWING_HALF
+        bcc vs_rise
+        lda #SWING_FULL
+        sec
+        sbc vphase
+        jmp vs_dip
+vs_rise:
+        lda vphase
+vs_dip:
+        bpl vs_pos              ; clamp dip >= 0 (past SWING_FULL)
+        lda #0
+vs_pos:
+        clc                     ; py = VINE_Y0 + dip
+        adc #VINE_Y0
+        sta py
+        lda #0
+        sta yfrac
+        sta vy_lo
+        sta vy_hi
+        clc                     ; centre col past the pit's right edge?
+        lda px_lo
+        adc #6
+        sta x_lo
+        lda px_hi
+        adc #0
+        sta x_hi
+        jsr div7
+        lda col
+        cmp cur_prc
+        bcs vs_release          ; over solid ground on the far side -> drop
+        lda vphase
+        cmp #SWING_MAX
+        bcc vs_hold             ; keep swinging
+vs_release:
+        lda #0
+        sta onvine
+        sta vy_lo
+        sta vy_hi
+        sta yfrac
+vs_hold:
         rts
 
 ; ---------------------------------------------------------------------------
@@ -395,17 +695,16 @@ check_ground:
         clc                     ; centre x = px + 6
         lda px_lo
         adc #6
-        sta tmp
+        sta x_lo
         lda px_hi
         adc #0
-        sta tmp2
-        lda tmp2
-        bne cg_ground           ; centre >= 256 -> past the pit -> ground
-        lda tmp
-        cmp #PIT_L
-        bcc cg_ground           ; centre < PIT_L -> ground
-        cmp #PIT_R+1
-        bcs cg_ground           ; centre > PIT_R -> ground
+        sta x_hi
+        jsr div7                ; col = centre / 7
+        lda col
+        cmp cur_plc
+        bcc cg_ground           ; col < pit-left  -> solid ground
+        cmp cur_prc
+        bcs cg_ground           ; col >= pit-right -> solid ground
         lda #0                  ; over the pit -> no ground
         sta onground
         rts
@@ -434,6 +733,8 @@ cg_done:
 
 ; move_right / move_left : shift px by RUNSPEED, clamp to [0, XMAX], set facing.
 move_right:
+        lda #0
+        sta facing
         clc
         lda px_lo
         adc #RUNSPEED
@@ -443,22 +744,29 @@ move_right:
         sta px_hi
         lda px_hi
         cmp #>XMAX
-        bcc mr_ok
-        bne mr_clamp
+        bcc mr_ok               ; px_hi < hi(XMAX) -> in range
+        bne mr_over             ; px_hi > hi(XMAX) -> past edge
         lda px_lo
         cmp #<XMAX+1
-        bcc mr_ok
+        bcc mr_ok               ; px <= XMAX
+mr_over:
+        lda curscr
+        cmp #NSCR-1
+        bcs mr_clamp            ; last screen -> clamp at world edge
+        lda #1                  ; else cross to the next screen
+        sta flipreq
+        rts
 mr_clamp:
         lda #<XMAX
         sta px_lo
         lda #>XMAX
         sta px_hi
 mr_ok:
-        lda #0
-        sta facing
         rts
 
 move_left:
+        lda #1
+        sta facing
         sec
         lda px_lo
         sbc #RUNSPEED
@@ -468,12 +776,16 @@ move_left:
         sta px_hi
         lda px_hi
         bpl ml_ok               ; still >= 0
-        lda #0                  ; underflow -> clamp to 0
+        lda curscr
+        beq ml_clamp            ; first screen -> clamp at left edge
+        lda #$FF                ; else cross to the previous screen
+        sta flipreq
+        rts
+ml_clamp:
+        lda #0
         sta px_lo
         sta px_hi
 ml_ok:
-        lda #1
-        sta facing
         rts
 
 ; player_die : lose a life and respawn at the start (game-over screen is M8).
@@ -541,6 +853,10 @@ rp_wbset:
 ; update_log : roll the log left; wrap to LOG_MAX when it runs off the left.
 ; ---------------------------------------------------------------------------
 update_log:
+        lda hz_active
+        bne ul_go
+        rts
+ul_go:
         sec
         lda hz_x_lo
         sbc #LOG_SPD
@@ -563,6 +879,10 @@ ul_ok:
 ;   log box    [hz_x, hz_x+LOG_W) x [LOG_Y, LOG_Y+LOG_H)
 ; ---------------------------------------------------------------------------
 collide_log:
+        lda hz_active
+        bne cl_go
+        rts
+cl_go:
         clc                     ; tmp = log right = hz_x + LOG_W
         lda hz_x_lo
         adc #LOG_W
@@ -616,6 +936,10 @@ draw_log:
 
 ; render_log : erase the log's previous cell from BG, redraw, save position.
 render_log:
+        lda hz_active
+        bne rl_go
+        rts
+rl_go:
         lda olog_col
         sta er_col
         lda olog_y
@@ -659,6 +983,9 @@ ctr_loop:
         stx ti
         lda tr_on,x
         beq ctr_next
+        lda tr_scr,x
+        cmp curscr
+        bne ctr_next            ; treasure lives on another screen
         lda tr_x,x              ; tr_right = tr_x + TR_W  -> tmp/tmp2
         clc
         adc #TR_W
@@ -763,6 +1090,9 @@ dt_loop:
         stx ti
         lda tr_on,x
         beq dt_next
+        lda tr_scr,x
+        cmp curscr
+        bne dt_next             ; treasure lives on another screen
         lda tr_x,x
         sta sx_lo
         lda #0
@@ -811,13 +1141,17 @@ update_hud:
         jsr emit2
         lda score0
         jsr emit2
-        lda tsec                ; time digits at columns 20..21
+        lda tsec                ; time digits at columns 19..20
         jsr bin2bcd
-        ldx #20
+        ldx #19
         jsr emit2
-        lda lives               ; lives digit at column 31
+        lda lives               ; lives digit at column 29
         ora #$B0
-        sta TLINE22+31
+        sta TLINE22+29
+        lda curscr              ; area number (1-based) at column 37
+        clc
+        adc #$B1
+        sta TLINE22+37
         rts
 
 ; emit2 : A = BCD byte, X = column offset into TLINE22; writes 2 digits, X += 2
@@ -1248,13 +1582,60 @@ ds_gfill:
         cmp #160
         bne ds_gnd
         jsr punch_pit           ; carve a pit into the ground band
+        jsr draw_vine           ; hang the vine, if this screen has one
         jsr copy_bg
+        rts
+
+; ---------------------------------------------------------------------------
+; draw_vine : hang a 2-pixel-wide vine down from the canopy at vine_x, drawn
+;   into BG so the rect-erase restores it behind the hero each frame.
+; ---------------------------------------------------------------------------
+draw_vine:
+        lda vine_on
+        beq dv_done
+        lda vine_x              ; column / bit of the vine
+        sta x_lo
+        lda #0
+        sta x_hi
+        jsr div7
+        ldx bitn
+        lda BITMASK,x
+        sta tmp                 ; first vine pixel
+        cpx #6
+        beq dv_bits             ; last bit in the byte -> single pixel
+        inx
+        lda BITMASK,x
+        ora tmp
+        sta tmp                 ; second pixel makes a 2px cord
+dv_bits:
+        lda #VINE_TOP
+        sta cury
+dv_row:
+        ldy cury
+        lda ROWL,y
+        sta bgptr
+        lda ROWH,y
+        clc
+        adc #BGDELTA
+        sta bgptr+1
+        ldy col
+        lda (bgptr),y
+        ora tmp
+        sta (bgptr),y
+        inc cury
+        lda cury
+        cmp #VINE_BOT
+        bne dv_row
+dv_done:
         rts
 
 ; ---------------------------------------------------------------------------
 ; punch_pit : clear a rectangular pit (byte cols 24..29) out of the ground.
 ; ---------------------------------------------------------------------------
 punch_pit:
+        lda cur_plc
+        cmp cur_prc
+        beq pp_done             ; empty range -> this screen has no pit
         lda #136
         sta cury
 pp_row:
@@ -1265,17 +1646,18 @@ pp_row:
         clc
         adc #BGDELTA
         sta bgptr+1
-        ldy #24
+        ldy cur_plc
         lda #0
 pp_col:
         sta (bgptr),y
         iny
-        cpy #30
+        cpy cur_prc
         bne pp_col
         inc cury
         lda cury
         cmp #160
         bne pp_row
+pp_done:
         rts
 
 ; ---------------------------------------------------------------------------
@@ -1338,6 +1720,25 @@ pr_done:
 BITMASK:
         .byte $01,$02,$04,$08,$10,$20,$40
 
+; ---- per-screen world descriptor (NSCR entries) ----
+;   pit = byte columns [plc, prc); plc==prc means no pit.
+scr_plc:                        ; pit left column
+        .byte 24, 22, 14, 0
+scr_prc:                        ; pit right column (exclusive)
+        .byte 30, 30, 19, 0
+scr_hz:                         ; 1 = a rolling log patrols this screen
+        .byte 1, 0, 1, 0
+scr_vine:                       ; 1 = a swingable vine crosses this screen
+        .byte 0, 1, 0, 0
+scr_vx:                         ; vine anchor x (pixels)
+        .byte 0, 168, 0, 0
+
+; ---- world treasure layout (NT entries) ----
+tr_x0:  .byte 60, 232, 236, 40, 232, 140
+tr_y0:  .byte 126, 126, 126, 126, 126, 126
+tr_scr0:                        ; which screen each gem sits on
+        .byte 0, 0, 1, 2, 2, 3
+
 ; hero : 12 x 16, left-justified rows (hi byte = cols 0-7, lo byte = cols 8-15)
 hero:
         .byte 12, 16
@@ -1386,8 +1787,16 @@ gem_spr:
 
 str_title:
         .asciiz "JUNGLE QUEST"
+str_ttl:
+        .asciiz "        * * *  JUNGLE QUEST  * * *"
+str_tag:
+        .asciiz "     an original jungle adventure"
+str_ctl:
+        .asciiz "  A / D  MOVE      SPACE  JUMP & GRAB"
+str_go:
+        .asciiz "        PRESS SPACE TO EXPLORE"
 str_stats:
-        .asciiz "SCORE 000000   TIME 20   LIVES 3"
+        .asciiz "SCORE 000000  TIME 60  LIVES 3  AREA 1"
 msg_win:
         .asciiz "YOU WIN!  PRESS SPACE TO PLAY AGAIN"
 msg_over:

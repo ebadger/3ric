@@ -141,6 +141,9 @@ function resetPlayer(px, py = 122) {
   vm.poke(S.VY_LO, 0); vm.poke(S.VY_HI, 0);
   vm.poke(S.ONGROUND, 1); vm.poke(S.MOVETMR, 0); vm.poke(S.MOVEDIR, 0);
   vm.poke(S.JUMPREQ, 0); vm.poke(S.FACING, 0); vm.poke(S.LIVES, 3);
+  vm.poke(S.CURSCR, 0); vm.poke(S.FLIPREQ, 0);        // screen-0 defaults
+  vm.poke(S.CUR_PLC, 24); vm.poke(S.CUR_PRC, 30);     // pit cols 24..30
+  vm.poke(S.HZ_ACTIVE, 1);                            // log present
   key(0);
 }
 const pxOf = () => vm.peek(S.PX_LO) | (vm.peek(S.PX_HI) << 8);
@@ -193,6 +196,7 @@ console.log("G) walking over a pit falls in -> lose a life + respawn");
 
 console.log("H) rolling log moves left and wraps");
 {
+  vm.poke(S.HZ_ACTIVE, 1);
   vm.poke(S.HZ_X_LO, 6); vm.poke(S.HZ_X_HI, 0);
   const seq = [];
   for (let i = 0; i < 4; i++) { runHook(S.LOGSTEP_BRK, `log ${i}`); seq.push(vm.peek(S.HZ_X_LO) | (vm.peek(S.HZ_X_HI) << 8)); }
@@ -215,6 +219,7 @@ console.log("I) log collision kills; clearing it by jumping does not");
 console.log("J) treasure pickup adds score and clears the treasure");
 {
   resetPlayer(60);                                  // stand on treasure 0 (x=60)
+  for (let i = 0; i < 6; i++) { vm.poke(S.TR_ON + i, 0); vm.poke(S.TR_SCR + i, 0); }
   vm.poke(S.TR_X + 0, 60); vm.poke(S.TR_X + 1, 120); vm.poke(S.TR_X + 2, 230);
   vm.poke(S.TR_Y + 0, 126); vm.poke(S.TR_Y + 1, 126); vm.poke(S.TR_Y + 2, 126);
   vm.poke(S.TR_ON + 0, 1); vm.poke(S.TR_ON + 1, 1); vm.poke(S.TR_ON + 2, 1);
@@ -229,11 +234,22 @@ console.log("J) treasure pickup adds score and clears the treasure");
 console.log("K) collecting the last treasure wins the game");
 {
   resetPlayer(60);
-  vm.poke(S.TR_X + 0, 60); vm.poke(S.TR_Y + 0, 126);
-  vm.poke(S.TR_ON + 0, 1); vm.poke(S.TR_ON + 1, 0); vm.poke(S.TR_ON + 2, 0);
+  for (let i = 0; i < 6; i++) { vm.poke(S.TR_ON + i, 0); vm.poke(S.TR_SCR + i, 0); }
+  vm.poke(S.TR_X + 0, 60); vm.poke(S.TR_Y + 0, 126); vm.poke(S.TR_ON + 0, 1);
   vm.poke(S.TRLEFT, 1); vm.poke(S.GAMESTATE, 0);
   runHook(S.COLLECT_BRK, "win");
   ok(vm.peek(S.TRLEFT) === 0 && vm.peek(S.GAMESTATE) === 1, `all collected -> gamestate=win (${vm.peek(S.GAMESTATE)})`);
+}
+
+console.log("J2) treasures on other screens are ignored");
+{
+  resetPlayer(60);
+  for (let i = 0; i < 6; i++) { vm.poke(S.TR_ON + i, 0); vm.poke(S.TR_SCR + i, 0); }
+  vm.poke(S.TR_X + 0, 60); vm.poke(S.TR_Y + 0, 126); vm.poke(S.TR_ON + 0, 1);
+  vm.poke(S.TR_SCR + 0, 1);                          // gem lives on screen 1
+  vm.poke(S.TRLEFT, 1); vm.poke(S.GAMESTATE, 0);
+  runHook(S.COLLECT_BRK, "offscreen");
+  ok(vm.peek(S.TR_ON + 0) === 1 && vm.peek(S.TRLEFT) === 1, "gem on another screen is not collected");
 }
 
 console.log("L) countdown timer reaches zero -> time up");
@@ -243,7 +259,58 @@ console.log("L) countdown timer reaches zero -> time up");
   ok(vm.peek(S.TSEC) === 0 && vm.peek(S.GAMESTATE) === 3, `timer hit 0 -> gamestate=time-up (${vm.peek(S.GAMESTATE)})`);
 }
 
+console.log("M) walking off a screen edge flips to the neighbouring screen");
+{
+  // right edge -> next screen, enter from the left
+  resetPlayer(266);                                  // on the right platform, screen 0
+  key(0xC4); runHook(S.STEP_BRK, "walk right off-edge");   // 'D'
+  ok(vm.peek(S.CURSCR) === 1 && pxOf() === S.ENTER_L, `right edge -> screen ${vm.peek(S.CURSCR)}, x=${pxOf()}`);
+
+  // left edge on an inner screen -> previous screen, enter from the right
+  resetPlayer(0); vm.poke(S.CURSCR, 1);
+  key(0xC1); runHook(S.STEP_BRK, "walk left off-edge");    // 'A'
+  ok(vm.peek(S.CURSCR) === 0 && pxOf() === S.ENTER_R, `left edge -> screen ${vm.peek(S.CURSCR)}, x=${pxOf()}`);
+
+  // left edge on the first screen -> clamp, no flip
+  resetPlayer(0);
+  key(0xC1); runHook(S.STEP_BRK, "walk left at world edge");
+  ok(vm.peek(S.CURSCR) === 0 && pxOf() === 0, `world left edge clamps (screen ${vm.peek(S.CURSCR)}, x=${pxOf()})`);
+}
+
+console.log("N) grabbing the vine swings the hero across the wide pit");
+{
+  // screen 1: wide pit at cols 22..30, a vine anchored at x=168, no log
+  resetPlayer(150, 100);                 // airborne over the pit, beside the vine
+  vm.poke(S.CURSCR, 1);
+  vm.poke(S.CUR_PLC, 22); vm.poke(S.CUR_PRC, 30);
+  vm.poke(S.HZ_ACTIVE, 0);
+  vm.poke(S.VINE_ON, 1); vm.poke(S.VINE_X, 168);
+  vm.poke(S.ONVINE, 0); vm.poke(S.VPHASE, 0);
+  vm.poke(S.ONGROUND, 0); vm.poke(S.VY_LO, 0); vm.poke(S.VY_HI, 0);
+  let grabbed = false;
+  for (let i = 0; i < 60; i++) {
+    key(0); runHook(S.STEP_BRK, "vine frame");
+    if (vm.peek(S.ONVINE) === 1) grabbed = true;
+  }
+  const centreCol = Math.floor((pxOf() + 6) / 7);
+  ok(grabbed, "hero latched onto the vine");
+  ok(vm.peek(S.ONVINE) === 0 && centreCol >= 30,
+     `released on the far platform (x=${pxOf()}, col=${centreCol})`);
+  ok(vm.peek(S.LIVES) === 3 && vm.peek(S.ONGROUND) === 1 && vm.peek(S.PY) === S.STAND_Y,
+     `crossed safely and landed (lives=${vm.peek(S.LIVES)}, py=${vm.peek(S.PY)})`);
+
+  // without the vine that same leap drops the hero into the pit
+  resetPlayer(150, 100);
+  vm.poke(S.CURSCR, 1);
+  vm.poke(S.CUR_PLC, 22); vm.poke(S.CUR_PRC, 30);
+  vm.poke(S.HZ_ACTIVE, 0);
+  vm.poke(S.VINE_ON, 0);                 // vine disabled
+  vm.poke(S.ONVINE, 0);
+  vm.poke(S.ONGROUND, 0); vm.poke(S.VY_LO, 0); vm.poke(S.VY_HI, 0);
+  for (let i = 0; i < 60; i++) { key(0); runHook(S.STEP_BRK, "no-vine frame"); }
+  ok(vm.peek(S.LIVES) === 2, `no vine -> falls in and loses a life (lives=${vm.peek(S.LIVES)})`);
+}
+
 // ---------------------------------------------------------------------------
-console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
 

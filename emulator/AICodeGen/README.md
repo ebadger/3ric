@@ -33,4 +33,4 @@ published to the hosted emulator by copying the `.prg` into
 | Project | Description | Load addr |
 | --- | --- | --- |
 | [`life`](life) | Conway's Game of Life — hi-res, toroidal wrap, **SPACE** reseeds. | `$0800` |
-| [`jungle`](jungle) | JUNGLE QUEST — original hi-res jungle platformer: run/jump, dodge a log, grab gems, beat the timer. | `$0800` |
+| [`jungle`](jungle) | JUNGLE QUEST — original hi-res jungle platformer: a four-screen world with run/jump physics, a rolling-log hazard, a swinging vine, six gems, a countdown timer, and a title screen. | `$0800` |
