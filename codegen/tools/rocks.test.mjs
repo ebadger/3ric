@@ -134,13 +134,15 @@ console.log("E) draw_poly: ship renders and XOR-erases");
 
 // ===== M2: ship physics =====================================================
 const SHIP = S.SHIP;
-const O = { act:0, xf:1, xl:2, xh:3, yf:4, yl:5, yh:6, vxl:7, vxh:8, vyl:9, vyh:10, ang:11, drawn:12, life:13 };
+const O = { act:0, xf:1, xl:2, xh:3, yf:4, yl:5, yh:6, vxl:7, vxh:8, vyl:9, vyh:10, ang:11, drawn:12, life:13, kind:14 };
 const gb = (k) => vm.peek(SHIP + O[k]);
 const sb = (k, v) => vm.poke(SHIP + O[k], v & 0xff);
 const s8 = (v) => (v & 0x80 ? v - 256 : v);           // signed byte
 const press = (k) => vm.poke(0xC000, k);              // key codes already carry bit7
 const frame = () => runHook(S.FRAME_BRK, "frame");
 const playfieldLit = () => boxLit(0, 0, 279, 159);
+const ROCKS = S.ROCKS;
+const clearRocks = () => { for (let i = 0; i < 28; i++) { vm.poke(ROCKS + i * 16 + O.act, 0); vm.poke(ROCKS + i * 16 + O.drawn, 0); } };
 
 // F) init : ship centred, at rest, pointing up
 console.log("F) init: ship centred, at rest, pointing up");
@@ -213,6 +215,7 @@ console.log("J) wrap: crossing an edge reappears on the opposite side");
 console.log("K) erase-redraw: a moving ship leaves no trail");
 {
   runHook(S.INIT_BRK, "init");
+clearRocks();
   for (let i = 0; i < 10; i++) { press(0xD7); frame(); } // thrust up
   for (let i = 0; i < 10; i++) frame();                  // coast
   const total = playfieldLit();
@@ -236,6 +239,7 @@ const firstBullet = () => { for (let i = 0; i < 5; i++) if (bull(i, "act")) retu
 console.log("L) fire: SPACE spawns a bullet at the nose moving up");
 {
   runHook(S.INIT_BRK, "init");
+  clearRocks();
   press(0xA0); frame();                       // SPACE
   ok(activeBullets() >= 1, `a bullet is active after firing (got ${activeBullets()})`);
   const bi = firstBullet();
@@ -249,6 +253,7 @@ console.log("L) fire: SPACE spawns a bullet at the nose moving up");
 console.log("M) bullet travels and is drawn");
 {
   runHook(S.INIT_BRK, "init");
+  clearRocks();
   press(0xA0); frame();
   const bi = firstBullet();
   const y1 = bull(bi, "yl");
@@ -263,6 +268,7 @@ console.log("M) bullet travels and is drawn");
 console.log("N) bullet expires after its lifetime");
 {
   runHook(S.INIT_BRK, "init");
+  clearRocks();
   press(0xA0); frame();
   ok(activeBullets() === 1, "bullet active");
   for (let i = 0; i < 62; i++) frame();       // outlive it
@@ -274,6 +280,7 @@ console.log("N) bullet expires after its lifetime");
 console.log("O) fire cadence caps active bullets at NBULLET");
 {
   runHook(S.INIT_BRK, "init");
+  clearRocks();
   let peak = 0;
   for (let i = 0; i < 50; i++) { press(0xA0); frame(); peak = Math.max(peak, activeBullets()); }
   ok(activeBullets() <= 5, `never more than 5 bullets (got ${activeBullets()})`);
@@ -284,11 +291,80 @@ console.log("O) fire cadence caps active bullets at NBULLET");
 console.log("P) bullet wraps at the top edge");
 {
   runHook(S.INIT_BRK, "init");
+  clearRocks();
   press(0xA0); frame();
   const bi = firstBullet();
   setbull(bi, "yf", 0); setbull(bi, "yl", 2); setbull(bi, "yh", 0);  // just below the top
   frame();
   ok(bull(bi, "yl") > 150, `bullet wrapped top -> bottom (y=${bull(bi, "yl")})`);
+}
+
+// ===========================================================================
+// M4) rocks
+// ===========================================================================
+const rk = (i, k) => vm.peek(ROCKS + i * 16 + O[k]);
+const setrk = (i, k, v) => vm.poke(ROCKS + i * 16 + O[k], v & 0xff);
+const rkx = (i) => rk(i, "xl") + 256 * rk(i, "xh");
+const activeRocks = () => { let n = 0; for (let i = 0; i < 28; i++) n += rk(i, "act") ? 1 : 0; return n; };
+const firstActiveRock = () => { for (let i = 0; i < 28; i++) if (rk(i, "act")) return i; return -1; };
+
+// Q) the opening wave spawns WAVE0 large rocks, on-screen, valid silhouettes
+console.log("Q) opening wave spawns large rocks");
+{
+  runHook(S.INIT_BRK, "init");
+  ok(activeRocks() === 4, `WAVE0 large rocks active (got ${activeRocks()})`);
+  let allLarge = true, onScreen = true;
+  for (let i = 0; i < 28; i++) if (rk(i, "act")) {
+    const k = rk(i, "kind");
+    if (k !== 2 && k !== 5 && k !== 8) allLarge = false;   // size 2 => kind in {2,5,8}
+    if (rkx(i) > 279 || rk(i, "yl") > 159) onScreen = false;
+  }
+  ok(allLarge, "every wave rock is a large silhouette");
+  ok(onScreen, "every rock spawns inside the playfield");
+}
+
+// R) rocks are actually drawn (they add many lit pixels over the ship alone)
+console.log("R) rocks are drawn on the playfield");
+{
+  runHook(S.INIT_BRK, "init"); clearRocks(); frame();
+  const shipOnly = playfieldLit();
+  runHook(S.INIT_BRK, "init"); frame();
+  const withRocks = playfieldLit();
+  ok(withRocks - shipOnly > 60, `4 large rocks add many lit pixels (${shipOnly} -> ${withRocks})`);
+}
+
+// S) rocks drift over time
+console.log("S) rocks drift over time");
+{
+  runHook(S.INIT_BRK, "init");
+  const bi = firstActiveRock();
+  const x0 = rkx(bi), y0 = rk(bi, "yl");
+  for (let i = 0; i < 20; i++) frame();
+  const x1 = rkx(bi), y1 = rk(bi, "yl");
+  ok(x0 !== x1 || y0 !== y1, `rock drifted (${x0},${y0}) -> (${x1},${y1})`);
+}
+
+// T) rocks wrap at the screen edges like every other object
+console.log("T) rocks wrap at the screen edges");
+{
+  runHook(S.INIT_BRK, "init");
+  const bi = firstActiveRock();
+  setrk(bi, "xf", 0); setrk(bi, "xl", 278 & 255); setrk(bi, "xh", 278 >> 8);
+  setrk(bi, "vxl", 0); setrk(bi, "vxh", 2); setrk(bi, "vyl", 0); setrk(bi, "vyh", 0);
+  frame();
+  ok(rkx(bi) < 20, `rock wrapped past the right edge (x=${rkx(bi)})`);
+}
+
+// U) rocks erase-redraw with no trail (lit count stays bounded over time)
+console.log("U) rocks leave no trail");
+{
+  runHook(S.INIT_BRK, "init");
+  frame();
+  const lit1 = playfieldLit();
+  for (let i = 0; i < 40; i++) frame();
+  const lit2 = playfieldLit();
+  ok(lit2 > 80, `rocks still on screen (lit ${lit2})`);
+  ok(lit2 < 700, `no runaway accumulation over 40 frames (${lit1} -> ${lit2})`);
 }
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);

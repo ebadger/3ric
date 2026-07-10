@@ -144,6 +144,10 @@ blcnt    = $6A56          ; object-iteration loop counter
 bx       = $6A57          ; plot_xy args: pixel x (16-bit) ...
 bxh      = $6A58
 by       = $6A59          ; ... pixel y (0..159)
+seed     = $6A5A          ; 16-bit LFSR RNG state (+1)
+rkcnt    = $6A5C          ; rocks alive (wave bookkeeping)
+spcnt    = $6A5D          ; spawn loop counter
+rksz     = $6A5E          ; spawn_rock: requested size, kept across rand calls
 
 ; ---- tunables ----
 HOLD     = 4              ; frames an action stays live after its key event
@@ -152,6 +156,10 @@ ANGUP    = 24             ; heading that points up (-y)
 DELAYO   = 20             ; frame-delay outer count (game pacing)
 BULLET_LIFE = 60          ; frames a shot lives (~1 screen width @ 4.2 px/frame)
 FIRE_CD  = 8              ; frames between shots (auto-fire cadence while held)
+NDRIFT   = 16             ; rock drift-direction table size
+SZLARGE  = 2              ; rock size index: 0 small, 1 med, 2 large
+NSHAPE   = 3              ; rock silhouette variants
+WAVE0    = 4              ; large rocks in the opening wave
 
 ; ---- key codes (Apple II: bit7 set = key ready) ----
 K_A      = $C1
@@ -193,8 +201,14 @@ game_init:
         jsr clear_screen
         jsr init_ship
         jsr clear_bullets
+        jsr clear_rocks
+        lda #$A5                ; nonzero LFSR seed (0 would lock the RNG)
+        sta seed
+        lda #$3C
+        sta seed+1
         lda #0
         sta firecd
+        jsr spawn_wave
         rts
 
 ; init_ship : place the ship at screen centre, at rest, pointing up.
@@ -230,6 +244,7 @@ init_ship:
 game_frame:
         jsr erase_ship
         jsr erase_bullets
+        jsr erase_rocks
         jsr read_input
         jsr do_rotate
         jsr do_thrust
@@ -237,8 +252,10 @@ game_frame:
         jsr integrate_ship
         jsr wrap_ship
         jsr update_bullets
+        jsr update_rocks
         jsr draw_ship
         jsr draw_bullets
+        jsr draw_rocks
         jsr decay_timers
         jsr dec_firecd
         rts
@@ -795,6 +812,239 @@ dec_firecd:
         beq dfc_ret
         dec firecd
 dfc_ret:
+        rts
+
+; ===========================================================================
+; M4 : rocks  (drifting lumpy polygons that wrap; split in M5)
+; ===========================================================================
+
+; rand : 16-bit Galois LFSR (poly $B400, period 65535).  Returns A = low byte.
+rand:
+        lsr seed+1
+        ror seed
+        bcc rnd_ret
+        lda seed+1
+        eor #$B4
+        sta seed+1
+rnd_ret:
+        lda seed
+        rts
+
+; set_rock_vp : point the vertex tables at rock silhouette A (kind 0..8).
+;   kind = shape*3 + size ; 8 verts per rock.
+set_rock_vp:
+        asl a
+        asl a
+        asl a                   ; kind*8
+        sta tmpa
+        clc
+        lda #<ROCKX
+        adc tmpa
+        sta vpx
+        lda #>ROCKX
+        adc #0
+        sta vpx+1
+        clc
+        lda #<ROCKY
+        adc tmpa
+        sta vpy
+        lda #>ROCKY
+        adc #0
+        sta vpy+1
+        lda #8
+        sta vcount
+        rts
+
+; render_rock : XOR the rock pointed to by objptr at its current position.
+render_rock:
+        ldy #o_xl
+        lda (objptr),y
+        sta cenx
+        ldy #o_xh
+        lda (objptr),y
+        sta cenh
+        ldy #o_yl
+        lda (objptr),y
+        sta ceny
+        ldy #o_kind
+        lda (objptr),y
+        jsr set_rock_vp
+        jsr draw_poly
+        rts
+
+; clear_rocks : deactivate every rock slot.
+clear_rocks:
+        lda #<ROCKS
+        sta objptr
+        lda #>ROCKS
+        sta objptr+1
+        lda #NROCK
+        sta blcnt
+crk_loop:
+        lda #0
+        ldy #o_act
+        sta (objptr),y
+        ldy #o_drawn
+        sta (objptr),y
+        jsr obj_next
+        dec blcnt
+        bne crk_loop
+        rts
+
+; erase_rocks : XOR off every rock that is currently drawn.
+erase_rocks:
+        lda #<ROCKS
+        sta objptr
+        lda #>ROCKS
+        sta objptr+1
+        lda #NROCK
+        sta blcnt
+erk_loop:
+        ldy #o_act
+        lda (objptr),y
+        beq erk_next
+        ldy #o_drawn
+        lda (objptr),y
+        beq erk_next
+        jsr render_rock
+erk_next:
+        jsr obj_next
+        dec blcnt
+        bne erk_loop
+        rts
+
+; update_rocks : drift + wrap each active rock (shared physics).
+update_rocks:
+        lda #<ROCKS
+        sta objptr
+        lda #>ROCKS
+        sta objptr+1
+        lda #NROCK
+        sta blcnt
+urk_loop:
+        ldy #o_act
+        lda (objptr),y
+        beq urk_next
+        jsr integrate_obj
+        jsr wrap_obj
+urk_next:
+        jsr obj_next
+        dec blcnt
+        bne urk_loop
+        rts
+
+; draw_rocks : XOR on every active rock and mark it drawn.
+draw_rocks:
+        lda #<ROCKS
+        sta objptr
+        lda #>ROCKS
+        sta objptr+1
+        lda #NROCK
+        sta blcnt
+drk_loop:
+        ldy #o_act
+        lda (objptr),y
+        beq drk_next
+        jsr render_rock
+        lda #1
+        ldy #o_drawn
+        sta (objptr),y
+drk_next:
+        jsr obj_next
+        dec blcnt
+        bne drk_loop
+        rts
+
+; spawn_wave : lay out the opening field of large rocks.
+spawn_wave:
+        lda #0
+        sta rkcnt
+        lda #WAVE0
+        sta spcnt
+sw_loop:
+        lda #SZLARGE
+        jsr spawn_rock
+        dec spcnt
+        bne sw_loop
+        rts
+
+; spawn_rock : add one rock of size A (0..2) in a free slot at a random edge
+; position with a random slow drift.  No-op if every slot is taken.
+spawn_rock:
+        sta rksz
+        lda #<ROCKS
+        sta objptr
+        lda #>ROCKS
+        sta objptr+1
+        lda #NROCK
+        sta blcnt
+spr_find:
+        ldy #o_act
+        lda (objptr),y
+        beq spr_free
+        jsr obj_next
+        dec blcnt
+        bne spr_find
+        rts                     ; field full
+spr_free:
+        ; kind = SHP3[rand & 3] + size
+        jsr rand
+        and #3
+        tax
+        lda SHP3,x
+        clc
+        adc rksz
+        ldy #o_kind
+        sta (objptr),y
+        ; x = rand (0..255) ; xf = xh = 0
+        lda #0
+        ldy #o_xf
+        sta (objptr),y
+        ldy #o_xh
+        sta (objptr),y
+        jsr rand
+        ldy #o_xl
+        sta (objptr),y
+        ; y = rand folded into 0..159 ; yf = yh = 0
+        lda #0
+        ldy #o_yf
+        sta (objptr),y
+        ldy #o_yh
+        sta (objptr),y
+        jsr rand
+        cmp #160
+        bcc spr_yset
+        sec
+        sbc #160
+spr_yset:
+        ldy #o_yl
+        sta (objptr),y
+        ; velocity = drift table[rand & 15]
+        jsr rand
+        and #(NDRIFT-1)
+        tax
+        lda DVXL,x
+        ldy #o_vxl
+        sta (objptr),y
+        lda DVXH,x
+        ldy #o_vxh
+        sta (objptr),y
+        lda DVYL,x
+        ldy #o_vyl
+        sta (objptr),y
+        lda DVYH,x
+        ldy #o_vyh
+        sta (objptr),y
+        ; flags
+        lda #0
+        ldy #o_drawn
+        sta (objptr),y
+        ldy #o_life
+        sta (objptr),y
+        lda #1
+        ldy #o_act
+        sta (objptr),y
+        inc rkcnt
         rts
 
 ; decay_timers : count each hold-timer down toward 0.
@@ -1354,6 +1604,16 @@ ROCKX:
         .byte 5,2,0,253,251,254,0,3,10,5,0,251,246,251,0,6,17,8,0,247,239,248,0,10,4,3,255,252,252,253,1,4,8,6,255,248,248,250,1,8,13,10,254,242,242,246,2,14,5,2,255,252,251,254,1,3,10,4,254,248,246,253,3,6,16,7,253,242,240,250,5,11
 ROCKY:
         .byte 0,2,5,3,0,254,251,253,0,5,10,5,0,251,247,250,0,8,17,9,0,248,240,246,1,4,4,3,255,252,253,253,1,8,7,6,255,248,249,250,2,14,12,10,254,242,244,246,1,4,3,2,255,253,252,254,3,8,6,4,253,249,247,253,5,13,11,7,251,245,241,250
+DVXL:
+        .byte 151,128,86,31,227,171,129,106,105,128,170,225,29,85,127,150
+DVXH:
+        .byte 0,0,0,0,255,255,255,255,255,255,255,255,0,0,0,0
+DVYL:
+        .byte 29,85,127,150,151,128,86,31,227,171,129,106,105,128,170,225
+DVYH:
+        .byte 0,0,0,0,0,0,0,0,255,255,255,255,255,255,255,255
+SHP3:
+        .byte 0,3,6,0            ; shape*3 for a random rock silhouette (rand&3)
 
 ; ---------------------------------------------------------------------------
 ; test hooks : harness pokes state, sets PC here, runs to BRK (monitor dump).
