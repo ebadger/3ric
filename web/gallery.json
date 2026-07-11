@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "_readme": "Community Gallery manifest for the 3ric web client. Each entry becomes a card on gallery.html with a one-click 'Run & Remix' link into the in-browser editor. To feature your own program: add its .s source under codegen/programs/ (build.ps1 stages every codegen/programs/*.s into web/programs/) and append an entry below, then open a pull request. Fields: title (required), author, authorUrl, mode (Hi-res|Lo-res|Text|Serial), description, tags[]; and a run target of either src ('programs/<name>.s') or an inline code (URL-safe base64 for ?code=), plus an optional org (hex load address, only when the source has no .org directive).",
+  "entries": [
+    {
+      "title": "Swarm",
+      "author": "3ric",
+      "authorUrl": "https://github.com/ebadger/3ric",
+      "mode": "Hi-res",
+      "src": "programs/swarm.s",
+      "description": "Space-invaders-style fixed shooter — hold the ground line against a descending alien swarm.",
+      "tags": ["shooter", "hi-res", "game"]
+    },
+    {
+      "title": "Rocks",
+      "author": "3ric",
+      "authorUrl": "https://github.com/ebadger/3ric",
+      "mode": "Hi-res",
+      "src": "programs/rocks.s",
+      "description": "Vector asteroids-style shooter — rotate, thrust with real inertia, and blast splitting rocks.",
+      "tags": ["shooter", "hi-res", "game"]
+    },
+    {
+      "title": "Jungle",
+      "author": "3ric",
+      "authorUrl": "https://github.com/ebadger/3ric",
+      "mode": "Hi-res",
+      "src": "programs/jungle.s",
+      "description": "Jungle platformer — dash through hazards, leap pits, grab the treasure, and beat the clock.",
+      "tags": ["platformer", "hi-res", "game"]
+    },
+    {
+      "title": "Snake",
+      "author": "3ric",
+      "authorUrl": "https://github.com/ebadger/3ric",
+      "mode": "Lo-res",
+      "src": "programs/snake.s",
+      "description": "Classic snake — grow by eating food, steer with the arrows or WASD; Q quits.",
+      "tags": ["arcade", "lo-res", "game"]
+    },
+    {
+      "title": "Game of Life",
+      "author": "3ric",
+      "authorUrl": "https://github.com/ebadger/3ric",
+      "mode": "Lo-res",
+      "src": "programs/life.s",
+      "description": "Conway's Game of Life on a toroidal 40x48 colour grid; press SPACE to reseed.",
+      "tags": ["simulation", "lo-res"]
+    },
+    {
+      "title": "Blocks",
+      "author": "3ric",
+      "authorUrl": "https://github.com/ebadger/3ric",
+      "mode": "Text",
+      "src": "programs/blocks.s",
+      "description": "Falling-block stacker — clear lines in a 10x20 well before the pieces reach the top.",
+      "tags": ["puzzle", "text", "game"]
+    },
+    {
+      "title": "Bricks",
+      "author": "3ric",
+      "authorUrl": "https://github.com/ebadger/3ric",
+      "mode": "Text",
+      "src": "programs/bricks.s",
+      "description": "Brick-breaker — clear the wall with a bouncing ball and a paddle.",
+      "tags": ["arcade", "text", "game"]
+    },
+    {
+      "title": "Paddles",
+      "author": "3ric",
+      "authorUrl": "https://github.com/ebadger/3ric",
+      "mode": "Text",
+      "src": "programs/paddles.s",
+      "description": "Two-paddle tennis — first to 7 points wins.",
+      "tags": ["arcade", "text", "game"]
+    },
+    {
+      "title": "2048",
+      "author": "3ric",
+      "authorUrl": "https://github.com/ebadger/3ric",
+      "mode": "Text",
+      "src": "programs/2048.s",
+      "description": "The classic 4x4 2048 sliding-tile puzzle — combine tiles to reach 2048.",
+      "tags": ["puzzle", "text", "game"]
+    },
+    {
+      "title": "Minesweeper",
+      "author": "3ric",
+      "authorUrl": "https://github.com/ebadger/3ric",
+      "mode": "Text",
+      "src": "programs/mines.s",
+      "description": "Turn-based Minesweeper on a 16x16 board — flag the mines and clear the field.",
+      "tags": ["puzzle", "text", "game"]
+    },
+    {
+      "title": "Hello, world",
+      "author": "3ric",
+      "authorUrl": "https://github.com/ebadger/3ric",
+      "mode": "Serial",
+      "src": "programs/hello.s",
+      "description": "A tiny greeting printed via COUT ($FDED), then BRK back to the monitor — the perfect starting point for your first 3ric program.",
+      "tags": ["demo", "serial", "starter"]
+    }
+  ]
+}

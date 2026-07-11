@@ -134,9 +134,39 @@ Implementation notes:
   when the source has no `.org` directive. Opening a `?src=`/`?code=` link auto-runs
   it and shows a "remixing a shared program" banner. No server is involved — the
   link is the whole payload, so very large sources make long `?code=` links.
-- `build.ps1` stages `asm6502.mjs` and the eleven sample `.s` sources into
-  `web/` and `web/programs/` (git-ignored, regenerated each build; CI does the
-  same before publishing).
+- `build.ps1` stages `asm6502.mjs` and every `codegen/programs/*.s` plus the ten
+  `emulator/AICodeGen` sample sources into `web/` and `web/programs/` (git-ignored,
+  regenerated each build; CI does the same before publishing).
+
+## Community Gallery
+
+`gallery.html` is a lightweight, WASM-free showcase of programs written for 3ric,
+linked from the emulator header. It fetches the committed **`gallery.json`** manifest
+and renders one card per program; each card's **&#9654; Run & Remix** button is just a
+`?src=`/`?code=` deep link into `index.html`, so a click loads the source into the
+editor, auto-runs it, and shows the remix banner — no separate storage or server.
+
+`gallery.json` is the single source of truth (a `{ "version", "entries": [...] }`
+document). Each entry has:
+
+| field | required | notes |
+|-------|----------|-------|
+| `title` | yes | shown as the card heading |
+| `mode` | no | badge text, e.g. `Hi-res` / `Lo-res` / `Text` / `Serial` |
+| `description` | no | one- or two-line blurb |
+| `author`, `authorUrl` | no | credit; `authorUrl` is linked only when `http(s)` |
+| `tags` | no | array of short labels |
+| `src` **or** `code` | yes | run target: a `programs/<name>.s` path, or an inline URL-safe base64 program (paste the `?code=` value from a Share link) |
+| `org` | no | hex load address, only when the source has no `.org` directive |
+
+The page builds every card with `textContent` (never `innerHTML`) and only ever
+produces `index.html?…` links, so a manifest entry can't inject markup or a
+`javascript:` URL.
+
+**Add your program:** drop the `.s` into `codegen/programs/` (every `*.s` there is
+staged into `web/programs/` automatically) and append an entry to `gallery.json`,
+then open a pull request. The gallery's *Add your program* card links straight to
+GitHub's in-browser editor for `gallery.json`.
 
 ## Headless tests (fast iteration)
 
@@ -234,8 +264,8 @@ site, 100 GB/month bandwidth).
 1. installs Python + Emscripten (`6.0.1`, matching this project),
 2. runs `web/build.ps1` (it detects Linux CI and invokes `em++` directly, and
    stages `asm6502.mjs` + the `programs/*.s` sample sources for the editor),
-3. stages `index.html` + `badger6502.js` + `.wasm` + `asm6502.mjs` + `data/` +
-   `programs/` as the site root,
+3. stages `index.html` + `gallery.html` + `gallery.json` + `badger6502.js` +
+   `.wasm` + `asm6502.mjs` + `data/` + `programs/` as the site root,
 4. uploads it as a Pages artifact and deploys.
 
 The build outputs stay git-ignored — CI regenerates them from the committed

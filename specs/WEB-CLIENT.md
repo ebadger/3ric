@@ -35,6 +35,12 @@ host it as static files.
   link to the current editor program.
 - **SD image:** `make_sd_sparse.py` streams `emulator/Data/sd.zip` (2 GB, mostly-zero FAT32)
   into `data/sd.sparse` (~11.5 MB `SDSP` container), fetched lazily.
+- **Gallery (`gallery.html` + `gallery.json`):** a lightweight, WASM-free showcase page that
+  fetches the curated `gallery.json` manifest and renders one card per program, each opening
+  `index.html?src=programs/<name>.s` (or an inline `?code=`) so the Share/Remix loader
+  auto-runs it. Manifest entries carry `title`, `author`/`authorUrl`, `mode`, `description`,
+  `tags`, and a run target (a `src` program path or inline `code`, plus optional `org`). Both
+  files are committed (not generated), so the deploy workflow stages them into `_site/`.
 
 ## Behaviour / Rules
 
@@ -55,6 +61,13 @@ host it as static files.
   involved; the link is the whole payload. Large sources make long `?code=` links (the giant
   hi-res samples are shared via `?src=` precisely to avoid this); a future `?codez=` could
   deflate the payload if needed.
+- **Community Gallery.** `gallery.html` is the discovery front door: it reads `gallery.json`
+  and shows every program as a one-click **Run & Remix** card that opens in the editor via the
+  same `?src=` / `?code=` deep links, so each card lands on an editable, auto-running program.
+  Contribution is PR-based — add a `.s` under `codegen/programs/` (staged into `programs/` by
+  `build.ps1`) plus an entry in `gallery.json` — so every featured program credits its author
+  and turns a visitor into a contributor. The page builds card text with `textContent` only:
+  the manifest is repo-reviewed, but no entry field is ever injected as HTML.
 
 ## Data flow
 
@@ -62,12 +75,16 @@ host it as static files.
 seedBasicRom / loadFont / reset) → run() per frame → renderFrame()→canvas, drainOutput()→
 log; keyDown()→$C000; Boot Disk/Mount SD → insertDisk()/loadSD() → C600G / EC5CG`.
 
+Gallery: `gallery.html → fetch gallery.json → render cards → click Run & Remix →
+index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
+
 ## Dependencies
 
 - **Upstream:** the VM core (`EMULATOR.md`), the ROM/font/disk/SD data (`ROM-SOFTWARE.md`),
   and `codegen/tools/asm6502.mjs` (staged for the in-browser assembler — `CODEGEN.md`).
-- **Downstream:** GitHub Pages deploy (`.github/workflows/deploy-pages.yml`); the public
-  users of the demo.
+- **Downstream:** GitHub Pages deploy (`.github/workflows/deploy-pages.yml`) — its **Stage
+  site** step stages `gallery.html` + `gallery.json` (alongside `index.html` and `programs/`)
+  into `_site/`; the public users of the demo.
 
 ## Implementation Status
 
@@ -78,6 +95,7 @@ log; keyDown()→$C000; Boot Disk/Mount SD → insertDisk()/loadSD() → C600G /
 | Disk II WOZ boot + micro-SD DOS shell | Shipped | **Boot Disk** / **Mount SD** buttons. |
 | In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; ~11 samples; `?src=`. |
 | Share / Remix deep links | Shipped | **Share** button; `?src=programs/<name>.s` for unmodified samples, inline base64url `?code=` otherwise, both carrying `&org=` when the source has no `.org`; remix banner on shared links. |
+| Community Gallery | Shipped | `gallery.html` renders the curated `gallery.json`; one-click **Run & Remix** via `?src=`/`?code=`; PR-based submissions credited by author. |
 | Adjustable CPU clock | Shipped | frontend-only pacing. |
 | Headless smoke tests | Shipped | `web/test_*.cjs` (boot/render/keyboard/screen/sd/disk). |
 | GitHub Pages CI deploy | Shipped | on push to `main` touching emulator/web/codegen sources. |
