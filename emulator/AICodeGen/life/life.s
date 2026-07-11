@@ -1,14 +1,24 @@
 ; ============================================================================
 ; Conway's Game of Life for the 3ric  (65C02, Apple-II compatible)
 ;
-;   * Hi-res graphics, full screen, page 1 (280x192).
-;   * Toroidal world (edges wrap) on a 40 x 48 cell grid.
-;     Each cell is 7 px wide (one hi-res byte) x 4 px tall -> fills the screen.
-;   * Runs the B3/S23 rules continuously, as fast as the CPU allows.
+;   * Full-screen LO-RES colour graphics, page 1 (40 x 48 blocks).
+;   * Toroidal world (edges wrap) on a 40 x 48 cell grid -- one lo-res block per
+;     cell, so the world fills the screen and every edge wraps.
+;   * Live cells are green, dead cells black.  Runs the B3/S23 rules
+;     continuously, as fast as the CPU allows.
 ;   * Press SPACE to reseed the world with a fresh pseudo-random field.
 ;   * Press RESET to return to the monitor / BASIC.
 ;
+; Lo-res page 1 shares the text page ($0400-$07FF): each byte holds two stacked
+; cells -- the low nibble is the upper cell, the high nibble the lower one -- so
+; a lo-res row R maps to text row R/2 (`TROWL/TROWH[R>>1]`), low nibble when R is
+; even, high nibble when R is odd.  A full-screen (non-mixed) field is therefore
+; 24 text rows x 2 = 48 cells tall.  The simulation is unchanged from the hi-res
+; version; only the render stage and the mode setup differ.
+;
 ; Build / run:
+;   node codegen/tools/asm6502.mjs emulator/AICodeGen/life/life.s \
+;        emulator/AICodeGen/life/life.prg --org 0x0800
 ;   BRUN LIFE.PRG 0800     (loads the raw image to $0800 and jumps there)
 ; ============================================================================
 
@@ -16,13 +26,19 @@
 TXTCLR   = $C050        ; graphics (text off)
 MIXCLR   = $C052        ; full screen (no split text window)
 LOWSCR   = $C054        ; display page 1
-HIRES_SW = $C057        ; hi-res
+LORES    = $C056        ; lo-res graphics
 KBD      = $C000        ; keyboard data (bit7 = key ready)
 KBDSTRB  = $C010        ; clear keyboard strobe
 
-; ---- grid geometry ----
-W        = 40           ; inner columns  (40 * 7  = 280 px)
-H        = 48           ; inner rows     (48 * 4  = 192 px)
+; ---- lo-res colours (index into the 16-entry palette) ----
+BLACK    = 0            ; dead cell
+GREEN    = $0C          ; live cell (palette 12) in the low (upper-pixel) nibble
+GREENHI  = $C0          ; live cell (palette 12) in the high (lower-pixel) nibble
+
+; ---- grid geometry (lo-res field: 40 cols x 48 rows, full screen) ----
+W        = 40           ; inner columns  (40 lo-res cells wide)
+H        = 48           ; inner rows     (48 lo-res cells tall)
+TROWS    = 24           ; text rows on screen (H / 2; two cells packed per byte)
 STRIDE   = 42           ; W + 2  (one halo column on each side)
 ROWS     = 50           ; H + 2  (one halo row on top and bottom)
 STRIDE2  = 84           ; STRIDE * 2
@@ -30,15 +46,11 @@ ROWH     = 2016         ; H * STRIDE       (byte offset of inner row H)
 ROWHB    = 2058         ; (H+1) * STRIDE   (byte offset of halo row H+1)
 
 ; ---- generation buffers (padded with a 1-cell halo used for wrapping) ----
-; One byte per cell: 0 = dead, 1 = alive.  Both live in the $4000-$5FFF
-; hi-res page-2 region, which is free RAM here (only page 1 at $2000 is shown).
+; One byte per cell: 0 = dead, 1 = alive.  Both live in the $4000-$5FFF free RAM
+; region; the lo-res display shares the text page at $0400-$07FF, so there is no
+; conflict with the buffers or with the program at $0800.
 CUR0     = $4000        ; current generation
 NXT0     = $5000        ; next generation
-
-; ---- tables / scratch in RAM ----
-CBASE_L  = $1000        ; 48 bytes: low byte  of the hi-res address of a cell row
-CBASE_H  = $1030        ; 48 bytes: high byte of the hi-res address of a cell row
-LINEBUF  = $1060        ; 40 bytes: one rendered cell row ($7F alive / $00 dead)
 
 ; ---- zero page ----
 seedL    = $06
@@ -50,14 +62,11 @@ pN       = $0E          ; step: next-gen row        (+1)
 cnt      = $10          ; neighbour count
 curbase  = $11          ; -> current buffer         (+1)
 nxtbase  = $13          ; -> next buffer            (+1)
-hp       = $15          ; render: hi-res dest ptr   (+1)
-rp       = $17          ; row pointer               (+1)
-sp       = $19          ; second row pointer        (+1)
-src      = $1B          ; general source ptr        (+1)
+hp       = $15          ; render: lo-res dest ptr   (+1)
+rp       = $17          ; render: top cell-row ptr  (+1)
+sp       = $19          ; render: bottom cell-row ptr (+1)
 dst      = $1D          ; general dest ptr          (+1)
-tmp2     = $20
-tmp3     = $21
-tmp4     = $22
+tmp2     = $20          ; render: packed low-nibble scratch
 
 SEED0    = $ACE1        ; initial LFSR state (must be non-zero)
 
@@ -74,12 +83,11 @@ start:
         lda TXTCLR              ; graphics on
         lda MIXCLR              ; full screen
         lda LOWSCR              ; page 1
-        lda HIRES_SW            ; hi-res
+        lda LORES               ; lo-res
         lda #<SEED0
         sta seedL
         lda #>SEED0
         sta seedH
-        jsr build_lines         ; hi-res base-address table
         lda #<CUR0
         sta curbase
         lda #>CUR0
@@ -100,66 +108,6 @@ main:
         jsr step
         jsr swap_buf
         jmp main
-
-; ---------------------------------------------------------------------------
-; build_lines : fill CBASE_L/H with the hi-res address of the top pixel row of
-; each of the 48 cell rows.  Cell row r starts at pixel y = r*4; because 4
-; divides 8, a cell's four pixel rows never cross an 8-line group boundary, so
-; the other three rows are just +$400 each (handled in render).
-;
-;   high = $20 + (r&1 ? $10 : 0) + (ym >> 1)          , ym = (r>>1) & 7
-;   low  =       (ym&1 ? $80 : 0) + (r>>4) * $28
-; ---------------------------------------------------------------------------
-build_lines:
-        ldx #0
-bl_loop:
-        txa
-        lsr a
-        and #7
-        sta tmp2                ; tmp2 = ym
-        lsr a                   ; ym >> 1
-        clc
-        adc #$20
-        sta tmp3                ; tmp3 = high (base part)
-        txa
-        and #1
-        beq bl_even
-        lda tmp3
-        clc
-        adc #$10
-        sta tmp3
-bl_even:
-        lda #0
-        sta tmp4                ; tmp4 = low
-        lda tmp2
-        and #1
-        beq bl_nolo
-        lda #$80
-        sta tmp4
-bl_nolo:
-        txa
-        lsr a
-        lsr a
-        lsr a
-        lsr a                   ; r >> 4  (0,1,2)
-        beq bl_store
-        tay
-        lda tmp4
-bl_add28:
-        clc
-        adc #$28
-        dey
-        bne bl_add28
-        sta tmp4
-bl_store:
-        lda tmp4
-        sta CBASE_L,x
-        lda tmp3
-        sta CBASE_H,x
-        inx
-        cpx #H
-        bne bl_loop
-        rts
 
 ; ---------------------------------------------------------------------------
 ; clear_bufs : zero the whole $4000-$5FFF range (both buffers + halo).
@@ -413,72 +361,59 @@ st_ret:
         rts
 
 ; ---------------------------------------------------------------------------
-; render : draw curbase to the hi-res screen.  For each cell row, build a
-; 40-byte pixel line then blast it to the cell's four pixel rows.
+; render : draw curbase to the full-screen lo-res page ($0400-$07FF).  Each
+; lo-res byte packs two vertically-adjacent cells: the low nibble is the upper
+; cell (even grid row 2R), the high nibble the lower cell (odd grid row 2R+1).
+; For each of the 24 text rows R, walk 40 columns writing one packed byte
+; (green for a live cell, black for a dead one).
 ; ---------------------------------------------------------------------------
 render:
         lda curbase
         clc
-        adc #STRIDE+1           ; inner cell (1,1)
+        adc #STRIDE+1           ; rp -> inner cell (1,1) = grid (0,0)
         sta rp
         lda curbase+1
         adc #0
         sta rp+1
-        ldx #0                  ; cell row 0..47
+        ldx #0                  ; X = text row R (0..23)
 rn_row:
-        ldy #0
-rn_build:
-        lda (rp),y
-        beq rn_dead
-        lda #$7F
-        jmp rn_put
-rn_dead:
-        lda #0
-rn_put:
-        sta LINEBUF,y
-        iny
-        cpy #W
-        bne rn_build
-        lda CBASE_L,x
-        sta hp
-        lda CBASE_H,x
-        sta hp+1
-        jsr blit_line           ; pixel row 0
-        lda hp+1
-        clc
-        adc #4                  ; +$400
-        sta hp+1
-        jsr blit_line           ; pixel row 1
-        lda hp+1
-        clc
-        adc #4
-        sta hp+1
-        jsr blit_line           ; pixel row 2
-        lda hp+1
-        clc
-        adc #4
-        sta hp+1
-        jsr blit_line           ; pixel row 3
-        lda rp
+        lda rp                  ; sp -> bottom cell row (grid row 2R+1)
         clc
         adc #STRIDE
+        sta sp
+        lda rp+1
+        adc #0
+        sta sp+1
+        lda TROWL,x             ; hp -> $0400 + text-row base
+        sta hp
+        lda TROWH,x
+        sta hp+1
+        ldy #0                  ; Y = column 0..39
+rn_col:
+        lda (rp),y              ; upper cell (0 = dead / 1 = alive)
+        beq rn_top0
+        lda #GREEN              ; alive -> low nibble = $0C
+rn_top0:
+        sta tmp2                ; dead leaves A=0 -> low nibble = 0
+        lda (sp),y              ; lower cell (0 = dead / 1 = alive)
+        beq rn_bot0
+        lda #GREENHI            ; alive -> high nibble = $C0
+rn_bot0:
+        ora tmp2                ; combine high | low
+        sta (hp),y
+        iny
+        cpy #W                  ; 40 columns
+        bne rn_col
+        lda rp                  ; advance to next text row's top cell (+2 grid rows)
+        clc
+        adc #STRIDE2
         sta rp
         lda rp+1
         adc #0
         sta rp+1
         inx
-        cpx #H
+        cpx #TROWS              ; 24 text rows
         bne rn_row
-        rts
-
-blit_line:
-        ldy #0
-bl2:
-        lda LINEBUF,y
-        sta (hp),y
-        iny
-        cpy #W
-        bne bl2
         rts
 
 ; ---------------------------------------------------------------------------
@@ -530,3 +465,23 @@ seed_brk:
         txs
         jsr seed_field
         brk
+
+; render_wai renders the current buffer, then WAIs.  Unlike a BRK hook this never
+; drops into the monitor, so its register dump can't scribble on the text/lo-res
+; page -- the harness can decode $0400-$07FF exactly as rendered.
+render_wai:
+        ldx #$FF
+        txs
+        jsr render
+        wai
+
+; ---------------------------------------------------------------------------
+; data : absolute base address of each of the 24 text rows in the lo-res/text
+; page ($0400 + the interleaved scanline offset).  render indexes these by text
+; row R; the two lo-res cells stacked in that row are the low (upper) and high
+; (lower) nibble of each byte.
+; ---------------------------------------------------------------------------
+TROWL:  .byte $00,$80,$00,$80,$00,$80,$00,$80,$28,$A8,$28,$A8
+        .byte $28,$A8,$28,$A8,$50,$D0,$50,$D0,$50,$D0,$50,$D0
+TROWH:  .byte $04,$04,$05,$05,$06,$06,$07,$07,$04,$04,$05,$05
+        .byte $06,$06,$07,$07,$04,$04,$05,$05,$06,$06,$07,$07

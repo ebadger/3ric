@@ -16,8 +16,9 @@ address, exactly like `BRUN FILE.PRG <org>` on real hardware.
 node codegen/tools/run6502.mjs codegen/programs/hello.s --out web/programs/hello.prg
 ```
 
-`life.prg` is Conway's Game of Life in hi-res on a wrapping (toroidal) world;
-press **SPACE** to reseed a random field. Source, prompt, and binary live in
+`life.prg` is Conway's Game of Life in full-screen lo-res colour on a wrapping
+(toroidal) world; press **SPACE** to reseed a random field. Source, prompt, and
+binary live in
 [`emulator/AICodeGen/life/`](../../emulator/AICodeGen/life); deep-link it at
 `?prg=programs/life.prg&org=0800` (set **Speed** to **Max** to run it fast):
 

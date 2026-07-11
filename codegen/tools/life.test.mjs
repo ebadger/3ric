@@ -5,8 +5,12 @@
 //   C) Glider wrap       : a lone glider must stay intact and translate
 //                          uniformly, including across the torus edges
 //                          (reference-free ground truth for rules + wrapping).
-//   D) Full run smoke    : start -> hi-res on, ~50% seed density, evolution,
-//                          and a SPACE press reseeds the field.
+//   D) Full run smoke    : start -> full-screen lo-res on, populated field,
+//                          evolution, and a SPACE press reseeds the field.
+//   E) Lo-res render     : render_wai draws a known buffer to the $0400-$07FF
+//                          lo-res page; assert the exact two-cells-per-byte
+//                          nibble packing, the seeded field round-trips, and a
+//                          blinker oscillates horizontal <-> vertical.
 //
 // Run:  node codegen/tools/life.test.mjs
 import { assemble } from "./asm6502.mjs";
@@ -15,11 +19,12 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-const { boot } = harnessPkg;
+const { boot, TEXT_SCANLINES } = harnessPkg;
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = join(HERE, "..", "..", "emulator", "AICodeGen", "life", "life.s");
 
 const W = 40, H = 48, STRIDE = 42;
+const GREEN = 12;                                 // lo-res palette index for a live cell
 const bufIndex = (r, c) => r * STRIDE + c;        // r,c are 1-based inside the padded buffer
 
 let failures = 0;
@@ -58,6 +63,24 @@ function pokeGrid(vm, base, g) { for (let r = 0; r < H; r++) for (let c = 0; c <
 function peekGrid(vm, base) { const g = new Uint8Array(H * W); for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) g[r * W + c] = vm.peek(base + bufIndex(r + 1, c + 1)) & 1; return g; }
 function zeroBuf(vm, base) { for (let i = 0; i < STRIDE * (H + 2); i++) vm.poke(base + i, 0); }
 
+// Decode the on-screen 40x48 field from the lo-res/text page the way the VM's
+// renderer does: each byte packs two stacked cells (low nibble = upper/even row,
+// high nibble = lower/odd row); a live cell is palette GREEN.
+function decodeField(vm) {
+  const g = new Uint8Array(H * W);
+  for (let r = 0; r < H; r++) {
+    const base = 0x400 + TEXT_SCANLINES[r >> 1];
+    for (let c = 0; c < W; c++) {
+      const byte = vm.peek(base + c) & 0xFF;
+      const nib = (r & 1) ? (byte >> 4) : (byte & 0x0F);
+      g[r * W + c] = nib === GREEN ? 1 : 0;
+    }
+  }
+  return g;
+}
+function countAlive(g) { let n = 0; for (const b of g) n += b; return n; }
+function asciiField(g) { let out = ""; for (let r = 0; r < H; r++) { let line = ""; for (let c = 0; c < W; c++) line += g[r * W + c] ? "#" : "."; out += "    " + line + "\n"; } return out; }
+
 // --- main -------------------------------------------------------------------
 const src = readFileSync(SRC, "utf8");
 const { org, bytes, symbols: S } = assemble(src);
@@ -67,9 +90,9 @@ const s = await boot();
 const vm = s.vm;
 s.load(bytes, org);
 
-function runHook(entry, label) {
+function runHook(entry, label, expect = "brk-monitor") {
   const r = s.run({ org: entry, maxCycles: 6_000_000, chunk: 200_000 });
-  if (r.halt !== "brk-monitor") throw new Error(`${label}: expected BRK halt, got ${r.halt} after ${r.cycles} cycles`);
+  if (r.halt !== expect) throw new Error(`${label}: expected ${expect} halt, got ${r.halt} after ${r.cycles} cycles`);
   return r;
 }
 
@@ -149,31 +172,84 @@ console.log("C) lone glider stays intact and translates uniformly across wraps")
 }
 
 // ===== D) full-run smoke test ===============================================
-console.log("D) full run: hi-res mode, seed density, evolution, spacebar reseed");
+console.log("D) full run: full-screen lo-res mode, populated field, evolution, spacebar reseed");
 function runCycles(n) { let c = 0; while (c < n) { c += vm.run(Math.min(200_000, n - c)); vm.drainOutput(); } }
-function readHires() { const a = new Uint8Array(0x2000); for (let i = 0; i < 0x2000; i++) a[i] = vm.peek(0x2000 + i); return a; }
-function countByte(a, val) { let n = 0; for (const b of a) if (b === val) n++; return n; }
-function countNonzero(a) { let n = 0; for (const b of a) if (b) n++; return n; }
 {
+  const CELLS = H * W;                        // 1920
   vm.setPC(S.START);
-  runCycles(400_000);                       // past build/clear/seed + first render
+  runCycles(400_000);                        // past clear/seed + first render(s)
   ok(vm.textMode() === 0, "graphics mode on (textMode==0)");
-  ok(vm.lores() === 0, "hi-res mode on (lores==0)");
-  const seedSnap = readHires();
-  const seedCells = countByte(seedSnap, 0x7F);
-  ok(seedCells > 1200 && seedCells < 5800, `rendered field ~half full (0x7F bytes=${seedCells})`);
+  ok(vm.lores() !== 0, "lo-res mode on (lores!=0)");
+  ok(vm.mixed() === 0, "full screen, not mixed (mixed==0)");
 
-  let snapA = readHires(), evolved = false;
-  for (let t = 0; t < 4 && !evolved; t++) { runCycles(300_000); const snapB = readHires(); if (!gridsEqual(snapA, snapB)) evolved = true; snapA = snapB; }
+  const seed = decodeField(vm);
+  const seedCells = countAlive(seed);
+  ok(seedCells > CELLS * 0.2 && seedCells < CELLS * 0.7, `field populated (alive=${seedCells}/${CELLS})`);
+
+  let snapA = decodeField(vm), evolved = false;
+  for (let t = 0; t < 4 && !evolved; t++) { runCycles(300_000); const snapB = decodeField(vm); if (!gridsEqual(snapA, snapB)) evolved = true; snapA = snapB; }
   ok(evolved, "field evolves over time");
 
-  const before = readHires();
-  vm.keyDown(0x20);                         // press SPACE
+  const before = decodeField(vm);
+  vm.keyDown(0x20);                          // press SPACE
   runCycles(700_000);
-  const after = readHires();
+  const after = decodeField(vm);
   ok(!gridsEqual(before, after), "SPACE reseeds (field changes)");
-  const dens = countByte(after, 0x7F);
-  ok(dens > 1200 && dens < 5800, `reseeded field ~half full (0x7F bytes=${dens})`);
+  const dens = countAlive(after);
+  ok(dens > CELLS * 0.2 && dens < CELLS * 0.7, `reseeded field populated (alive=${dens}/${CELLS})`);
+}
+
+// ===== E) lo-res render: exact nibble packing + seed round-trip + blinker ====
+// render_wai draws curbase to the lo-res page then WAIs (no monitor, so the
+// register dump can't scribble on $0400-$07FF), letting us decode exactly what
+// the renderer produced.  A full render overwrites every visible byte, so any
+// earlier monitor output from a BRK hook is wiped before we read it back.
+console.log("E) lo-res render ground truth (render_wai)");
+function renderCur(base) { pokeWord(vm, S.CURBASE, base); runHook(S.RENDER_WAI, "render_wai", "wai"); }
+{
+  // E1) a seeded buffer round-trips through the renderer exactly.
+  pokeWord(vm, S.SEEDL, S.SEED0);
+  pokeWord(vm, S.CURBASE, S.CUR0);
+  runHook(S.SEED_BRK, "seed_brk");           // fill CUR0 with the LFSR field
+  renderCur(S.CUR0);
+  const shown = decodeField(vm);
+  ok(gridsEqual(shown, refSeed(S.SEED0)), "rendered lo-res field matches the seeded buffer");
+  const alive = countAlive(shown);
+  ok(alive > H * W * 0.4 && alive < H * W * 0.6, `rendered seed density ~50% (alive=${alive}/${H * W})`);
+
+  // E2) exact two-cells-per-byte nibble packing: low nibble = upper (even) cell,
+  //     high nibble = lower (odd) cell.  A top/bottom swap would only show here.
+  zeroBuf(vm, S.CUR0);
+  const set = (r, c) => vm.poke(S.CUR0 + bufIndex(r + 1, c + 1), 1);
+  set(0, 0); set(1, 0);                       // text row 0, col 0: both cells -> $CC
+  set(0, 5);                                  // upper only            -> $0C
+  set(3, 7);                                  // odd row (text row 1)  -> $C0
+  renderCur(S.CUR0);
+  ok(vm.peek(0x400) === 0xCC, "byte packs upper|lower cell into low|high nibble ($0400==$CC)");
+  ok(vm.peek(0x405) === 0x0C, "upper-only cell sets only the low nibble ($0405==$0C)");
+  ok(vm.peek(0x400 + TEXT_SCANLINES[1] + 7) === 0xC0, "odd-row cell sets only the high nibble ($C0)");
+  const expSparse = new Uint8Array(H * W);
+  expSparse[0 * W + 0] = 1; expSparse[1 * W + 0] = 1; expSparse[0 * W + 5] = 1; expSparse[3 * W + 7] = 1;
+  ok(gridsEqual(decodeField(vm), expSparse), "sparse pattern decodes back to exactly the poked cells");
+
+  // E3) a blinker oscillates horizontal <-> vertical (period-2 oscillator).
+  const horiz = new Uint8Array(H * W); horiz[10 * W + 10] = 1; horiz[10 * W + 11] = 1; horiz[10 * W + 12] = 1;
+  const vert = new Uint8Array(H * W); vert[9 * W + 11] = 1; vert[10 * W + 11] = 1; vert[11 * W + 11] = 1;
+  zeroBuf(vm, S.CUR0); zeroBuf(vm, S.NXT0);
+  pokeGrid(vm, S.CUR0, horiz);
+  renderCur(S.CUR0);
+  const shownH = decodeField(vm);
+  const okH = gridsEqual(shownH, horiz);
+  ok(okH, "horizontal blinker renders as three cells in a row");
+  if (!okH) console.log(asciiField(shownH));
+
+  pokeWord(vm, S.CURBASE, S.CUR0); pokeWord(vm, S.NXTBASE, S.NXT0);
+  runHook(S.ONESTEP_BRK, "onestep blinker");  // CUR0 -> NXT0 (one generation)
+  renderCur(S.NXT0);
+  const shownV = decodeField(vm);
+  const okV = gridsEqual(shownV, vert);
+  ok(okV, "after one step the blinker is vertical (period-2 oscillator)");
+  if (!okV) console.log(asciiField(shownV));
 }
 
 console.log(failures === 0 ? "\nALL LIFE TESTS PASSED" : `\n${failures} CHECK(S) FAILED`);
