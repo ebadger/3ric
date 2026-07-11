@@ -1,0 +1,134 @@
+#!/bin/sh
+# pre-push -- Mechanical guards that run on every `git push`, regardless of caller
+# (agent, IDE, or terminal). Make the rules in docs/LEARNINGS.md mechanical instead
+# of relying on memory.
+#
+# Activate with: scripts/dev/install-hooks.sh   (sets core.hooksPath=.githooks)
+#
+# Three independent guards run in order:
+#   1. LEARNINGS.md size-cap guard  -- keeps the always-loaded Tier-1 digest small.
+#   2. Optional project test gate   -- runs scripts/dev/pre-push-tests.sh if present.
+#   3. PR-state guard               -- blocks pushes to a MERGED/CLOSED PR branch.
+#
+# Each guard fails OPEN where it cannot run (missing tool, offline) so it never
+# blocks legitimate work. Escape hatches are per-guard env vars, noted below.
+
+remote_url="$2"
+
+# Capture git's ref list from stdin into a temp file so it can be read multiple times.
+_refs_tmp=$(mktemp)
+cat > "$_refs_tmp"
+trap 'rm -f "$_refs_tmp"' EXIT
+
+# --- 1. docs/LEARNINGS.md size-cap guard -----------------------------------
+# Keeps the always-loaded Tier-1 rules digest under its token cap (see
+# docs/LEARNINGS.md "How this file is maintained"). Redirect stdin from /dev/null
+# so it never consumes the ref list git feeds us.
+# Escape hatch: SKIP_LEARNINGS_BUDGET=1 git push ...
+_budget="$(cd "$(dirname "$0")" && pwd)/../scripts/dev/check-learnings-budget.sh"
+if [ -f "$_budget" ]; then
+  sh "$_budget" </dev/null || exit 1
+fi
+# ---------------------------------------------------------------------------
+
+# --- 2. Optional project test gate -----------------------------------------
+# If the project provides scripts/dev/pre-push-tests.sh, run it before allowing
+# the push. The script decides WHAT to test (build, unit tests, a critical-path
+# eval suite, lint, etc.) and returns non-zero to BLOCK the push. This keeps the
+# *mechanism* (a mechanical test gate on push) project-agnostic -- copy
+# pre-push-tests.sh.example to pre-push-tests.sh and fill it in.
+# Escape hatch (only if the script itself honors it): SKIP_TEST_GUARD=1 git push ...
+_tests="$(cd "$(dirname "$0")" && pwd)/../scripts/dev/pre-push-tests.sh"
+if [ -f "$_tests" ] && [ -x "$_tests" ]; then
+  echo "pre-push: running project test gate (scripts/dev/pre-push-tests.sh)..." >&2
+  REFS_FILE="$_refs_tmp" sh "$_tests" </dev/null || {
+    echo "" >&2
+    echo "x pre-push BLOCKED: project test gate failed. Fix failures before pushing." >&2
+    echo "" >&2
+    exit 1
+  }
+fi
+# ---------------------------------------------------------------------------
+
+# --- 3. PR-state guard -----------------------------------------------------
+# Blocks pushes to a branch whose PR is already MERGED or CLOSED. Once a PR is
+# merged its branch is stale; pushing more commits orphans them. See LEARNINGS §6.
+# Escape hatch (rare, deliberate): SKIP_PR_GUARD=1 git push ...
+if [ "${SKIP_PR_GUARD:-}" = "1" ]; then
+  echo "pre-push: SKIP_PR_GUARD=1 -- skipping PR-state check." >&2
+  exit 0
+fi
+
+if ! command -v gh >/dev/null 2>&1; then
+  echo "pre-push: 'gh' CLI not found -- skipping PR-state check (fail-open)." >&2
+  exit 0
+fi
+
+# Derive owner/repo from the push URL so the check targets the remote actually
+# being pushed to. Only GitHub remotes are checkable.
+case "$remote_url" in
+  https://github.com/*)   repo=${remote_url#https://github.com/} ;;
+  git@github.com:*)       repo=${remote_url#git@github.com:} ;;
+  ssh://git@github.com/*) repo=${remote_url#ssh://git@github.com/} ;;
+  *) repo="" ;;
+esac
+repo=${repo%.git}
+repo=${repo%/}
+if [ -z "$repo" ]; then
+  echo "pre-push: '$remote_url' is not a recognized GitHub remote -- skipping check." >&2
+  exit 0
+fi
+
+zero="0000000000000000000000000000000000000000"
+status=0
+
+# git feeds pre-push one line per ref; we read from the captured temp file.
+#   <local ref> <local sha> <remote ref> <remote sha>
+while read -r local_ref local_sha remote_ref remote_sha; do
+  # Branch deletion (local sha all-zero) -- nothing to guard.
+  [ "$local_sha" = "$zero" ] && continue
+
+  case "$remote_ref" in
+    refs/heads/*) branch=${remote_ref#refs/heads/} ;;
+    *) continue ;;  # tags or other refs -- ignore
+  esac
+
+  # The default branch is protected by review/branch rules; never block normal flow.
+  [ "$branch" = "main" ] && continue
+  [ "$branch" = "master" ] && continue
+
+  # All PRs whose head is this branch. A branch can carry BOTH a merged PR and a
+  # newer open one, so an OPEN PR must win.
+  if ! states=$(gh pr list --repo "$repo" --head "$branch" --state all --json state --jq '.[].state' 2>/dev/null); then
+    echo "pre-push: could not query PR state for '$branch' via gh -- allowing (fail-open)." >&2
+    continue
+  fi
+
+  # No PRs for this branch -> first push, allow.
+  [ -z "$states" ] && continue
+  # An OPEN PR exists -> pushing to it is exactly right.
+  printf '%s\n' "$states" | grep -q '^OPEN$' && continue
+  # No open PR, but a merged/closed one exists -> the branch is stale. Block.
+  closed_state=$(printf '%s\n' "$states" | grep -E '^(MERGED|CLOSED)$' | head -n 1)
+  [ -z "$closed_state" ] && continue
+
+  echo "" >&2
+  echo "x pre-push BLOCKED: the PR for branch '$branch' is $closed_state ($repo)." >&2
+  echo "  Pushing more commits to it orphans them -- the PR will not update." >&2
+  echo "" >&2
+  if [ "$closed_state" = "CLOSED" ]; then
+    echo "  Either reopen that PR first, or move your work to a fresh branch:" >&2
+  else
+    echo "  Move your work to a fresh, reviewable branch:" >&2
+  fi
+  echo "    git fetch origin <default-branch>" >&2
+  echo "    git switch -c <new-branch> origin/<default-branch>" >&2
+  echo "    git cherry-pick <your new commit SHAs>" >&2
+  echo "    git push -u origin <new-branch>   # then open a new PR" >&2
+  echo "" >&2
+  echo "  Override (only if you are certain): SKIP_PR_GUARD=1 git push ..." >&2
+  echo "" >&2
+  status=1
+done < "$_refs_tmp"
+
+exit $status

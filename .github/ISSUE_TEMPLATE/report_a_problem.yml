@@ -1,0 +1,30 @@
+name: "💬 Report a problem (non-technical)"
+description: "Something seems wrong but you don't have technical detail. We'll triage it."
+title: "[PROBLEM] <short summary>"
+labels: ["status: triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        No technical detail needed — just tell us what happened and what you expected.
+
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened?
+      description: Describe it in plain language.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: input
+    id: where
+    attributes:
+      label: Where did you see this?
+      placeholder: "page / screen / time / device"
