@@ -1,6 +1,6 @@
 // mines.test.mjs — headless tests for emulator/AICodeGen/mines/mines.s
 //
-//   A) Boot: text mode on, "MINEFIELD" title and a hidden 12x12 grid render.
+//   A) Boot: text mode on, "MINEFIELD" title and a hidden 16x16 grid render.
 //   B) count_hook: deterministic neighbor counts for known mine layouts.
 //   C) flood_hook: deterministic zero-region flood reveal without recursion.
 //
@@ -15,7 +15,7 @@ const { boot } = harnessPkg;
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = join(HERE, "..", "..", "emulator", "AICodeGen", "mines", "mines.s");
 
-const W = 12, H = 12, CELLS = W * H;
+const W = 16, H = 16, CELLS = W * H;
 const idx = (r, c) => r * W + c;
 
 let failures = 0;
@@ -61,7 +61,7 @@ runCycles(500_000);
 let sc = screen();
 ok(vm.textMode() !== 0, "text mode is on (textMode!=0)");
 ok(has(sc, "MINEFIELD"), "title shows MINEFIELD");
-ok(count(sc, ".") > 100, `hidden cells rendered (. count=${count(sc, ".")})`);
+ok(count(sc, ".") > 200, `hidden cells rendered (. count=${count(sc, ".")})`);
 if (failures) dump(sc);
 
 // ===== B) deterministic neighbor-count hook ================================
@@ -90,15 +90,15 @@ ok(vm.peek(S.COUNT + idx(6, 6)) === 2, "second cell touching both mines has coun
 console.log("C) flood_hook: empty region reveals broadly, mine remains hidden");
 zeroBoard();
 vm.poke(S.MINE + idx(0, 0), 1);
-vm.poke(S.START_R, 11);
-vm.poke(S.START_C, 11);
+vm.poke(S.START_R, 15);
+vm.poke(S.START_C, 15);
 runHook(S.FLOOD_HOOK, "flood_hook");
 {
   let revealed = 0;
   for (let i = 0; i < CELLS; i++) if (vm.peek(S.STATE + i) === 1) revealed++;
-  ok(revealed > 130, `large safe region revealed (${revealed}/${CELLS})`);
+  ok(revealed > 240, `large safe region revealed (${revealed}/${CELLS})`);
   ok(vm.peek(S.STATE + idx(0, 0)) !== 1, "mine cell stayed hidden");
-  ok(vm.peek(S.STATE + idx(0, 1)) === 1 && vm.peek(S.STATE + idx(11, 11)) === 1, "numeric border and start region revealed");
+  ok(vm.peek(S.STATE + idx(0, 1)) === 1 && vm.peek(S.STATE + idx(15, 15)) === 1, "numeric border and start region revealed");
 }
 
 console.log(failures === 0 ? "\nALL MINEFIELD TESTS PASSED" : `\n${failures} CHECK(S) FAILED`);
