@@ -25,8 +25,8 @@ Pico builds compile and behave exactly as before.
   boots any WOZ image you pick. Self-booting machine-code game disks run into
   their hi-res title; DOS 3.3 / Quick-DOS disks don't (this clone has no
   Applesoft for their auto-run greeting — see below).
-- **Adjustable CPU clock** (**Speed** selector): 0.5× / 1× (≈1 MHz) / 2× / 4× /
-  8× / Max, with a per-frame wall-clock cap so the page stays responsive.
+- **Adjustable CPU clock** (**Speed** selector): 0.5× / 1× (≈1.57 MHz, native) /
+  2× / 4× / 8× / Max, with a per-frame wall-clock cap so the page stays responsive.
 - **In-browser assembler** (**Assemble & Run**): edit 65C02 source in the page,
   assemble it client-side with the very same assembler the CLI uses
   (`codegen/tools/asm6502.mjs`), run the resulting image like **Load .PRG**, and
@@ -247,8 +247,9 @@ screen without trapping.
 
 ## CPU clock speed
 
-The frame loop runs `BASE_CYCLES_PER_FRAME` (≈17030, i.e. ~1 MHz at 60 fps) times
-the **Speed** multiplier each animation frame, bounded by a ~12 ms wall-clock
+The frame loop runs `NATIVE_CYCLES_PER_FRAME` (≈26224, i.e. the machine's native
+~1.57 MHz clock — the 25.175 MHz VGA dot clock ÷ 16, at 60 fps) times the
+**Speed** multiplier each animation frame, bounded by a ~12 ms wall-clock
 budget so the tab never locks up. `Max` sets the multiplier to `Infinity`, so the
 CPU runs as many cycles as fit in that budget. Clock speed is purely a frontend
 concern — the VM core is unchanged.
