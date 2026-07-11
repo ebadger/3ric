@@ -78,6 +78,7 @@
       "use strict";
       var REPO = "https://github.com/ebadger/3ric";
       var EDIT_URL = REPO + "/edit/main/web/gallery.json";
+      var CONTRIB_URL = REPO + "/blob/main/CONTRIBUTING.md";
       var grid = document.getElementById("grid");
       var countEl = document.getElementById("count");
 
@@ -145,8 +146,14 @@
         c.setAttribute("role", "listitem");
         c.appendChild(el("h2", null, "\u2795 Add your program"));
         c.appendChild(el("p", "desc",
-          "Drop your .s source into codegen/programs/ and add an entry to gallery.json, " +
-          "then open a pull request \u2014 your program shows up here, credited to you."));
+          "New here? Let an AI coding tool write one for you \u2014 the guide has a " +
+          "copy-paste prompt. Or drop your .s source into codegen/programs/, add an entry to " +
+          "gallery.json, and open a pull request. Either way it shows up here, credited to you."));
+        var ai = el("a", "run", "\uD83E\uDD16 Make one with AI");
+        ai.href = CONTRIB_URL;
+        ai.target = "_blank";
+        ai.rel = "noopener noreferrer";
+        c.appendChild(ai);
         var run = el("a", "run", "\u270E Contribute on GitHub");
         run.href = EDIT_URL;
         run.target = "_blank";

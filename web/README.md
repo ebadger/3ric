@@ -168,6 +168,12 @@ staged into `web/programs/` automatically) and append an entry to `gallery.json`
 then open a pull request. The gallery's *Add your program* card links straight to
 GitHub's in-browser editor for `gallery.json`.
 
+**Contribute with AI:** `llms.txt` (staged to the site root) is a machine-readable brief that
+hands any AI coding tool the 65C02 dialect, entry/exit rules, a worked example, and the gallery
+submission flow in a single fetch — <https://ebadger.github.io/3ric/llms.txt>. The repo-root
+[`CONTRIBUTING.md`](../CONTRIBUTING.md) has a copy-paste prompt and both submission paths, and
+the gallery's *Make one with AI* card links to it.
+
 ## Headless tests (fast iteration)
 
 ```powershell
@@ -264,8 +270,8 @@ site, 100 GB/month bandwidth).
 1. installs Python + Emscripten (`6.0.1`, matching this project),
 2. runs `web/build.ps1` (it detects Linux CI and invokes `em++` directly, and
    stages `asm6502.mjs` + the `programs/*.s` sample sources for the editor),
-3. stages `index.html` + `gallery.html` + `gallery.json` + `badger6502.js` +
-   `.wasm` + `asm6502.mjs` + `data/` + `programs/` as the site root,
+3. stages `index.html` + `gallery.html` + `gallery.json` + `llms.txt` +
+   `badger6502.js` + `.wasm` + `asm6502.mjs` + `data/` + `programs/` as the site root,
 4. uploads it as a Pages artifact and deploys.
 
 The build outputs stay git-ignored — CI regenerates them from the committed
