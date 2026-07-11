@@ -45,6 +45,13 @@ host it as static files.
   gives AI coding tools a 65C02 codegen quickstart plus links to the platform reference
   (`codegen/platform/*`), a worked example, the live editor, and the gallery submission flow
   (`CONTRIBUTING.md`). Static text; staged into `_site/` by the deploy workflow.
+- **Discoverability of `llms.txt`:** `index.html` advertises it via a
+  `<link rel="alternate" type="text/markdown" href="llms.txt">` plus a visible footer link
+  (mirrored in `gallery.html`), and committed `robots.txt` + `sitemap.xml` list it for
+  crawlers. NOTE: on a GitHub *project* page the served root is `…/3ric/`, not the domain
+  root, so `robots.txt`/`sitemap.xml` there are advisory (crawlers honour the domain-root
+  `robots.txt`) and become authoritative only under a custom domain — the in-page links and
+  the human copy-paste prompt (`CONTRIBUTING.md`) are the discovery paths that work today.
 
 ## Behaviour / Rules
 
@@ -88,9 +95,9 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 - **Upstream:** the VM core (`EMULATOR.md`), the ROM/font/disk/SD data (`ROM-SOFTWARE.md`),
   and `codegen/tools/asm6502.mjs` (staged for the in-browser assembler — `CODEGEN.md`).
 - **Downstream:** GitHub Pages deploy (`.github/workflows/deploy-pages.yml`) — its **Stage
-  site** step stages `gallery.html` + `gallery.json` + `llms.txt` (alongside `index.html` and
-  `programs/`) into `_site/`; the public users of the demo, and AI coding tools that fetch
-  `llms.txt`.
+  site** step stages `gallery.html` + `gallery.json` + `llms.txt` + `robots.txt` +
+  `sitemap.xml` (alongside `index.html` and `programs/`) into `_site/`; the public users of
+  the demo, and AI coding tools that fetch `llms.txt`.
 
 ## Implementation Status
 
@@ -103,7 +110,7 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 | Share / Remix deep links | Shipped | **Share** button; `?src=programs/<name>.s` for unmodified samples, inline base64url `?code=` otherwise, both carrying `&org=` when the source has no `.org`; remix banner on shared links. |
 | Community Gallery | Shipped | `gallery.html` renders the curated `gallery.json`; one-click **Run & Remix** via `?src=`/`?code=`; PR-based submissions credited by author. |
 | AI-contributor entry point (`llms.txt`) | Shipped | machine-readable 65C02 codegen quickstart + links; published at the site root, staged by the deploy workflow. |
-| Adjustable CPU clock | Shipped | frontend-only pacing. |
+| `llms.txt` discoverability | Shipped | `<link rel="alternate">` + footer links in `index.html`/`gallery.html`; `robots.txt` + `sitemap.xml` staged (advisory on the project-page root; authoritative under a custom domain). |
 | Adjustable CPU clock | Shipped | frontend-only pacing; native **1× ≈ 1.57 MHz** (25.175 MHz VGA dot clock ÷ 16) default. |
 | Headless smoke tests | Shipped | `web/test_*.cjs` (boot/render/keyboard/screen/sd/disk). |
 | GitHub Pages CI deploy | Shipped | on push to `main` touching emulator/web/codegen sources. |

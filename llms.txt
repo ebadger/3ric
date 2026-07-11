@@ -1,0 +1,11 @@
+# 3ric — AI code-generation guide (pointer)
+
+The machine-readable 65C02 code-generation guide for AI coding tools is published at:
+
+    https://ebadger.github.io/3ric/llms.txt
+
+Its source lives in this repository at `web/llms.txt` (the canonical copy — edit that one).
+This root file is a discovery breadcrumb for tools that look for `llms.txt` at the repo root.
+
+To contribute a program with an AI coding tool (GitHub Copilot, Cursor, ChatGPT, Claude, …),
+see `CONTRIBUTING.md`.

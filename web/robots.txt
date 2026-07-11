@@ -1,0 +1,12 @@
+# 3ric — https://ebadger.github.io/3ric/
+#
+# NOTE: This is a GitHub *project* page, so web crawlers read the authoritative
+# robots rules from the DOMAIN root (https://ebadger.github.io/robots.txt), not
+# this file. This copy documents intent and becomes authoritative if 3ric moves
+# to its own custom domain.
+User-agent: *
+Allow: /
+
+# Machine-readable 65C02 code-generation guide for AI coding tools:
+#   https://ebadger.github.io/3ric/llms.txt
+Sitemap: https://ebadger.github.io/3ric/sitemap.xml
