@@ -58,4 +58,23 @@ PR clearly: "⚠️ Not test-verified — needs CI or manual test."
 
 ---
 
+### 4. Lo-res render test hooks must halt with WAI, not BRK
+
+**Problem:** A codegen program that renders to the lo-res page (`$0400-$07FF`) can't
+be verified by a BRK-based test hook: `BRK` drops into the monitor, whose register
+dump is emitted via COUT and scrolls/scribbles the shared text+lo-res page,
+corrupting the field before the headless harness can decode it. Hit while converting
+Life to lo-res (PR #21); Snake never saw it because it only decodes after a free run.
+
+**Suggestion:** For any hook that must leave the lo-res/text page intact for decoding,
+end it with `WAI` instead of `BRK` — the harness reports a clean `wai` halt
+(`vm.waiting()`), and the monitor never runs. Keep `BRK` hooks for state that lives in
+RAM buffers (e.g. `$4000/$5000`), which the dump doesn't touch. A full render also
+overwrites every visible byte, so a render-then-`WAI` hook can even follow a prior
+`BRK` hook and still decode cleanly.
+
+**Owner:** codegen / test-harness.
+
+---
+
 *Add new suggestions at the bottom. ebadger promotes accepted ones into practice.*
