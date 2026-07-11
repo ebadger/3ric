@@ -161,9 +161,13 @@ $samples = @(
     (Join-Path $root "emulator\AICodeGen\paddles\paddles.s"),
     (Join-Path $root "emulator\AICodeGen\bricks\bricks.s"),
     (Join-Path $root "emulator\AICodeGen\2048\2048.s"),
-    (Join-Path $root "emulator\AICodeGen\mines\mines.s"),
-    (Join-Path $root "codegen\programs\hello.s")
+    (Join-Path $root "emulator\AICodeGen\mines\mines.s")
 )
+# Every .s under codegen\programs is also staged (this already covers hello.s). Drop a new
+# source there and add a gallery.json entry to feature it in the Community Gallery — no need
+# to edit this list by hand.
+$samples += Get-ChildItem -Path (Join-Path $root "codegen\programs") -Filter *.s -File -ErrorAction SilentlyContinue |
+    ForEach-Object { $_.FullName }
 foreach ($s in $samples) {
     if (Test-Path $s) { Copy-Item $s (Join-Path $webPrograms (Split-Path $s -Leaf)) -Force }
     else { Write-Warning "sample source missing: $s" }

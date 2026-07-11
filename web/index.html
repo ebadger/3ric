@@ -30,6 +30,11 @@
   }
   header .filebtn:hover { background: var(--panel); }
   header .filebtn input { display: none; }
+  header a.nav {
+    color: var(--fg); text-decoration: none; border: 1px solid var(--dim);
+    padding: 4px 10px; font-size: 12px; border-radius: 3px;
+  }
+  header a.nav:hover { background: var(--panel); }
   header input.addr {
     background: var(--bg); color: var(--fg); border: 1px solid var(--dim);
     padding: 3px 6px; font-family: inherit; font-size: 12px; border-radius: 3px; width: 4.5em;
@@ -87,6 +92,7 @@
 <body>
   <header>
     <h1>3ric&nbsp;&mdash;&nbsp;Apple-II-clone&nbsp;65C02&nbsp;(WebAssembly)</h1>
+    <a class="nav" href="gallery.html" title="Browse the community program gallery">&#9654;&nbsp;Gallery</a>
     <button id="reset">Reset</button>
     <button id="bootdisk">Boot Disk</button>
     <label class="filebtn">Insert .woz&hellip;<input type="file" id="diskfile" accept=".woz" /></label>

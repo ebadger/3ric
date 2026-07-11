@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>3ric — Program Gallery</title>
+<style>
+  :root { --bg:#0b0e0c; --fg:#33ff66; --dim:#1d6b33; --panel:#11140f; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: "Cascadia Code", "Consolas", ui-monospace, monospace;
+    display: flex; flex-direction: column; min-height: 100vh;
+  }
+  header { padding: 10px 16px; border-bottom: 1px solid var(--dim); display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+  header h1 { font-size: 14px; margin: 0; letter-spacing: 1px; }
+  header .count { font-size: 12px; color: var(--dim); margin-left: auto; }
+  header a.nav {
+    color: var(--fg); text-decoration: none; border: 1px solid var(--dim);
+    padding: 4px 10px; font-size: 12px; border-radius: 3px;
+  }
+  header a.nav:hover { background: var(--panel); }
+  main { flex: 1; width: 100%; max-width: 1120px; margin: 0 auto; padding: 16px; }
+  .intro { font-size: 13px; line-height: 1.55; margin: 2px 0 18px; }
+  .intro a { color: var(--fg); }
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(258px, 1fr)); gap: 14px; }
+  .card {
+    border: 1px solid var(--dim); border-radius: 6px; background: var(--panel);
+    padding: 12px 13px; display: flex; flex-direction: column; gap: 9px;
+  }
+  .card .cardhead { display: flex; align-items: center; gap: 8px; }
+  .badge {
+    font-size: 10px; letter-spacing: .5px; text-transform: uppercase;
+    border: 1px solid var(--dim); border-radius: 10px; padding: 1px 7px;
+    color: var(--dim); white-space: nowrap;
+  }
+  .card h2 { font-size: 14px; margin: 0; letter-spacing: .5px; }
+  .desc { font-size: 12px; line-height: 1.5; margin: 0; flex: 1; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag { font-size: 10px; color: var(--dim); }
+  .meta { font-size: 11px; color: var(--dim); }
+  .meta a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--dim); }
+  .run {
+    align-self: flex-start; text-decoration: none; color: var(--fg);
+    border: 1px solid var(--fg); border-radius: 4px; padding: 5px 12px; font-size: 12px;
+  }
+  .run:hover { background: rgba(51, 255, 102, .08); }
+  .card.add { border-style: dashed; }
+  .status { color: var(--dim); font-size: 12px; padding: 10px 0; }
+  .status.err { color: #ff6b6b; }
+  footer { padding: 8px 16px; border-top: 1px solid var(--dim); font-size: 11px; color: var(--dim); }
+  footer a { color: var(--dim); }
+</style>
+</head>
+<body>
+  <header>
+    <h1>3ric&nbsp;&mdash;&nbsp;Program&nbsp;Gallery</h1>
+    <a class="nav" href="index.html">&#9654;&nbsp;Emulator &amp; Editor</a>
+    <span class="count" id="count">loading&hellip;</span>
+  </header>
+  <main>
+    <p class="intro">
+      Programs written for 3ric &mdash; the from-scratch Apple-II-class 65C02 machine that
+      runs in your browser. Pick one to <strong>run it instantly</strong> and open its source
+      in the editor, where you can tweak it and <strong>Share your own remix</strong>.
+      Made something cool? <a href="index.html">Build it in the editor</a> and add it below.
+    </p>
+    <div id="grid" role="list"></div>
+  </main>
+  <footer>
+    3ric Program Gallery &middot;
+    <a href="index.html">Emulator</a> &middot;
+    <a href="https://github.com/ebadger/3ric">Source</a> &middot;
+    <a href="https://github.com/ebadger/3ric/edit/main/web/gallery.json" target="_blank" rel="noopener noreferrer">Add your program</a>
+  </footer>
+  <script>
+    (function () {
+      "use strict";
+      var REPO = "https://github.com/ebadger/3ric";
+      var EDIT_URL = REPO + "/edit/main/web/gallery.json";
+      var grid = document.getElementById("grid");
+      var countEl = document.getElementById("count");
+
+      function el(tag, cls, text) {
+        var e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (text != null) e.textContent = text;
+        return e;
+      }
+      function isHttp(u) { return typeof u === "string" && /^https?:\/\//i.test(u); }
+
+      // Mirror index.html's Share link format exactly: an unmodified sample links as the
+      // short ?src=programs/<name>.s; an inline program uses ?code=<base64url>; either
+      // carries &org=<hex> when the source has no .org directive. The scheme is always the
+      // fixed "index.html?..." target, so these hrefs can never be a javascript: URL.
+      function runHref(entry) {
+        var suffix = entry.org ? "&org=" + encodeURIComponent(String(entry.org)) : "";
+        if (entry.code) return "index.html?code=" + entry.code + suffix;
+        if (entry.src) return "index.html?src=" + entry.src + suffix;
+        return null;
+      }
+
+      function card(entry) {
+        var c = el("article", "card");
+        c.setAttribute("role", "listitem");
+        var head = el("div", "cardhead");
+        if (entry.mode) head.appendChild(el("span", "badge", entry.mode));
+        head.appendChild(el("h2", null, entry.title || "Untitled"));
+        c.appendChild(head);
+
+        if (entry.description) c.appendChild(el("p", "desc", entry.description));
+
+        if (Array.isArray(entry.tags) && entry.tags.length) {
+          var tags = el("div", "tags");
+          entry.tags.forEach(function (t) { tags.appendChild(el("span", "tag", "#" + t)); });
+          c.appendChild(tags);
+        }
+
+        if (entry.author) {
+          var meta = el("div", "meta");
+          meta.appendChild(document.createTextNode("by "));
+          if (isHttp(entry.authorUrl)) {
+            var a = el("a", null, entry.author);
+            a.href = entry.authorUrl;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            meta.appendChild(a);
+          } else {
+            meta.appendChild(document.createTextNode(entry.author));
+          }
+          c.appendChild(meta);
+        }
+
+        var href = runHref(entry);
+        if (href) {
+          var run = el("a", "run", "\u25B6 Run & Remix");
+          run.href = href;
+          c.appendChild(run);
+        }
+        return c;
+      }
+
+      function addCard() {
+        var c = el("article", "card add");
+        c.setAttribute("role", "listitem");
+        c.appendChild(el("h2", null, "\u2795 Add your program"));
+        c.appendChild(el("p", "desc",
+          "Drop your .s source into codegen/programs/ and add an entry to gallery.json, " +
+          "then open a pull request \u2014 your program shows up here, credited to you."));
+        var run = el("a", "run", "\u270E Contribute on GitHub");
+        run.href = EDIT_URL;
+        run.target = "_blank";
+        run.rel = "noopener noreferrer";
+        c.appendChild(run);
+        return c;
+      }
+
+      function setCount(n) {
+        if (countEl) countEl.textContent = n + " program" + (n === 1 ? "" : "s");
+      }
+
+      fetch("gallery.json", { cache: "no-cache" })
+        .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+        .then(function (data) {
+          var entries = (data && Array.isArray(data.entries)) ? data.entries : [];
+          var shown = 0;
+          entries.forEach(function (entry) {
+            if (entry && entry.title) { grid.appendChild(card(entry)); shown++; }
+          });
+          grid.appendChild(addCard());
+          setCount(shown);
+        })
+        .catch(function (err) {
+          grid.appendChild(el("p", "status err",
+            "Could not load the gallery (" + ((err && err.message) || err) + "). " +
+            "You can still browse the programs on GitHub."));
+          grid.appendChild(addCard());
+          if (countEl) countEl.textContent = "";
+        });
+    })();
+  </script>
+</body>
+</html>
