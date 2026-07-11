@@ -45,7 +45,8 @@ host it as static files.
 ## Behaviour / Rules
 
 - The CPU is stepped per animation frame (`run(maxSteps)`), bounded by a wall-clock budget so
-  the tab stays responsive; the **Speed** selector scales cycles/frame (0.5×–8×, Max).
+  the tab stays responsive; the **Speed** selector scales cycles/frame around the machine's
+  native **1× ≈ 1.57 MHz** (25.175 MHz VGA dot clock ÷ 16), through 0.5×–8× and an uncapped **Max**.
 - **Parity is the rule:** the WASM build must behave like the native build. Do not add
   behavior in the bridge that isn't in the shared core unless it's a genuinely
   presentation-only concern (canvas, clock pacing) — and never behind an unguarded fork.
@@ -96,6 +97,6 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 | In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; ~11 samples; `?src=`. |
 | Share / Remix deep links | Shipped | **Share** button; `?src=programs/<name>.s` for unmodified samples, inline base64url `?code=` otherwise, both carrying `&org=` when the source has no `.org`; remix banner on shared links. |
 | Community Gallery | Shipped | `gallery.html` renders the curated `gallery.json`; one-click **Run & Remix** via `?src=`/`?code=`; PR-based submissions credited by author. |
-| Adjustable CPU clock | Shipped | frontend-only pacing. |
+| Adjustable CPU clock | Shipped | frontend-only pacing; native **1× ≈ 1.57 MHz** (25.175 MHz VGA dot clock ÷ 16) default. |
 | Headless smoke tests | Shipped | `web/test_*.cjs` (boot/render/keyboard/screen/sd/disk). |
 | GitHub Pages CI deploy | Shipped | on push to `main` touching emulator/web/codegen sources. |

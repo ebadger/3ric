@@ -1,10 +1,22 @@
 ; ============================================================================
-; BLOCK DROP for the 3ric  (65C02, Apple-II compatible) -- text mode, 40x24.
+; BLOCK DROP for the 3ric  (65C02, Apple-II compatible) -- LO-RES colour graphics.
 ;
-;   * Generic falling-block stacker in a 10 x 20 well.
-;   * Controls: Left/Right arrows or A/D move, Up/W rotates, Down/S drops,
+;   * Generic falling-block stacker in a 10 x 20 well, rendered in MIXED LO-RES:
+;     each well cell is a 2x2 lo-res block, so the 10x20 well fills a 20x40 lo-res
+;     area framed by grey side walls.  The seven shapes each drop in their own
+;     colour and settle into the well.
+;   * A four-row text HUD (screen rows 20-23) under the field carries the score,
+;     the controls, and the game-over banner -- the same mixed-graphics idiom as
+;     snake.s / jungle.s.
+;   * Controls: Left/Right arrows or A/D move, Up/W rotates, Down/S soft-drops,
 ;     Q quits.  SPACE restarts after game over.
-;   * The well contents live in RAM; the text screen is rendered from that model.
+;   * The well contents live in a 10x20 byte model in RAM (0 = empty, else the
+;     settled cell's lo-res colour); the lo-res field is rendered from that model.
+;
+; Lo-res page 1 shares the text page ($0400-$07FF): each byte holds two stacked
+; pixels -- the low nibble is the upper pixel, the high nibble the lower one --
+; so a lo-res row R maps to text row R/2 (`ROWL/ROWH[R>>1]`), low nibble when R
+; is even, high nibble when R is odd (see lplot/lpeek).
 ;
 ; Build / run:
 ;   node codegen/tools/asm6502.mjs emulator/AICodeGen/blocks/blocks.s \
@@ -13,46 +25,55 @@
 ; ============================================================================
 
 ; ---- soft switches / hardware ----
-KBD      = $C000
-KBDSTRB  = $C010
-TXTSET   = $C051
-LOWSCR   = $C054
+KBD      = $C000        ; keyboard data (bit7 = key ready)
+KBDSTRB  = $C010        ; clear keyboard strobe (any access)
+TXTCLR   = $C050        ; graphics on (text off)
+MIXSET   = $C053        ; mixed: 40x40 lo-res + 4 text rows at the bottom
+LOWSCR   = $C054        ; display page 1
+LORES    = $C056        ; lo-res graphics
 
-; ---- glyphs (normal video = ascii | $80) ----
-BLANK    = $A0          ; ' '
-WALL     = $A3          ; '#'
-ACTIVE   = $C0          ; '@'
+; ---- lo-res colours (index into the 16-entry palette) ----
+C_EMPTY  = 0            ; black, empty cell
+C_WALL   = 5            ; grey side wall
 
-; ---- well geometry ----
+; ---- well geometry (10 wide x 20 tall cells; each cell = 2x2 lo-res pixels) ----
 WELL_W   = 10
 WELL_H   = 20
-WELL_R0  = 2
-WELL_C0  = 15
-WALL_L   = 14
-WALL_R   = 25
-FLOOR_R  = 22
+IX0      = 10           ; interior left lo-res col (cell col c -> cols IX0+2c, +1)
+WALL_L   = 9            ; left wall lo-res column
+WALL_R   = 30           ; right wall lo-res column
 
-; ---- score digit positions on row 0 ----
-SCOREH   = $0412
-SCORET   = $0413
-SCOREO   = $0414
+; ---- text HUD (mixed-mode rows 20..23 live in the text page) ----
+HUDROW   = 20           ; status / score line
+HELPROW  = 21           ; controls line
+OVERROW  = 22           ; game-over banner
+AGAINROW = 23           ; play-again prompt
+
+; ---- score digit positions on the HUD row ("...SCORE:000" -> $0650+19..21) ----
+SCOREH   = $0663
+SCORET   = $0664
+SCOREO   = $0665
 
 ; ---- pacing ----
-PACE     = 45
-DLY      = 60
+; GRAV = wait-loop iterations per gravity step (16-bit).  Each iteration polls
+; the keyboard and burns DLY inner counts, so GRAV*(read_key+tiny_delay) sets the
+; drop interval.  Tuned for a ~0.8 s/cell fall at the native 1.57 MHz clock; the
+; page Speed selector scales it.
+GRAV     = 1700
+DLY      = 110
 SEED0    = $A5A5
 
 ; ---- game model ----
-WELL     = $2000        ; 200 bytes, row-major 10 x 20
+WELL     = $2000        ; 200 bytes, row-major 10 x 20 (0 = empty, else colour)
 
 ; ---- zero page ----
 seedL    = $06
 seedH    = $07
-sptr     = $08          ; screen pointer
-strp     = $0A          ; string pointer
-srcp     = $0C          ; source/well pointer
-dstp     = $0E          ; destination pointer
-shp      = $10          ; shape data pointer
+sptr     = $08          ; (2) screen pointer
+strp     = $0A          ; (2) string pointer
+srcp     = $0C          ; (2) source/well pointer
+dstp     = $0E          ; (2) destination pointer
+shp      = $10          ; (2) shape data pointer
 pieceR   = $12
 pieceC   = $13
 curShape = $14
@@ -69,6 +90,14 @@ scanC    = $1E
 copyR    = $1F
 score    = $20
 gover    = $21
+lcolor   = $22          ; lplot/lpeek scratch: colour 0..15
+ltmp     = $23          ; lplot scratch: colour << 4
+pcColor  = $24          ; plot_cell: cell colour
+pcRow    = $25          ; plot_cell: base lo-res row
+pcCol    = $26          ; plot_cell: base lo-res col
+actColor = $27          ; active-piece colour
+gcntL    = $28          ; (2) 16-bit gravity countdown
+gcntH    = $29
 
         .org $0800
 
@@ -80,9 +109,11 @@ start:
         cld
         ldx #$FF
         txs
-        lda TXTSET
-        lda LOWSCR
-        lda KBDSTRB
+        lda TXTCLR              ; graphics on (text off)
+        lda MIXSET              ; mixed: lo-res field + text HUD
+        lda LOWSCR              ; display page 1
+        lda LORES               ; lo-res graphics
+        lda KBDSTRB             ; clear any pending key
         lda #<SEED0
         sta seedL
         lda #>SEED0
@@ -91,17 +122,27 @@ start:
 play:
         jsr init_game
 main_loop:
-        ldx #PACE
+        lda #<GRAV
+        sta gcntL
+        lda #>GRAV
+        sta gcntH
 ml_wait:
-        phx
         jsr read_key
+        lda gover
+        bne ml_over            ; soft-drop topped the well out
         jsr tiny_delay
-        plx
-        dex
+        lda gcntL
+        bne ml_declo
+        dec gcntH
+ml_declo:
+        dec gcntL
+        lda gcntL
+        ora gcntH
         bne ml_wait
         jsr gravity_step
         lda gover
         beq main_loop
+ml_over:
         jmp game_over
 
 ; ---------------------------------------------------------------------------
@@ -297,12 +338,14 @@ cc_next:
         rts
 
 ; ---------------------------------------------------------------------------
-; lock_piece : copy the active piece into the well array.
+; lock_piece : copy the active piece (in its colour) into the well array.
 ; ---------------------------------------------------------------------------
 lock_piece:
         lda curRot
         sta tryRot
         jsr set_shape_ptr
+        jsr cur_color
+        sta actColor
         stz cellI
 lp_loop:
         ldy cellI
@@ -317,7 +360,7 @@ lp_loop:
         sta tempC
         ldx tempR
         ldy tempC
-        lda #1
+        lda actColor
         jsr well_store
         lda cellI
         clc
@@ -418,15 +461,15 @@ game_over:
         sta strp
         lda #>msg_over
         sta strp+1
-        ldx #10
-        ldy #11
+        ldx #OVERROW
+        ldy #10
         jsr puts
         lda #<msg_again
         sta strp
         lda #>msg_again
         sta strp+1
-        ldx #12
-        ldy #6
+        ldx #AGAINROW
+        ldy #10
         jsr puts
 go_wait:
         lda KBD
@@ -454,44 +497,43 @@ render_all:
         jsr draw_score
         rts
 
+; draw_board : black the field, blank the HUD, draw the status/help lines + walls.
 draw_board:
-        jsr clear_screen
+        jsr clear_gfx
+        jsr clear_hud
         lda #<msg_status
         sta strp
         lda #>msg_status
         sta strp+1
-        ldx #0
+        ldx #HUDROW
         ldy #0
         jsr puts
-        ldx #WELL_R0
-        stx scanR
-db_sides:
-        ldx scanR
-        ldy #WALL_L
-        lda #WALL
-        jsr plot
-        ldx scanR
-        ldy #WALL_R
-        lda #WALL
-        jsr plot
-        inc scanR
-        lda scanR
-        cmp #FLOOR_R
-        bne db_sides
-        ldx #FLOOR_R
-        lda ROWL,x
-        sta sptr
-        lda ROWH,x
-        sta sptr+1
-        ldy #WALL_L
-        lda #WALL
-db_floor:
-        sta (sptr),y
-        iny
-        cpy #WALL_R+1
-        bne db_floor
+        lda #<msg_help
+        sta strp
+        lda #>msg_help
+        sta strp+1
+        ldx #HELPROW
+        ldy #0
+        jsr puts
+        jsr draw_walls
         rts
 
+; draw_walls : paint the grey side walls (cols WALL_L/WALL_R, all 40 lo-res rows).
+draw_walls:
+        ldx #0
+dw_l:
+        ldy #WALL_L
+        lda #C_WALL
+        jsr lplot               ; preserves X (row) and Y (col)
+        ldy #WALL_R
+        lda #C_WALL
+        jsr lplot
+        inx
+        cpx #40
+        bne dw_l
+        rts
+
+; render_well : paint all 200 well cells from the model (2x2 lo-res block each).
 render_well:
         stz scanR
 rw_row:
@@ -500,28 +542,13 @@ rw_row:
         sta srcp
         lda WELLRH,x
         sta srcp+1
-        lda scanR
-        clc
-        adc #WELL_R0
-        sta tempR
         stz scanC
 rw_col:
         ldy scanC
-        lda (srcp),y
-        beq rw_blank
-        lda #WALL
-        bra rw_plot
-rw_blank:
-        lda #BLANK
-rw_plot:
-        pha
-        lda scanC
-        clc
-        adc #WELL_C0
-        tay
-        ldx tempR
-        pla
-        jsr plot
+        lda (srcp),y            ; A = cell colour (0 = empty)
+        ldx scanR
+        ldy scanC
+        jsr plot_cell
         inc scanC
         lda scanC
         cmp #WELL_W
@@ -532,36 +559,68 @@ rw_plot:
         bne rw_row
         rts
 
+; draw_active : overlay the active piece (in its colour) as 2x2 blocks.
 draw_active:
         lda curRot
         sta tryRot
         jsr set_shape_ptr
+        jsr cur_color
+        sta actColor
         stz cellI
 da_loop:
         ldy cellI
         lda (shp),y
         clc
         adc pieceR
-        clc
-        adc #WELL_R0
         sta tempR
         iny
         lda (shp),y
         clc
         adc pieceC
-        clc
-        adc #WELL_C0
         sta tempC
+        lda actColor
         ldx tempR
         ldy tempC
-        lda #ACTIVE
-        jsr plot
+        jsr plot_cell
         lda cellI
         clc
         adc #2
         sta cellI
         cmp #8
         bne da_loop
+        rts
+
+; plot_cell : A=colour, X=cell row(0..19), Y=cell col(0..9) -> paint a 2x2 block.
+;   lo-res base row = X*2, base col = IX0 + Y*2.  Uses lplot (which preserves X,Y).
+plot_cell:
+        sta pcColor
+        txa
+        asl a                   ; cell row * 2
+        sta pcRow
+        tya
+        asl a                   ; cell col * 2
+        clc
+        adc #IX0
+        sta pcCol
+        ldx pcRow
+        ldy pcCol
+        lda pcColor
+        jsr lplot               ; (r, c)
+        iny
+        lda pcColor
+        jsr lplot               ; (r, c+1)
+        inx
+        lda pcColor
+        jsr lplot               ; (r+1, c+1)
+        dey
+        lda pcColor
+        jsr lplot               ; (r+1, c)
+        rts
+
+; cur_color : A = lo-res colour for the current shape.
+cur_color:
+        ldx curShape
+        lda SHCOL,x
         rts
 
 clear_well:
@@ -574,16 +633,37 @@ cw_loop:
         bne cw_loop
         rts
 
-clear_screen:
-        lda #BLANK
+; clear_gfx : paint the whole lo-res page ($0400-$07FF) black.
+clear_gfx:
+        lda #C_EMPTY
         ldx #0
-cs_l:
+cg_l:
         sta $0400,x
         sta $0500,x
         sta $0600,x
         sta $0700,x
         inx
-        bne cs_l
+        bne cg_l
+        rts
+
+; clear_hud : blank the four text HUD rows (20..23) to spaces.
+clear_hud:
+        ldx #20
+ch_row:
+        lda ROWL,x
+        sta sptr
+        lda ROWH,x
+        sta sptr+1
+        ldy #0
+        lda #$A0
+ch_col:
+        sta (sptr),y
+        iny
+        cpy #40
+        bne ch_col
+        inx
+        cpx #24
+        bne ch_row
         rts
 
 ; ---------------------------------------------------------------------------
@@ -608,7 +688,7 @@ well_store:
         rts
 
 ; ---------------------------------------------------------------------------
-; draw_score : render score as three decimal digits on row 0.
+; draw_score : render score as three decimal digits on the HUD row.
 ; ---------------------------------------------------------------------------
 draw_score:
         lda score
@@ -643,26 +723,45 @@ ds_td:
         rts
 
 ; ---------------------------------------------------------------------------
-; plot / peekc / puts copied from the text-mode game skeleton.
+; lplot : A=colour(0..15), X=row(0..39), Y=col(0..39) -> paint one lo-res cell.
+;         Read-modify-writes the correct nibble; preserves X and Y.
 ; ---------------------------------------------------------------------------
-plot:
-        pha
+lplot:
+        sta lcolor
+        phy                     ; save caller col
+        phx                     ; save caller row
+        txa
+        lsr a                   ; A = row>>1 = text row ; C = parity (1 = odd)
+        tax
         lda ROWL,x
         sta sptr
         lda ROWH,x
         sta sptr+1
-        pla
+        plx                     ; restore caller row (pulls leave C intact)
+        ply                     ; restore caller col -> Y
+        bcs lp_hi               ; odd row -> high (lower-pixel) nibble
+        lda (sptr),y            ; even row -> low (upper-pixel) nibble
+        and #$F0
+        ora lcolor
+        sta (sptr),y
+        rts
+lp_hi:
+        lda lcolor
+        asl a
+        asl a
+        asl a
+        asl a
+        sta ltmp                ; colour << 4
+        lda (sptr),y
+        and #$0F
+        ora ltmp
         sta (sptr),y
         rts
 
-peekc:
-        lda ROWL,x
-        sta sptr
-        lda ROWH,x
-        sta sptr+1
-        lda (sptr),y
-        rts
-
+; ---------------------------------------------------------------------------
+; puts : print a NUL-terminated ASCII string (strp) at row X, col Y. Each
+; byte is OR'd with $80 for normal video.
+; ---------------------------------------------------------------------------
 puts:
         lda ROWL,x
         sta sptr
@@ -671,7 +770,7 @@ puts:
         tya
         clc
         adc sptr
-        sta sptr
+        sta sptr                ; sptr = rowbase + col (no page cross in a row)
         ldy #0
 pu_l:
         lda (strp),y
@@ -728,6 +827,8 @@ clear_hook:
 ; ---------------------------------------------------------------------------
 ; data
 ; ---------------------------------------------------------------------------
+; ROWL/ROWH : base address of each text row (indexed by row>>1 for lo-res, and
+; by 20..23 for the HUD).
 ROWL:   .byte $00,$80,$00,$80,$00,$80,$00,$80,$28,$A8,$28,$A8
         .byte $28,$A8,$28,$A8,$50,$D0,$50,$D0,$50,$D0,$50,$D0
 ROWH:   .byte $04,$04,$05,$05,$06,$06,$07,$07,$04,$04,$05,$05
@@ -741,6 +842,9 @@ WELLRH: .byte >WELL,>(WELL+10),>(WELL+20),>(WELL+30),>(WELL+40)
         .byte >(WELL+50),>(WELL+60),>(WELL+70),>(WELL+80),>(WELL+90)
         .byte >(WELL+100),>(WELL+110),>(WELL+120),>(WELL+130),>(WELL+140)
         .byte >(WELL+150),>(WELL+160),>(WELL+170),>(WELL+180),>(WELL+190)
+
+; per-shape lo-res colours: O,I,T,S,Z,L,J
+SHCOL:  .byte 13,14,3,12,1,9,6
 
 SHAPE_L: .byte <sh_o0,<sh_o1,<sh_o2,<sh_o3,<sh_i0,<sh_i1,<sh_i2,<sh_i3
          .byte <sh_t0,<sh_t1,<sh_t2,<sh_t3,<sh_s0,<sh_s1,<sh_s2,<sh_s3
@@ -781,7 +885,7 @@ sh_j1: .byte 0,1, 1,1, 2,1, 2,2
 sh_j2: .byte 1,0, 1,1, 1,2, 2,0
 sh_j3: .byte 0,0, 0,1, 1,1, 2,1
 
-msg_status: .byte "BLOCK DROP  SCORE:000 A/D W/S ROT Q", 0
+msg_status: .byte "BLOCK DROP   SCORE:000", 0
+msg_help:   .byte "A/D-MOVE  W-ROT  S-DROP  Q-QUIT", 0
 msg_over:   .byte "**** GAME OVER ****", 0
-msg_again:  .byte "SPACE = PLAY AGAIN     Q = QUIT", 0
-
+msg_again:  .byte "SPACE=AGAIN   Q=QUIT", 0
