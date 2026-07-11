@@ -101,12 +101,12 @@
       <span class="hint">@&nbsp;$</span><input class="addr" id="prgaddr" value="0800" spellcheck="false"
         title="hex load/entry address, e.g. 0800 (the BRUN address)" /></span>
     <span class="grp"><span class="hint">Speed</span>
-      <select id="speed" title="CPU clock speed">
-        <option value="0.5">0.5&times;</option>
-        <option value="1" selected>1&times; (1&nbsp;MHz)</option>
-        <option value="2">2&times;</option>
-        <option value="4">4&times;</option>
-        <option value="8">8&times;</option>
+      <select id="speed" title="CPU clock speed (native = 25.175 MHz VGA dot clock / 16)">
+        <option value="0.5">0.5&times; (0.79&nbsp;MHz)</option>
+        <option value="1" selected>1&times; (1.57&nbsp;MHz, native)</option>
+        <option value="2">2&times; (3.1&nbsp;MHz)</option>
+        <option value="4">4&times; (6.3&nbsp;MHz)</option>
+        <option value="8">8&times; (12.6&nbsp;MHz)</option>
         <option value="max">Max</option>
       </select></span>
     <span class="regs" id="regs">PC:---- A:-- X:-- Y:-- SP:-- P:--</span>
@@ -128,9 +128,9 @@
           <optgroup label="Lo-res">
             <option value="snake">Snake</option>
             <option value="life">Conway&rsquo;s Life</option>
+            <option value="blocks">Block Drop</option>
           </optgroup>
           <optgroup label="Text mode">
-            <option value="blocks">Block Drop</option>
             <option value="paddles">Paddles</option>
             <option value="bricks">Brick Buster</option>
             <option value="2048">2048</option>
@@ -161,7 +161,8 @@
     &ldquo;Load .PRG&rdquo; loads a raw program image at the given hex address and runs it, exactly like
     <code>BRUN FILE.PRG&nbsp;&lt;addr&gt;</code> on the hardware (or deep-link one with
     <code>?prg=programs/hello.prg&amp;org=0800</code>).
-    &ldquo;Speed&rdquo; sets the CPU clock (1&times; &asymp; 1&nbsp;MHz; &ldquo;Max&rdquo; runs as fast as the frame allows).
+    &ldquo;Speed&rdquo; sets the CPU clock (native 1&times; &asymp; 1.57&nbsp;MHz &mdash; the 25.175&nbsp;MHz VGA
+    dot clock &divide;&nbsp;16; &ldquo;Max&rdquo; runs as fast as the frame allows).
     The <strong>Assembler</strong> panel assembles 65C02 source in your browser (the same assembler the
     project uses on the command line) and runs it just like &ldquo;Load&nbsp;.PRG&rdquo; &mdash; pick a sample,
     edit it, <code>Assemble&nbsp;&amp;&nbsp;Run</code> (or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>), and download the
@@ -172,12 +173,15 @@
 
   <script src="badger6502.js"></script>
   <script>
-    // ~1.02 MHz at 60 fps. Mirrors the host: run instructions, ticking VIAs per
-    // cycle, until roughly one frame's worth of cycles has elapsed. The "Speed"
-    // selector scales this; "Max" runs as many cycles as fit in FRAME_BUDGET_MS.
-    const BASE_CYCLES_PER_FRAME = 17030;
+    // The 3ric clocks its 65C02 from the 25.175 MHz VGA dot clock divided by 16,
+    // i.e. ~1.5734 MHz — the machine's native "1x" speed. Each frame we run that
+    // many cycles (ticking VIAs per cycle) at 60 fps, mirroring the host. The
+    // "Speed" selector scales this; "Max" runs as many cycles as fit in FRAME_BUDGET_MS.
+    const VGA_DOT_CLOCK_HZ = 25_175_000;              // master VGA dot clock
+    const CPU_CLOCK_HZ = VGA_DOT_CLOCK_HZ / 16;       // ~1.5734 MHz — the 65C02 clock
+    const NATIVE_CYCLES_PER_FRAME = Math.round(CPU_CLOCK_HZ / 60); // ~26224 at 60 fps
     const FRAME_BUDGET_MS = 12; // wall-clock cap so the tab stays responsive
-    let speedMul = 1;           // 1x = ~1 MHz; Infinity = "Max"
+    let speedMul = 1;           // 1x = native 1.57 MHz; Infinity = "Max"
 
     const canvas  = document.getElementById("screen");
     const ctx     = canvas.getContext("2d", { alpha: false });
@@ -291,7 +295,7 @@
       // Run the CPU for this frame's cycle budget, but never spend more than
       // FRAME_BUDGET_MS of wall-clock time so the page stays responsive even at
       // high / "Max" speeds.
-      const target = speedMul === Infinity ? Infinity : BASE_CYCLES_PER_FRAME * speedMul;
+      const target = speedMul === Infinity ? Infinity : NATIVE_CYCLES_PER_FRAME * speedMul;
       const start = performance.now();
       let cyc = 0;
       while (cyc < target) {

@@ -51,10 +51,10 @@
       "title": "Blocks",
       "author": "3ric",
       "authorUrl": "https://github.com/ebadger/3ric",
-      "mode": "Text",
+      "mode": "Lo-res",
       "src": "programs/blocks.s",
-      "description": "Falling-block stacker — clear lines in a 10x20 well before the pieces reach the top.",
-      "tags": ["puzzle", "text", "game"]
+      "description": "Falling-block stacker in lo-res colour — clear lines in a 10x20 well before the pieces reach the top; score and controls on a text HUD.",
+      "tags": ["puzzle", "lo-res", "game"]
     },
     {
       "title": "Bricks",
