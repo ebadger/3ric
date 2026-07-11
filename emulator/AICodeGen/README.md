@@ -46,3 +46,9 @@ runs). The editor uses the very same assembler as the CLI above
 | [`jungle`](jungle) | JUNGLE QUEST — original hi-res jungle platformer: a four-screen world with run/jump physics, a rolling-log hazard, a swinging vine, six gems, a countdown timer, and a title screen. | `$0800` |
 | [`rocks`](rocks) | ROCK STORM — original hi-res vector rock-shooter: a rotate/thrust/inertia ship, shots that split drifting rocks, screen wrap, a thrust flame, hyperspace, escalating waves, score/lives, and attract/game-over screens. | `$0800` |
 | [`swarm`](swarm) | STAR SWARM — original hi-res fixed-shooter: a formation of aliens that marches, drops, and speeds up while raining bombs, a bottom cannon that fires up, destructible shields, a bonus saucer, escalating waves, score/lives/high score, and attract/game-over screens. | `$0800` |
+| [`snake`](snake) | SNAKE — text-mode arcade classic: steer a growing snake to eat food; hitting a wall or yourself ends the game. Arrows/WASD, **SPACE** restarts. | `$0800` |
+| [`blocks`](blocks) | BLOCK DROP — original text-mode falling-block stacker: move, rotate, and soft-drop the seven four-cell shapes to clear full rows. **A/D** move, **W** rotate, **S** drop. | `$0800` |
+| [`paddles`](paddles) | PADDLES — original text-mode paddle-and-ball tennis against a ball-tracking CPU; first to seven points wins. **W/S** or arrows. | `$0800` |
+| [`bricks`](bricks) | BRICK BUSTER — original text-mode brick-breaker: bounce a ball off your paddle to clear rows of bricks across three lives. **A/D** move. | `$0800` |
+| [`2048`](2048) | 2048 — slide and merge numbered tiles on a 4×4 grid to build a 2048 tile. Arrows/WASD; a new tile appears after every move. | `$0800` |
+| [`mines`](mines) | MINEFIELD — clear a 12×12 grid without detonating a mine; zeros flood-fill and you can flag suspects. Arrows move, **SPACE** reveals, **F** flags. | `$0800` |

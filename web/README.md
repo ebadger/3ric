@@ -107,8 +107,9 @@ from the card. The **Speed** selector sets the CPU clock (0.5×–8× or Max).
 The page includes an **Assembler** panel that assembles 65C02 source entirely in
 the browser and runs it in the emulator — no CLI, no server round-trip:
 
-1. **Pick a sample** (STAR SWARM, ROCK STORM, JUNGLE QUEST, Conway's Life, or
-   Hello) or type your own source into the editor.
+1. **Pick a sample** — hi-res games (STAR SWARM, ROCK STORM, JUNGLE QUEST,
+   Conway's Life), text-mode games (Snake, Block Drop, Paddles, Brick Buster,
+   2048, Minefield), or Hello (serial) — or type your own source into the editor.
 2. **Assemble & Run** (button or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>) assembles the
    source and loads the image exactly like **Load .PRG** (`BRUN` on hardware).
    Assembler errors show as `line N: …` and are non-fatal.
@@ -125,7 +126,7 @@ Implementation notes:
   when the source has no origin directive (passing both would corrupt the layout).
 - The editor autosaves to `localStorage`, and a program is deep-linkable:
   `?src=programs/swarm.s` fetches that source, fills the editor, and auto-runs it.
-- `build.ps1` stages `asm6502.mjs` and the five sample `.s` sources into
+- `build.ps1` stages `asm6502.mjs` and the eleven sample `.s` sources into
   `web/` and `web/programs/` (git-ignored, regenerated each build; CI does the
   same before publishing).
 

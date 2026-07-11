@@ -152,11 +152,17 @@ Copy-Item (Join-Path $root "codegen\tools\asm6502.mjs") (Join-Path $web "asm6502
 $webPrograms = Join-Path $web "programs"
 New-Item -ItemType Directory -Force -Path $webPrograms | Out-Null
 $samples = @(
-    (Join-Path $root "codegen\programs\hello.s"),
-    (Join-Path $root "emulator\AICodeGen\life\life.s"),
-    (Join-Path $root "emulator\AICodeGen\jungle\jungle.s"),
+    (Join-Path $root "emulator\AICodeGen\swarm\swarm.s"),
     (Join-Path $root "emulator\AICodeGen\rocks\rocks.s"),
-    (Join-Path $root "emulator\AICodeGen\swarm\swarm.s")
+    (Join-Path $root "emulator\AICodeGen\jungle\jungle.s"),
+    (Join-Path $root "emulator\AICodeGen\life\life.s"),
+    (Join-Path $root "emulator\AICodeGen\snake\snake.s"),
+    (Join-Path $root "emulator\AICodeGen\blocks\blocks.s"),
+    (Join-Path $root "emulator\AICodeGen\paddles\paddles.s"),
+    (Join-Path $root "emulator\AICodeGen\bricks\bricks.s"),
+    (Join-Path $root "emulator\AICodeGen\2048\2048.s"),
+    (Join-Path $root "emulator\AICodeGen\mines\mines.s"),
+    (Join-Path $root "codegen\programs\hello.s")
 )
 foreach ($s in $samples) {
     if (Test-Path $s) { Copy-Item $s (Join-Path $webPrograms (Split-Path $s -Leaf)) -Force }
