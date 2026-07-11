@@ -22,8 +22,23 @@ interleaved screen layout. The well is kept separately as a 10×20 byte model:
 settled cells render as `#` and the active falling piece as `@`. The seven shapes
 and their rotations are precomputed as four `(dRow,dCol)` cell offsets each (the
 assembler has no multiply), full rows shift the model down and bump the score, and
-a 16-bit Galois LFSR picks the next shape. **SPACE** restarts after a top-out;
+a 16-bit Galois LFSR picks the next shape. Gravity is **level-based**: a 16-bit
+countdown of keyboard-poll iterations per row is reloaded from a per-level pace
+table, so the fall starts gentle (**≈0.80 s/row** at level 1) and speeds up one
+step every five cleared lines down to **≈0.09 s/row** at level 15. The current
+level shows as `LVL:nn` on the status row. **SPACE** restarts after a top-out;
 **Q** returns to the monitor.
+
+## Follow-up — level-based speed curve
+
+> The fall was uniformly too fast (a fixed 8-bit `ldx #PACE` counter capped the
+> gravity period at ~0.06 s/row). Replace it with a 16-bit gravity countdown
+> reloaded from a per-level pace table so the game starts slow and gets
+> progressively faster at each level, and show the level on the status line.
+
+Level rises with lines cleared (`LINES_PER_LEVEL = 5`, capped at 15). `PACE_TBL`
+holds the iterations-per-row for levels 1–15; the speeds were calibrated against
+the emulator's ~1.02 MHz clock and verified headlessly (see test section **E**).
 
 ## Build & test
 

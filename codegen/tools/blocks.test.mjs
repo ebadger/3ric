@@ -57,13 +57,18 @@ if (failures) dump(sc);
 
 // ===== B) gravity / motion ==================================================
 console.log("B) gravity: field changes as the piece descends");
+// Level 1 now falls ~0.8 s/row; force a fast level so a step lands quickly.
+vm.poke(S.SCORE, 90); vm.poke(S.LEVEL, 15);
+vm.poke(S.GRAVL, 30); vm.poke(S.GRAVH, 0);
 const before = joined(screen().slice(2, 22));
-runCycles(450_000);
+runCycles(500_000);
 const after = joined(screen().slice(2, 22));
 ok(before !== after, "well changes after gravity ticks");
 
 // ===== C) accumulation / locking ===========================================
 console.log("C) accumulation: pieces lock into the lower well");
+vm.poke(S.SCORE, 90); vm.poke(S.LEVEL, 15);
+vm.poke(S.GRAVL, 30); vm.poke(S.GRAVH, 0);
 for (let i = 0; i < 12; i++) runCycles(500_000);
 sc = screen();
 const lowerSettled = countRegion(sc, 17, 21, 15, 24, "#");
@@ -83,6 +88,25 @@ const above = rowValues(18);
 ok(bottom.reduce((a, b) => a + (b ? 1 : 0), 0) === 1 && bottom[4] === 1, "row above shifted into cleared bottom row");
 ok(above.every((v) => v === 0), "row above is empty after shift");
 ok(vm.peek(S.SCORE) === 1, `score increased by one (${vm.peek(S.SCORE)})`);
+
+// ===== E) level speed curve =================================================
+console.log("E) level curve: LVL shown, pace table ramps, level 1 is slowed");
+vm.setPC(S.START);
+for (let i = 0; i < 6; i++) runCycles(20_000); // boot + render status line
+ok(has(screen(), "LVL:01"), "status line shows LVL:01 at start");
+
+const pace = (lvl) => vm.peek(S.PACE_TBL_L + lvl) | (vm.peek(S.PACE_TBL_H + lvl) << 8);
+let monotonic = true;
+for (let lvl = 2; lvl <= 15; lvl++) if (pace(lvl) >= pace(lvl - 1)) monotonic = false;
+ok(monotonic, `pace strictly decreases L1..L15 (${pace(1)} -> ${pace(15)} iters/row)`);
+ok(pace(1) >= 1500 && pace(1) <= 2600, `level 1 pace is playable-slow (${pace(1)} iters/row)`);
+
+// time one full row at level 1 (empty well => clean pieceR increments)
+const CLK = 17030 * 60;
+const rowGap = () => { let pr = vm.peek(S.PIECER), c = 0; while (c < 4_000_000) { c += vm.run(2000); vm.drainOutput(); if (vm.peek(S.PIECER) !== pr) return c; } return c; };
+rowGap();            // finish the current (possibly partial) row
+const g = rowGap();  // one full row
+ok(g > 400_000, `level 1 fall is slowed to ~${(g / CLK).toFixed(2)} s/row (${g} cyc, was ~0.036 s)`);
 
 console.log(failures === 0 ? "\nALL BLOCKS TESTS PASSED" : `\n${failures} CHECK(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
