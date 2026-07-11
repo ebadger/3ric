@@ -7,10 +7,10 @@ by what. When in doubt, the license shipped alongside a specific file or
 subdirectory governs that file.
 
 
-1. Original 3ric work by ebadger
+1. Original 3ric work by Eric Badger
 --------------------------------
 
-Copyright (c) 2023-2026 ebadger.
+Copyright (c) 2023-2026 Eric Badger.
 
   a. SOFTWARE  ->  MIT License (see LICENSE)
      The original source code of the project, including but not limited to:
@@ -34,7 +34,7 @@ Copyright (c) 2023-2026 ebadger.
 2. Bundled third-party components (each under its own license)
 --------------------------------------------------------------
 
-These are included for convenience and are NOT licensed by ebadger. They remain
+These are included for convenience and are NOT licensed by Eric Badger. They remain
 under the license shipped with them:
 
   - emulator/picodisk/sdlib/
