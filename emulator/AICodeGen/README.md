@@ -51,4 +51,4 @@ runs). The editor uses the very same assembler as the CLI above
 | [`paddles`](paddles) | PADDLES — original text-mode paddle-and-ball tennis against a ball-tracking CPU; first to seven points wins. **W/S** or arrows. | `$0800` |
 | [`bricks`](bricks) | BRICK BUSTER — original text-mode brick-breaker: bounce a ball off your paddle to clear rows of bricks across three lives. **A/D** move. | `$0800` |
 | [`2048`](2048) | 2048 — slide and merge numbered tiles on a 4×4 grid to build a 2048 tile. Arrows/WASD; a new tile appears after every move. | `$0800` |
-| [`mines`](mines) | MINEFIELD — clear a 12×12 grid without detonating a mine; zeros flood-fill and you can flag suspects. Arrows move, **SPACE** reveals, **F** flags. | `$0800` |
+| [`mines`](mines) | MINEFIELD — clear a 16×16 grid without detonating a mine; zeros flood-fill and you can flag suspects. Arrows move, **SPACE** reveals, **F** flags. | `$0800` |

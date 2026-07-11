@@ -91,7 +91,7 @@ best); source, prompt, and binary live under
 - `bricks.prg` — **BRICK BUSTER**: bounce a ball off your paddle to clear bricks
   across three lives (**A/D** move).
 - `2048.prg` — **2048**: slide and merge numbered tiles on a 4×4 grid (arrows/WASD).
-- `mines.prg` — **MINEFIELD**: clear a 12×12 grid without hitting a mine (arrows
+- `mines.prg` — **MINEFIELD**: clear a 16×16 grid without hitting a mine (arrows
   move, **SPACE** reveals, **F** flags).
 
 Every program here is also a one-click sample in the page's **Assemble & Run**

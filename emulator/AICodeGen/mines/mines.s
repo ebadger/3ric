@@ -1,7 +1,7 @@
 ; ============================================================================
 ; MINEFIELD for the 3ric  (65C02, Apple-II compatible)  -- text mode, 40x24.
 ;
-;   * Turn-based Minesweeper-style game on a 12x12 field.
+;   * Turn-based Minesweeper-style game on a 16x16 field.
 ;   * Controls: arrows or W/A/S/D move, SPACE/RETURN reveal, F flags, Q quits.
 ;   * On game over or win: SPACE plays again, Q returns to the monitor.
 ;   * BRK hooks expose deterministic count and flood-fill logic for tests.
@@ -26,18 +26,20 @@ FLAGCH   = $C6          ; 'F'
 CURSORCH = $A3          ; '#'
 
 ; ---- grid geometry ----
-W        = 12
-H        = 12
-CELLS    = 144
-MINES_N  = 18
+; A 16x16 field (256 cells) is the classic Minesweeper "intermediate" board and
+; is the largest grid the single-byte cell index (ROWOFF[row]+col) can address.
+W        = 16
+H        = 16
+CELLS    = 256          ; note: index range is 0..255 -- exactly one byte
+MINES_N  = 40
 GRIDTOP  = 4
-GRIDLEFT = 14
+GRIDLEFT = 12
 SEED0    = $BEEF
 
 ; ---- documented RAM arrays / hook inputs ----
-MINE     = $2000        ; 144 bytes: 1 = mine, 0 = safe
-STATE    = $2100        ; 144 bytes: 0 = hidden, 1 = revealed, 2 = flagged
-COUNT    = $2200        ; 144 bytes: computed neighboring mine count
+MINE     = $2000        ; 256 bytes: 1 = mine, 0 = safe
+STATE    = $2100        ; 256 bytes: 0 = hidden, 1 = revealed, 2 = flagged
+COUNT    = $2200        ; 256 bytes: computed neighboring mine count
 STACK_R  = $2300        ; flood-fill worklist rows
 STACK_C  = $2400        ; flood-fill worklist cols
 START_R  = $2500        ; flood_hook input row
@@ -181,24 +183,21 @@ ca_loop:
         sta STATE,x
         sta COUNT,x
         inx
-        cpx #CELLS
-        bne ca_loop
+        bne ca_loop             ; wraps 255->0 after all 256 cells
         rts
 
+; random_cell : draw (rr,cc) from one RNG step -- seedH's low nibble picks the
+; row, seedL's low nibble the column. Both are 0..15, exactly the 16x16 range,
+; so no rejection is needed. (The original drew both coordinates from seedL's
+; low nibble, whose short sub-cycle only reached 32 of the 256 cells -- not
+; enough to place 40 mines, so placement spun forever.)
 random_cell:
-rc_row:
         jsr rng
-        lda seedL
+        lda seedH
         and #$0F
-        cmp #H
-        bcs rc_row
         sta rr
-rc_col:
-        jsr rng
         lda seedL
         and #$0F
-        cmp #W
-        bcs rc_col
         sta cc
         rts
 
@@ -292,8 +291,7 @@ cw_loop:
         bne cw_notyet
 cw_next:
         inx
-        cpx #CELLS
-        bne cw_loop
+        bne cw_loop             ; wraps 255->0 after all 256 cells
         lda #2
         sta status
 cw_notyet:
@@ -512,7 +510,7 @@ qi_done:
         rts
 
 ; ---------------------------------------------------------------------------
-; render_all : draw title, status, and the 12x12 field.
+; render_all : draw title, status, and the 16x16 field.
 ; ---------------------------------------------------------------------------
 render_all:
         jsr clear_screen
@@ -708,7 +706,7 @@ flood_hook:
 ; ---------------------------------------------------------------------------
 ; data
 ; ---------------------------------------------------------------------------
-ROWOFF: .byte 0,12,24,36,48,60,72,84,96,108,120,132
+ROWOFF: .byte 0,16,32,48,64,80,96,112,128,144,160,176,192,208,224,240
 
 ROWL:   .byte $00,$80,$00,$80,$00,$80,$00,$80,$28,$A8,$28,$A8
         .byte $28,$A8,$28,$A8,$50,$D0,$50,$D0,$50,$D0,$50,$D0
