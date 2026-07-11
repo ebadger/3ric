@@ -33,13 +33,18 @@ WALL_R   = 25
 FLOOR_R  = 22
 
 ; ---- score digit positions on row 0 ----
-SCOREH   = $0412
-SCORET   = $0413
-SCOREO   = $0414
+SCOREH   = $0411
+SCORET   = $0412
+SCOREO   = $0413
+LVLT     = $0419        ; level tens / ones digits
+LVLO     = $041A
 
 ; ---- pacing ----
-PACE     = 45
-DLY      = 60
+;   Gravity period (ml_wait iterations per row) comes from PACE_TBL, indexed by
+;   the current level.  Level rises with lines cleared, so the fall speeds up.
+DLY      = 60           ; inner busy-delay per keyboard poll
+LINES_PER_LEVEL = 5     ; cleared lines needed to advance one level
+MAXLVL   = 15           ; fastest level (also PACE_TBL's last index)
 SEED0    = $A5A5
 
 ; ---- game model ----
@@ -69,6 +74,9 @@ scanC    = $1E
 copyR    = $1F
 score    = $20
 gover    = $21
+level    = $22
+gravL    = $23          ; 16-bit gravity countdown (iterations left this row)
+gravH    = $24
 
         .org $0800
 
@@ -91,13 +99,17 @@ start:
 play:
         jsr init_game
 main_loop:
-        ldx #PACE
+        jsr reload_grav
 ml_wait:
-        phx
         jsr read_key
         jsr tiny_delay
-        plx
-        dex
+        lda gravL
+        bne ml_declo
+        dec gravH
+ml_declo:
+        dec gravL
+        lda gravL
+        ora gravH
         bne ml_wait
         jsr gravity_step
         lda gover
@@ -111,6 +123,8 @@ init_game:
         jsr draw_board
         jsr clear_well
         stz score
+        lda #1
+        sta level
         stz gover
         jsr spawn_piece
         jsr render_all
@@ -218,6 +232,7 @@ gravity_step:
 gs_lock:
         jsr lock_piece
         jsr clear_lines
+        jsr update_level
         jsr spawn_piece
         lda gover
         bne gs_over
@@ -452,6 +467,7 @@ render_all:
         jsr render_well
         jsr draw_active
         jsr draw_score
+        jsr draw_level
         rts
 
 draw_board:
@@ -643,6 +659,58 @@ ds_td:
         rts
 
 ; ---------------------------------------------------------------------------
+; draw_level : render the current level as two decimal digits on row 0.
+; ---------------------------------------------------------------------------
+draw_level:
+        lda level
+        ldx #0
+dl_t:
+        cmp #10
+        bcc dl_td
+        sbc #10
+        inx
+        bra dl_t
+dl_td:
+        pha
+        txa
+        ora #$B0
+        sta LVLT
+        pla
+        ora #$B0
+        sta LVLO
+        rts
+
+; ---------------------------------------------------------------------------
+; update_level : level = 1 + min(score / LINES_PER_LEVEL, MAXLVL-1), capped.
+; ---------------------------------------------------------------------------
+update_level:
+        lda score
+        ldx #1
+ul_loop:
+        cmp #LINES_PER_LEVEL
+        bcc ul_done
+        sbc #LINES_PER_LEVEL
+        inx
+        cpx #MAXLVL
+        bcc ul_loop
+        ldx #MAXLVL
+ul_done:
+        stx level
+        rts
+
+; ---------------------------------------------------------------------------
+; reload_grav : load this row's gravity countdown from PACE_TBL[level].
+;   Larger counts = slower fall; the table shrinks as the level rises.
+; ---------------------------------------------------------------------------
+reload_grav:
+        ldx level
+        lda PACE_TBL_L,x
+        sta gravL
+        lda PACE_TBL_H,x
+        sta gravH
+        rts
+
+; ---------------------------------------------------------------------------
 ; plot / peekc / puts copied from the text-mode game skeleton.
 ; ---------------------------------------------------------------------------
 plot:
@@ -742,6 +810,13 @@ WELLRH: .byte >WELL,>(WELL+10),>(WELL+20),>(WELL+30),>(WELL+40)
         .byte >(WELL+100),>(WELL+110),>(WELL+120),>(WELL+130),>(WELL+140)
         .byte >(WELL+150),>(WELL+160),>(WELL+170),>(WELL+180),>(WELL+190)
 
+; gravity countdown (ml_wait iterations per row) by level 1..MAXLVL.  index 0 is
+; unused (level is 1-based).  ~0.80 s/row at level 1 down to ~0.09 s/row at 15.
+PACE_TBL_L: .byte <1948,<1948,<1699,<1475,<1275,<1101,<951,<802
+            .byte <677,<577,<478,<403,<328,<278,<229,<179
+PACE_TBL_H: .byte >1948,>1948,>1699,>1475,>1275,>1101,>951,>802
+            .byte >677,>577,>478,>403,>328,>278,>229,>179
+
 SHAPE_L: .byte <sh_o0,<sh_o1,<sh_o2,<sh_o3,<sh_i0,<sh_i1,<sh_i2,<sh_i3
          .byte <sh_t0,<sh_t1,<sh_t2,<sh_t3,<sh_s0,<sh_s1,<sh_s2,<sh_s3
          .byte <sh_z0,<sh_z1,<sh_z2,<sh_z3,<sh_l0,<sh_l1,<sh_l2,<sh_l3
@@ -781,7 +856,7 @@ sh_j1: .byte 0,1, 1,1, 2,1, 2,2
 sh_j2: .byte 1,0, 1,1, 1,2, 2,0
 sh_j3: .byte 0,0, 0,1, 1,1, 2,1
 
-msg_status: .byte "BLOCK DROP  SCORE:000 A/D W/S ROT Q", 0
+msg_status: .byte "BLOCK DROP SCORE:000 LVL:01 A/D W/S Q", 0
 msg_over:   .byte "**** GAME OVER ****", 0
 msg_again:  .byte "SPACE = PLAY AGAIN     Q = QUIT", 0
 

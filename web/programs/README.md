@@ -75,8 +75,9 @@ best); source, prompt, and binary live under
 
 - `snake.prg` — **SNAKE**: steer a growing snake to eat food; walls or your own
   tail end the run (arrows/WASD, **SPACE** restarts).
-- `blocks.prg` — **BLOCK DROP**: rotate and drop four-cell shapes to clear rows
-  (**A/D** move, **W** rotate, **S** drop).
+- `blocks.prg` — **BLOCK DROP**: rotate and drop four-cell shapes to clear rows;
+  starts gentle and speeds up a level every five lines (**A/D** move, **W** rotate,
+  **S** drop).
 - `paddles.prg` — **PADDLES**: paddle-and-ball tennis to seven points against a
   ball-tracking CPU (**W/S** or arrows).
 - `bricks.prg` — **BRICK BUSTER**: bounce a ball off your paddle to clear bricks
