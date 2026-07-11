@@ -31,7 +31,8 @@ Pico builds compile and behave exactly as before.
   assemble it client-side with the very same assembler the CLI uses
   (`codegen/tools/asm6502.mjs`), run the resulting image like **Load .PRG**, and
   download the `.PRG`. Ships the project's sample programs; deep-linkable with
-  `?src=`.
+  `?src=` / `?code=`, and a **Share** button that copies a one-click link to the
+  current program.
 
 ## Layout
 
@@ -125,8 +126,14 @@ Implementation notes:
   cleanly as a browser ES module. `index.html` lazily `import()`s its `assemble()`.
 - A source's own `.org` / `*=` is authoritative; the **org $** field is only used
   when the source has no origin directive (passing both would corrupt the layout).
-- The editor autosaves to `localStorage`, and a program is deep-linkable:
-  `?src=programs/swarm.s` fetches that source, fills the editor, and auto-runs it.
+- The editor autosaves to `localStorage`, and any program is deep-linkable. The
+  **Share** button copies a self-contained link to the current program: an
+  unmodified built-in sample links as the short `?src=programs/<name>.s` (fetches
+  that source, fills the editor, auto-runs); edited or hand-written source is
+  embedded inline as URL-safe base64 in `?code=`. Either link carries `&org=<hex>`
+  when the source has no `.org` directive. Opening a `?src=`/`?code=` link auto-runs
+  it and shows a "remixing a shared program" banner. No server is involved — the
+  link is the whole payload, so very large sources make long `?code=` links.
 - `build.ps1` stages `asm6502.mjs` and the eleven sample `.s` sources into
   `web/` and `web/programs/` (git-ignored, regenerated each build; CI does the
   same before publishing).

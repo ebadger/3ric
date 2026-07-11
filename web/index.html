@@ -76,6 +76,12 @@
   }
   #asmout.ok  { color: var(--fg); }
   #asmout.err { color: #ff6b6b; border-color: #7a2b2b; }
+  #ide .remix {
+    display: none; padding: 6px 9px; border: 1px solid var(--dim);
+    border-left: 3px solid var(--fg); border-radius: 4px;
+    background: var(--panel); color: var(--fg); font-size: 12px; line-height: 1.4;
+  }
+  #ide .remix.show { display: block; }
 </style>
 </head>
 <body>
@@ -132,7 +138,9 @@
           title="hex load/entry address, used only when the source has no .org directive" />
         <button id="assemble" class="go" title="assemble the source and run it (Ctrl+Enter)">Assemble &amp; Run</button>
         <button id="download" title="download the assembled .PRG image" disabled>Download .PRG</button>
+        <button id="share" title="copy a one-click link to this exact program">Share</button>
       </div>
+      <div id="remixnote" class="remix" role="status"></div>
       <textarea id="src" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off"
         aria-label="6502 assembly source" placeholder="; write 65C02 assembly here, then Assemble & Run"></textarea>
       <pre id="asmout">Pick a sample or write 65C02 assembly, then Assemble &amp; Run.</pre>
@@ -151,8 +159,9 @@
     The <strong>Assembler</strong> panel assembles 65C02 source in your browser (the same assembler the
     project uses on the command line) and runs it just like &ldquo;Load&nbsp;.PRG&rdquo; &mdash; pick a sample,
     edit it, <code>Assemble&nbsp;&amp;&nbsp;Run</code> (or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>), and download the
-    resulting <code>.PRG</code> to <code>BRUN</code> on hardware. Share a program with
-    <code>?src=programs/swarm.s</code>.
+    resulting <code>.PRG</code> to <code>BRUN</code> on hardware. Hit <strong>Share</strong>
+    to copy a one-click link to your program (a short <code>?src=</code> for the built-in
+    samples, or your source inlined in <code>?code=</code>).
   </footer>
 
   <script src="badger6502.js"></script>
@@ -349,6 +358,28 @@
     let lastPrg = null;      // { bytes, org, name } of the last good assembly
     let assembleFn = null;   // asm6502.assemble, imported lazily
 
+    // Shareable-link codec: pack the editor source into a self-contained URL so
+    // any program — even one you just wrote — is a one-click link with no server.
+    // URL-safe base64 of the UTF-8 source (base64url: +/ -> -_, no padding).
+    function srcToCode(src) {
+      const bytes = new TextEncoder().encode(src);
+      let bin = "";
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    }
+    function codeToSrc(code) {
+      // Strip any whitespace a chat app / email client may have injected into a long
+      // link BEFORE measuring length, then restore '=' padding (some older engines
+      // reject unpadded atob()).
+      let b64 = code.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+      const pad = b64.length % 4;
+      if (pad) b64 += "=".repeat(4 - pad);
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return new TextDecoder().decode(bytes);
+    }
+
     async function ensureAssembler() {
       if (!assembleFn) assembleFn = (await import("./asm6502.mjs")).assemble;
       return assembleFn;
@@ -367,7 +398,10 @@
       const dlBtn    = document.getElementById("download");
       const asmBtn   = document.getElementById("assemble");
       const sampleEl = document.getElementById("sample");
+      const shareBtn = document.getElementById("share");
+      const remixEl  = document.getElementById("remixnote");
       if (!srcEl) return;
+      let loadedRef = null;  // { name, text }: set while the editor holds an unmodified sample
 
       const setOut = (msg, cls) => { outEl.textContent = msg; outEl.className = cls || ""; };
       const save = () => {
@@ -424,22 +458,84 @@
         setTimeout(() => URL.revokeObjectURL(a.href), 1000);
       });
 
+      // Build a self-contained link to the current program and copy it. Unmodified
+      // built-in samples get a short ?src= link; anything edited or hand-written is
+      // inlined as ?code= so the exact source travels with the URL.
+      function buildShareUrl() {
+        const src = srcEl.value;
+        if (!src.trim()) return null;
+        const base = location.origin + location.pathname;
+        // The load address is only meaningful when the source has no .org; carry it
+        // on either link form so a shared program runs at the address the sharer saw.
+        const orgSuffix = hasOrg(src) ? "" : `&org=${encodeURIComponent((addrEl.value || "0800").trim())}`;
+        if (loadedRef && src === loadedRef.text) return `${base}?src=programs/${loadedRef.name}.s${orgSuffix}`;
+        return `${base}?code=${srcToCode(src)}${orgSuffix}`;
+      }
+      async function copyText(text) {
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text); return true;
+          }
+        } catch (e) {}
+        try {
+          const t = document.createElement("textarea");
+          t.value = text; t.style.position = "fixed"; t.style.opacity = "0";
+          document.body.appendChild(t); t.focus(); t.select();
+          const ok = document.execCommand("copy"); t.remove(); return ok;
+        } catch (e) { return false; }
+      }
+      shareBtn.addEventListener("click", async () => {
+        const url = buildShareUrl();
+        if (!url) { setOut("nothing to share yet \u2014 write or load a program first.", "err"); return; }
+        const copied = await copyText(url);
+        const big = url.length > 8000
+          ? ` (this link is ~${(url.length / 1024).toFixed(1)} KB \u2014 it works, but some chat apps may truncate it; use Download .PRG there.)`
+          : "";
+        setOut(copied ? ("shareable link copied to your clipboard." + big) : ("copy this shareable link:\n" + url), "ok");
+      });
+
       sampleEl.addEventListener("change", async () => {
         try {
           srcEl.value = await loadSampleSrc(sampleEl.value);
+          loadedRef = { name: sampleEl.value, text: srcEl.value };
+          remixEl.classList.remove("show");
           addrEl.value = "0800";
           save();
           setOut(`loaded sample: ${sampleEl.options[sampleEl.selectedIndex].text}. Assemble & Run to build it.`, "ok");
         } catch (e) { setOut("could not load sample: " + e, "err"); }
       });
 
-      // Initial content: ?src=<url> (auto-runs) > your saved source > STAR SWARM.
-      const srcUrl = new URLSearchParams(location.search).get("src");
+      // Initial content precedence: ?code= (inline source) > ?src=<url> (file) >
+      // your saved source > STAR SWARM. A ?code=/?src= link auto-runs and shows the
+      // remix banner so a visitor knows they can edit it and re-share their version.
+      const params0 = new URLSearchParams(location.search);
+      const showRemix = () => {
+        remixEl.textContent = "\uD83D\uDD00 You opened a shared program \u2014 edit it, then hit Share to pass your version on.";
+        remixEl.classList.add("show");
+      };
+      const codeParam = params0.get("code");
+      if (codeParam) {
+        try {
+          srcEl.value = codeToSrc(codeParam);
+          const org = params0.get("org");
+          if (org && !hasOrg(srcEl.value)) addrEl.value = org;
+          showRemix();
+          setOut("loaded a shared program. assembling\u2026", "ok");
+          await assembleRun();
+        } catch (e) { setOut("could not decode the shared ?code= link: " + ((e && e.message) || e), "err"); }
+        return;
+      }
+      const srcUrl = params0.get("src");
       if (srcUrl) {
         try {
           const resp = await fetch(srcUrl);
           if (!resp.ok) throw new Error(`${resp.status}`);
           srcEl.value = await resp.text();
+          const m = /^programs\/([\w-]+)\.s$/.exec(srcUrl);
+          if (m) loadedRef = { name: m[1], text: srcEl.value };
+          const srcOrg = params0.get("org");
+          if (srcOrg && !hasOrg(srcEl.value)) addrEl.value = srcOrg;
+          showRemix();
           setOut(`loaded ${srcUrl}. assembling\u2026`, "ok");
           await assembleRun();
         } catch (e) { setOut("could not load ?src=" + srcUrl + ": " + e, "err"); }
@@ -455,6 +551,7 @@
         try {
           sampleEl.value = "swarm";
           srcEl.value = await loadSampleSrc("swarm");
+          loadedRef = { name: "swarm", text: srcEl.value };
           setOut("loaded sample: STAR SWARM. Assemble & Run to build it.", "ok");
         } catch (e) { setOut("write 65C02 assembly, then Assemble & Run.", ""); }
       }
