@@ -31,7 +31,8 @@ host it as static files.
 - **UI (`index.html`):** `requestAnimationFrame` driver, keyboard, disk/SD/clock controls,
   and the in-browser **Assembler** panel (imports `assemble()` from the staged
   `asm6502.mjs`). Honors optional `window.ASSET_BASE` / `?assets=` for CDN/R2 offload and
-  `?src=` / `?prg=` deep links.
+  `?src=` / `?prg=` / `?code=` deep links, plus a **Share** button that builds a one-click
+  link to the current editor program.
 - **SD image:** `make_sd_sparse.py` streams `emulator/Data/sd.zip` (2 GB, mostly-zero FAT32)
   into `data/sd.sparse` (~11.5 MB `SDSP` container), fetched lazily.
 
@@ -44,6 +45,16 @@ host it as static files.
   presentation-only concern (canvas, clock pacing) — and never behind an unguarded fork.
 - Assets are relative so the site works under `/<repo>/` on Pages; the mandatory first-load
   payload is ~1.26 MB, with `disk.woz`/`sd.sparse` fetched only on demand.
+- **Share / Remix loop.** The editor's **Share** button copies a self-contained deep link
+  that reproduces the exact program: an *unmodified* built-in sample links as the short
+  `?src=programs/<name>.s`; any edited or hand-written source is embedded inline as URL-safe
+  base64 in `?code=`. Either form carries `&org=<hex>` when the source has no `.org`
+  directive, so the load address travels with the link. Opening a `?src=` or `?code=` link
+  loads it into the editor, auto-assembles/runs it, and shows a "remixing a shared program"
+  banner — so every shared program is an editable starting point. No server or storage is
+  involved; the link is the whole payload. Large sources make long `?code=` links (the giant
+  hi-res samples are shared via `?src=` precisely to avoid this); a future `?codez=` could
+  deflate the payload if needed.
 
 ## Data flow
 
@@ -66,6 +77,7 @@ log; keyDown()→$C000; Boot Disk/Mount SD → insertDisk()/loadSD() → C600G /
 | Canvas video + keyboard | Shipped | text/lo-res/hi-res, `$C000` input. |
 | Disk II WOZ boot + micro-SD DOS shell | Shipped | **Boot Disk** / **Mount SD** buttons. |
 | In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; ~11 samples; `?src=`. |
+| Share / Remix deep links | Shipped | **Share** button; `?src=programs/<name>.s` for unmodified samples, inline base64url `?code=` otherwise, both carrying `&org=` when the source has no `.org`; remix banner on shared links. |
 | Adjustable CPU clock | Shipped | frontend-only pacing. |
 | Headless smoke tests | Shipped | `web/test_*.cjs` (boot/render/keyboard/screen/sd/disk). |
 | GitHub Pages CI deploy | Shipped | on push to `main` touching emulator/web/codegen sources. |
