@@ -1,0 +1,11 @@
+# Renders the "Sponsor" button on the 3ric repository.
+# Docs: https://docs.github.com/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+#
+# GitHub Sponsors: works once Sponsors is enabled for the owner account.
+github: [ebadger]
+
+# Uncomment and fill in any of these as you set them up:
+# patreon: <your-patreon-handle>
+# ko_fi: <your-ko-fi-handle>
+# buy_me_a_coffee: <your-bmac-handle>
+# custom: ["https://www.youtube.com/playlist?list=PLbYLt1iawSBLK4w46Kn7cxxuoeVt7Zepq"]
