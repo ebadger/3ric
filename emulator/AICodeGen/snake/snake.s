@@ -1,14 +1,20 @@
 ; ============================================================================
-; SNAKE for the 3ric  (65C02, Apple-II compatible)  -- text mode, 40x24.
+; SNAKE for the 3ric  (65C02, Apple-II compatible)  -- LO-RES colour graphics.
 ;
-;   * Steer a growing snake around a bordered arena; eat the food ('*') to
-;     grow and score; running into a wall or yourself ends the game.
+;   * Steer a growing snake around a bordered arena; eat the food to grow and
+;     score; running into a wall or yourself ends the game.
 ;   * Controls: arrow keys or W/A/S/D to steer, Q to quit.
 ;   * On game over: SPACE plays again, Q returns to the monitor.
 ;
-; Runs entirely on the 40x24 text page ($0400-$07FF).  A 24-entry row-base
-; table maps (row,col) to the interleaved screen layout; the screen itself
-; doubles as the collision map (a non-blank, non-food cell is a crash).
+; Renders in MIXED LO-RES: a 40x40 colour playfield (each cell an 8x8 block)
+; sits above four text HUD rows (screen rows 20-23) that carry the score/status
+; and the game-over banner -- the same mixed-graphics idiom as jungle.s.
+;
+; Lo-res page 1 shares the text page ($0400-$07FF): each byte holds two stacked
+; pixels -- the low nibble is the upper pixel, the high nibble the lower one --
+; so a lo-res row R maps to text row R/2 (`ROWL/ROWH[R>>1]`), low nibble when R
+; is even, high nibble when R is odd.  The field itself doubles as the collision
+; map (a non-black, non-food destination cell is a crash).
 ;
 ; Build / run:
 ;   node codegen/tools/asm6502.mjs emulator/AICodeGen/snake/snake.s \
@@ -19,25 +25,33 @@
 ; ---- soft switches / hardware ----
 KBD      = $C000        ; keyboard data (bit7 = key ready)
 KBDSTRB  = $C010        ; clear keyboard strobe (any access)
-TXTSET   = $C051        ; text mode on
+TXTCLR   = $C050        ; graphics on (text off)
+MIXSET   = $C053        ; mixed: 40x40 lo-res + 4 text rows at the bottom
 LOWSCR   = $C054        ; display page 1
+LORES    = $C056        ; lo-res graphics
 
-; ---- glyphs (normal video = ascii | $80) ----
-BLANK    = $A0          ; ' '
-WALL     = $A3          ; '#'
-BODY     = $CF          ; 'O'  snake segment
-FOOD     = $AA          ; '*'
+; ---- lo-res colours (index into the 16-entry palette) ----
+BLACK    = 0            ; empty cell
+WALL     = 5            ; grey border
+BODY     = 12           ; green snake segment
+FOOD     = 13           ; yellow food
 
-; ---- geometry ----
-TOPROW   = 1            ; top border row
-BOTROW   = 23           ; bottom border row
+BLANK    = $A0          ; text-HUD space (normal video ' ')
+
+; ---- geometry (lo-res field is 40 wide x 40 tall) ----
+TOPROW   = 0            ; top border row
+BOTROW   = 39           ; bottom border row
 LCOL     = 0            ; left border col
 RCOL     = 39           ; right border col
 
-; ---- score digit positions on row 0 ($0400 + col) ----
-SCOREH   = $040D
-SCORET   = $040E
-SCOREO   = $040F
+; ---- text HUD (mixed-mode rows 20..23 live in the text page) ----
+HUDROW   = 20           ; status / score line
+OVERROW  = 22           ; game-over line
+
+; ---- score digit positions on the HUD row ($0650 + col) ----
+SCOREH   = $065D
+SCORET   = $065E
+SCOREO   = $065F
 
 ; ---- pacing (tuned for ~1 MHz; use the page Speed selector to taste) ----
 PACE     = 180          ; input polls per snake step
@@ -70,6 +84,8 @@ slen     = $18          ; live length
 score    = $19
 ate      = $1A          ; "ate food this step" flag
 gover    = $1B          ; game-over flag
+lcolor   = $1C          ; lplot/lpeek scratch: colour 0..15
+ltmp     = $1D          ; lplot scratch: colour << 4
 
         .org $0800
 
@@ -81,8 +97,10 @@ start:
         cld
         ldx #$FF
         txs
-        lda TXTSET              ; force text mode, page 1
-        lda LOWSCR
+        lda TXTCLR              ; graphics on (text off)
+        lda MIXSET              ; mixed: lo-res field + text HUD
+        lda LOWSCR              ; display page 1
+        lda LORES               ; lo-res graphics
         lda KBDSTRB             ; clear any pending key
         lda #<SEED0
         sta seedL
@@ -121,10 +139,10 @@ init_game:
         sta penC
         lda #4
         sta slen
-        ; lay 4 body cells at row 12, cols 10..13
+        ; lay 4 body cells at row 20, cols 10..13
         ldx #0
 ig_l:
-        lda #12
+        lda #20
         sta SNK_R,x
         txa
         clc
@@ -132,16 +150,16 @@ ig_l:
         sta SNK_C,x             ; col = 10 + idx  (A = col)
         phx
         tay                     ; Y = col
-        ldx #12                 ; X = row
+        ldx #20                 ; X = row
         lda #BODY
-        jsr plot
+        jsr lplot
         plx
         inx
         cpx #4
         bne ig_l
         lda #3
         sta hidx
-        lda #12
+        lda #20
         sta headR
         lda #13
         sta headC
@@ -163,10 +181,10 @@ step:
         sta newC
         ldx newR
         ldy newC
-        jsr peekc               ; A = destination cell
+        jsr lpeek               ; A = destination cell colour
         cmp #FOOD
         beq st_eat
-        cmp #BLANK
+        cmp #BLACK
         beq st_move
         lda #1                  ; wall or body -> crash
         sta gover
@@ -178,8 +196,8 @@ st_move:
         tay
         lda SNK_R,x
         tax
-        lda #BLANK
-        jsr plot
+        lda #BLACK
+        jsr lplot
         inc tidx
         bra st_head
 st_eat:
@@ -202,7 +220,7 @@ st_head:
         ldx newR
         ldy newC
         lda #BODY
-        jsr plot
+        jsr lplot
         lda ate
         beq st_done
         lda #0
@@ -290,17 +308,17 @@ ad_no:
         rts
 
 ; ---------------------------------------------------------------------------
-; spawn_food : drop food on a random empty interior cell.
+; spawn_food : drop food on a random empty interior cell (rows/cols 1..38).
 ; ---------------------------------------------------------------------------
 spawn_food:
 sf_row:
         jsr rng
         lda seedL
-        and #$1F                ; 0..31
-        cmp #21
-        bcs sf_row              ; reject -> rows 0..20
+        and #$3F                ; 0..63
+        cmp #38
+        bcs sf_row              ; reject -> rows 0..37
         clc
-        adc #2                  ; row 2..22
+        adc #1                  ; row 1..38
         sta foodR
 sf_col:
         jsr rng
@@ -313,32 +331,25 @@ sf_col:
         sta foodC
         ldx foodR
         ldy foodC
-        jsr peekc
-        cmp #BLANK
+        jsr lpeek
+        cmp #BLACK
         bne sf_row              ; occupied -> pick again
         ldx foodR
         ldy foodC
         lda #FOOD
-        jsr plot
+        jsr lplot
         rts
 
 ; ---------------------------------------------------------------------------
-; game_over : overlay the banner and wait for SPACE (restart) or Q (quit).
+; game_over : show the banner in the HUD and wait for SPACE (restart) or Q.
 ; ---------------------------------------------------------------------------
 game_over:
         lda #<msg_over
         sta strp
         lda #>msg_over
         sta strp+1
-        ldx #11
-        ldy #11
-        jsr puts
-        lda #<msg_again
-        sta strp
-        lda #>msg_again
-        sta strp+1
-        ldx #13
-        ldy #6
+        ldx #OVERROW
+        ldy #0
         jsr puts
 go_wait:
         lda KBD
@@ -358,62 +369,81 @@ quit:
         brk                     ; back to the monitor
 
 ; ---------------------------------------------------------------------------
-; draw_board : clear the screen, draw the status line and the border box.
+; draw_board : clear the field, blank the HUD, draw the status line + border.
 ; ---------------------------------------------------------------------------
 draw_board:
-        jsr clear_screen
+        jsr clear_gfx           ; lo-res field -> black
+        jsr clear_hud           ; blank the 4 text HUD rows
         lda #<msg_status
         sta strp
         lda #>msg_status
         sta strp+1
-        ldx #0
+        ldx #HUDROW
         ldy #0
         jsr puts
         ldx #TOPROW
         jsr hborder
         ldx #BOTROW
         jsr hborder
-        ldx #2
+        ldx #1
 db_side:
         ldy #LCOL
         lda #WALL
-        jsr plot
+        jsr lplot
         ldy #RCOL
         lda #WALL
-        jsr plot
+        jsr lplot
         inx
         cpx #BOTROW
         bne db_side
         rts
 
-clear_screen:
-        lda #BLANK
+; clear_gfx : paint the whole lo-res page ($0400-$07FF) black.
+clear_gfx:
+        lda #BLACK
         ldx #0
-cs_l:
+cg_l:
         sta $0400,x
         sta $0500,x
         sta $0600,x
         sta $0700,x
         inx
-        bne cs_l
+        bne cg_l
         rts
 
-hborder:
+; clear_hud : blank the four text HUD rows (20..23) to spaces.
+clear_hud:
+        ldx #20
+ch_row:
         lda ROWL,x
         sta sptr
         lda ROWH,x
         sta sptr+1
         ldy #0
-        lda #WALL
-hb_l:
+        lda #BLANK
+ch_col:
         sta (sptr),y
+        iny
+        cpy #40
+        bne ch_col
+        inx
+        cpx #24
+        bne ch_row
+        rts
+
+; hborder : paint a full 40-cell lo-res row (X = row) in the wall colour.
+hborder:
+        ldy #0
+hb_l:
+        lda #WALL
+        jsr lplot               ; preserves X (row) and Y (col)
         iny
         cpy #40
         bne hb_l
         rts
 
 ; ---------------------------------------------------------------------------
-; draw_score : render `score` (0..255) as three decimal digits on row 0.
+; draw_score : render `score` (0..255) as three decimal digits on the HUD row.
 ; ---------------------------------------------------------------------------
 draw_score:
         lda score
@@ -448,25 +478,66 @@ ds_td:
         rts
 
 ; ---------------------------------------------------------------------------
-; plot  : A=char, X=row, Y=col  -> write one cell.
-; peekc : X=row, Y=col          -> A=char at that cell.
+; lplot : A=colour(0..15), X=row(0..39), Y=col(0..39) -> paint one lo-res cell.
+;         Read-modify-writes the correct nibble; preserves X and Y.
 ; ---------------------------------------------------------------------------
-plot:
-        pha
+lplot:
+        sta lcolor
+        phy                     ; save caller col
+        phx                     ; save caller row
+        txa
+        lsr a                   ; A = row>>1 = text row ; C = parity (1 = odd)
+        tax
         lda ROWL,x
         sta sptr
         lda ROWH,x
         sta sptr+1
-        pla
+        plx                     ; restore caller row (pulls leave C intact)
+        ply                     ; restore caller col -> Y
+        bcs lp_hi               ; odd row -> high (lower-pixel) nibble
+        lda (sptr),y            ; even row -> low (upper-pixel) nibble
+        and #$F0
+        ora lcolor
+        sta (sptr),y
+        rts
+lp_hi:
+        lda lcolor
+        asl a
+        asl a
+        asl a
+        asl a
+        sta ltmp                ; colour << 4
+        lda (sptr),y
+        and #$0F
+        ora ltmp
         sta (sptr),y
         rts
 
-peekc:
+; ---------------------------------------------------------------------------
+; lpeek : X=row(0..39), Y=col(0..39) -> A = lo-res colour(0..15) at that cell.
+;         Preserves X and Y.
+; ---------------------------------------------------------------------------
+lpeek:
+        phy
+        phx
+        txa
+        lsr a                   ; text row ; C = parity
+        tax
         lda ROWL,x
         sta sptr
         lda ROWH,x
         sta sptr+1
+        plx
+        ply
         lda (sptr),y
+        bcs lpk_hi
+        and #$0F                ; even row -> low nibble
+        rts
+lpk_hi:
+        lsr a                   ; odd row -> high nibble
+        lsr a
+        lsr a
+        lsr a
         rts
 
 ; ---------------------------------------------------------------------------
@@ -519,11 +590,12 @@ td_l:
 ; ---------------------------------------------------------------------------
 ; data
 ; ---------------------------------------------------------------------------
+; ROWL/ROWH : base address of each text row (indexed by row>>1 for lo-res, and
+; by 20..23 for the HUD).
 ROWL:   .byte $00,$80,$00,$80,$00,$80,$00,$80,$28,$A8,$28,$A8
         .byte $28,$A8,$28,$A8,$50,$D0,$50,$D0,$50,$D0,$50,$D0
 ROWH:   .byte $04,$04,$05,$05,$06,$06,$07,$07,$04,$04,$05,$05
         .byte $06,$06,$07,$07,$04,$04,$05,$05,$06,$06,$07,$07
 
 msg_status:  .byte "SNAKE  SCORE:000  WASD/ARROWS Q=QUIT", 0
-msg_over:    .byte "**** GAME OVER ****", 0
-msg_again:   .byte "SPACE = PLAY AGAIN     Q = QUIT", 0
+msg_over:    .byte "**** GAME OVER ****  SPACE=AGAIN Q=QUIT", 0
