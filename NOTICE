@@ -1,0 +1,79 @@
+3ric — Licensing & Attribution Notice
+=====================================
+
+3ric is dual-licensed, and it also bundles third-party components and data that
+keep their own licenses. This file is the authoritative map of what is covered
+by what. When in doubt, the license shipped alongside a specific file or
+subdirectory governs that file.
+
+
+1. Original 3ric work by ebadger
+--------------------------------
+
+Copyright (c) 2023-2026 ebadger.
+
+  a. SOFTWARE  ->  MIT License (see LICENSE)
+     The original source code of the project, including but not limited to:
+       - emulator/      (the C++ 65C02 VM core, WozLib, MockMicroSD, hosts)
+                        EXCEPT third-party subtrees listed in section 2
+       - web/           (Emscripten bridge, browser client, in-browser assembler)
+       - codegen/       (asm6502 assembler, run6502/harness, platform-ref tools)
+       - scripts/       (developer/CI scripts)
+       - original 6502 assembly programs authored for this project
+         (e.g. codegen/programs/, emulator/AICodeGen/, web/programs/*.prg)
+
+  b. HARDWARE DESIGNS and DOCUMENTATION  ->  Creative Commons
+     Attribution-ShareAlike 4.0 International (see LICENSE-CC-BY-SA-4.0.txt)
+       - kicad/, 22v10/, logisim/, diylayout/, schematic_pdf/
+         (schematics, PCB, 22V10 GAL address decode, digital-logic models)
+                        EXCEPT third-party subtrees listed in section 2
+       - docs/, specs/, status/, and the README/prose documentation
+         throughout the repository
+
+
+2. Bundled third-party components (each under its own license)
+--------------------------------------------------------------
+
+These are included for convenience and are NOT licensed by ebadger. They remain
+under the license shipped with them:
+
+  - emulator/picodisk/sdlib/
+      no-OS-FatFS SD SPI library. Apache License 2.0.
+      See emulator/picodisk/sdlib/LICENSE.
+
+  - emulator/picodisk/sdlib/FatFs_SPI/ff15/
+      FatFs - Generic FAT Filesystem Module by ChaN. FatFs License (BSD-style,
+      1-clause). See emulator/picodisk/sdlib/FatFs_SPI/ff15/LICENSE.txt.
+
+  - kicad/libraries/KiCad-RP-Pico-main/
+      TPCWare KiCad Library (Raspberry Pi Pico footprint/3D model).
+      Creative Commons Attribution-ShareAlike 4.0. See the LICENSE in that
+      directory.
+
+Other vendored libraries or footprints, if added later, likewise retain their
+own licenses; add them to this section.
+
+
+3. Provenance disclosures (third-party copyrighted material, NOT licensed here)
+-------------------------------------------------------------------------------
+
+The following are third-party copyrighted works. They are neither owned nor
+licensed by this project; they are present only to make the emulator useful for
+study and demonstration. Do not assume any redistribution rights from the 3ric
+licenses above.
+
+  - Microsoft BASIC in the ROM (emulator/Data/badger6502.bin)
+      The 512 KB ROM image includes a Microsoft 6502 BASIC interpreter. Its
+      copyright is held by Microsoft; its redistribution status is unsettled.
+      The 3ric MIT/CC-BY-SA licenses do NOT grant any rights to it.
+
+  - Apple II disk images and program binaries used as test/demo data
+      (e.g. emulator/Data/loderun.bin and the .woz images under
+      emulator/WozFileTestApp/testdata/)
+      These are or may be commercial Apple II software (for example
+      "Lode Runner") retained by their respective copyright holders. They are
+      included as fixtures for the Disk II / WOZ subsystem and carry no license
+      from this project.
+
+If you redistribute or repackage 3ric, review sections 2 and 3 and strip or
+replace any material you do not have the right to include.
