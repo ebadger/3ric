@@ -16,6 +16,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = join(HERE, "..", "..", "emulator", "AICodeGen", "mines", "mines.s");
 
 const W = 16, H = 16, CELLS = W * H;
+const GRIDTOP = 4, GRIDLEFT = 12;   // must match mines.s
 const idx = (r, c) => r * W + c;
 
 let failures = 0;
@@ -46,9 +47,7 @@ function zeroBoard() {
   }
 }
 const screen = () => s.textScreen();
-const joined = (rows) => rows.join("\n");
 const has = (rows, sub) => rows.some((r) => r.includes(sub));
-const count = (rows, ch) => joined(rows).split("").filter((c) => c === ch).length;
 function dump(rows) {
   console.log("    +" + "-".repeat(40));
   for (const r of rows) console.log("    |" + r);
@@ -61,7 +60,23 @@ runCycles(500_000);
 let sc = screen();
 ok(vm.textMode() !== 0, "text mode is on (textMode!=0)");
 ok(has(sc, "MINEFIELD"), "title shows MINEFIELD");
-ok(count(sc, ".") > 200, `hidden cells rendered (. count=${count(sc, ".")})`);
+// Exact render check: the WxH grid at rows GRIDTOP..+H-1, cols GRIDLEFT..+W-1
+// must be entirely hidden cells ('.') except the single cursor ('#'). A missing
+// row/column or short-drawn grid would leave blanks (gridOther>0) or drop dots.
+{
+  let gridDots = 0, gridCursor = 0, gridOther = 0;
+  for (let r = 0; r < H; r++) {
+    const row = sc[GRIDTOP + r] || "";
+    for (let c = 0; c < W; c++) {
+      const ch = row[GRIDLEFT + c];
+      if (ch === ".") gridDots++;
+      else if (ch === "#") gridCursor++;
+      else gridOther++;
+    }
+  }
+  ok(gridDots === CELLS - 1 && gridCursor === 1 && gridOther === 0,
+    `full ${W}x${H} grid rendered (dots=${gridDots}, cursor=${gridCursor}, other=${gridOther})`);
+}
 if (failures) dump(sc);
 
 // ===== B) deterministic neighbor-count hook ================================
@@ -96,7 +111,7 @@ runHook(S.FLOOD_HOOK, "flood_hook");
 {
   let revealed = 0;
   for (let i = 0; i < CELLS; i++) if (vm.peek(S.STATE + i) === 1) revealed++;
-  ok(revealed > 240, `large safe region revealed (${revealed}/${CELLS})`);
+  ok(revealed === CELLS - 1, `entire safe region revealed (${revealed}/${CELLS})`);
   ok(vm.peek(S.STATE + idx(0, 0)) !== 1, "mine cell stayed hidden");
   ok(vm.peek(S.STATE + idx(0, 1)) === 1 && vm.peek(S.STATE + idx(15, 15)) === 1, "numeric border and start region revealed");
 }
