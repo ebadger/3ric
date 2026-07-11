@@ -108,8 +108,9 @@ The page includes an **Assembler** panel that assembles 65C02 source entirely in
 the browser and runs it in the emulator — no CLI, no server round-trip:
 
 1. **Pick a sample** — hi-res games (STAR SWARM, ROCK STORM, JUNGLE QUEST,
-   Conway's Life), text-mode games (Snake, Block Drop, Paddles, Brick Buster,
-   2048, Minefield), or Hello (serial) — or type your own source into the editor.
+   Conway's Life), a lo-res game (SNAKE), text-mode games (Block Drop, Paddles,
+   Brick Buster, 2048, Minefield), or Hello (serial) — or type your own source
+   into the editor.
 2. **Assemble & Run** (button or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>) assembles the
    source and loads the image exactly like **Load .PRG** (`BRUN` on hardware).
    Assembler errors show as `line N: …` and are non-fatal.

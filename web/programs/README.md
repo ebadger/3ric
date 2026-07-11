@@ -67,14 +67,23 @@ over). Source, prompt, and binary live in
 node codegen/tools/asm6502.mjs emulator/AICodeGen/swarm/swarm.s web/programs/swarm.prg --org 0x0800
 ```
 
-Six **text-mode games** round out the set — each an original take that runs from
+`snake.prg` is **SNAKE**, rendered in mixed **lo-res** colour — a 40×40 block
+playfield above a four-line text HUD. Steer a growing snake to eat food and grow;
+a wall or your own tail ends the run (**arrows**/**WASD** steer, **SPACE**
+restarts, **Q** quits). Source, prompt, and binary live in
+[`emulator/AICodeGen/snake/`](../../emulator/AICodeGen/snake); deep-link it at
+`?prg=programs/snake.prg&org=0800`:
+
+```sh
+node codegen/tools/asm6502.mjs emulator/AICodeGen/snake/snake.s web/programs/snake.prg --org 0x0800
+```
+
+Five **text-mode games** round out the set — each an original take that runs from
 the text screen and reads the keyboard. Load any of them with **Load .PRG…** or a
 `?prg=programs/<name>.prg&org=0800` deep link (**Speed** **1MHz**–**2MHz** plays
 best); source, prompt, and binary live under
 [`emulator/AICodeGen/<name>/`](../../emulator/AICodeGen):
 
-- `snake.prg` — **SNAKE**: steer a growing snake to eat food; walls or your own
-  tail end the run (arrows/WASD, **SPACE** restarts).
 - `blocks.prg` — **BLOCK DROP**: rotate and drop four-cell shapes to clear rows
   (**A/D** move, **W** rotate, **S** drop).
 - `paddles.prg` — **PADDLES**: paddle-and-ball tennis to seven points against a
