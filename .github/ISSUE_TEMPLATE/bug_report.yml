@@ -1,0 +1,79 @@
+name: "🐛 Bug report (technical)"
+description: "Log a defect with technical detail. Critical-path bugs (money / data loss / safety) get a fast lane."
+title: "[BUG] <area>: <short summary>"
+labels: ["type: bug", "status: triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for logging a defect. Keep it concrete. If this bug touches the
+        **critical path** (money, irreversible actions, data loss, or a core flow being
+        down), set severity = critical and say so in the summary — those get a fast lane
+        and a stricter review gate.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One or two sentences. What is broken?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity (proposed — triage confirms)
+      options:
+        - "critical — money/data wrong, safety bypass, data loss, core flow down"
+        - "high — core flow broken for some users, no clean workaround"
+        - "medium — feature broken but workaround exists"
+        - "low — cosmetic / minor / polish"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: layers
+    attributes:
+      label: Affected layer(s)
+      description: "Trace it — most real bugs cross layers."
+      options:
+        - label: "Data store (schema / data / constraints)"
+        - label: "API / Service (endpoint / validation / server logic)"
+        - label: "Client / UI"
+        - label: "Unknown — needs investigation"
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Repro steps
+      description: Numbered steps. Include the account/role used.
+      placeholder: |
+        1. ...
+        2. ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_actual
+    attributes:
+      label: Expected vs actual
+      placeholder: |
+        Expected: ...
+        Actual:   ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Build/commit SHA, where observed, browser/device if applicable.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence (optional)
+      description: Logs, screenshots, failing test name, relevant queries.

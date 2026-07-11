@@ -1,0 +1,7 @@
+# 3ric line-ending policy for the AI operating-layer machinery.
+# Shell scripts, the git hook, and the compliance-hooks extension must be LF so they run
+# under sh / Node on Linux/macOS/WSL/CI even when authored on Windows.
+.githooks/pre-push             text eol=lf
+scripts/dev/*.sh              text eol=lf
+scripts/dev/*.example         text eol=lf
+.github/extensions/**/*.mjs   text eol=lf
