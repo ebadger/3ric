@@ -67,7 +67,7 @@ jobs:
       - name: Stage site
         run: |
           mkdir -p _site
-          cp web/index.html web/gallery.html web/gallery.json web/llms.txt web/badger6502.js web/badger6502.wasm _site/
+          cp web/index.html web/gallery.html web/gallery.json web/llms.txt web/robots.txt web/sitemap.xml web/badger6502.js web/badger6502.wasm _site/
           cp web/asm6502.mjs _site/
           cp -r web/data _site/data
           cp -r web/programs _site/programs
