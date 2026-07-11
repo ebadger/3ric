@@ -41,6 +41,10 @@ host it as static files.
   auto-runs it. Manifest entries carry `title`, `author`/`authorUrl`, `mode`, `description`,
   `tags`, and a run target (a `src` program path or inline `code`, plus optional `org`). Both
   files are committed (not generated), so the deploy workflow stages them into `_site/`.
+- **`llms.txt`:** a committed, machine-readable entry point (published at the site root) that
+  gives AI coding tools a 65C02 codegen quickstart plus links to the platform reference
+  (`codegen/platform/*`), a worked example, the live editor, and the gallery submission flow
+  (`CONTRIBUTING.md`). Static text; staged into `_site/` by the deploy workflow.
 
 ## Behaviour / Rules
 
@@ -84,8 +88,9 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 - **Upstream:** the VM core (`EMULATOR.md`), the ROM/font/disk/SD data (`ROM-SOFTWARE.md`),
   and `codegen/tools/asm6502.mjs` (staged for the in-browser assembler — `CODEGEN.md`).
 - **Downstream:** GitHub Pages deploy (`.github/workflows/deploy-pages.yml`) — its **Stage
-  site** step stages `gallery.html` + `gallery.json` (alongside `index.html` and `programs/`)
-  into `_site/`; the public users of the demo.
+  site** step stages `gallery.html` + `gallery.json` + `llms.txt` (alongside `index.html` and
+  `programs/`) into `_site/`; the public users of the demo, and AI coding tools that fetch
+  `llms.txt`.
 
 ## Implementation Status
 
@@ -97,6 +102,8 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 | In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; ~11 samples; `?src=`. |
 | Share / Remix deep links | Shipped | **Share** button; `?src=programs/<name>.s` for unmodified samples, inline base64url `?code=` otherwise, both carrying `&org=` when the source has no `.org`; remix banner on shared links. |
 | Community Gallery | Shipped | `gallery.html` renders the curated `gallery.json`; one-click **Run & Remix** via `?src=`/`?code=`; PR-based submissions credited by author. |
+| AI-contributor entry point (`llms.txt`) | Shipped | machine-readable 65C02 codegen quickstart + links; published at the site root, staged by the deploy workflow. |
+| Adjustable CPU clock | Shipped | frontend-only pacing. |
 | Adjustable CPU clock | Shipped | frontend-only pacing; native **1× ≈ 1.57 MHz** (25.175 MHz VGA dot clock ÷ 16) default. |
 | Headless smoke tests | Shipped | `web/test_*.cjs` (boot/render/keyboard/screen/sd/disk). |
 | GitHub Pages CI deploy | Shipped | on push to `main` touching emulator/web/codegen sources. |

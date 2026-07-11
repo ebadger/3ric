@@ -119,3 +119,20 @@ The harness loads the project's WebAssembly build. If `web/badger6502.js` or
 ```
 pwsh web/build.ps1
 ```
+
+## Publish it to the gallery
+
+Once `run6502` reports a clean halt (`brk-monitor`, `wai`, or a deliberate `idle`), the
+program is ready to share. Add it to the Community Gallery so it appears at
+<https://ebadger.github.io/3ric/gallery.html>:
+
+- **Source-file path:** drop the `.s` under `codegen/programs/`, then append an entry to
+  `web/gallery.json` with `"src": "programs/<name>.s"`.
+- **Zero-file path:** open the program in the browser editor
+  (<https://ebadger.github.io/3ric/>), press **Share**, and paste the `?code=` value into a
+  `gallery.json` entry's `"code"` field.
+
+Either way, open a pull request. The full walkthrough — including a copy-paste prompt that
+hands this guide to an AI tool — is in [`CONTRIBUTING.md`](../../CONTRIBUTING.md). The
+AI-facing entry point published alongside the emulator is
+<https://ebadger.github.io/3ric/llms.txt>.

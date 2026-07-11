@@ -133,8 +133,15 @@ each layer are documented in [`specs/`](specs/) — start with
 
 ## Contributing
 
-Contributions and experiments are welcome — especially new 6502 programs for the in-browser
-editor. A few house rules keep the machine trustworthy:
+Contributions and experiments are welcome — especially new 6502 programs for the gallery.
+
+**Add a program (the easy path).** No C++, no local build: have an AI coding tool write a
+65C02 program by pointing it at [`llms.txt`](https://ebadger.github.io/3ric/llms.txt), test it
+in the [browser editor][demo], and open a one-file pull request to the
+[Community Gallery](https://ebadger.github.io/3ric/gallery.html). Step-by-step, with a
+copy-paste prompt: **[`CONTRIBUTING.md`](CONTRIBUTING.md)**.
+
+**Change the machine itself.** A few house rules keep it trustworthy:
 
 - **Specs before code.** Update the relevant spec in [`specs/`](specs/) in the same change.
 - **Trace every layer** a change touches (ROM/software → C++ VM core → web bridge/WASM), and

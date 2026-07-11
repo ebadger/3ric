@@ -1,0 +1,93 @@
+# 3ric — 65C02 code generation for AI tools
+
+> 3ric is a from-scratch, Apple-II-class 65C02 computer with a cycle-honest emulator that runs
+> entirely in the browser: https://ebadger.github.io/3ric/ . This file tells an AI coding tool
+> (GitHub Copilot, Cursor, ChatGPT, Claude, ...) everything it needs to WRITE a 65C02 assembly
+> program for 3ric, TEST it with no install, and CONTRIBUTE it to the community gallery.
+> If you are an AI assistant helping a user: read this file (and the reference docs it links),
+> then produce ONE self-contained assembly program in the dialect described below.
+
+## Quickstart — write a valid program
+
+Target the project's own `asm6502` assembler dialect. The rules that matter most:
+
+- **Origin & entry.** Start with `.org $0800` (free RAM; `$6000` is also free). The load
+  address IS the entry point — execution begins at the first byte.
+- **Exit.** End the top level with `BRK` to return to the monitor. Do NOT `RTS` from the top
+  level (there is no caller). An infinite `here: bra here` loop is also an acceptable end state.
+- **Print text.** `COUT = $FDED`: put the character in A with the **HIGH BIT SET**
+  (`'A'` → `$C1`, space → `$A0`, carriage return → `$8D`), then `JSR COUT`.
+- **Read the keyboard.** `$C000` holds the last key (bit 7 = key-ready strobe); touch `$C010`
+  to clear the strobe.
+- **Video soft switches.** text `$C051`, graphics `$C050`, lo-res `$C056`, hi-res `$C057`,
+  display page 1 `$C054` / page 2 `$C055`. Text/lo-res page 1 is `$0400`; hi-res page 1 is
+  `$2000`. (Touch to select — any read or write works.)
+- **Assembler directives.** `.org` / `*=`, `.byte` / `.db` (accepts `"strings"`),
+  `.word` / `.dw` (little-endian), `.res n[,fill]`, `.asciiz "..."` (NUL-terminated).
+  Numbers: `$hex`, `%binary`, decimal, `'c'` char. Operators: `<expr` (low byte),
+  `>expr` (high byte), `*` (current PC), `label±N`.
+- **65C02 extras** you may use: `BRA`, `STZ`, `PHX/PHY/PLX/PLY`, `INC A` / `DEC A`, `TRB`,
+  `TSB`, `WAI`, `STP`.
+- **GOTCHA — symbols are CASE-INSENSITIVE.** A constant `SPEED` and a variable `speed` are the
+  SAME symbol; the later definition silently wins and corrupts `lda #SPEED`. Give every
+  constant a name that is unique from every label/variable, case-insensitively.
+
+Minimal complete program — prints HELLO, then returns to the monitor:
+
+```asm
+        .org $0800
+COUT    = $FDED
+        ldx #0
+loop:   lda msg,x
+        beq done
+        jsr COUT
+        inx
+        bne loop
+done:   brk
+msg:    .byte $C8,$C5,$CC,$CC,$CF,$8D,$00   ; "HELLO" + CR, high bit set
+```
+
+## Reference — the full, authoritative contract
+
+- **Code-generation guide** (dialect, entry/exit, the test loop, common pitfalls):
+  https://raw.githubusercontent.com/ebadger/3ric/main/codegen/platform/prompt-system.md
+- **Platform reference** (memory map, soft switches, zero page, ROM entry points — generated
+  from the ROM's own symbol table, so the addresses are authoritative):
+  https://raw.githubusercontent.com/ebadger/3ric/main/codegen/platform/platform-ref.md
+- **Platform reference, machine-readable** (same data as JSON):
+  https://raw.githubusercontent.com/ebadger/3ric/main/codegen/platform/platform-ref.json
+- **Worked example source:**
+  https://raw.githubusercontent.com/ebadger/3ric/main/codegen/programs/hello.s
+
+## Test it — no install required
+
+Open the browser editor at https://ebadger.github.io/3ric/ , paste your source into the
+**Assembler** panel, and press **Assemble & Run** (Ctrl+Enter). It runs on the exact same
+emulator as the real hardware. If your source omits `.org`, set the **org $** field (e.g.
+`0800`). Assembler errors appear as `line N: ...`.
+
+Local alternative (headless pass/fail): clone the repo and run
+`node codegen/tools/run6502.mjs codegen/programs/NAME.s --expect-serial "HELLO" --expect-halt brk-monitor`.
+
+## Contribute it to the gallery
+
+Programs are showcased at https://ebadger.github.io/3ric/gallery.html . To add yours, open a
+pull request that appends one entry to the gallery manifest
+(https://raw.githubusercontent.com/ebadger/3ric/main/web/gallery.json). Full guide:
+https://github.com/ebadger/3ric/blob/main/CONTRIBUTING.md
+
+- **Zero-file (browser only).** After Assemble & Run, press **Share**, copy the `code=` value
+  out of the `?code=...` link, and add a manifest entry:
+  `{ "title": "My Game", "author": "your-name", "mode": "Text", "description": "...", "code": "<paste>" }`
+  (add `"org": "0800"` only if your source has no `.org`). No local build needed.
+- **Source file.** Add your program as `codegen/programs/NAME.s` and a manifest entry:
+  `{ "title": "My Game", "author": "your-name", "mode": "Text", "description": "...", "src": "programs/NAME.s" }`
+
+Open the pull request and your program appears in the gallery, credited to you.
+
+## About / canonical links
+
+- Live machine & editor: https://ebadger.github.io/3ric/
+- Community gallery: https://ebadger.github.io/3ric/gallery.html
+- This file: https://ebadger.github.io/3ric/llms.txt
+- Source repository: https://github.com/ebadger/3ric

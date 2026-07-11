@@ -46,6 +46,12 @@ screen (decode `$0400`, 40×24 interleaved), graphics (`renderFrame()` RGBA), CP
   reliance on `process` outside the guarded CLI tail — breaking this breaks the in-browser
   assembler (`WEB-CLIENT.md`).
 - `platform-ref.*` is generated, not hand-edited; edit `vm.h`/symbols then regenerate.
+- **AI-contributor path.** The codegen guide is exposed for external AI tools: `web/llms.txt`
+  (published at the site root, owned by `WEB-CLIENT.md`) is the machine-readable entry point
+  that links `prompt-system.md` + `platform-ref.md`, and `prompt-system.md` closes the loop to
+  the gallery (write → test → submit a `gallery.json` entry, per `CONTRIBUTING.md`). Keep
+  `llms.txt`'s inline quickstart in sync with `prompt-system.md` when the dialect or entry/exit
+  conventions change.
 
 ## Data flow
 
@@ -67,3 +73,4 @@ capture serial/text/gfx/regs → checks PASS/FAIL → optional .PRG (+ manifest)
 | `harness` + `run6502` validation loop | Shipped | serial/text/gfx/register checks + `.PRG`. |
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |
+| AI-contributor entry point | Shipped | `web/llms.txt` + `CONTRIBUTING.md`; `prompt-system.md` closes the loop to the gallery. |
