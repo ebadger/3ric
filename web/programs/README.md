@@ -85,9 +85,8 @@ the text screen and reads the keyboard. Load any of them with **Load .PRG…** o
 best); source, prompt, and binary live under
 [`emulator/AICodeGen/<name>/`](../../emulator/AICodeGen):
 
-- `blocks.prg` — **BLOCK DROP**: lo-res colour block stacker — rotate and drop
-  four-cell shapes to clear rows, score/controls on a text HUD (**A/D** move,
-  **W** rotate, **S** drop).
+- `blocks.prg` — **BLOCK DROP**: rotate and drop four-cell shapes to clear rows
+  (**A/D** move, **W** rotate, **S** drop).
 - `paddles.prg` — **PADDLES**: paddle-and-ball tennis to seven points against a
   ball-tracking CPU (**W/S** or arrows).
 - `bricks.prg` — **BRICK BUSTER**: bounce a ball off your paddle to clear bricks
