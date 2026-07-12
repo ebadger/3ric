@@ -46,11 +46,11 @@ faster ones; everything wraps at the screen edges. Clear a wave to face a larger
 one; a thrust flame trails the engine and **H** triggers a hyperspace panic-jump.
 Source, prompt, and binary live in
 [`emulator/AICodeGen/rocks/`](../../emulator/AICodeGen/rocks); deep-link it at
-`?prg=programs/rocks.prg&org=0800` (set **Speed** to **Max** for full-speed
+`?prg=programs/rocks.prg&org=0C00` (set **Speed** to **Max** for full-speed
 vectors):
 
 ```sh
-node codegen/tools/asm6502.mjs emulator/AICodeGen/rocks/rocks.s web/programs/rocks.prg --org 0x0800
+node codegen/tools/asm6502.mjs emulator/AICodeGen/rocks/rocks.s web/programs/rocks.prg --org 0x0C00
 ```
 
 `swarm.prg` is **STAR SWARM**, an original hi-res fixed-shooter — a five-row
