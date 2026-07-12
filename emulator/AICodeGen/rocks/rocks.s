@@ -17,7 +17,7 @@
 ;   * BRK test hooks for the headless harness
 ;
 ; Build / run:
-;   BRUN ROCKS.PRG 0800      (loads the raw image to $0800 and jumps there)
+;   BRUN ROCKS.PRG 0C00      (loads the raw image to $0C00 and jumps there)
 ; ============================================================================
 
 ; ---- soft switches (touched by reading them) ----
@@ -222,13 +222,14 @@ K_UARR   = $8B
 K_SPACE  = $A0
 K_H      = $C8            ; hyperspace
 
-        .org $0800
+        .org $0C00              ; above text page 2 ($800-$BFF): the page-flip HUD
+                                ; uses text page 2, so the program must not live there
 
 ; ---------------------------------------------------------------------------
 ; entry (M1: draw a fan of ships at increasing angle to eyeball the engine)
 ; ---------------------------------------------------------------------------
 ; ---------------------------------------------------------------------------
-; entry : the game.  BRUN ROCKS.PRG 0800.
+; entry : the game.  BRUN ROCKS.PRG 0C00.
 ; ---------------------------------------------------------------------------
 start:
         sei
@@ -237,6 +238,8 @@ start:
         txs
         jsr video_init
         jsr enter_attract
+        jsr flip_show           ; hide page 1, draw the first frame on page 2 (no
+                                ; first-frame teardown flicker on the visible page)
 sg_loop:
         jsr game_frame
         jsr flip_show           ; reveal the finished page, hide the other one

@@ -3,7 +3,7 @@
 - **Model:** Claude Opus 4.8 (GitHub Copilot CLI)
 - **Date:** 2026-07-09
 - **Target:** 3ric (65C02, Apple-II compatible)
-- **Load / entry address:** `$0800` &nbsp;→&nbsp; `BRUN ROCKS.PRG 0800`
+- **Load / entry address:** `$0C00` &nbsp;→&nbsp; `BRUN ROCKS.PRG 0C00`
 
 ## Prompt
 
@@ -24,7 +24,7 @@ and the code here are original to this project.
 ## Result
 
 - **`rocks.s`** — 65C02 source.
-- **`rocks.prg`** — assembled raw image (load and run at `$0800`).
+- **`rocks.prg`** — assembled raw image (load and run at `$0C00`).
 - **`rockgen.mjs`** — Node script that bakes every rotated silhouette and rock
   polygon into the `.byte` geometry tables pasted into `rocks.s` (the assembler
   has no multiply and there is no runtime trig, so all geometry is precomputed).
@@ -54,7 +54,7 @@ over** — press **SPACE** to play again.
 
 ```sh
 # assemble
-node codegen/tools/asm6502.mjs emulator/AICodeGen/rocks/rocks.s emulator/AICodeGen/rocks/rocks.prg --org 0x0800
+node codegen/tools/asm6502.mjs emulator/AICodeGen/rocks/rocks.s emulator/AICodeGen/rocks/rocks.prg --org 0x0C00
 
 # (optional) regenerate the baked geometry tables
 node emulator/AICodeGen/rocks/rockgen.mjs
@@ -67,10 +67,10 @@ node codegen/tools/rocks.test.mjs
 
 ## Run it
 
-- **Hardware / disk:** `BRUN ROCKS.PRG 0800`.
-- **Hosted emulator:** deep link `?prg=programs/rocks.prg&org=0800` (set **Speed**
+- **Hardware / disk:** `BRUN ROCKS.PRG 0C00`.
+- **Hosted emulator:** deep link `?prg=programs/rocks.prg&org=0C00` (set **Speed**
   to **Max** for full-speed vectors), or the **Load .PRG…** button at address
-  `0800`.
+  `0C00`.
 
 ### Controls
 
