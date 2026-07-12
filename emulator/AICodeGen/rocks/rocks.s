@@ -256,6 +256,9 @@ video_init:
         lda HIRES_SW            ; hi-res
         jsr build_rows
         jsr clear_screen
+        jsr hud_clear           ; blank the page-1 text HUD too (build_rows left
+                                ; txtoff=0), so the first hidden-draw frame shows a
+                                ; clean screen instead of stale text-row garbage
         rts
 
 ; ---------------------------------------------------------------------------
