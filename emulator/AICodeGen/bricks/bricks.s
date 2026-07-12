@@ -42,8 +42,14 @@ SCOREO   = $0415
 LIVESPOS = $041D
 
 ; ---- pacing ----
-PACE     = 20
-DLY      = 60
+; PACE ticks of tiny_delay pass between each ball step; bigger = slower ball.
+; PACE*DLY sets the tick period: ~15 ball steps/sec at the native 1x clock
+; (down from ~190/sec), a playable brick-breaker pace. PACE also sets how many
+; times the keyboard is polled per step, so keeping it high keeps the paddle
+; responsive; the paddle advances one cell per step, matching the ball's own
+; one-column-per-step drift so it can always track the ball.
+PACE     = 140
+DLY      = 120
 SEED0    = $A5A5
 
 ; ---- brick presence bytes (5 rows * 36 columns = 180 bytes) ----
@@ -206,7 +212,8 @@ mp_done:
         rts
 
 ; ---------------------------------------------------------------------------
-; serve_ball : place the ball above the paddle, travelling straight up.
+; serve_ball : place the ball above the paddle, travelling up on a diagonal so
+;              play always carries some horizontal momentum.
 ; ---------------------------------------------------------------------------
 serve_ball:
         lda #21
@@ -217,7 +224,15 @@ serve_ball:
         sta ballC
         lda #$FF
         sta ballDR
-        lda #0
+        jsr rng                 ; randomize the serve angle (never straight up)
+        lda seedL
+        and #1
+        beq srv_left
+        lda #1                  ; head right
+        bra srv_set
+srv_left:
+        lda #$FF                ; head left
+srv_set:
         sta ballDC
         ldx ballR
         ldy ballC
@@ -266,8 +281,17 @@ sb_move:
         rts
 sb_paddle:
         lda #$FF
-        sta ballDR
-        lda #0
+        sta ballDR              ; always rebound upward
+        lda newC
+        sec
+        sbc paddleC             ; A = strike offset within the paddle (0..PADW-1)
+        cmp #3
+        bcc sbp_left            ; left half -> send the ball left
+        lda #1
+        sta ballDC
+        rts
+sbp_left:
+        lda #$FF
         sta ballDC
         rts
 sb_hash:
