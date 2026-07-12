@@ -38,8 +38,10 @@ the whole scene there, then flips the display soft switch (`LOWSCR`/`HISCR`) so
 the player never sees a half-drawn frame. A `pgoff`/`txtoff` offset steers every
 writer (`clear_screen`, `plotcur`, the HUD routines) at the hidden page, and the
 flip alternates it each frame. This full-frame clear-and-redraw replaces the old
-erase-by-redraw pass; the clear loop is 8×-unrolled and the per-pixel line loop
-inlines its `plotcur`/`stepx`/`stepy` helpers, leaving the frame ~1.5× faster
+erase-by-redraw pass; the clear loop is 8×-unrolled, the per-pixel line loop
+inlines its `plotcur`/`stepx`/`stepy` helpers, and that loop keeps its Bresenham
+error term in a single byte (every rock/ship edge spans ≤36 px, so the old 16-bit
+error math is provably unnecessary), leaving the frame ~1.7× faster
 **and** flicker-free. Ship, bullets, and rocks share a 16-byte object struct with 8.8
 fixed-point position and velocity; motion wraps modulo the playfield. Rocks
 split into two faster children when shot (20/50/100 points by size); the ship
