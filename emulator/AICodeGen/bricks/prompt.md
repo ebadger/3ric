@@ -20,10 +20,16 @@
 Runs on the 40×24 **text** page. A 24-entry row-base table maps `(row,col)` to the
 interleaved screen layout. Bricks (`#`) fill several rows and are tracked in a byte
 array so each can be cleared individually; the paddle (`=`) slides along the bottom
-and the ball (`O`) carries a `±1` velocity that bounces off the walls, the paddle,
-and the bricks. Clearing a brick scores; dropping the ball past the paddle costs a
-life; zero lives ends the game and clearing the field wins. **SPACE** restarts;
-**Q** returns to the monitor.
+and the ball (`O`) travels on a diagonal, carrying a `±1` velocity on **both** axes
+so it always has horizontal momentum. It is served at a random left/right angle, and
+the paddle steers it: strike the ball with the paddle's left half to send it left, the
+right half to send it right. It bounces off the walls, the paddle, and the bricks —
+a brick struck on its side reverses the ball's horizontal direction while one struck
+from below reverses the vertical, so the ball never bores sideways through the pack.
+Clearing a brick scores; dropping the ball past the paddle costs a life; zero lives
+ends the game and clearing the field wins. **SPACE** restarts; **Q** returns to the
+monitor. Ball pacing (`PACE`/`DLY`) is tuned to roughly 15 steps/second at the native
+1× clock — a playable brick-breaker speed, not the old blink-and-miss-it dash.
 
 ## Build & test
 
@@ -41,4 +47,5 @@ node codegen/tools/bricks.test.mjs
   the paddle, **Q** quits.
 - **Hosted emulator:** the **Games** dropdown, deep link
   `?prg=programs/bricks.prg&org=0800`, or **Load .PRG…** at address `0800`.
-  A **1×–2×** Speed is a comfortable pace.
+  The ball is paced for the native **1×** clock; bump the **Speed** up for a
+  faster game or down to **0.5×** for a gentler one.

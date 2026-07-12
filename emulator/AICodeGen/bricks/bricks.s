@@ -42,8 +42,14 @@ SCOREO   = $0415
 LIVESPOS = $041D
 
 ; ---- pacing ----
-PACE     = 20
-DLY      = 60
+; PACE ticks of tiny_delay pass between each ball step; bigger = slower ball.
+; PACE*DLY sets the tick period: ~15 ball steps/sec at the native 1x clock
+; (down from ~190/sec), a playable brick-breaker pace. PACE also sets how many
+; times the keyboard is polled per step, so keeping it high keeps the paddle
+; responsive; the paddle advances one cell per step, matching the ball's own
+; one-column-per-step drift so it can always track the ball.
+PACE     = 140
+DLY      = 120
 SEED0    = $A5A5
 
 ; ---- brick presence bytes (5 rows * 36 columns = 180 bytes) ----
@@ -206,7 +212,8 @@ mp_done:
         rts
 
 ; ---------------------------------------------------------------------------
-; serve_ball : place the ball above the paddle, travelling straight up.
+; serve_ball : place the ball above the paddle, travelling up on a diagonal so
+;              play always carries some horizontal momentum.
 ; ---------------------------------------------------------------------------
 serve_ball:
         lda #21
@@ -217,7 +224,15 @@ serve_ball:
         sta ballC
         lda #$FF
         sta ballDR
-        lda #0
+        jsr rng                 ; randomize the serve angle (never straight up)
+        lda seedL
+        and #1
+        beq srv_left
+        lda #1                  ; head right
+        bra srv_set
+srv_left:
+        lda #$FF                ; head left
+srv_set:
         sta ballDC
         ldx ballR
         ldy ballC
@@ -266,8 +281,17 @@ sb_move:
         rts
 sb_paddle:
         lda #$FF
-        sta ballDR
-        lda #0
+        sta ballDR              ; always rebound upward
+        lda newC
+        sec
+        sbc paddleC             ; A = strike offset within the paddle (0..PADW-1)
+        cmp #3
+        bcc sbp_left            ; left half -> send the ball left
+        lda #1
+        sta ballDC
+        rts
+sbp_left:
+        lda #$FF
         sta ballDC
         rts
 sb_hash:
@@ -328,7 +352,8 @@ fd_done:
         rts
 
 ; ---------------------------------------------------------------------------
-; hit_brick : remove the brick at newR/newC, bump score, and bounce vertically.
+; hit_brick : remove the brick at newR/newC, bump score, and bounce off the
+;             face we actually struck.
 ; ---------------------------------------------------------------------------
 hit_brick:
         ldx newR
@@ -355,8 +380,43 @@ hit_brick:
         bne hb_bounce
         lda #2
         sta gover
+; Reflect off the face we actually struck. The ball moves on a diagonal, so a
+; hit on the target cell (newR,newC) may be a bottom/top, a side, or a corner
+; contact. Probe the two orthogonal neighbours the ball squeezes past -- the
+; cell directly above/below it (newR,ballC) and the one directly beside it
+; (ballR,newC): a solid vertical neighbour means a top/bottom hit (flip DR), a
+; solid horizontal neighbour means a side hit (flip DC), and a lone diagonal
+; (neither orthogonal neighbour solid) is a corner (flip both). Without this the
+; ball would keep its horizontal travel through side hits and bore sideways
+; through the brick mass. (BRICK and WALL share the $A3 glyph, so one compare
+; detects "solid".)
 hb_bounce:
+        ldx newR
+        ldy ballC
+        jsr peekc               ; vertical neighbour (above/below the ball)
+        cmp #WALL
+        php                     ; remember whether it was solid
+        ldx ballR
+        ldy newC
+        jsr peekc               ; horizontal neighbour (left/right of the ball)
+        cmp #WALL
+        beq hb_hsolid
+        plp                     ; horizontal clear...
+        beq hb_vonly            ; ...vertical solid -> top/bottom hit, flip DR
+        jsr flip_dr             ; ...neither solid -> corner, flip both
+        jsr flip_dc
+        rts
+hb_vonly:
         jsr flip_dr
+        rts
+hb_hsolid:
+        plp                     ; horizontal solid...
+        beq hb_both             ; ...vertical solid too -> corner, flip both
+        jsr flip_dc             ; ...vertical clear -> side hit, flip DC
+        rts
+hb_both:
+        jsr flip_dr
+        jsr flip_dc
         rts
 
 ; ---------------------------------------------------------------------------

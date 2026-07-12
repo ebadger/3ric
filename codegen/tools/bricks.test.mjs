@@ -106,5 +106,69 @@ ok(vm.peek(S.SCORE) === 1, "score bumped to 001");
 ok(vm.peek(S.BRICKSLEFT) === 179, "brick counter decremented");
 if (failures) dump(s.textScreen());
 
+// ===== E) diagonal physics: serve angle, paddle english, side bounces ======
+console.log("E) diagonal physics: serve angle, paddle english, wall & brick side hits");
+const s8 = (v) => (v > 127 ? v - 256 : v);
+const cell = (row, col) => vm.peek(S.ROWL + row) + 256 * vm.peek(S.ROWH + row) + col;
+async function bootFresh() { const st = await fresh(); st.vm.setPC(S.START); runCycles(st.vm, 40_000); return st; }
+
+// E1: the serve is diagonal — horizontal velocity is never zero.
+s = await bootFresh(); vm = s.vm;
+ok(s8(vm.peek(S.BALLDC)) !== 0, `serve is diagonal (BALLDC=${s8(vm.peek(S.BALLDC))} != 0)`);
+
+// E2: paddle english — the paddle (cols 17..22, paddleC=17) steers the ball:
+// striking its left half sends the ball left, its right half sends it right.
+for (const [col, wantDC, side] of [[18, 0xFF, "left"], [21, 0x01, "right"]]) {
+  s = await bootFresh(); vm = s.vm;
+  vm.poke(S.BALLR, 21); vm.poke(S.BALLC, col);
+  vm.poke(S.BALLDR, 0x01); vm.poke(S.BALLDC, 0x00);   // dropping onto the paddle
+  s.run({ org: S.HOOK, maxCycles: 200_000, chunk: 50_000 });
+  ok(vm.peek(S.BALLDR) === 0xFF && vm.peek(S.BALLDC) === wantDC,
+    `paddle ${side} half (col ${col}) -> up & ${side} (DR=${s8(vm.peek(S.BALLDR))}, DC=${s8(vm.peek(S.BALLDC))})`);
+}
+
+// E3: a side wall reverses horizontal travel and keeps vertical (this bounce
+// was a no-op back when the ball could only ever move straight up/down).
+s = await bootFresh(); vm = s.vm;
+vm.poke(S.BALLR, 10); vm.poke(S.BALLC, 1);
+vm.poke(S.BALLDR, 0xFF); vm.poke(S.BALLDC, 0xFF);      // up-left into the col-0 wall
+s.run({ org: S.HOOK, maxCycles: 200_000, chunk: 50_000 });
+ok(vm.peek(S.BALLDC) === 0x01 && vm.peek(S.BALLDR) === 0xFF,
+  `left wall flips DC, keeps DR (DC=${s8(vm.peek(S.BALLDC))}, DR=${s8(vm.peek(S.BALLDR))})`);
+
+// E4: a brick struck on its SIDE face reverses horizontal travel (regression
+// guard for sideways tunnelling): horizontal neighbour solid, vertical clear.
+// We assert on the brick *map* (like test D) rather than the screen cell: the
+// BRK hook returns through the monitor, whose register dump scrolls the text
+// screen and drags the poked neighbour glyph over the target -- the map entry
+// is the reliable "brick consumed" signal.
+s = await bootFresh(); vm = s.vm;
+vm.poke(cell(7, 21), 0xA3);   // target brick at (newR,newC)
+vm.poke(cell(8, 21), 0xA3);   // horizontal neighbour solid -> side hit
+vm.poke(cell(7, 20), 0xA0);   // vertical neighbour clear
+vm.poke(S.BALLR, 8); vm.poke(S.BALLC, 20);
+vm.poke(S.BALLDR, 0xFF); vm.poke(S.BALLDC, 0x01);      // up-right into the brick's left face
+vm.poke(S.BRICKS + 4 * 36 + 19, 1);                    // map: brick present at (7,21)
+vm.poke(S.BRICKSLEFT, 180); vm.poke(S.GOVER, 0); vm.poke(S.SCORE, 0);
+s.run({ org: S.HOOK, maxCycles: 200_000, chunk: 50_000 });
+ok(vm.peek(S.BALLDC) === 0xFF && vm.peek(S.BALLDR) === 0xFF,
+  `brick side hit flips DC, keeps DR (DC=${s8(vm.peek(S.BALLDC))}, DR=${s8(vm.peek(S.BALLDR))})`);
+ok(vm.peek(S.BRICKS + 4 * 36 + 19) === 0, "struck brick consumed on side hit (map cleared)");
+
+// E5: a brick struck on its BOTTOM face reverses vertical travel and keeps
+// horizontal: vertical neighbour solid, horizontal neighbour clear.
+s = await bootFresh(); vm = s.vm;
+vm.poke(cell(7, 21), 0xA3);   // target brick
+vm.poke(cell(7, 20), 0xA3);   // vertical neighbour solid -> bottom hit
+vm.poke(cell(8, 21), 0xA0);   // horizontal neighbour clear
+vm.poke(S.BALLR, 8); vm.poke(S.BALLC, 20);
+vm.poke(S.BALLDR, 0xFF); vm.poke(S.BALLDC, 0x01);      // up-right into the brick's underside
+vm.poke(S.BRICKS + 4 * 36 + 19, 1);                    // map: brick present at (7,21)
+vm.poke(S.BRICKSLEFT, 180); vm.poke(S.GOVER, 0); vm.poke(S.SCORE, 0);
+s.run({ org: S.HOOK, maxCycles: 200_000, chunk: 50_000 });
+ok(vm.peek(S.BALLDR) === 0x01 && vm.peek(S.BALLDC) === 0x01,
+  `brick bottom hit flips DR, keeps DC (DR=${s8(vm.peek(S.BALLDR))}, DC=${s8(vm.peek(S.BALLDC))})`);
+ok(vm.peek(S.BRICKS + 4 * 36 + 19) === 0, "struck brick consumed on bottom hit (map cleared)");
+
 console.log(failures === 0 ? "\nALL BRICK BUSTER TESTS PASSED" : `\n${failures} CHECK(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
