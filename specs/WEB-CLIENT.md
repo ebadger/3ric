@@ -52,6 +52,11 @@ host it as static files.
   root, so `robots.txt`/`sitemap.xml` there are advisory (crawlers honour the domain-root
   `robots.txt`) and become authoritative only under a custom domain — the in-page links and
   the human copy-paste prompt (`CONTRIBUTING.md`) are the discovery paths that work today.
+- **Support / funding call-to-action:** the `index.html` and `gallery.html` footers link to
+  the project's GitHub Sponsors page (`https://github.com/sponsors/ebadger`), the primary
+  target declared in `.github/FUNDING.yml`, so visitors to the live emulator — the project's
+  main traffic surface — can fund it. Static markup, external link
+  (`target="_blank" rel="noopener noreferrer"`); no new runtime behaviour.
 
 ## Behaviour / Rules
 
@@ -111,6 +116,7 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 | Community Gallery | Shipped | `gallery.html` renders the curated `gallery.json`; one-click **Run & Remix** via `?src=`/`?code=`; PR-based submissions credited by author. |
 | AI-contributor entry point (`llms.txt`) | Shipped | machine-readable 65C02 codegen quickstart + links; published at the site root, staged by the deploy workflow. |
 | `llms.txt` discoverability | Shipped | `<link rel="alternate">` + footer links in `index.html`/`gallery.html`; `robots.txt` + `sitemap.xml` staged (advisory on the project-page root; authoritative under a custom domain). |
+| Support / funding link | Shipped | GitHub Sponsors call-to-action in the `index.html`/`gallery.html` footers; target declared in `.github/FUNDING.yml`. |
 | Adjustable CPU clock | Shipped | frontend-only pacing; native **1× ≈ 1.57 MHz** (25.175 MHz VGA dot clock ÷ 16) default. |
 | Headless smoke tests | Shipped | `web/test_*.cjs` (boot/render/keyboard/screen/sd/disk). |
 | GitHub Pages CI deploy | Shipped | on push to `main` touching emulator/web/codegen sources. |
