@@ -31,9 +31,16 @@ and the code here are original to this project.
 
 Runs in mixed hi-res mode (a 280×160 vector playfield over a 4-line text HUD).
 The engine builds a 192-entry hi-res row-address table and draws every shape
-with an XOR Bresenham line routine, erasing by redrawing at the old position
-before redrawing at the new one (a per-object DRAWN flag suppresses the first
-erase). Ship, bullets, and rocks share a 16-byte object struct with 8.8
+with an XOR Bresenham line routine. To eliminate flicker it **page-flips**
+between the two hi-res pages (`$2000`/`$4000`) and their matching text-HUD
+pages (`$400`/`$800`): each frame clears the hidden (off-screen) page, redraws
+the whole scene there, then flips the display soft switch (`LOWSCR`/`HISCR`) so
+the player never sees a half-drawn frame. A `pgoff`/`txtoff` offset steers every
+writer (`clear_screen`, `plotcur`, the HUD routines) at the hidden page, and the
+flip alternates it each frame. This full-frame clear-and-redraw replaces the old
+erase-by-redraw pass; the clear loop is 8×-unrolled and the per-pixel line loop
+inlines its `plotcur`/`stepx`/`stepy` helpers, leaving the frame ~1.5× faster
+**and** flicker-free. Ship, bullets, and rocks share a 16-byte object struct with 8.8
 fixed-point position and velocity; motion wraps modulo the playfield. Rocks
 split into two faster children when shot (20/50/100 points by size); the ship
 gets a brief spawn/arrival invulnerability. Waves escalate from four rocks up to

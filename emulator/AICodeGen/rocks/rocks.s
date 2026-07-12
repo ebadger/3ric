@@ -24,6 +24,7 @@
 TXTCLR   = $C050        ; graphics (text off)
 MIXSET   = $C053        ; mixed mode on  (bottom 4 rows are text = HUD)
 LOWSCR   = $C054        ; display page 1
+HISCR    = $C055        ; display page 2  (double-buffer flip)
 HIRES_SW = $C057        ; hi-res
 KBD      = $C000        ; keyboard data (bit7 = key ready)
 KBDSTRB  = $C010        ; clear keyboard strobe
@@ -179,6 +180,9 @@ wave     = $6A79          ; current wave number (1-based)
 fldrawn  = $6A7A          ; 1 = thrust flame currently XOR-drawn on screen
 hhyp     = $6A7B          ; momentary hyperspace request (set by input)
 hypcd    = $6A7C          ; frames until hyperspace is allowed again
+drawpg   = $6A7D          ; double buffer: hi-res page being DRAWN (0=$2000, 1=$4000)
+pgoff    = $6A7E          ; hi-res high-byte offset for the draw page ($00 or $20)
+txtoff   = $6A7F          ; text-HUD high-byte offset for the draw page ($00 or $04)
 
 ; ---- tunables ----
 HOLD     = 4              ; frames an action stays live after its key event
@@ -235,6 +239,7 @@ start:
         jsr enter_attract
 sg_loop:
         jsr game_frame
+        jsr flip_show           ; reveal the finished page, hide the other one
         jsr frame_delay
         jmp sg_loop
 
@@ -314,6 +319,7 @@ init_ship:
 ; game_frame : one tick — dispatch on the current game state.
 ; ---------------------------------------------------------------------------
 game_frame:
+        jsr clear_screen        ; wipe the hidden page, then compose the whole frame
         lda gstate
         cmp #GS_PLAY
         beq gf_play
@@ -325,6 +331,36 @@ gf_play:
 gf_over:
         jmp over_frame
 
+; ---------------------------------------------------------------------------
+; flip_show : reveal the page we just finished drawing, then make the OTHER
+;   page the hidden draw target for the next frame.  PAGE2 ($C054/$C055) flips
+;   the hi-res playfield AND the mixed-mode text HUD together, so pgoff/txtoff
+;   move in lock-step.  Called only from the live loop; the test hooks never
+;   flip, so every harness frame composes on page 1 where the tests read.
+; ---------------------------------------------------------------------------
+flip_show:
+        lda drawpg
+        bne fs_show2
+        lda LOWSCR              ; just drew page 1 -> display it
+        jmp fs_adv
+fs_show2:
+        lda HISCR              ; just drew page 2 -> display it
+fs_adv:
+        lda drawpg
+        eor #1
+        sta drawpg             ; the other page is now the hidden draw target
+        beq fs_p1
+        lda #$20               ; new draw page is page 2
+        sta pgoff
+        lda #$04
+        sta txtoff
+        rts
+fs_p1:
+        lda #0                 ; new draw page is page 1
+        sta pgoff
+        sta txtoff
+        rts
+
 ; play_frame : advance one frame of actual gameplay.
 play_frame:
         lda rkcnt
@@ -332,10 +368,6 @@ play_frame:
         inc wave                ; field cleared -> next, larger wave
         jsr start_wave
 pf_go:
-        jsr erase_ship
-        jsr erase_flame
-        jsr erase_bullets
-        jsr erase_rocks
         jsr read_input
         jsr do_rotate
         jsr do_thrust
@@ -362,7 +394,6 @@ pf_ret:
 
 ; attract_frame : title screen — rocks drift behind it; SPACE starts a game.
 attract_frame:
-        jsr erase_rocks
         jsr update_rocks
         jsr draw_rocks
         jsr hud_attract
@@ -374,7 +405,6 @@ af_ret:
 
 ; over_frame : game-over screen — rocks keep drifting; SPACE restarts.
 over_frame:
-        jsr erase_rocks
         jsr update_rocks
         jsr draw_rocks
         jsr hud_over
@@ -439,6 +469,8 @@ hc_row:
         lda HUDBL,x
         sta ptr
         lda HUDBH,x
+        clc
+        adc txtoff              ; author the HUD on the hidden text page
         sta ptr+1
         lda #$A0                ; normal-video space
         ldy #39
@@ -453,6 +485,10 @@ hc_col:
 
 ; puts : copy the $00-terminated ASCII string at (vpx) to (ptr), hi-bit set.
 puts:
+        lda ptr+1
+        clc
+        adc txtoff              ; retarget to the hidden text page
+        sta ptr+1
         ldy #0
 puts_l:
         lda (vpx),y
@@ -466,6 +502,10 @@ puts_d:
 
 ; put_score : write the 6-digit BCD score at (ptr) (cells Y=0..5).
 put_score:
+        lda ptr+1
+        clc
+        adc txtoff              ; retarget to the hidden text page
+        sta ptr+1
         ldy #0
         lda score2
         jsr sc_byte
@@ -629,15 +669,7 @@ render_ship:
         jsr draw_poly
         rts
 
-; erase_ship : XOR the ship off (only if it was drawn last frame).
-erase_ship:
-        lda SHIP+o_drawn
-        beq er_ret
-        jsr render_ship
-er_ret:
-        rts
-
-; draw_ship : XOR the ship on and mark it drawn (skip when destroyed).
+; draw_ship : draw the ship and mark it drawn (skip when destroyed).
 draw_ship:
         lda SHIP+o_act
         beq ds_ret
@@ -647,9 +679,9 @@ draw_ship:
 ds_ret:
         rts
 
-; render_flame / erase_flame / draw_flame : the thrust flame, drawn as its own
-;   XOR polygon behind the ship so it can blink on and off with the engine
-;   without disturbing the ship's own erase-redraw bookkeeping.
+; render_flame / draw_flame : the thrust flame, drawn as its own XOR polygon
+;   behind the ship so it blinks on and off with the engine.  With the frame
+;   cleared each tick it simply isn't redrawn when the engine is idle.
 render_flame:
         lda SHIP+o_xl
         sta cenx
@@ -660,13 +692,6 @@ render_flame:
         lda SHIP+o_ang
         jsr set_flame_vp
         jsr draw_poly
-        rts
-
-erase_flame:
-        lda fldrawn
-        beq ef_ret
-        jsr render_flame
-ef_ret:
         rts
 
 draw_flame:
@@ -1137,28 +1162,6 @@ fb_ya:
         sta (objptr),y
         rts
 
-; erase_bullets : XOR-off every bullet that is currently drawn.
-erase_bullets:
-        lda #<BULLETS
-        sta objptr
-        lda #>BULLETS
-        sta objptr+1
-        lda #NBULLET
-        sta blcnt
-eb_loop:
-        ldy #o_act
-        lda (objptr),y
-        beq eb_next
-        ldy #o_drawn
-        lda (objptr),y
-        beq eb_next
-        jsr render_bullet
-eb_next:
-        jsr obj_next
-        dec blcnt
-        bne eb_loop
-        rts
-
 ; update_bullets : integrate + wrap each active bullet, then age it; a shot
 ; whose life reaches 0 is deactivated (it was erased at the top of the frame).
 update_bullets:
@@ -1324,28 +1327,6 @@ crk_loop:
         jsr obj_next
         dec blcnt
         bne crk_loop
-        rts
-
-; erase_rocks : XOR off every rock that is currently drawn.
-erase_rocks:
-        lda #<ROCKS
-        sta objptr
-        lda #>ROCKS
-        sta objptr+1
-        lda #NROCK
-        sta blcnt
-erk_loop:
-        ldy #o_act
-        lda (objptr),y
-        beq erk_next
-        ldy #o_drawn
-        lda (objptr),y
-        beq erk_next
-        jsr render_rock
-erk_next:
-        jsr obj_next
-        dec blcnt
-        bne erk_loop
         rts
 
 ; update_rocks : drift + wrap each active rock (shared physics).
@@ -1679,7 +1660,7 @@ srh_ret:
 ; ship_hit : lose a ship; respawn with invulnerability, or end the game.
 ship_hit:
         lda #0
-        sta SHIP+o_drawn        ; already erased this frame; don't redraw at old pos
+        sta SHIP+o_drawn        ; clear the drawn flag on the lost ship
         dec lives
         bne sh_respawn
         lda #1
@@ -2145,7 +2126,34 @@ l_loop:
 l_ret:
         rts
 l_plot:
-        jsr plotcur
+        ; --- inlined plotcur (per-pixel hot path; saves jsr/rts ~12 cyc/px) ---
+        lda cxh
+        bmi lp_skip             ; cx < 0
+        beq lp_xlo              ; cxh == 0 -> cx in 0..255 (< 280) ok
+        cmp #1
+        bne lp_skip             ; cxh >= 2 -> cx >= 512
+        lda cx
+        cmp #24
+        bcs lp_skip             ; cxh==1 & cxlo>=24 -> cx >= 280
+lp_xlo:
+        lda cyh
+        bne lp_skip             ; cy >= 256 or cy < 0
+        lda cy
+        cmp #HEIGHT
+        bcs lp_skip             ; cy >= 160
+        ldy cy
+        lda ROWL,y
+        sta ptr
+        lda ROWH,y
+        clc
+        adc pgoff               ; +$00 page 1 / +$20 page 2 (double buffer)
+        sta ptr+1
+        ldx bitn
+        lda BITMASK,x
+        ldy col
+        eor (ptr),y
+        sta (ptr),y
+lp_skip:
 l_step:
         ; e2 = lerr * 2
         lda lerr
@@ -2173,7 +2181,35 @@ l_step:
         lda lerrh
         sbc dyh
         sta lerrh
-        jsr stepx
+        ; --- inlined stepx (saves jsr/rts) ---
+        lda sxs
+        bmi lsx_neg
+        inc cx
+        bne lsx_p1
+        inc cxh
+lsx_p1:
+        ldx bitn
+        inx
+        cpx #7
+        bne lsx_p2
+        inc col
+        ldx #0
+lsx_p2:
+        stx bitn
+        jmp l_d2
+lsx_neg:
+        lda cx
+        bne lsx_n1
+        dec cxh
+lsx_n1:
+        dec cx
+        ldx bitn
+        bne lsx_n2
+        dec col
+        ldx #7
+lsx_n2:
+        dex
+        stx bitn
 l_d2:
         ; d2: s2 = e2 - dx ; if s2 < 0 -> lerr += dx ; step y
         sec
@@ -2194,57 +2230,23 @@ l_stepy:
         lda lerrh
         adc dxh
         sta lerrh
-        jsr stepy
+        ; --- inlined stepy (saves jsr/rts) ---
+        lda sys
+        bmi lsy_neg
+        inc cy
+        bne lsy_j
+        inc cyh
+lsy_j:
+        jmp l_loop
+lsy_neg:
+        lda cy
+        bne lsy_n1
+        dec cyh
+lsy_n1:
+        dec cy
         jmp l_loop
 
-; step current x by sxs (+/-1), maintaining col/bitn
-stepx:
-        lda sxs
-        bmi sx_neg
-        inc cx
-        bne sx_p1
-        inc cxh
-sx_p1:
-        ldx bitn
-        inx
-        cpx #7
-        bne sx_p2
-        inc col
-        ldx #0
-sx_p2:
-        stx bitn
-        rts
-sx_neg:
-        lda cx
-        bne sx_n1
-        dec cxh
-sx_n1:
-        dec cx
-        ldx bitn
-        bne sx_n2
-        dec col
-        ldx #7
-sx_n2:
-        dex
-        stx bitn
-        rts
-
-; step current y by sys (+/-1)
-stepy:
-        lda sys
-        bmi sy_neg
-        inc cy
-        bne sy_p1
-        inc cyh
-sy_p1:
-        rts
-sy_neg:
-        lda cy
-        bne sy_n1
-        dec cyh
-sy_n1:
-        dec cy
-        rts
+; stepx/stepy were inlined into the l_step hot loop above (per-pixel path).
 
 ; ---------------------------------------------------------------------------
 ; seedcol : from cx (16-bit signed, >= -21) compute col = cx/7, bitn = cx%7.
@@ -2308,6 +2310,8 @@ pc_xlo:
         lda ROWL,y
         sta ptr
         lda ROWH,y
+        clc
+        adc pgoff              ; +$00 page 1 / +$20 page 2 (double buffer)
         sta ptr+1
         ldx bitn
         lda BITMASK,x
@@ -2321,6 +2325,10 @@ pc_skip:
 ; build_rows : ROWL/ROWH[y] = hi-res address of pixel row y (y = 0..191)
 ; ---------------------------------------------------------------------------
 build_rows:
+        lda #0
+        sta drawpg             ; default to page 1 so test hooks draw where they read
+        sta pgoff
+        sta txtoff
         ldx #0
 br_loop:
         txa
@@ -2377,14 +2385,30 @@ br_lowdone:
 ; ---------------------------------------------------------------------------
 clear_screen:
         lda #>SCREEN
+        clc
+        adc pgoff               ; clear the hidden page ($2000 or $4000)
         sta ptr+1
         lda #0
         sta ptr
-        ldx #$20                ; 32 pages ($2000-$3FFF)
+        ldx #$20                ; 32 pages
+        lda #0                  ; fill byte; A stays 0 for the whole loop
 cs_pg:
         ldy #0
-        lda #0
 cs_by:
+        sta (ptr),y             ; 8x-unrolled: amortize the iny/bne per byte
+        iny
+        sta (ptr),y
+        iny
+        sta (ptr),y
+        iny
+        sta (ptr),y
+        iny
+        sta (ptr),y
+        iny
+        sta (ptr),y
+        iny
+        sta (ptr),y
+        iny
         sta (ptr),y
         iny
         bne cs_by
