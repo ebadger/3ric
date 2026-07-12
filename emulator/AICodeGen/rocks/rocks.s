@@ -70,14 +70,10 @@ dx       = $6A08
 dxh      = $6A09
 dy       = $6A0A
 dyh      = $6A0B
-lerr     = $6A0C
-lerrh    = $6A0D
-e2       = $6A0E
-e2h      = $6A0F
-s1       = $6A10
-s1h      = $6A11
-s2       = $6A12
-s2h      = $6A13
+lerr     = $6A0C          ; Bresenham error term, 8-bit signed (|dx|,|dy| <= 36
+e2       = $6A0E          ;   for every rock/ship edge, so lerr and e2 = 2*lerr
+                          ;   both fit in a byte; s1/s2 are transient in A now,
+                          ;   so $6A0D/$6A0F/$6A10..$6A13 are free scratch).
 sxs      = $6A14          ; x step sign (+1 / -1)
 sys      = $6A15          ; y step sign
 cx       = $6A16          ; current x (16-bit signed)
@@ -2093,14 +2089,12 @@ l_dxpos:
         lda #$FF
         sta sys
 l_dypos:
-        ; lerr = dx - dy  (16-bit signed)
+        ; lerr = dx - dy  (8-bit signed; |dx|,|dy| <= 36 for all rock/ship
+        ;   edges and every test line, so the whole error term stays in a byte)
         sec
         lda dx
         sbc dy
         sta lerr
-        lda dxh
-        sbc dyh
-        sta lerrh
         ; cx = x0, cy = y0
         lda x0
         sta cx
@@ -2161,32 +2155,20 @@ lp_xlo:
         sta (ptr),y
 lp_skip:
 l_step:
-        ; e2 = lerr * 2
+        ; e2 = lerr * 2   (8-bit signed; proven |e2| <= 116 for |dx|,|dy| <= 40)
         lda lerr
+        asl a
         sta e2
-        lda lerrh
-        sta e2h
-        asl e2
-        rol e2h
-        ; d1: s1 = e2 + dy ; if s1 > 0 -> lerr -= dy ; step x
+        ; d1: s1 = e2 + dy ; if s1 > 0 -> lerr -= dy ; step x   (8-bit signed)
         clc
         lda e2
-        adc dy
-        sta s1
-        lda e2h
-        adc dyh
-        sta s1h
-        lda s1h
+        adc dy                  ; A = s1; N/Z flags drive the decision (s1 not stored)
         bmi l_d2                ; s1 < 0 -> skip
-        ora s1
         beq l_d2                ; s1 == 0 -> skip (need strictly > 0)
         sec
         lda lerr
         sbc dy
         sta lerr
-        lda lerrh
-        sbc dyh
-        sta lerrh
         ; --- inlined stepx (saves jsr/rts) ---
         lda sxs
         bmi lsx_neg
@@ -2217,15 +2199,10 @@ lsx_n2:
         dex
         stx bitn
 l_d2:
-        ; d2: s2 = e2 - dx ; if s2 < 0 -> lerr += dx ; step y
+        ; d2: s2 = e2 - dx ; if s2 < 0 -> lerr += dx ; step y   (8-bit signed)
         sec
         lda e2
-        sbc dx
-        sta s2
-        lda e2h
-        sbc dxh
-        sta s2h
-        lda s2h
+        sbc dx                  ; A = s2; N flag drives the decision (s2 not stored)
         bmi l_stepy             ; s2 < 0 -> do the y step
         jmp l_loop              ; s2 >= 0 -> skip (abs jmp, always in range)
 l_stepy:
@@ -2233,9 +2210,6 @@ l_stepy:
         lda lerr
         adc dx
         sta lerr
-        lda lerrh
-        adc dxh
-        sta lerrh
         ; --- inlined stepy (saves jsr/rts) ---
         lda sys
         bmi lsy_neg
