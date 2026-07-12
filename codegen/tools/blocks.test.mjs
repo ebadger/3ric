@@ -1,13 +1,9 @@
-// blocks.test.mjs — headless smoke/behaviour test for emulator/AICodeGen/blocks/blocks.s
+// blocks.test.mjs ? headless smoke/behaviour test for emulator/AICodeGen/blocks/blocks.s
 //
-//   A) Boot: mixed LO-RES mode, HUD status line, grey side walls, active piece.
-//   B) Gravity: the lo-res field changes as the active piece descends.
-//   C) Locking: with no key input, a piece settles into the lower well model.
+//   A) Boot: text mode, title/status, well border, and active piece rendered.
+//   B) Gravity: the field changes as the active piece descends.
+//   C) Locking: with no key input, pieces settle into the lower well.
 //   D) Line clear hook: a full bottom row is removed, shifted, and scored.
-//
-// The playfield renders in mixed lo-res (a 10x20 well drawn as 2x2 colour blocks
-// with a four-row text HUD at the bottom), so A/B read the lo-res video RAM and C
-// reads the WELL byte model directly; D exercises the model-level clear hook.
 //
 // Run:  node codegen/tools/blocks.test.mjs
 import { assemble } from "./asm6502.mjs";
@@ -16,7 +12,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-const { boot, TEXT_SCANLINES } = harnessPkg;
+const { boot } = harnessPkg;
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = join(HERE, "..", "..", "emulator", "AICodeGen", "blocks", "blocks.s");
 
@@ -33,61 +29,49 @@ s.load(bytes, org);
 
 function runCycles(n) { let c = 0; while (c < n) { c += vm.run(Math.min(200_000, n - c)); vm.drainOutput(); } }
 const screen = () => s.textScreen();
+const joined = (rows) => rows.join("\n");
 const has = (rows, sub) => rows.some((r) => r.includes(sub));
-
-// Lo-res colour (0..15) of the cell at lo-res (row 0..39, col 0..39). Two stacked
-// pixels share a text byte: low nibble = even row, high nibble = odd row.
-function lores(row, col) {
-  const b = vm.peek(0x400 + TEXT_SCANLINES[row >> 1] + col) & 0xff;
-  return (row & 1) ? (b >> 4) & 0x0f : b & 0x0f;
-}
-// Non-black interior cells (well columns map to lo-res cols 10..29) in a row band.
-function countField(r0, r1) {
+function dump(rows) { console.log("    +" + "-".repeat(40)); for (const r of rows) console.log("    |" + r); }
+function countRegion(rows, r0, r1, c0, c1, ch) {
   let n = 0;
-  for (let r = r0; r <= r1; r++) for (let c = 10; c <= 29; c++) if (lores(r, c) !== 0) n++;
+  for (let r = r0; r <= r1; r++) for (const c of rows[r].slice(c0, c1 + 1)) if (c === ch) n++;
   return n;
 }
-function fieldSig(r0, r1) {
-  let sig = "";
-  for (let r = r0; r <= r1; r++) for (let c = 10; c <= 29; c++) sig += lores(r, c).toString(16);
-  return sig;
-}
-function wellCell(row, col) { return vm.peek(S.WELL + row * 10 + col) & 0xff; }
+function clearWell() { for (let i = 0; i < 200; i++) vm.poke(S.WELL + i, 0); }
+function rowValues(row) { const a = []; for (let c = 0; c < 10; c++) a.push(vm.peek(S.WELL + row * 10 + c)); return a; }
 
 // ===== A) boot / initial render ============================================
-console.log("A) boot: mixed lo-res, HUD status, side walls, active piece");
+console.log("A) boot: text mode, title/status, border, active piece");
 vm.setPC(S.START);
 let sc = screen();
-for (let i = 0; i < 40; i++) {
+for (let i = 0; i < 30; i++) {
   runCycles(20_000);
   sc = screen();
-  if (vm.lores() && countField(0, 9) > 0) break;
+  if (countRegion(sc, 2, 15, 15, 24, "@") > 0) break;
 }
-ok(vm.textMode() === 0, "graphics on (textMode==0)");
-ok(vm.lores() !== 0, "lo-res mode on");
-ok(vm.mixed() !== 0, "mixed mode on (four text HUD rows at the bottom)");
-ok(has(sc, "BLOCK DROP") && has(sc, "SCORE"), "HUD status line shows BLOCK DROP + SCORE");
-ok(lores(0, 9) === 5 && lores(0, 30) === 5, "grey side walls drawn (cols 9 & 30)");
-ok(countField(0, 9) > 0, "active piece visible in the upper lo-res field");
+ok(vm.textMode() !== 0, "text mode is on (textMode!=0)");
+ok(has(sc, "BLOCK DROP") && has(sc, "SCORE"), "status line shows BLOCK DROP + SCORE");
+ok(sc.some((r) => r.includes("#")), "well border/floor drawn with #");
+ok(countRegion(sc, 2, 15, 15, 24, "@") > 0, "active piece visible in upper well");
+if (failures) dump(sc);
 
 // ===== B) gravity / motion ==================================================
-console.log("B) gravity: the lo-res field changes as the piece descends");
-const before = fieldSig(0, 39);
-runCycles(1_600_000);        // one ~0.83 s gravity step at the native clock
-const after = fieldSig(0, 39);
-ok(before !== after, "field changes after gravity ticks");
+console.log("B) gravity: field changes as the piece descends");
+const before = joined(screen().slice(2, 22));
+runCycles(1_600_000);        // one ~0.83 s gravity step at the native 1.57 MHz clock
+const after = joined(screen().slice(2, 22));
+ok(before !== after, "well changes after gravity ticks");
 
 // ===== C) accumulation / locking ===========================================
-console.log("C) accumulation: a piece locks into the lower well model");
+console.log("C) accumulation: pieces lock into the lower well");
 runCycles(40_000_000);       // let at least one piece fall to the floor and lock
-let settled = 0;
-for (let r = 12; r < 20; r++) for (let c = 0; c < 10; c++) if (wellCell(r, c) !== 0) settled++;
-ok(settled > 0, `settled cells appear in the lower well (count=${settled})`);
+sc = screen();
+const lowerSettled = countRegion(sc, 17, 21, 15, 24, "#");
+ok(lowerSettled > 0, `settled # cells appear in bottom rows (count=${lowerSettled})`);
+if (lowerSettled === 0) dump(sc);
 
 // ===== D) deterministic line clear hook =====================================
 console.log("D) clear hook: full row shifts down and increments score");
-function clearWell() { for (let i = 0; i < 200; i++) vm.poke(S.WELL + i, 0); }
-function rowValues(row) { const a = []; for (let c = 0; c < 10; c++) a.push(wellCell(row, c)); return a; }
 clearWell();
 for (let c = 0; c < 10; c++) vm.poke(S.WELL + 19 * 10 + c, 1);
 vm.poke(S.WELL + 18 * 10 + 4, 1);
@@ -102,3 +86,4 @@ ok(vm.peek(S.SCORE) === 1, `score increased by one (${vm.peek(S.SCORE)})`);
 
 console.log(failures === 0 ? "\nALL BLOCKS TESTS PASSED" : `\n${failures} CHECK(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
+
