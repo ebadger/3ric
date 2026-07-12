@@ -23,7 +23,9 @@ array so each can be cleared individually; the paddle (`=`) slides along the bot
 and the ball (`O`) travels on a diagonal, carrying a `±1` velocity on **both** axes
 so it always has horizontal momentum. It is served at a random left/right angle, and
 the paddle steers it: strike the ball with the paddle's left half to send it left, the
-right half to send it right. It bounces off the walls, the paddle, and the bricks.
+right half to send it right. It bounces off the walls, the paddle, and the bricks —
+a brick struck on its side reverses the ball's horizontal direction while one struck
+from below reverses the vertical, so the ball never bores sideways through the pack.
 Clearing a brick scores; dropping the ball past the paddle costs a life; zero lives
 ends the game and clearing the field wins. **SPACE** restarts; **Q** returns to the
 monitor. Ball pacing (`PACE`/`DLY`) is tuned to roughly 15 steps/second at the native

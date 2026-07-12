@@ -352,7 +352,8 @@ fd_done:
         rts
 
 ; ---------------------------------------------------------------------------
-; hit_brick : remove the brick at newR/newC, bump score, and bounce vertically.
+; hit_brick : remove the brick at newR/newC, bump score, and bounce off the
+;             face we actually struck.
 ; ---------------------------------------------------------------------------
 hit_brick:
         ldx newR
@@ -379,8 +380,43 @@ hit_brick:
         bne hb_bounce
         lda #2
         sta gover
+; Reflect off the face we actually struck. The ball moves on a diagonal, so a
+; hit on the target cell (newR,newC) may be a bottom/top, a side, or a corner
+; contact. Probe the two orthogonal neighbours the ball squeezes past -- the
+; cell directly above/below it (newR,ballC) and the one directly beside it
+; (ballR,newC): a solid vertical neighbour means a top/bottom hit (flip DR), a
+; solid horizontal neighbour means a side hit (flip DC), and a lone diagonal
+; (neither orthogonal neighbour solid) is a corner (flip both). Without this the
+; ball would keep its horizontal travel through side hits and bore sideways
+; through the brick mass. (BRICK and WALL share the $A3 glyph, so one compare
+; detects "solid".)
 hb_bounce:
+        ldx newR
+        ldy ballC
+        jsr peekc               ; vertical neighbour (above/below the ball)
+        cmp #WALL
+        php                     ; remember whether it was solid
+        ldx ballR
+        ldy newC
+        jsr peekc               ; horizontal neighbour (left/right of the ball)
+        cmp #WALL
+        beq hb_hsolid
+        plp                     ; horizontal clear...
+        beq hb_vonly            ; ...vertical solid -> top/bottom hit, flip DR
+        jsr flip_dr             ; ...neither solid -> corner, flip both
+        jsr flip_dc
+        rts
+hb_vonly:
         jsr flip_dr
+        rts
+hb_hsolid:
+        plp                     ; horizontal solid...
+        beq hb_both             ; ...vertical solid too -> corner, flip both
+        jsr flip_dc             ; ...vertical clear -> side hit, flip DC
+        rts
+hb_both:
+        jsr flip_dr
+        jsr flip_dc
         rts
 
 ; ---------------------------------------------------------------------------
