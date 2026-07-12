@@ -8,6 +8,7 @@
 <p align="center">
   <a href="https://ebadger.github.io/3ric/"><img alt="Live demo" src="https://img.shields.io/badge/%E2%96%B6_try_it-live_in_your_browser-2ea44f"></a>
   <a href="https://www.youtube.com/playlist?list=PLbYLt1iawSBLK4w46Kn7cxxuoeVt7Zepq"><img alt="Build series" src="https://img.shields.io/badge/build_series-YouTube-red"></a>
+  <a href="https://github.com/sponsors/ebadger"><img alt="Sponsor" src="https://img.shields.io/badge/%E2%9D%A4_sponsor-GitHub-ea4aaa"></a>
   <img alt="CPU" src="https://img.shields.io/badge/CPU-65C02-8957e5">
   <img alt="Runs in WebAssembly" src="https://img.shields.io/badge/runs_in-WebAssembly-654ff0">
   <a href="LICENSE"><img alt="Code license: MIT" src="https://img.shields.io/badge/code-MIT-blue"></a>
@@ -158,9 +159,11 @@ templates under [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/).
 
 ## Support
 
-If this project helps you learn or you just enjoy the build, you can support it via the
-**Sponsor** button on this repository (see [`.github/FUNDING.yml`](.github/FUNDING.yml)).
-Sponsorship funds parts, boards, and more build videos.
+If this project helps you learn or you just enjoy the build, please consider
+**[sponsoring it on GitHub][sponsor]** — or use the **Sponsor** button at the top of this
+repository (see [`.github/FUNDING.yml`](.github/FUNDING.yml)). Sponsorship funds parts,
+boards, and more build videos, and **every sponsor is credited in
+[`BACKERS.md`](BACKERS.md)**.
 
 ## License
 
@@ -177,3 +180,4 @@ before redistributing.
 
 [demo]: https://ebadger.github.io/3ric/
 [youtube]: https://www.youtube.com/playlist?list=PLbYLt1iawSBLK4w46Kn7cxxuoeVt7Zepq
+[sponsor]: https://github.com/sponsors/ebadger
