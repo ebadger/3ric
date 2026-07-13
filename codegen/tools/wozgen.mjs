@@ -369,6 +369,8 @@ export function buildBootableWoz(programBytes, loadAddr, entryAddr = loadAddr) {
     throw new Error("wozgen: load address must be page-aligned (low byte $00)");
   if (loadAddr < 0x0800)
     throw new Error("wozgen: load address must be >= $0800 (below is boot/ZP/stack/text)");
+  if (!Number.isInteger(entryAddr) || entryAddr < 0 || entryAddr > 0xFFFF)
+    throw new Error("wozgen: entry address must be an integer in $0000..$FFFF");
   if (bytes.length === 0) throw new Error("wozgen: program is empty");
 
   const nPages = Math.ceil(bytes.length / 256);
