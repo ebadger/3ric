@@ -4,6 +4,11 @@
 ;   * Generic falling-block stacker in a 10 x 20 well.
 ;   * Controls: Left/Right arrows or A/D move, Up/W rotates, Down/S drops,
 ;     Q quits.  SPACE restarts after game over.
+;   * SNES gamepad (real hardware): D-pad Left/Right move, Down soft-drops,
+;     Up / A / B rotate, SELECT quits, START restarts after game over.  The pad
+;     is read from the ROM's GAMEPAD1 ($CEE0) table, refreshed by touching PTRIG
+;     ($C070) which raises the VIA CB2 edge -> NMI pad-scan.  The emulator has no
+;     gamepad hardware, so the pad is a no-op there; verify on real hardware.
 ;   * The well contents live in RAM; the text screen is rendered from that model.
 ;   * Gravity is paced by a 16-bit counter (GRAV) tuned for the native ~1.57 MHz
 ;     clock (~0.8 s/cell) so the drop is a comfortable classic pace, not too fast.
@@ -19,6 +24,23 @@ KBD      = $C000
 KBDSTRB  = $C010
 TXTSET   = $C051
 LOWSCR   = $C054
+
+; ---- SNES gamepad (serviced by the ROM's VIA CB2 -> NMI pad scan) ----
+; Touch PTRIG to trigger a refresh; the ROM then fills GAMEPAD1 with one byte
+; per button (1 = pressed).  Source of truth: ebadger/msbasic (branch
+; newboard_a2), badger6502_extra.s.
+PTRIG     = $C070       ; RW: strobe -> CB2 edge -> NMI -> ROM scans the pads
+JOYMODE   = $CE15       ; ROM joystick mode (0 = SNES pads)
+GAMEPAD1  = $CEE0       ; 16 bytes; GAMEPAD1+offset = 1 while that button is down
+PAD_B     = 0
+PAD_SEL   = 2
+PAD_START = 3
+PAD_UP    = 4
+PAD_DOWN  = 5
+PAD_LEFT  = 6
+PAD_RIGHT = 7
+PAD_A     = 8
+GP_RATE   = 180         ; read_key calls between pad polls (repeat rate / latency)
 
 ; ---- glyphs (normal video = ascii | $80) ----
 BLANK    = $A0          ; ' '
@@ -77,6 +99,8 @@ score    = $20
 gover    = $21
 gcntL    = $28          ; (2) 16-bit gravity countdown
 gcntH    = $29
+gpPoll   = $2A          ; gamepad poll throttle countdown
+gpRot    = $2B          ; gamepad rotate edge latch (1 = rotate held last poll)
 
         .org $0800
 
@@ -91,6 +115,7 @@ start:
         lda TXTSET
         lda LOWSCR
         lda KBDSTRB
+        stz JOYMODE            ; ensure the ROM scans SNES pads (not the mouse)
         lda #<SEED0
         sta seedL
         lda #>SEED0
@@ -130,6 +155,9 @@ init_game:
         jsr clear_well
         stz score
         stz gover
+        lda #GP_RATE
+        sta gpPoll
+        stz gpRot
         jsr spawn_piece
         jsr render_all
         rts
@@ -138,6 +166,12 @@ init_game:
 ; read_key : non-blocking keyboard poll.
 ; ---------------------------------------------------------------------------
 read_key:
+        dec gpPoll
+        bne rk_kbd
+        lda #GP_RATE
+        sta gpPoll
+        jsr read_pad
+rk_kbd:
         lda KBD
         bpl rk_none
         and #$7F
@@ -214,6 +248,60 @@ rk_rot:
         sta curRot
         jsr render_all
         rts
+
+; ---------------------------------------------------------------------------
+; read_pad : poll the SNES gamepad (throttled by read_key via gpPoll).  Touch
+; PTRIG so the ROM refreshes GAMEPAD1, then act on the buttons.  Left/Right and
+; Down are level-triggered (they auto-repeat at the poll rate); rotate is
+; edge-detected via gpRot so one press = one turn; SELECT quits.
+;
+; A real D-pad can never report LEFT+RIGHT or UP+DOWN simultaneously, so those
+; impossible combinations are rejected.  That also makes the pad a no-op under
+; emulation: the emulator models no pad hardware, so the ROM's bit-bang reads
+; every button as pressed -- the guard catches that and leaves the game on the
+; keyboard.  A disconnected pad reads all-zero (also safe).
+; ---------------------------------------------------------------------------
+read_pad:
+        lda PTRIG               ; strobe -> CB2 -> NMI -> ROM fills GAMEPAD1
+        lda GAMEPAD1 + PAD_LEFT
+        and GAMEPAD1 + PAD_RIGHT
+        bne rp_done             ; both L+R held -> invalid, ignore this poll
+        lda GAMEPAD1 + PAD_UP
+        and GAMEPAD1 + PAD_DOWN
+        bne rp_done             ; both U+D held -> invalid, ignore this poll
+        lda GAMEPAD1 + PAD_LEFT
+        beq rp_nl
+        jsr rk_left
+rp_nl:
+        lda GAMEPAD1 + PAD_RIGHT
+        beq rp_nr
+        jsr rk_right
+rp_nr:
+        lda GAMEPAD1 + PAD_DOWN
+        beq rp_nd
+        jsr gravity_step        ; soft drop
+        lda gover
+        bne rp_done             ; topped out during the soft drop
+rp_nd:
+        lda GAMEPAD1 + PAD_UP
+        ora GAMEPAD1 + PAD_A
+        ora GAMEPAD1 + PAD_B
+        beq rp_rotup            ; no rotate button held -> release the latch
+        lda gpRot
+        bne rp_quitchk          ; still held -> do not auto-repeat rotation
+        lda #1
+        sta gpRot
+        jsr rk_rot
+        bra rp_quitchk
+rp_rotup:
+        stz gpRot
+rp_quitchk:
+        lda GAMEPAD1 + PAD_SEL
+        bne rp_quit
+rp_done:
+        rts
+rp_quit:
+        jmp quit
 
 ; ---------------------------------------------------------------------------
 ; gravity_step : move down if possible; otherwise lock, clear rows, respawn.
@@ -447,6 +535,18 @@ game_over:
         ldy #6
         jsr puts
 go_wait:
+        lda PTRIG               ; refresh the pad
+        lda GAMEPAD1 + PAD_LEFT
+        and GAMEPAD1 + PAD_RIGHT
+        bne go_kbd              ; invalid combo (also the emulator) -> keys only
+        lda GAMEPAD1 + PAD_UP
+        and GAMEPAD1 + PAD_DOWN
+        bne go_kbd
+        lda GAMEPAD1 + PAD_START
+        bne go_restart          ; START = play again
+        lda GAMEPAD1 + PAD_SEL
+        bne quit                ; SELECT = quit
+go_kbd:
         lda KBD
         bpl go_wait
         and #$7F
@@ -799,7 +899,7 @@ sh_j1: .byte 0,1, 1,1, 2,1, 2,2
 sh_j2: .byte 1,0, 1,1, 1,2, 2,0
 sh_j3: .byte 0,0, 0,1, 1,1, 2,1
 
-msg_status: .byte "BLOCK DROP  SCORE:000 A/D W/S ROT Q", 0
+msg_status: .byte "BLOCK DROP  SCORE:000 A/D W/S ROT Q +PAD", 0
 msg_over:   .byte "**** GAME OVER ****", 0
 msg_again:  .byte "SPACE = PLAY AGAIN     Q = QUIT", 0
 

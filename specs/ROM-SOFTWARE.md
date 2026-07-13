@@ -23,6 +23,16 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   `COUT $FDED`, `COUT1 $FDF0`, `CROUT $FD8E`, `PRBYTE $FDDA`, `HOME $FC58`, `KEYIN $FD1B`;
   DOS shell `dos $EC5C` (mount + `>` prompt), verbs `BSAVE/BLOAD/BRUN/DIR/CAT/CD`, FAT32
   `fat32_file_read/write`.
+- **SNES gamepad (contract for programs):** the ROM scans the two SNES pads from an
+  interrupt raised on the VIA CB2 edge. A program touches **`PTRIG $C070`** to raise that
+  edge (→ NMI pad scan; the NMI is non-maskable, so a program may poll the pad while running
+  under `sei`), then reads **`GAMEPAD1 $CEE0`** / `GAMEPAD2 $CEF0` — 16-byte tables, one byte
+  per button (`1` = pressed): `B`=0, `Y`=1, `SELECT`=2, `START`=3, `UP`=4, `DOWN`=5,
+  `LEFT`=6, `RIGHT`=7, `A`=8, `X`=9, `L`=$A, `R`=$B. `JOYSTICK_MODE $CE15` must be `0`
+  (pads — the power-on default). The emulator models no pad hardware (its VIA port reads
+  back the last written value, so a scan reports every button pressed); programs must reject
+  impossible states (e.g. `LEFT`+`RIGHT`) and verify pad input on real hardware. Addresses
+  are exported in `codegen/platform/platform-ref.*`.
 - **`.PRG` programs:** assembled by the codegen toolchain (`CODEGEN.md`). Sources: tracked
   `.s` files (`codegen/programs/hello.s`, `emulator/AICodeGen/<name>/<name>.s`); assembled
   `.prg` images are git-ignored (regenerated). Run on hardware/SD via `BRUN NAME.PRG <org>`,
@@ -62,3 +72,4 @@ BRUN) → user program runs → COUT/screen/serial output`.
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
+| SNES gamepad input | Shipped (hardware) | ROM fills `GAMEPAD1/2` on a `$C070` touch; `blocks` (BLOCK DROP) reads it — D-pad move/soft-drop, `A`/`B`/Up rotate, `SELECT` quit, `START` restart. Inert in the emulator (no pad hardware). |
