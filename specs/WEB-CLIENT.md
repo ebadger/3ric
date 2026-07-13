@@ -46,6 +46,23 @@ host it as static files.
   auto-runs it. Manifest entries carry `title`, `author`/`authorUrl`, `mode`, `description`,
   `tags`, and a run target (a `src` program path or inline `code`, plus optional `org`). Both
   files are committed (not generated), so the deploy workflow stages them into `_site/`.
+- **Story / landing page (`story.html`):** a committed, WASM-free narrative page that tells
+  the story of 3ric and the wider hardware-hacking journey (the Atari-1200XL / learning-journey
+  origin, the Lode-Runner goal that drove the push toward Apple II *compatibility* — 3ric is an
+  original design, not a clone, with its own ROM and modern I/O (PS/2 keyboard/mouse, SNES pads,
+  SD card), so some Apple II software and Applesoft do not run — the hardware-generated VGA
+  graphics with NTSC-artifact color reproduced in logic (the part the author is proudest of), the
+  shared-RAM CPU/video timing, breadboard → PCB, the Ultima IV payoff, the in-browser build →
+  **Download .woz** Apple II dev-kit angle, and the related builds — the Badger6502 **Pico**
+  kit/emulator, ESP32/Atari-2600 experiments, and the cross-platform Lode Runner saga). It links each chapter to its YouTube
+  episode via a **lite-embed facade** (a static `img.youtube.com` thumbnail that, on click,
+  swaps in a privacy-friendly `youtube-nocookie.com` iframe — so no third-party player loads
+  until the visitor asks for it) and funnels visitors into the live emulator/editor, the
+  Gallery, and the Tutorials. A **Community & discussion** section links the `r/beneater`
+  subreddit and the 6502.org project thread; curated post highlights are added by editing the
+  page. Pure static markup (one small inline script for the facade); no WASM, no bundle
+  dependency. Linked from the `index.html` / `gallery.html` / `tutorials.html` headers so it is
+  reachable from anywhere in the web client.
 - **`llms.txt`:** a committed, machine-readable entry point (published at the site root) that
   gives AI coding tools a 65C02 codegen quickstart plus links to the platform reference
   (`codegen/platform/*`), a worked example, the live editor, and the gallery submission flow
@@ -120,7 +137,7 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
   generator, a JS port of `emulator/dsk2woz2`). The `.woz` boot loader depends on the `$C600`
   P5 boot PROM contract (`ROM-SOFTWARE.md`) and the Disk II phase-stepping model (`EMULATOR.md`).
 - **Downstream:** GitHub Pages deploy (`.github/workflows/deploy-pages.yml`) — its **Stage
-  site** step stages `gallery.html` + `gallery.json` + `llms.txt` + `robots.txt` +
+  site** step stages `gallery.html` + `gallery.json` + `story.html` + `llms.txt` + `robots.txt` +
   `sitemap.xml` (alongside `index.html` and `programs/`) into `_site/`; the public users of
   the demo, and AI coding tools that fetch `llms.txt`.
 
@@ -135,6 +152,7 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 | Program downloads (.PRG / .woz) | Shipped | **Download .PRG** (raw bytes) + **Download .woz** (bootable WOZ2 via `wozgen.mjs`, a port of `dsk2woz2`, with a multi-track boot loader); verified by `web/test_woz_download.cjs`. |
 | Share / Remix deep links | Shipped | **Share** button; `?src=programs/<name>.s` for unmodified samples, inline base64url `?code=` otherwise, both carrying `&org=` when the source has no `.org`; remix banner on shared links. |
 | Community Gallery | Shipped | `gallery.html` renders the curated `gallery.json`; one-click **Run & Remix** via `?src=`/`?code=`; PR-based submissions credited by author. |
+| Story / landing page | Shipped | `story.html` — narrative of 3ric + the wider hardware-hacking journey; lite-embed YouTube chapters (facade → `youtube-nocookie` iframe on click); links to emulator/gallery/tutorials + `r/beneater` / 6502.org. Reddit post highlights stubbed for a later curation pass. Linked from the `index.html`/`gallery.html`/`tutorials.html` headers; staged by the deploy workflow. |
 | AI-contributor entry point (`llms.txt`) | Shipped | machine-readable 65C02 codegen quickstart + links; published at the site root, staged by the deploy workflow. |
 | `llms.txt` discoverability | Shipped | `<link rel="alternate">` + footer links in `index.html`/`gallery.html`; `robots.txt` + `sitemap.xml` staged (advisory on the project-page root; authoritative under a custom domain). |
 | Support / funding link | Shipped | GitHub Sponsors call-to-action in the `index.html`/`gallery.html` footers; target declared in `.github/FUNDING.yml`. |

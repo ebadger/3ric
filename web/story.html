@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>3ric — The Story: I built a 6502 computer that speaks Apple II</title>
+<meta name="description" content="The story of 3ric — I set out to learn how 8-bit computers really work, so I built one from a pile of chips. It's an original design, not an Apple II clone, but it speaks enough Apple II to run Lode Runner and finish Ultima IV — hardware-generated VGA with artifact color reproduced in logic I designed. Run it in your browser, and export bootable .woz disks that boot on a real Apple II." />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="3ric — an original 6502 computer that speaks Apple II" />
+<meta property="og:description" content="It started with an Atari 1200XL and one question: how do these 8-bit machines really work? So I built one — an original design that runs Lode Runner and Ultima IV, artifact-color graphics and all. Run it in your browser, and export .woz disks that boot on a real Apple II." />
+<meta property="og:url" content="https://ebadger.github.io/3ric/story.html" />
+<meta property="og:image" content="https://i.ytimg.com/vi/e65qVK7zNGM/hqdefault.jpg" />
+<style>
+  :root { --bg:#0b0e0c; --fg:#33ff66; --dim:#1d6b33; --panel:#11140f; --amber:#ffcc66; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: "Cascadia Code", "Consolas", ui-monospace, monospace;
+    display: flex; flex-direction: column; min-height: 100vh;
+  }
+  a { color: var(--fg); }
+  header { padding: 10px 16px; border-bottom: 1px solid var(--dim); display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+  header h1 { font-size: 14px; margin: 0; letter-spacing: 1px; }
+  header a.nav {
+    color: var(--fg); text-decoration: none; border: 1px solid var(--dim);
+    padding: 4px 10px; font-size: 12px; border-radius: 3px;
+  }
+  header a.nav:hover { background: var(--panel); }
+  header .spacer { margin-left: auto; }
+  main { flex: 1; width: 100%; max-width: 1120px; margin: 0 auto; padding: 8px 16px 24px; }
+
+  /* Hero */
+  .hero { padding: 30px 4px 18px; border-bottom: 1px dashed var(--dim); margin-bottom: 8px; }
+  .hero .kicker { color: var(--dim); font-size: 12px; letter-spacing: 2px; text-transform: uppercase; margin: 0 0 10px; }
+  .hero h2 { font-size: clamp(22px, 4.4vw, 40px); line-height: 1.15; margin: 0 0 14px; letter-spacing: .5px; }
+  .hero h2 .amber { color: var(--amber); }
+  .hero p { font-size: 14px; line-height: 1.6; max-width: 74ch; margin: 0 0 18px; }
+  .cta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn {
+    text-decoration: none; color: var(--bg); background: var(--fg); font-weight: 600;
+    border: 1px solid var(--fg); border-radius: 5px; padding: 9px 16px; font-size: 13px;
+  }
+  .btn:hover { background: #5cff88; }
+  .btn.ghost { color: var(--fg); background: transparent; }
+  .btn.ghost:hover { background: rgba(51,255,102,.10); }
+
+  /* Chapters */
+  .chapter { padding: 26px 4px; border-bottom: 1px solid rgba(29,107,51,.5); }
+  .chapter:last-of-type { border-bottom: none; }
+  .chapnum { color: var(--dim); font-size: 12px; letter-spacing: 2px; text-transform: uppercase; margin: 0 0 6px; }
+  .chapter h3 { font-size: clamp(18px, 3vw, 24px); margin: 0 0 12px; letter-spacing: .5px; }
+  .chapter p { font-size: 13.5px; line-height: 1.62; max-width: 76ch; margin: 0 0 14px; }
+  .chapter p .hl { color: var(--amber); }
+  blockquote {
+    margin: 14px 0; padding: 8px 14px; border-left: 3px solid var(--dim);
+    color: #7de79a; font-style: italic; max-width: 74ch;
+  }
+  blockquote cite { display:block; margin-top:6px; font-style: normal; color: var(--dim); font-size: 12px; }
+
+  /* Video cards */
+  .vid { margin: 16px 0; }
+  .media {
+    position: relative; aspect-ratio: 16 / 9; width: 100%;
+    border: 1px solid var(--dim); border-radius: 8px; overflow: hidden; background: #000;
+  }
+  .media > .lite-yt, .media > iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .lite-yt {
+    display: grid; place-items: center; cursor: pointer; padding: 0; margin: 0;
+    background-color: #000; background-size: cover; background-position: center;
+  }
+  .lite-yt::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(0,0,0,.55)); }
+  .lite-yt .play {
+    position: relative; z-index: 1; font-size: 26px; line-height: 1; color: var(--bg);
+    background: var(--fg); border: 0; border-radius: 999px; width: 64px; height: 64px;
+    display: grid; place-items: center; padding-left: 5px; box-shadow: 0 4px 16px rgba(0,0,0,.5);
+    transition: transform .1s ease, background .1s ease;
+  }
+  .lite-yt:hover .play, .lite-yt:focus-visible .play { transform: scale(1.08); background: #5cff88; }
+  .lite-yt:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  figure.vid { margin: 16px 0 0; }
+  figcaption { font-size: 12px; color: var(--fg); margin-top: 8px; line-height: 1.5; }
+  figcaption a { text-decoration: none; border-bottom: 1px dotted var(--dim); }
+  figcaption a:hover { border-bottom-color: var(--fg); }
+  figcaption .dur { color: var(--dim); margin-left: 6px; }
+  .feature .media { border-color: var(--fg); }
+
+  .video-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; margin-top: 12px; }
+  .video-row figure.vid { margin: 0; }
+
+  .playlist-note { font-size: 12px; color: var(--dim); margin-top: 14px; }
+  .playlist-note a { color: var(--fg); }
+
+  /* Community / discussion */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; margin-top: 14px; }
+  .linkcard {
+    border: 1px solid var(--dim); border-radius: 6px; background: var(--panel);
+    padding: 13px 14px; display: flex; flex-direction: column; gap: 7px;
+  }
+  .linkcard h4 { margin: 0; font-size: 13px; letter-spacing: .5px; }
+  .linkcard p { margin: 0; font-size: 12px; line-height: 1.5; color: #8fe6a8; }
+  .linkcard a.go { align-self: flex-start; margin-top: 2px; text-decoration: none; color: var(--fg); border: 1px solid var(--fg); border-radius: 4px; padding: 4px 11px; font-size: 12px; }
+  .linkcard a.go:hover { background: rgba(51,255,102,.08); }
+  .stub { border-style: dashed; }
+  .stub p { color: var(--dim); }
+
+  footer { padding: 10px 16px; border-top: 1px solid var(--dim); font-size: 11px; color: var(--dim); }
+  footer a { color: var(--dim); }
+  footer a:hover { color: var(--fg); }
+</style>
+<link rel="alternate" type="text/markdown" title="llms.txt — 65C02 codegen guide for AI tools" href="llms.txt" />
+</head>
+<body>
+  <header>
+    <h1>3ric&nbsp;&mdash;&nbsp;The&nbsp;Story</h1>
+    <a class="nav" href="index.html" title="Run the machine in your browser">&#9654;&nbsp;Emulator &amp; Editor</a>
+    <a class="nav" href="tutorials.html" title="Learn 65C02 game programming">&#9654;&nbsp;Tutorials</a>
+    <a class="nav" href="gallery.html" title="Browse the community program gallery">&#9654;&nbsp;Gallery</a>
+    <a class="nav spacer" href="https://www.youtube.com/playlist?list=PLbYLt1iawSBLK4w46Kn7cxxuoeVt7Zepq" target="_blank" rel="noopener noreferrer" title="The full build series on YouTube">&#9654;&nbsp;Build series</a>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="kicker">A homebrew computing story</p>
+      <h2>I wanted to learn how 8-bit computers <em>really</em> work. So I built one &mdash; an original machine that learned to speak <span class="amber">Apple&nbsp;II</span>.</h2>
+      <p>
+        It started with an Atari&nbsp;1200XL I grew up with and a question I could never shake: how do
+        these machines <em>actually</em> work? The only honest way to find out was to build one, so I
+        wired up a 6502 from a pile of chips. Then a goal took hold &mdash; get the games I loved
+        running on hardware I designed, starting with <strong>Lode&nbsp;Runner</strong> &mdash; and
+        that one goal pushed the whole design toward <strong>Apple&nbsp;II compatibility</strong>,
+        because the Apple&nbsp;II had the simplest graphics of its generation you can still build from
+        off-the-shelf parts today. 3RIC isn&rsquo;t an Apple&nbsp;II clone &mdash; it&rsquo;s an
+        original design with its own ROM and modern I/O &mdash; but it speaks enough Apple&nbsp;II to
+        run Lode&nbsp;Runner, finish <strong>Ultima&nbsp;IV</strong>, and a whole lot more. I had no
+        idea if I could pull it off. I did it anyway. And the best part: you can <strong>run it right
+        now in your browser</strong> &mdash; and even build Apple&nbsp;II software with it.
+      </p>
+      <div class="cta">
+        <a class="btn" href="index.html">&#9654;&nbsp;Run 3ric in your browser</a>
+        <a class="btn ghost" href="https://www.youtube.com/playlist?list=PLbYLt1iawSBLK4w46Kn7cxxuoeVt7Zepq" target="_blank" rel="noopener noreferrer">Watch the build series</a>
+      </div>
+    </section>
+
+    <section class="chapter">
+      <p class="chapnum">Chapter 1 &middot; Where it started</p>
+      <h3>It started with an Atari&nbsp;1200XL</h3>
+      <p>
+        I grew up with an <strong>Atari&nbsp;1200XL</strong> and a fascination with computers in
+        general &mdash; how does a box of silicon turn switches into games? Years later I wanted a
+        real answer instead of a hand-wavy one, so I went back to the 8-bit era and started with the
+        <strong>6502</strong> &mdash; the same CPU behind the Apple&nbsp;II, the Commodore&nbsp;64, and
+        the NES. No blueprint, no fixed destination &mdash; just a Ben-Eater-shaped urge to understand
+        a computer by building one from nothing. First and foremost, this was a learning journey.
+      </p>
+      <figure class="vid feature">
+        <div class="media">
+          <button class="lite-yt" data-id="e65qVK7zNGM" style="background-image:url(https://i.ytimg.com/vi/e65qVK7zNGM/hqdefault.jpg)" aria-label="Play video: 6502 childhood dream come true (+VGA, Pi Pico, and Lode Runner too)">
+            <span class="play" aria-hidden="true">&#9654;</span>
+          </button>
+        </div>
+        <figcaption><a href="https://youtu.be/e65qVK7zNGM" target="_blank" rel="noopener noreferrer">6502 childhood dream come true (+VGA, Pi Pico, and Lode Runner too)</a><span class="dur">9:31</span></figcaption>
+      </figure>
+    </section>
+
+    <section class="chapter">
+      <p class="chapnum">Chapter 2 &middot; A goal takes shape</p>
+      <h3>A first machine &mdash; and a target: Lode&nbsp;Runner</h3>
+      <p>
+        The first working machine was the <strong>EB6502</strong>. I bolted on a bit-banged micro-SD
+        card, wrote a tiny DOS for it, and started porting games &mdash; Chess, Breakout, Gomoku
+        &mdash; just to prove the thing could <em>play</em>. That&rsquo;s when the learning project
+        grew a mission: get the games I actually loved running on hardware I built myself, starting
+        with <strong>Lode&nbsp;Runner</strong>. Chasing that one game would end up dictating almost
+        every design decision that followed &mdash; and put an even bigger challenge,
+        <span class="hl">Ultima&nbsp;IV</span>, on the horizon.
+      </p>
+      <div class="video-row">
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="kXQsNKizgxw" style="background-image:url(https://i.ytimg.com/vi/kXQsNKizgxw/hqdefault.jpg)" aria-label="Play video: MicroSD DOS for the EB6502 — porting Chess, Breakout and Gomoku">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/kXQsNKizgxw" target="_blank" rel="noopener noreferrer">MicroSD DOS for the EB6502 &mdash; Chess, Breakout &amp; Gomoku</a><span class="dur">4:21</span></figcaption>
+        </figure>
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="JQuxmTqFi28" style="background-image:url(https://i.ytimg.com/vi/JQuxmTqFi28/hqdefault.jpg)" aria-label="Play video: EB6502 walkthrough — Ultima IV on the EB6502? A retro computing challenge">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/JQuxmTqFi28" target="_blank" rel="noopener noreferrer">EB6502 walkthrough &mdash; a retro computing challenge</a><span class="dur">19:00</span></figcaption>
+        </figure>
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="Pr4oF3ofoNE" style="background-image:url(https://i.ytimg.com/vi/Pr4oF3ofoNE/hqdefault.jpg)" aria-label="Play video: Ultima IV on a 6502 — bringing a classic RPG to life">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/Pr4oF3ofoNE" target="_blank" rel="noopener noreferrer">Ultima&nbsp;IV on a 6502 &mdash; bringing a classic RPG to life</a><span class="dur">4:58</span></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="chapter">
+      <p class="chapnum">Chapter 3 &middot; The twist</p>
+      <h3>To run Lode&nbsp;Runner, I had to speak Apple&nbsp;II</h3>
+      <p>
+        Here&rsquo;s the plot twist: to run the games I was after, my machine had to <em>behave</em>
+        like an Apple&nbsp;II &mdash; and that was a deliberate choice. Of that whole generation, the
+        <strong>Apple&nbsp;II had the simplest graphics hardware you can still build from
+        off-the-shelf parts today</strong>, so chasing Lode&nbsp;Runner steered almost every design
+        decision toward Apple&nbsp;II compatibility. But 3RIC is <strong>no clone</strong> &mdash; the
+        schematic is an <strong>original design</strong> that doesn&rsquo;t look like an Apple&nbsp;II
+        at all. It just gets <em>close enough in behavior</em> to run a surprising amount of
+        Apple&nbsp;II software.
+      </p>
+      <p>
+        The graphics system is the part I&rsquo;m <span class="hl">proudest of</span>. On 3RIC the
+        video is generated entirely in <strong>hardware</strong>, out to a clean modern
+        <strong>VGA</strong> signal. The Apple&nbsp;II&rsquo;s famous hi-res color was a gorgeous hack
+        &mdash; it fell out of <strong>color-burst artifacts on the NTSC signal</strong> &mdash; so to
+        get that same color on VGA I reproduced the artifact behavior in <strong>logic circuits I
+        designed myself</strong>. And because the CPU and the video hardware <strong>share the same
+        RAM</strong>, the whole thing only works with <strong>exact timing</strong>: the two have to
+        take turns on the bus so they never collide. Getting that dance right is the engineering
+        I&rsquo;m most proud of.
+      </p>
+      <p>
+        And make no mistake &mdash; 3RIC is its own machine. It takes a <strong>PS/2 keyboard and
+        mouse</strong>, <strong>SNES controllers</strong>, and an <strong>SD card</strong> &mdash;
+        none of which the Apple&nbsp;II had &mdash; so its <strong>ROM is significantly different</strong>,
+        and there&rsquo;s no Applesoft BASIC. That originality is half the fun, and it&rsquo;s also why
+        <em>not</em> everything runs: some titles lean on Apple&nbsp;II internals that 3RIC simply does
+        its own way. A machine this original deserves its own name &mdash; so the ebadger6502 became
+        <strong>3RIC</strong>.
+      </p>
+      <blockquote>
+        &ldquo;A new computer deserves a new name &mdash; from now on ebadger6502 is the 3RIC 6502.&rdquo;
+        <cite>&mdash; my 6502.org project thread</cite>
+      </blockquote>
+      <div class="video-row">
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="LZXh7j7UPaY" style="background-image:url(https://i.ytimg.com/vi/LZXh7j7UPaY/hqdefault.jpg)" aria-label="Play video: 3RIC 6502 — am I building an Apple II?">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/LZXh7j7UPaY" target="_blank" rel="noopener noreferrer">3RIC 6502 &mdash; am I building an Apple&nbsp;II?</a><span class="dur">7:49</span></figcaption>
+        </figure>
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="UuSKEHjjHn0" style="background-image:url(https://i.ytimg.com/vi/UuSKEHjjHn0/hqdefault.jpg)" aria-label="Play video: Porting Ultima IV — the Apple II language card and banking challenge">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/UuSKEHjjHn0" target="_blank" rel="noopener noreferrer">The Apple&nbsp;II language card &amp; banking challenge</a><span class="dur">7:03</span></figcaption>
+        </figure>
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="kC3BS5_F_xo" style="background-image:url(https://i.ytimg.com/vi/kC3BS5_F_xo/hqdefault.jpg)" aria-label="Play video: Is the 3R1C a Commander X16 killer? Ultima IV update">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/kC3BS5_F_xo" target="_blank" rel="noopener noreferrer">A Commander&nbsp;X16 killer? &mdash; Ultima&nbsp;IV update</a><span class="dur">8:03</span></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="chapter">
+      <p class="chapnum">Chapter 4 &middot; Making it a real computer</p>
+      <h3>Disks, joysticks, demos &amp; music</h3>
+      <p>
+        A computer isn&rsquo;t fun until it&rsquo;s <em>playable</em>. 3RIC got Apple&nbsp;II
+        <strong>disk emulation</strong>, <strong>joysticks</strong> hacked out of a SNES gamepad, a
+        run of deater&rsquo;s jaw-dropping <strong>Mode&nbsp;7</strong> demo, and even a
+        Petscii&nbsp;Robots intro screen with <strong>Mockingboard</strong> music. Bit by bit it
+        stopped being a project and started being a machine.
+      </p>
+      <div class="video-row">
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="rA7bQ838gZ0" style="background-image:url(https://i.ytimg.com/vi/rA7bQ838gZ0/hqdefault.jpg)" aria-label="Play video: 3RIC — playtime with Apple II disk emulation">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/rA7bQ838gZ0" target="_blank" rel="noopener noreferrer">Playtime with Apple&nbsp;II disk emulation</a><span class="dur">39:00</span></figcaption>
+        </figure>
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="HeC8wlNiH0c" style="background-image:url(https://i.ytimg.com/vi/HeC8wlNiH0c/hqdefault.jpg)" aria-label="Play video: 3RIC gets joysticks — hacking a SNES gamepad">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/HeC8wlNiH0c" target="_blank" rel="noopener noreferrer">3RIC gets joysticks &mdash; hacking a SNES gamepad</a><span class="dur">7:01</span></figcaption>
+        </figure>
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="a_jcKuw44c8" style="background-image:url(https://i.ytimg.com/vi/a_jcKuw44c8/hqdefault.jpg)" aria-label="Play video: Breadboard 6502 running deater's Mode 7 Apple II demo">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/a_jcKuw44c8" target="_blank" rel="noopener noreferrer">deater&rsquo;s Mode&nbsp;7 Apple&nbsp;II demo</a><span class="dur">1:54</span></figcaption>
+        </figure>
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="quxPbxa5BJE" style="background-image:url(https://i.ytimg.com/vi/quxPbxa5BJE/hqdefault.jpg)" aria-label="Play video: Petscii Robots intro with Mockingboard music on 3RIC">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/quxPbxa5BJE" target="_blank" rel="noopener noreferrer">Petscii&nbsp;Robots + Mockingboard music</a><span class="dur">0:32</span></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="chapter">
+      <p class="chapnum">Chapter 5 &middot; From wires to a board</p>
+      <h3>Breadboards &rarr; PCB</h3>
+      <p>
+        A wall of jumper wires can only take you so far. The scariest, most satisfying step was
+        turning the rat&rsquo;s nest into a real <strong>printed circuit board</strong> &mdash;
+        committing the design to copper, ordering it, and hoping it powers on. (Spoiler: it took a
+        couple of tries. It always does.)
+      </p>
+      <figure class="vid feature">
+        <div class="media">
+          <button class="lite-yt" data-id="w9Gtfwvl4cY" style="background-image:url(https://i.ytimg.com/vi/w9Gtfwvl4cY/hqdefault.jpg)" aria-label="Play video: 3RIC 6502 from breadboards to PCB">
+            <span class="play" aria-hidden="true">&#9654;</span>
+          </button>
+        </div>
+        <figcaption><a href="https://youtu.be/w9Gtfwvl4cY" target="_blank" rel="noopener noreferrer">3RIC 6502 &mdash; from breadboards to PCB</a><span class="dur">9:15</span></figcaption>
+      </figure>
+      <div class="video-row">
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="WHrFdTmDhjY" style="background-image:url(https://i.ytimg.com/vi/WHrFdTmDhjY/hqdefault.jpg)" aria-label="Play video: 3R1C homebrew computer — tear it down?">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/WHrFdTmDhjY" target="_blank" rel="noopener noreferrer">Tear it down?</a><span class="dur">2:40</span></figcaption>
+        </figure>
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="WXjMHbjiHTY" style="background-image:url(https://i.ytimg.com/vi/WXjMHbjiHTY/hqdefault.jpg)" aria-label="Play video: Oops, I did it again — the PCB build">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/WXjMHbjiHTY" target="_blank" rel="noopener noreferrer">Oops, I did it again (PCB build)</a><span class="dur">0:25</span></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="chapter">
+      <p class="chapnum">Chapter 6 &middot; The payoff</p>
+      <h3>Lode&nbsp;Runner ran. Then I set my sights on Ultima&nbsp;IV.</h3>
+      <p>
+        And then it happened: <strong>Lode&nbsp;Runner ran on the machine I built</strong> &mdash; the
+        exact goal that had started the whole redesign. So I aimed higher and went after
+        <strong>Ultima&nbsp;IV</strong>, a full Apple&nbsp;II RPG, end to end &mdash; and
+        <strong>finished it on 3RIC</strong>. With the hard problems solved, a whole lot of other
+        games fell into place too. I&rsquo;d blown right past the plan I started with.
+      </p>
+      <blockquote>
+        Honestly, the whole project was a lesson in faith. When I set out to run Lode&nbsp;Runner I had
+        no idea how I&rsquo;d get there &mdash; it felt outside what I was capable of. I did it anyway,
+        and far exceeded my own expectations.
+      </blockquote>
+      <div class="video-row">
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="XI2BuQyncEE" style="background-image:url(https://i.ytimg.com/vi/XI2BuQyncEE/hqdefault.jpg)" aria-label="Play video: Homebrew Lode Runner on 3RIC">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/XI2BuQyncEE" target="_blank" rel="noopener noreferrer">Homebrew Lode&nbsp;Runner on 3RIC</a><span class="dur">0:09</span></figcaption>
+        </figure>
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="kvI9nI8rl0o" style="background-image:url(https://i.ytimg.com/vi/kvI9nI8rl0o/hqdefault.jpg)" aria-label="Play video: 3RIC 6502 homebrew computer — Ultima IV completed">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/kvI9nI8rl0o" target="_blank" rel="noopener noreferrer">Ultima&nbsp;IV completed</a><span class="dur">0:37</span></figcaption>
+        </figure>
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="0BFpo2a4FHQ" style="background-image:url(https://i.ytimg.com/vi/0BFpo2a4FHQ/hqdefault.jpg)" aria-label="Play video: 3RIC homebrew 6502 — the conclusion">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/0BFpo2a4FHQ" target="_blank" rel="noopener noreferrer">3RIC homebrew 6502 &mdash; the conclusion</a><span class="dur">9:01</span></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="chapter">
+      <p class="chapnum">Chapter 7 &middot; Not just one machine</p>
+      <h3>The wider hardware-hacking universe</h3>
+      <p>
+        3RIC is the headline, but it lives in a bigger tinkering habit. There&rsquo;s the
+        <strong>Badger6502&nbsp;Pico</strong> &mdash; a DIY kit and a Raspberry&nbsp;Pi&nbsp;Pico
+        running a 6502 emulator, complete with a 3D-printed case &mdash; the endless
+        <strong>Lode&nbsp;Runner</strong> saga that hops between an Apple&nbsp;II, the Pico, and
+        3RIC, and detours into <strong>ESP32</strong>, the <strong>Atari&nbsp;2600</strong>, and the
+        XAC controller adapter. Same curiosity, different silicon.
+      </p>
+      <div class="video-row">
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="A-ka1GT2asc" style="background-image:url(https://i.ytimg.com/vi/A-ka1GT2asc/hqdefault.jpg)" aria-label="Play video: DIY Badger6502Pico Kit — case assembly demonstration">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/A-ka1GT2asc" target="_blank" rel="noopener noreferrer">DIY Badger6502&nbsp;Pico Kit &mdash; case assembly</a><span class="dur">1:41</span></figcaption>
+        </figure>
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="umDmZJTn25A" style="background-image:url(https://i.ytimg.com/vi/umDmZJTn25A/hqdefault.jpg)" aria-label="Play video: Pi Pico firsts — the Badger6502 Pico, Lode Runner evolved">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/umDmZJTn25A" target="_blank" rel="noopener noreferrer">Pi&nbsp;Pico firsts &mdash; Lode&nbsp;Runner evolved</a><span class="dur">10:54</span></figcaption>
+        </figure>
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="T5tWXcCaBWw" style="background-image:url(https://i.ytimg.com/vi/T5tWXcCaBWw/hqdefault.jpg)" aria-label="Play video: Lode Runner on my Pi Pico 6502 emulator and an Apple II side by side">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/T5tWXcCaBWw" target="_blank" rel="noopener noreferrer">Pico vs. Apple&nbsp;II, side by side</a><span class="dur">1:28</span></figcaption>
+        </figure>
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="UJyYEBcQ2sE" style="background-image:url(https://i.ytimg.com/vi/UJyYEBcQ2sE/hqdefault.jpg)" aria-label="Play video: The homebrew ebadger 6502 Lode Runner epic tale continues">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/UJyYEBcQ2sE" target="_blank" rel="noopener noreferrer">The Lode&nbsp;Runner epic tale continues</a><span class="dur">4:13</span></figcaption>
+        </figure>
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="8Bl3qC75VYw" style="background-image:url(https://i.ytimg.com/vi/8Bl3qC75VYw/hqdefault.jpg)" aria-label="Play video: My adventures with ESP32, Atari 2600 and the XAC">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/8Bl3qC75VYw" target="_blank" rel="noopener noreferrer">ESP32, Atari&nbsp;2600 &amp; the XAC</a><span class="dur">2:55</span></figcaption>
+        </figure>
+      </div>
+      <p class="playlist-note">
+        That&rsquo;s the highlight reel &mdash; the full run of build logs, shorts, and deep dives lives on the
+        <a href="https://www.youtube.com/playlist?list=PLbYLt1iawSBLK4w46Kn7cxxuoeVt7Zepq" target="_blank" rel="noopener noreferrer">3RIC build series</a>
+        and my <a href="https://www.youtube.com/@thecodesorcerer" target="_blank" rel="noopener noreferrer">YouTube channel</a>.
+      </p>
+    </section>
+
+    <section class="chapter">
+      <p class="chapnum">Chapter 8 &middot; Your turn</p>
+      <h3>Now the whole machine runs in your browser</h3>
+      <p>
+        Here&rsquo;s the twist ending: alongside the real hardware I built a <strong>cycle-honest C++
+        emulator</strong> of 3RIC and compiled it to <strong>WebAssembly</strong>, so the exact same
+        core that models the chips boots the real 512&nbsp;KB ROM in any browser &mdash; no install, no
+        account. Click the screen and type at the monitor prompt, boot a disk, or open the built-in
+        <strong>65C02 assembler</strong> and write a program that runs on the machine instantly.
+      </p>
+      <p>
+        And here&rsquo;s my favorite part for tinkerers: it doubles as an <strong>Apple&nbsp;II dev
+        kit</strong>. Write and assemble a program in the browser, get it running, then hit
+        <strong>Download&nbsp;.woz</strong> &mdash; you get a bootable 5.25&Prime; disk image,
+        generated entirely client-side, that boots not just on 3RIC but on a <strong>real
+        Apple&nbsp;II</strong>. Build a game here; run it on real hardware.
+      </p>
+      <div class="cta">
+        <a class="btn" href="index.html">&#9654;&nbsp;Launch the emulator</a>
+        <a class="btn ghost" href="tutorials.html">Learn to program it</a>
+        <a class="btn ghost" href="gallery.html">Browse the gallery</a>
+      </div>
+    </section>
+
+    <section class="chapter">
+      <p class="chapnum">Community &middot; Follow along</p>
+      <h3>Join the build</h3>
+      <div class="cards">
+        <div class="linkcard">
+          <h4>&#9654; YouTube build series</h4>
+          <p>Every episode, short, and deep dive from the workbench.</p>
+          <a class="go" href="https://www.youtube.com/@thecodesorcerer" target="_blank" rel="noopener noreferrer">Watch &amp; subscribe</a>
+        </div>
+        <div class="linkcard">
+          <h4>r/beneater</h4>
+          <p>The homebrew-6502 community where a lot of this journey was shared and debated.</p>
+          <a class="go" href="https://www.reddit.com/r/beneater/" target="_blank" rel="noopener noreferrer">Open the subreddit</a>
+        </div>
+        <div class="linkcard">
+          <h4>6502.org &mdash; project thread</h4>
+          <p>My long-running &ldquo;3RIC&rdquo; build log among fellow 6502 hardware nerds.</p>
+          <a class="go" href="https://6502.org/forum/viewtopic.php?t=7749" target="_blank" rel="noopener noreferrer">Read the thread</a>
+        </div>
+        <div class="linkcard">
+          <h4>Source on GitHub</h4>
+          <p>Emulator, ROM, schematics, and the in-browser assembler &mdash; all open.</p>
+          <a class="go" href="https://github.com/ebadger/3ric" target="_blank" rel="noopener noreferrer">github.com/ebadger/3ric</a>
+        </div>
+        <div class="linkcard stub">
+          <h4>Reddit post highlights</h4>
+          <p>Curated r/beneater posts and milestones will land here soon.</p>
+          <a class="go" href="https://www.reddit.com/r/beneater/" target="_blank" rel="noopener noreferrer">r/beneater &rarr;</a>
+        </div>
+        <div class="linkcard">
+          <h4>&#9749; Support the project</h4>
+          <p>Sponsorship funds parts, boards, and more build videos &mdash; every backer is credited.</p>
+          <a class="go" href="https://github.com/sponsors/ebadger" target="_blank" rel="noopener noreferrer">Become a sponsor</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    3ric &mdash; The Story &middot;
+    <a href="index.html">Emulator</a> &middot;
+    <a href="tutorials.html">Tutorials</a> &middot;
+    <a href="gallery.html">Gallery</a> &middot;
+    <a href="https://www.youtube.com/playlist?list=PLbYLt1iawSBLK4w46Kn7cxxuoeVt7Zepq" target="_blank" rel="noopener noreferrer">Build series</a> &middot;
+    <a href="https://github.com/ebadger/3ric" target="_blank" rel="noopener noreferrer">Source</a> &middot;
+    <a href="llms.txt">For AI tools</a> &middot;
+    <a href="https://github.com/sponsors/ebadger" target="_blank" rel="noopener noreferrer">&#9749; Support</a>
+  </footer>
+
+  <script>
+    // Lite-embed facade: each .lite-yt shows a static YouTube thumbnail; clicking (or
+    // Enter/Space, since it's a <button>) swaps in a privacy-friendly youtube-nocookie
+    // player. Nothing loads from YouTube's player domain until the visitor opts in.
+    (function () {
+      "use strict";
+      var buttons = document.querySelectorAll(".lite-yt");
+      Array.prototype.forEach.call(buttons, function (btn) {
+        btn.addEventListener("click", function () {
+          var id = btn.getAttribute("data-id");
+          if (!/^[A-Za-z0-9_-]{11}$/.test(id || "")) return; // static IDs only
+          var iframe = document.createElement("iframe");
+          iframe.src = "https://www.youtube-nocookie.com/embed/" + id + "?autoplay=1&rel=0";
+          iframe.title = btn.getAttribute("aria-label") || "YouTube video player";
+          iframe.setAttribute("allow", "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share");
+          iframe.setAttribute("allowfullscreen", "");
+          iframe.setAttribute("loading", "eager");
+          btn.replaceWith(iframe);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
