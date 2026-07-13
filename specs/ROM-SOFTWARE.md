@@ -51,6 +51,11 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   regenerating `platform-ref.*`.
 - 6502 sources target the `asm6502.mjs` dialect and conventions in
   `codegen/platform/prompt-system.md`.
+- **ROCK STORM performance contract.** An opening-wave live frame (compose the hidden
+  page and flip it) must complete in at most **175,000 65C02 cycles** in the headless
+  emulator. The live loop must not add a fixed busy-wait when rendering already consumes
+  the available frame time. Its cycle check and pixel/gameplay tests live in
+  `codegen/tools/rocks.test.mjs`.
 
 ## Data flow
 
@@ -72,4 +77,5 @@ BRUN) → user program runs → COUT/screen/serial output`.
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
+| ROCK STORM vector game | Shipped / cycle-guarded | Opening-wave live frame is 133,262 cycles against a 175,000-cycle limit; both distributed `.prg` copies are generated from `rocks.s`. |
 | SNES gamepad input | Shipped (hardware) | ROM fills `GAMEPAD1/2` on a `$C070` touch; `blocks` (BLOCK DROP) reads it — D-pad move/soft-drop, `A`/`B`/Up rotate, `SELECT` quit, `START` restart. Inert in the emulator (no pad hardware). |
