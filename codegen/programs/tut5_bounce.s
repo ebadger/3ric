@@ -5,7 +5,7 @@
 ; needed to make it go -- this is the first program with a real "game loop".
 ;
 ;   Try it:   https://ebadger.github.io/3ric/?src=programs/tut5_bounce.s
-;   Verify:   node verify_run.cjs codegen/programs/tut5_bounce.s 0x0800 2000000 ...
+;   Verify:   node codegen/tools/verify_run.cjs codegen/programs/tut5_bounce.s 0x0800 2000000 ...
 ;   Controls: Q quits.
 ; ============================================================================
 

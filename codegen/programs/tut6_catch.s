@@ -6,7 +6,7 @@
 ; graphics up top with a 4-line TEXT window at the bottom for the score.
 ;
 ;   Try it:   https://ebadger.github.io/3ric/?src=programs/tut6_catch.s
-;   Verify:   node verify_keys.cjs codegen/programs/tut6_catch.s 0x0800 "<keys>" ...
+;   Verify:   node codegen/tools/verify_keys.cjs codegen/programs/tut6_catch.s 0x0800 "<keys>" ...
 ;   Controls: W/A/S/D move, Q quits.
 ; ============================================================================
 
@@ -114,7 +114,12 @@ after:  lda hx              ; did we land on the food?
         cmp fy
         bne nocatch
         inc score           ; caught it!
-        jsr drawhud
+        lda score           ; keep the 2-digit HUD valid: cap the score at 99
+        cmp #100
+        bcc sc_ok
+        lda #99
+        sta score
+sc_ok:  jsr drawhud
         jsr newfood
 
 nocatch: jsr drawfood       ; keep food lit (player may have sat on its cell)

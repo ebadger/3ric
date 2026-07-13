@@ -104,7 +104,7 @@ the game fully testable. We drive the player left 18 and up 19 to reach it and c
 score ticks to 1:
 
 ```sh
-node verify_keys.cjs codegen/programs/tut6_catch.s 0x0800 \
+node codegen/tools/verify_keys.cjs codegen/programs/tut6_catch.s 0x0800 \
     "AAAAAAAAAAAAAAAAAAWWWWWWWWWWWWWWWWWWW" 0x06=0x02 0x07=0x01 0x0A=0x01
 ```
 

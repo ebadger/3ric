@@ -195,7 +195,9 @@ mf_rev: lda #$01            ; hit left -> drop, go right
 
 ; ============================================================================
 ; HITCHECK — if the bullet overlaps any live alien, kill it and score.
-; Aliens are 2 px wide, so the bullet matches ax OR ax+1.
+; Aliens are 2 px wide, so the bullet matches ax OR ax+1. The bullet also climbs
+; 2 rows/frame, so it can jump clean over a row: we match by OR by+1 as well, or
+; an alien on an odd row (which happens after the fleet drops) could never be hit.
 ; ============================================================================
 hitcheck: lda bactive
         beq hc_done
@@ -214,9 +216,13 @@ hc_c:   jsr alienidx        ; X = row*5+col, A = alive[X]
         cmp bx
         bne hc_next
 hc_xok: jsr alieny          ; A = ay
-        cmp by
+        cmp by              ; ay == the bullet's row?
+        beq hc_hit
+        sec
+        sbc #1              ; bullet climbs 2 rows/frame, so it can skip a row:
+        cmp by              ; also count the row it jumped over (ay-1 == by)
         bne hc_next
-        jsr alienidx        ; X = this alien's index
+hc_hit: jsr alienidx        ; X = this alien's index
         lda #0
         sta alive,x         ; kill it
         sta bactive

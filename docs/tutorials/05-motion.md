@@ -107,7 +107,7 @@ Because the ball never stops on its own, we verify it with a **fixed cycle budge
 waiting for a halt (that's what `verify_run.cjs` does — run exactly *N* cycles, then look):
 
 ```sh
-node verify_run.cjs codegen/programs/tut5_bounce.s 0x0800 2000000 \
+node codegen/tools/verify_run.cjs codegen/programs/tut5_bounce.s 0x0800 2000000 \
     0x06=0x0C 0x07=0x1C 0x08=0xFF 0x09=0xFF
 ```
 

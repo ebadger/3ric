@@ -78,8 +78,11 @@ die; try that in the exercises.
 
 ### Firing and collision
 
-The cannon fires **one** bullet at a time. `hitcheck` walks the fleet each frame and, because
-aliens are two pixels wide, matches the bullet against `ax` *or* `ax+1`:
+The cannon fires **one** bullet at a time. `hitcheck` walks the fleet each frame. Aliens are
+two pixels wide, so it matches the bullet against `ax` *or* `ax+1`. And because the bullet
+climbs **two rows per frame**, it can jump clean over a row — so we accept `by` *or* `by+1`
+too. Without that, an alien on an odd row (which is exactly what happens after the fleet
+drops) could never be hit: the bullet's row stays even and steps right past it.
 
 ```asm
         jsr alienx          ; A = ax
@@ -90,10 +93,14 @@ aliens are two pixels wide, matches the bullet against `ax` *or* `ax+1`:
         adc #1              ; ax+1  (aliens are 2 px wide)
         cmp bx
         bne hc_next
-hc_xok: jsr alieny
+hc_xok: jsr alieny          ; A = ay
+        cmp by              ; the bullet's row...
+        beq hc_hit
+        sec
+        sbc #1              ; ...or the row it skipped (ay-1 == by)
         cmp by
         bne hc_next
-        ; hit! clear alive[i], stop the bullet, score++
+hc_hit: ; hit! clear alive[i], stop the bullet, score++
 ```
 
 ### The state machine
@@ -126,7 +133,7 @@ again or **Q** to quit.
 Two headless checks pin down the core mechanics. First, the fresh-game state:
 
 ```sh
-node verify_keys.cjs codegen/programs/tut7_invaders.s 0x0800 "" \
+node codegen/tools/verify_keys.cjs codegen/programs/tut7_invaders.s 0x0800 "" \
     0x0E=0x0F 0x0F=0x00 0x07=0x00 0x06=0x14
 ```
 
@@ -134,7 +141,7 @@ node verify_keys.cjs codegen/programs/tut7_invaders.s 0x0800 "" \
 cannon under the right column and fire:
 
 ```sh
-node verify_keys.cjs codegen/programs/tut7_invaders.s 0x0800 "AA ZZZZZZZZ" \
+node codegen/tools/verify_keys.cjs codegen/programs/tut7_invaders.s 0x0800 "AA ZZZZZZZZ" \
     0x06=0x12 0x0E=0x0E 0x0F=0x01 0x0A=0x00
 ```
 
