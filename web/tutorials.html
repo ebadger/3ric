@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>3ric — 65C02 Game Dev Tutorials</title>
+<meta name="description" content="Learn 65C02 assembly game programming on the 3ric, from Hello World to Space Invaders — eight browser-runnable lessons." />
+<style>
+  :root { --bg:#0b0e0c; --fg:#33ff66; --dim:#1d6b33; --panel:#11140f; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: "Cascadia Code", "Consolas", ui-monospace, monospace;
+    display: flex; flex-direction: column; min-height: 100vh;
+  }
+  header { padding: 10px 16px; border-bottom: 1px solid var(--dim); display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+  header h1 { font-size: 14px; margin: 0; letter-spacing: 1px; }
+  header a.nav {
+    color: var(--fg); text-decoration: none; border: 1px solid var(--dim);
+    padding: 4px 10px; font-size: 12px; border-radius: 3px;
+  }
+  header a.nav:hover { background: var(--panel); }
+  main { flex: 1; width: 100%; max-width: 1120px; margin: 0 auto; padding: 16px; }
+  .intro { font-size: 13px; line-height: 1.55; margin: 2px 0 18px; }
+  .intro a { color: var(--fg); }
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .card {
+    border: 1px solid var(--dim); border-radius: 6px; background: var(--panel);
+    padding: 12px 13px; display: flex; flex-direction: column; gap: 9px;
+  }
+  .card .cardhead { display: flex; align-items: center; gap: 8px; }
+  .badge {
+    font-size: 10px; letter-spacing: .5px; text-transform: uppercase;
+    border: 1px solid var(--dim); border-radius: 10px; padding: 1px 7px;
+    color: var(--dim); white-space: nowrap;
+  }
+  .badge.cap { color: var(--fg); border-color: var(--fg); }
+  .card h2 { font-size: 14px; margin: 0; letter-spacing: .5px; }
+  .desc { font-size: 12px; line-height: 1.5; margin: 0; flex: 1; }
+  .learn { font-size: 11px; color: var(--dim); margin: 0; }
+  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .run {
+    text-decoration: none; color: var(--fg);
+    border: 1px solid var(--fg); border-radius: 4px; padding: 5px 12px; font-size: 12px;
+  }
+  .run:hover { background: rgba(51, 255, 102, .08); }
+  .read {
+    text-decoration: none; color: var(--dim);
+    border: 1px solid var(--dim); border-radius: 4px; padding: 5px 12px; font-size: 12px;
+  }
+  .read:hover { background: var(--panel); color: var(--fg); }
+  footer { padding: 8px 16px; border-top: 1px solid var(--dim); font-size: 11px; color: var(--dim); }
+  footer a { color: var(--dim); }
+</style>
+</head>
+<body>
+  <header>
+    <h1>3ric&nbsp;&mdash;&nbsp;65C02&nbsp;Game&nbsp;Dev&nbsp;Tutorials</h1>
+    <a class="nav" href="index.html">&#9654;&nbsp;Emulator &amp; Editor</a>
+    <a class="nav" href="gallery.html">&#9654;&nbsp;Gallery</a>
+  </header>
+  <main>
+    <p class="intro">
+      An eight-lesson course in <strong>65C02 assembly game programming</strong> on 3ric &mdash;
+      the from-scratch Apple-II-class machine that runs in your browser. Start at
+      <em>Hello, 3ric</em> and build up to a playable <strong>Space Invaders</strong>. Every
+      lesson comes with a small, fully-commented program you can <strong>run with one click</strong>,
+      edit in the <a href="index.html">in-browser editor</a>, and re-share. No install, no account.
+      Read the lessons in order &mdash; each one reuses the routines from the last.
+    </p>
+    <div id="grid" role="list">
+
+      <div class="card" role="listitem">
+        <div class="cardhead"><span class="badge">Lesson 1</span><h2>Hello, 3ric</h2></div>
+        <p class="desc">Your first program end-to-end: type it, assemble it, run it. Print
+          text with the ROM&rsquo;s character-out routine.</p>
+        <p class="learn">New: the assembler, <code>COUT</code>, the run loop.</p>
+        <div class="actions">
+          <a class="run" href="index.html?src=programs/tut1_hello.s">&#9654; Run it</a>
+          <a class="read" href="https://github.com/ebadger/3ric/blob/main/docs/tutorials/01-hello.md" target="_blank" rel="noopener noreferrer">Read lesson</a>
+        </div>
+      </div>
+
+      <div class="card" role="listitem">
+        <div class="cardhead"><span class="badge">Lesson 2</span><h2>The text screen</h2></div>
+        <p class="desc">Write straight to screen memory: draw a border, center a title, and
+          lay out a HUD on the 40&times;24 text grid.</p>
+        <p class="learn">New: screen memory, the interleaved row map, direct writes.</p>
+        <div class="actions">
+          <a class="run" href="index.html?src=programs/tut2_screen.s">&#9654; Run it</a>
+          <a class="read" href="https://github.com/ebadger/3ric/blob/main/docs/tutorials/02-text-screen.md" target="_blank" rel="noopener noreferrer">Read lesson</a>
+        </div>
+      </div>
+
+      <div class="card" role="listitem">
+        <div class="cardhead"><span class="badge">Lesson 3</span><h2>Reading the keyboard</h2></div>
+        <p class="desc">Steer a hero around the screen with W/A/S/D. Build the read-a-key,
+          erase, move, redraw loop every game uses.</p>
+        <p class="learn">New: the keyboard at <code>$C000</code>, bounds, the input loop.</p>
+        <div class="actions">
+          <a class="run" href="index.html?src=programs/tut3_move.s">&#9654; Run it</a>
+          <a class="read" href="https://github.com/ebadger/3ric/blob/main/docs/tutorials/03-input.md" target="_blank" rel="noopener noreferrer">Read lesson</a>
+        </div>
+      </div>
+
+      <div class="card" role="listitem">
+        <div class="cardhead"><span class="badge">Lesson 4</span><h2>Color with lo-res</h2></div>
+        <p class="desc">Flip into 40&times;48 lo-res color, write a reusable <code>plot</code>
+          routine, and steer a color-cycling block.</p>
+        <p class="learn">New: soft switches, the lo-res two-pixels-per-byte layout, 16 colors.</p>
+        <div class="actions">
+          <a class="run" href="index.html?src=programs/tut4_lores.s">&#9654; Run it</a>
+          <a class="read" href="https://github.com/ebadger/3ric/blob/main/docs/tutorials/04-lores.md" target="_blank" rel="noopener noreferrer">Read lesson</a>
+        </div>
+      </div>
+
+      <div class="card" role="listitem">
+        <div class="cardhead"><span class="badge">Lesson 5</span><h2>Motion &amp; collision</h2></div>
+        <p class="desc">A ball that moves on its own and bounces off all four walls &mdash;
+          your first real game loop with velocity.</p>
+        <p class="learn">New: the game loop, velocity, reflecting at boundaries, timing.</p>
+        <div class="actions">
+          <a class="run" href="index.html?src=programs/tut5_bounce.s">&#9654; Run it</a>
+          <a class="read" href="https://github.com/ebadger/3ric/blob/main/docs/tutorials/05-motion.md" target="_blank" rel="noopener noreferrer">Read lesson</a>
+        </div>
+      </div>
+
+      <div class="card" role="listitem">
+        <div class="cardhead"><span class="badge">Lesson 6</span><h2>Randomness &amp; scoring</h2></div>
+        <p class="desc">Catch-the-food: a random target, collision, and a live score in a
+          text HUD below the graphics.</p>
+        <p class="learn">New: an LFSR random generator, mixed mode, drawing a number.</p>
+        <div class="actions">
+          <a class="run" href="index.html?src=programs/tut6_catch.s">&#9654; Run it</a>
+          <a class="read" href="https://github.com/ebadger/3ric/blob/main/docs/tutorials/06-random.md" target="_blank" rel="noopener noreferrer">Read lesson</a>
+        </div>
+      </div>
+
+      <div class="card" role="listitem">
+        <div class="cardhead"><span class="badge cap">Capstone</span><h2>Space Invaders</h2></div>
+        <p class="desc">Put it all together: a marching alien fleet, a cannon, a bullet,
+          collision, score, and win/lose screens.</p>
+        <p class="learn">New: a game state machine, a fleet stored as data, edge-reverse motion.</p>
+        <div class="actions">
+          <a class="run" href="index.html?src=programs/tut7_invaders.s">&#9654; Run it</a>
+          <a class="read" href="https://github.com/ebadger/3ric/blob/main/docs/tutorials/07-invaders.md" target="_blank" rel="noopener noreferrer">Read lesson</a>
+        </div>
+      </div>
+
+      <div class="card" role="listitem">
+        <div class="cardhead"><span class="badge">Lesson 8</span><h2>Hi-res &amp; next steps</h2></div>
+        <p class="desc">A peek at 280&times;192 high-resolution graphics, then a map of the
+          shipped games to read and remix from here.</p>
+        <p class="learn">New: hi-res mode, interleaved rows, precomputed address tables.</p>
+        <div class="actions">
+          <a class="run" href="index.html?src=programs/tut8_hires.s">&#9654; Run it</a>
+          <a class="read" href="https://github.com/ebadger/3ric/blob/main/docs/tutorials/08-hires.md" target="_blank" rel="noopener noreferrer">Read lesson</a>
+        </div>
+      </div>
+
+    </div>
+  </main>
+  <footer>
+    3ric Game Dev Tutorials &middot;
+    <a href="index.html">Emulator</a> &middot;
+    <a href="gallery.html">Gallery</a> &middot;
+    <a href="https://github.com/ebadger/3ric/tree/main/docs/tutorials">All lessons on GitHub</a> &middot;
+    <a href="https://github.com/ebadger/3ric">Source</a> &middot;
+    <a href="llms.txt">For AI tools</a>
+  </footer>
+</body>
+</html>
