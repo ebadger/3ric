@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>3ric — The Story: I built a 6502 computer to beat Ultima IV</title>
-<meta name="description" content="The story of 3ric — a from-scratch, Apple-II-class 65C02 computer built on breadboards to run Ultima IV — plus the wider hardware-hacking journey: a Raspberry Pi Pico 6502 kit, VGA artifact color, Lode Runner, and more. Watch the build series and run the machine in your browser." />
+<title>3ric — The Story: I built a 6502 computer, and it became an Apple II</title>
+<meta name="description" content="The story of 3ric — I set out to learn how 8-bit computers really work, so I built one from a pile of chips. To run the games I loved it grew into an Apple II: hardware-generated VGA, Apple II artifact color reproduced in logic I designed, Lode Runner, and finally Ultima IV. Watch the build series and run the machine in your browser." />
 <meta property="og:type" content="website" />
-<meta property="og:title" content="3ric — The Story of a homebrew 65C02 computer" />
-<meta property="og:description" content="From a Ben-Eater breadboard to a PCB that beats Ultima IV. Watch the build series and run the machine in your browser — no install." />
+<meta property="og:title" content="3ric — I built a homebrew Apple II to run the games I loved" />
+<meta property="og:description" content="It started with an Atari 1200XL and one question: how do these 8-bit machines really work? So I built one — and to run Lode Runner and Ultima IV it became an Apple II, artifact-color graphics and all. Watch the build series and run it in your browser." />
 <meta property="og:url" content="https://ebadger.github.io/3ric/story.html" />
 <meta property="og:image" content="https://i.ytimg.com/vi/e65qVK7zNGM/hqdefault.jpg" />
 <style>
@@ -121,15 +121,18 @@
   <main>
     <section class="hero">
       <p class="kicker">A homebrew computing story</p>
-      <h2>I set out to beat <span class="amber">Ultima&nbsp;IV</span> on a computer I built from a pile of chips.</h2>
+      <h2>I wanted to learn how 8-bit computers <em>really</em> work. So I built one &mdash; and it became an <span class="amber">Apple&nbsp;II</span>.</h2>
       <p>
-        3ric started as a Ben-Eater-style 6502 on a breadboard and a stubborn idea: don&rsquo;t
-        just <em>emulate</em> an Apple&nbsp;II &mdash; <strong>build one</strong>, wire by wire, until
-        it could run a real Apple&nbsp;II RPG with the right graphics and sound &mdash; and then
-        actually finish the game on it. Somewhere along the way the machine earned a name, grew a
-        micro-SD &ldquo;DOS,&rdquo; sprouted a VGA video path, jumped from breadboards to a custom
-        PCB, and spun off a whole family of side-quests. This is that story &mdash; and the best part
-        is you can <strong>run the finished machine right now, in your browser</strong>.
+        It started with an Atari&nbsp;1200XL I grew up with and a question I could never shake: how do
+        these machines <em>actually</em> work? The only honest way to find out was to build one, so I
+        wired up a 6502 from a pile of chips. Then a goal took hold &mdash; get the games I loved
+        running on hardware I designed, starting with <strong>Lode&nbsp;Runner</strong> &mdash; and
+        that one goal quietly rebuilt the whole machine into an <strong>Apple&nbsp;II</strong>, because
+        the Apple&nbsp;II had the simplest graphics of its generation you can still build from
+        off-the-shelf parts today. I had no idea if I could pull it off. I did it anyway: ran
+        Lode&nbsp;Runner, then <strong>finished Ultima&nbsp;IV</strong> on it, then a whole lot more.
+        And the best part &mdash; you can <strong>run the finished machine right now, in your
+        browser</strong>.
       </p>
       <div class="cta">
         <a class="btn" href="index.html">&#9654;&nbsp;Run 3ric in your browser</a>
@@ -139,13 +142,14 @@
 
     <section class="chapter">
       <p class="chapnum">Chapter 1 &middot; Where it started</p>
-      <h3>A 6502 childhood dream</h3>
+      <h3>It started with an Atari&nbsp;1200XL</h3>
       <p>
-        Like a lot of people who fall down this rabbit hole, I started with the 6502 &mdash; the
-        same 8-bit CPU behind the Apple&nbsp;II, the Commodore&nbsp;64, and the NES &mdash; and a
-        Ben-Eater-shaped urge to understand a computer by building one from nothing. Add a VGA
-        signal, a Raspberry&nbsp;Pi&nbsp;Pico, and a copy of <strong>Lode&nbsp;Runner</strong>, and a
-        childhood dream quietly came true on my workbench.
+        I grew up with an <strong>Atari&nbsp;1200XL</strong> and a fascination with computers in
+        general &mdash; how does a box of silicon turn switches into games? Years later I wanted a
+        real answer instead of a hand-wavy one, so I went back to the 8-bit era and started with the
+        <strong>6502</strong> &mdash; the same CPU behind the Apple&nbsp;II, the Commodore&nbsp;64, and
+        the NES. No blueprint, no fixed destination &mdash; just a Ben-Eater-shaped urge to understand
+        a computer by building one from nothing. First and foremost, this was a learning journey.
       </p>
       <figure class="vid feature">
         <div class="media">
@@ -158,14 +162,16 @@
     </section>
 
     <section class="chapter">
-      <p class="chapnum">Chapter 2 &middot; The quest</p>
-      <h3>&ldquo;Can this thing run Ultima&nbsp;IV?&rdquo;</h3>
+      <p class="chapnum">Chapter 2 &middot; A goal takes shape</p>
+      <h3>A first machine &mdash; and a target: Lode&nbsp;Runner</h3>
       <p>
-        The first version was the <strong>EB6502</strong>. I bolted on a bit-banged micro-SD card and
-        wrote a tiny DOS for it, then started porting games &mdash; Chess, Breakout, Gomoku &mdash;
-        just to prove the machine could <em>play</em>. That was the moment the real challenge showed
-        up: could I get <span class="hl">Ultima&nbsp;IV</span>, a proper Apple&nbsp;II RPG, running end
-        to end on hardware I designed myself?
+        The first working machine was the <strong>EB6502</strong>. I bolted on a bit-banged micro-SD
+        card, wrote a tiny DOS for it, and started porting games &mdash; Chess, Breakout, Gomoku
+        &mdash; just to prove the thing could <em>play</em>. That&rsquo;s when the learning project
+        grew a mission: get the games I actually loved running on hardware I built myself, starting
+        with <strong>Lode&nbsp;Runner</strong>. Chasing that one game would end up dictating almost
+        every design decision that followed &mdash; and put an even bigger challenge,
+        <span class="hl">Ultima&nbsp;IV</span>, on the horizon.
       </p>
       <div class="video-row">
         <figure class="vid">
@@ -197,13 +203,25 @@
 
     <section class="chapter">
       <p class="chapnum">Chapter 3 &middot; The twist</p>
-      <h3>Wait&hellip; am I building an Apple&nbsp;II?</h3>
+      <h3>To run Lode&nbsp;Runner, I had to build an Apple&nbsp;II</h3>
       <p>
-        To run Apple&nbsp;II software faithfully, I kept having to <em>become</em> the Apple&nbsp;II:
-        emulate its <strong>artifact color</strong> out of a modern VGA signal using logic, tame the
-        timing with a <strong>PLL</strong>, and add a <strong>language card</strong> with the bank
-        switching Ultima&nbsp;IV expects. A machine that has to act like an Apple&nbsp;II deserves its
-        own identity &mdash; so the ebadger6502 became <strong>3RIC</strong>.
+        Here&rsquo;s the plot twist: to run the games I was after, my machine had to <em>become</em>
+        an Apple&nbsp;II &mdash; and that was a deliberate choice. Of that whole generation, the
+        <strong>Apple&nbsp;II had the simplest graphics hardware you can still build from
+        off-the-shelf parts today</strong>, so chasing Lode&nbsp;Runner quietly steered almost every
+        design decision toward Apple&nbsp;II compatibility.
+      </p>
+      <p>
+        The graphics system is the part I&rsquo;m <span class="hl">proudest of</span>. On 3RIC the
+        video is generated entirely in <strong>hardware</strong>, out to a clean modern
+        <strong>VGA</strong> signal. The Apple&nbsp;II&rsquo;s famous hi-res color was a gorgeous hack
+        &mdash; it fell out of <strong>color-burst artifacts on the NTSC signal</strong> &mdash; so to
+        get that same color on VGA I reproduced the artifact behavior in <strong>logic circuits I
+        designed myself</strong>. And because the CPU and the video hardware <strong>share the same
+        RAM</strong>, the whole thing only works with <strong>exact timing</strong>: the two have to
+        take turns on the bus so they never collide. Getting that dance right is the engineering
+        I&rsquo;m most proud of &mdash; and a machine that has to think it&rsquo;s an Apple&nbsp;II
+        deserves its own name, so the ebadger6502 became <strong>3RIC</strong>.
       </p>
       <blockquote>
         &ldquo;A new computer deserves a new name &mdash; from now on ebadger6502 is the 3RIC 6502.&rdquo;
@@ -322,13 +340,28 @@
 
     <section class="chapter">
       <p class="chapnum">Chapter 6 &middot; The payoff</p>
-      <h3>Ultima&nbsp;IV, completed.</h3>
+      <h3>Lode&nbsp;Runner ran. Then I set my sights on Ultima&nbsp;IV.</h3>
       <p>
-        Years of Saturdays later, the machine I built from chips booted the disk, ran the game, and I
-        <strong>finished Ultima&nbsp;IV on it</strong> &mdash; the exact thing I set out to do. Then I
-        sat down for a proper wrap-up on what the whole adventure taught me.
+        And then it happened: <strong>Lode&nbsp;Runner ran on the machine I built</strong> &mdash; the
+        exact goal that had started the whole redesign. So I aimed higher and went after
+        <strong>Ultima&nbsp;IV</strong>, a full Apple&nbsp;II RPG, end to end &mdash; and
+        <strong>finished it on 3RIC</strong>. With the hard problems solved, a whole lot of other
+        games fell into place too. I&rsquo;d blown right past the plan I started with.
       </p>
+      <blockquote>
+        Honestly, the whole project was a lesson in faith. When I set out to run Lode&nbsp;Runner I had
+        no idea how I&rsquo;d get there &mdash; it felt outside what I was capable of. I did it anyway,
+        and far exceeded my own expectations.
+      </blockquote>
       <div class="video-row">
+        <figure class="vid">
+          <div class="media">
+            <button class="lite-yt" data-id="XI2BuQyncEE" style="background-image:url(https://i.ytimg.com/vi/XI2BuQyncEE/hqdefault.jpg)" aria-label="Play video: Homebrew Lode Runner on 3RIC">
+              <span class="play" aria-hidden="true">&#9654;</span>
+            </button>
+          </div>
+          <figcaption><a href="https://youtu.be/XI2BuQyncEE" target="_blank" rel="noopener noreferrer">Homebrew Lode&nbsp;Runner on 3RIC</a><span class="dur">0:09</span></figcaption>
+        </figure>
         <figure class="vid">
           <div class="media">
             <button class="lite-yt" data-id="kvI9nI8rl0o" style="background-image:url(https://i.ytimg.com/vi/kvI9nI8rl0o/hqdefault.jpg)" aria-label="Play video: 3RIC 6502 homebrew computer — Ultima IV completed">
@@ -400,14 +433,6 @@
           </div>
           <figcaption><a href="https://youtu.be/8Bl3qC75VYw" target="_blank" rel="noopener noreferrer">ESP32, Atari&nbsp;2600 &amp; the XAC</a><span class="dur">2:55</span></figcaption>
         </figure>
-        <figure class="vid">
-          <div class="media">
-            <button class="lite-yt" data-id="XI2BuQyncEE" style="background-image:url(https://i.ytimg.com/vi/XI2BuQyncEE/hqdefault.jpg)" aria-label="Play video: Homebrew Lode Runner on 3RIC">
-              <span class="play" aria-hidden="true">&#9654;</span>
-            </button>
-          </div>
-          <figcaption><a href="https://youtu.be/XI2BuQyncEE" target="_blank" rel="noopener noreferrer">Homebrew Lode&nbsp;Runner on 3RIC</a><span class="dur">0:09</span></figcaption>
-        </figure>
       </div>
       <p class="playlist-note">
         That&rsquo;s the highlight reel &mdash; the full run of build logs, shorts, and deep dives lives on the
@@ -477,7 +502,7 @@
     <a href="tutorials.html">Tutorials</a> &middot;
     <a href="gallery.html">Gallery</a> &middot;
     <a href="https://www.youtube.com/playlist?list=PLbYLt1iawSBLK4w46Kn7cxxuoeVt7Zepq" target="_blank" rel="noopener noreferrer">Build series</a> &middot;
-    <a href="https://github.com/ebadger/3ric">Source</a> &middot;
+    <a href="https://github.com/ebadger/3ric" target="_blank" rel="noopener noreferrer">Source</a> &middot;
     <a href="llms.txt">For AI tools</a> &middot;
     <a href="https://github.com/sponsors/ebadger" target="_blank" rel="noopener noreferrer">&#9749; Support</a>
   </footer>

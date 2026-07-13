@@ -47,9 +47,11 @@ host it as static files.
   `tags`, and a run target (a `src` program path or inline `code`, plus optional `org`). Both
   files are committed (not generated), so the deploy workflow stages them into `_site/`.
 - **Story / landing page (`story.html`):** a committed, WASM-free narrative page that tells
-  the story of 3ric and the wider hardware-hacking journey (the Ben-Eater-kit origin, the
-  Ultima IV quest, the VGA-artifact-color / PLL / Apple II language-card work, breadboard →
-  PCB, and the related builds — the Badger6502 **Pico** kit/emulator, ESP32/Atari-2600
+  the story of 3ric and the wider hardware-hacking journey (the Atari-1200XL / learning-journey
+  origin, the Lode-Runner goal that drove the migration to Apple II hardware, the
+  hardware-generated VGA graphics with NTSC-artifact color reproduced in logic — the part the
+  author is proudest of — the shared-RAM CPU/video timing, breadboard → PCB, the Ultima IV
+  payoff, and the related builds — the Badger6502 **Pico** kit/emulator, ESP32/Atari-2600
   experiments, and the cross-platform Lode Runner saga). It links each chapter to its YouTube
   episode via a **lite-embed facade** (a static `img.youtube.com` thumbnail that, on click,
   swaps in a privacy-friendly `youtube-nocookie.com` iframe — so no third-party player loads
