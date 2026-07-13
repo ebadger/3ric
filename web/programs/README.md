@@ -60,7 +60,9 @@ through four crumbling shields; a mystery saucer streaks across the top for bonu
 points. Clear the swarm for a faster wave; let it reach the shields (or lose your
 last cannon) and it's game over (**A/D** or **arrows** move, **SPACE** fires;
 **SPACE** also starts the game from the title screen and restarts after game
-over). Source, prompt, and binary live in
+over). On real hardware, the SNES pad's **D-pad** moves, **A/B** fires,
+**START** launches/restarts, and **SELECT** quits. Source, prompt, and binary
+live in
 [`emulator/AICodeGen/swarm/`](../../emulator/AICodeGen/swarm); deep-link it at
 `?prg=programs/swarm.prg&org=0800` (set **Speed** to **Max** for a brisk pace):
 

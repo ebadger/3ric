@@ -5,6 +5,7 @@
 //   C) xor-erase  : drawing a sprite twice leaves the screen black
 //   D) clip       : sprites straddling the left / right / bottom edges are
 //                   clipped (on-screen part exact, nothing wraps around)
+//   E+) gameplay, game flow, HUD, and SNES gamepad table decoding
 //
 // Run:  node codegen/tools/swarm.test.mjs
 import { assemble } from "./asm6502.mjs";
@@ -71,6 +72,13 @@ const canx = () => vm.peek(S.CANXL) | (vm.peek(S.CANXH) << 8);
 const shtact = () => vm.peek(S.SHTACT);
 const shotx = () => vm.peek(S.SHTXL) | (vm.peek(S.SHTXH) << 8);
 const shty = () => vm.peek(S.SHTY);
+const PAD = { B: 0, SELECT: 2, START: 3, UP: 4, DOWN: 5, LEFT: 6, RIGHT: 7, A: 8 };
+const setPad = (...buttons) => {
+  for (let i = 0; i < 16; i++) vm.poke(S.GAMEPAD1 + i, 0);
+  for (const button of buttons) vm.poke(S.GAMEPAD1 + button, 1);
+};
+const applyPad = () => runHook(S.PAD_BRK, "apply gamepad");
+const applyPadStart = () => runHook(S.PADSTART_BRK, "apply gamepad start");
 // ---- M4 formation helpers ----
 const bx = () => vm.peek(S.BXL) | (vm.peek(S.BXH) << 8);
 const by = () => vm.peek(S.BY);
@@ -235,6 +243,45 @@ console.log("F) cannon: moves under held keys and clamps at both edges");
   const a = canx();
   for (let i = 0; i < 12; i++) frame();
   ok(canx() === a, `cannon halts after key release (${a} == ${canx()})`);
+}
+
+// ===== F1) SNES pad movement/fire mapping ===================================
+console.log("F1) gamepad: D-pad moves and A/B fire");
+{
+  initCannon();
+  setPad(PAD.LEFT);
+  applyPad();
+  ok(vm.peek(S.HLEFT) === S.HOLD && vm.peek(S.HRIGHT) === 0, "D-pad Left maps to left intent");
+
+  setPad(PAD.RIGHT);
+  applyPad();
+  ok(vm.peek(S.HRIGHT) === S.HOLD && vm.peek(S.HLEFT) === 0, "D-pad Right maps to right intent");
+
+  initCannon();
+  setPad(PAD.A);
+  applyPad();
+  ok(vm.peek(S.HFIRE) === S.HOLD, "A maps to fire intent");
+
+  initCannon();
+  setPad(PAD.B);
+  applyPad();
+  ok(vm.peek(S.HFIRE) === S.HOLD, "B maps to fire intent");
+}
+
+// ===== F2) impossible pad states are inert =================================
+console.log("F2) gamepad: impossible D-pad states are rejected");
+{
+  initCannon();
+  setPad(PAD.LEFT, PAD.RIGHT, PAD.A);
+  applyPad();
+  ok(vm.peek(S.HLEFT) === 0 && vm.peek(S.HRIGHT) === 0 && vm.peek(S.HFIRE) === 0,
+     "Left+Right rejects the whole pad sample");
+
+  initCannon();
+  setPad(PAD.UP, PAD.DOWN, PAD.B);
+  applyPad();
+  ok(vm.peek(S.HLEFT) === 0 && vm.peek(S.HRIGHT) === 0 && vm.peek(S.HFIRE) === 0,
+     "Up+Down rejects the whole pad sample");
 }
 
 // ===== G) cannon: erase-redraw leaves no trail ==============================
@@ -661,6 +708,26 @@ console.log("DD) flow: the title screen starts a clean game when SPACE is presse
   ok(vm.peek(S.SCORE0) === 0 && vm.peek(S.SCORE2) === 0, "score starts at zero");
 }
 
+// ===== DD1) pad START launches and restarts ==================================
+console.log("DD1) gamepad flow: START launches and restarts the game");
+{
+  runHook(S.ATTRACT_BRK, "enter attract");
+  setPad();
+  applyPadStart();
+  ok(gstate() === 0, "without START the title screen remains active");
+
+  setPad(PAD.START);
+  applyPadStart();
+  ok(gstate() === 1 && livecnt() === 40, "START launches a fresh game");
+
+  vm.poke(S.GSTATE, 2);
+  vm.poke(S.LIVES, 0);
+  setPad(PAD.START);
+  applyPadStart();
+  ok(gstate() === 1 && vm.peek(S.LIVES) === 3, "START restarts after game over");
+  setPad();
+}
+
 // ===== EE) the swarm landing ends the game ==================================
 console.log("EE) flow: the swarm reaching the invasion line is game over");
 {
@@ -727,13 +794,13 @@ console.log("II) HUD: attract shows the title/prompt; game over shows GAME OVER"
 {
   runHook(S.HUDATT_BRK, "hud attract");
   ok(snapStr(0, 15, 10) === "STAR SWARM", "title on the attract screen");
-  ok(snapStr(2, 10, 19) === "PRESS SPACE TO PLAY", "start prompt");
+  ok(snapStr(2, 10, 21) === "SPACE / START TO PLAY", "start prompt");
   ok(snapStr(3, 13, 4) === "HIGH", "high-score label");
 
   runHook(S.HUDOVER_BRK, "hud over");
   ok(snapStr(0, 15, 9) === "GAME OVER", "game-over banner");
   ok(snapStr(2, 10, 5) === "SCORE", "final score label");
-  ok(snapStr(3, 10, 19) === "PRESS SPACE TO PLAY", "restart prompt");
+  ok(snapStr(3, 10, 21) === "SPACE / START TO PLAY", "restart prompt");
 }
 
 // ===== JJ) the high score only ratchets upward ==============================

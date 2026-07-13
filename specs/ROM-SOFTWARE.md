@@ -72,4 +72,4 @@ BRUN) → user program runs → COUT/screen/serial output`.
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
-| SNES gamepad input | Shipped (hardware) | ROM fills `GAMEPAD1/2` on a `$C070` touch; `blocks` (BLOCK DROP) reads it — D-pad move/soft-drop, `A`/`B`/Up rotate, `SELECT` quit, `START` restart. Inert in the emulator (no pad hardware). |
+| SNES gamepad input | Shipped (hardware) | ROM fills `GAMEPAD1/2` on a `$C070` touch. `blocks` (BLOCK DROP): D-pad move/soft-drop, `A`/`B`/Up rotate, `SELECT` quit, `START` restart. `swarm` (STAR SWARM): D-pad Left/Right move, `A`/`B` fire, `START` launch/restart, `SELECT` quit. Inert in the emulator (no pad hardware). |

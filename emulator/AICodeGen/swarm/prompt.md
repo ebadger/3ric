@@ -41,10 +41,11 @@ fires one bolt at a time; a hit scores by rank (top rows worth most). Four
 shields erode pixel-by-pixel under fire from both sides, and a mystery saucer
 glides across the top for bonus points.
 
-An **attract / title screen** opens the game (press **SPACE** to launch). Clear
-the swarm to roll into a faster wave; let the swarm reach the shields, or lose
-your last cannon, for **game over** — press **SPACE** to play again. Score,
-lives, wave, and a high score are shown on the HUD.
+An **attract / title screen** opens the game (press keyboard **SPACE** or SNES
+pad **START** to launch). Clear the swarm to roll into a faster wave; let the
+swarm reach the shields, or lose your last cannon, for **game over** — press
+**SPACE** or **START** to play again. Score, lives, wave, and a high score are
+shown on the HUD.
 
 ## Build & test
 
@@ -74,3 +75,10 @@ node codegen/tools/swarm.test.mjs
 - **D / right** — move the cannon right
 - **SPACE** — fire; also starts the game from the title screen and restarts on
   the game-over screen
+- **SNES D-pad left / right** — move the cannon on real hardware
+- **SNES A / B** — fire
+- **SNES START** — start or restart; **SELECT** — quit to the monitor
+
+The ROM refreshes its `GAMEPAD1` table when the game touches `PTRIG`; impossible
+D-pad states are ignored so the unmodelled controller stays inert in the
+emulator. Verify pad input on real hardware.
