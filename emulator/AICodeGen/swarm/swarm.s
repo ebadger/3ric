@@ -6,6 +6,11 @@
 ; cannon left/right, fire up, and clear the formation before it lands.  The swarm
 ; marches side to side, drops a row and speeds up as its ranks thin, rains bombs,
 ; and hides behind crumbling bunkers while a mystery saucer streaks overhead.
+; Keyboard: A/D or Left/Right move, SPACE fires and starts/restarts the game.
+; SNES pad (real hardware): D-pad Left/Right move, A/B fire, START starts or
+; restarts, and SELECT quits.  Touching PTRIG refreshes the ROM's GAMEPAD1 table;
+; impossible D-pad states are rejected so the pad stays inert in the emulator,
+; which does not model controller hardware.
 ; All sprite art, code and the name are original; only the un-copyrightable
 ; genre mechanics are shared with the classic.
 ;
@@ -29,6 +34,19 @@ LOWSCR   = $C054        ; display page 1
 HIRES_SW = $C057        ; hi-res
 KBD      = $C000        ; keyboard data (bit7 = key ready)
 KBDSTRB  = $C010        ; clear keyboard strobe
+
+; ---- SNES gamepad (serviced by the ROM's VIA CB2 -> NMI pad scan) ----
+PTRIG     = $C070       ; strobe -> CB2 edge -> NMI -> ROM scans the pads
+JOYMODE   = $CE15       ; ROM joystick mode (0 = SNES pads)
+GAMEPAD1  = $CEE0       ; 16 bytes; one byte per button (1 = pressed)
+PAD_B     = 0
+PAD_SEL   = 2
+PAD_START = 3
+PAD_UP    = 4
+PAD_DOWN  = 5
+PAD_LEFT  = 6
+PAD_RIGHT = 7
+PAD_A     = 8
 
 ; ---- memory map ----
 SCREEN   = $2000        ; hi-res page 1 (displayed)   $2000-$3FFF
@@ -251,6 +269,7 @@ start:
         ldx #$FF
         txs
         jsr video_init
+        stz JOYMODE             ; select SNES pads rather than mouse packets
         lda #0                  ; zero the high score at power-on
         sta hisc0
         sta hisc1
@@ -345,11 +364,12 @@ play_frame:
         rts
 
 ; ---------------------------------------------------------------------------
-; read_input : poll the keyboard; refresh the matching intent hold-timer.
+; read_input : poll the gamepad and keyboard; refresh matching intent timers.
 ;   (Apple II reports one key at a time; held keys + OS auto-repeat keep the
 ;    intent alive via the hold-timers.)
 ; ---------------------------------------------------------------------------
 read_input:
+        jsr poll_pad_input
         lda KBD
         bpl ri_ret              ; bit7 clear -> no key waiting
         sta keyin
@@ -378,6 +398,56 @@ ri_fire:
         lda #HOLD
         sta hfire
 ri_ret:
+        rts
+
+; ---------------------------------------------------------------------------
+; poll_pad_input : refresh GAMEPAD1, then feed its held buttons into the same
+;   intent timers as the keyboard.  A/B may auto-fire once the current bolt
+;   retires; SELECT returns to the monitor.
+; ---------------------------------------------------------------------------
+poll_pad_input:
+        lda PTRIG               ; CB2 edge -> NMI -> ROM refreshes GAMEPAD1
+apply_pad_input:
+        jsr pad_valid
+        bcc api_ret
+        lda GAMEPAD1 + PAD_LEFT
+        beq api_right
+        lda #HOLD
+        sta hleft
+        stz hright
+api_right:
+        lda GAMEPAD1 + PAD_RIGHT
+        beq api_fire
+        lda #HOLD
+        sta hright
+        stz hleft
+api_fire:
+        lda GAMEPAD1 + PAD_A
+        ora GAMEPAD1 + PAD_B
+        beq api_select
+        lda #HOLD
+        sta hfire
+api_select:
+        lda GAMEPAD1 + PAD_SEL
+        beq api_ret
+        jmp exit_game
+api_ret:
+        rts
+
+; pad_valid : carry set when the table contains a physically possible D-pad
+;   state.  The emulator's unmodelled pad reads every button as pressed, so this
+;   guard also prevents phantom movement, firing, starts, and quits there.
+pad_valid:
+        lda GAMEPAD1 + PAD_LEFT
+        and GAMEPAD1 + PAD_RIGHT
+        bne pv_bad
+        lda GAMEPAD1 + PAD_UP
+        and GAMEPAD1 + PAD_DOWN
+        bne pv_bad
+        sec
+        rts
+pv_bad:
+        clc
         rts
 
 ; ---------------------------------------------------------------------------
@@ -1998,7 +2068,7 @@ ps_ret:
         rts
 
 ; ---------------------------------------------------------------------------
-; attract_frame : title screen — draw the HUD, wait for SPACE to launch a game.
+; attract_frame : title screen — wait for keyboard SPACE or pad START.
 ; ---------------------------------------------------------------------------
 attract_frame:
         jsr hud_attract
@@ -2009,7 +2079,7 @@ af_ret:
         rts
 
 ; ---------------------------------------------------------------------------
-; over_frame : game-over screen — show the result, wait for SPACE to restart.
+; over_frame : game-over screen — wait for keyboard SPACE or pad START.
 ; ---------------------------------------------------------------------------
 over_frame:
         jsr hud_over
@@ -2135,22 +2205,37 @@ uh_no:
         rts
 
 ; ---------------------------------------------------------------------------
-; poll_space : carry set if SPACE is down this frame (clears the strobe).
+; poll_space : carry set if keyboard SPACE or pad START is down this frame.
+;   The main loop calls this once per paced frame, so PTRIG cannot hammer the
+;   controller latch.  SELECT exits to the monitor.
 ; ---------------------------------------------------------------------------
 poll_space:
         lda KBD
-        bpl ps_no
+        bpl ps_pad
         sta keyin
         lda KBDSTRB
         lda keyin
         cmp #K_SPACE
         beq ps_yes
+ps_pad:
+        lda PTRIG
+apply_pad_start:
+        jsr pad_valid
+        bcc ps_no
+        lda GAMEPAD1 + PAD_SEL
+        bne exit_game
+        lda GAMEPAD1 + PAD_START
+        bne ps_yes
 ps_no:
         clc
         rts
 ps_yes:
         sec
         rts
+
+exit_game:
+        lda KBDSTRB
+        brk
 
 ; ---------------------------------------------------------------------------
 ; M7 HUD : text page 1 rows 20-23, visible under the mixed hi-res field.
@@ -2381,7 +2466,7 @@ HUDBH:  .byte $06,$06,$07,$07    ; ... high bytes
 SNAPL:  .byte $00,$28,$50,$78    ; snapshot rows at $6B00/$6B28/$6B50/$6B78
 SNAPH:  .byte $6B,$6B,$6B,$6B
 MSG_TITLE: .asciiz "STAR SWARM"
-MSG_START: .asciiz "PRESS SPACE TO PLAY"
+MSG_START: .asciiz "SPACE / START TO PLAY"
 MSG_OVER:  .asciiz "GAME OVER"
 MSG_SCORE: .asciiz "SCORE"
 MSG_LIVES: .asciiz "LIVES"
@@ -2405,6 +2490,15 @@ init_brk:
         brk
 frame_brk:
         jsr play_frame
+        brk
+pad_brk:
+        jsr apply_pad_input
+        brk
+padstart_brk:
+        jsr apply_pad_start
+        bcc padstart_done
+        jsr enter_play
+padstart_done:
         brk
 initform_brk:
         jsr init_formation
