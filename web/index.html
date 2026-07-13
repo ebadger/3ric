@@ -423,7 +423,12 @@
     }
 
     async function loadSampleSrc(name) {
-      const resp = await fetch(`programs/${name}.s`);
+      // Revalidate rather than trust the browser's cached copy: sample sources
+      // are static files served with max-age=600, so a repeat visitor could
+      // otherwise keep loading a stale programs/<name>.s for up to 10 min after
+      // a deploy. "no-cache" forces a conditional GET; GitHub Pages purges its
+      // CDN on deploy, so this returns the freshly deployed source.
+      const resp = await fetch(`programs/${name}.s`, { cache: "no-cache" });
       if (!resp.ok) throw new Error(`fetch programs/${name}.s: ${resp.status}`);
       return resp.text();
     }
@@ -586,7 +591,9 @@
       const srcUrl = params0.get("src");
       if (srcUrl) {
         try {
-          const resp = await fetch(srcUrl);
+          // Revalidate (see loadSampleSrc) so a shared ?src=programs/<name>.s
+          // link reflects the latest deploy, not a stale cached copy.
+          const resp = await fetch(srcUrl, { cache: "no-cache" });
           if (!resp.ok) throw new Error(`${resp.status}`);
           srcEl.value = await resp.text();
           const m = /^programs\/([\w-]+)\.s$/.exec(srcUrl);
