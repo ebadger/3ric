@@ -32,7 +32,11 @@ host it as static files.
   and the in-browser **Assembler** panel (imports `assemble()` from the staged
   `asm6502.mjs`). Honors optional `window.ASSET_BASE` / `?assets=` for CDN/R2 offload and
   `?src=` / `?prg=` / `?code=` deep links, plus a **Share** button that builds a one-click
-  link to the current editor program.
+  link to the current editor program. The sample-source loads (the **sample** dropdown and
+  `?src=programs/<name>.s`) fetch with `{ cache: "no-cache" }` so the browser **revalidates**
+  against Pages instead of serving a stale `max-age=600` copy — a freshly deployed program
+  shows up on the next selection without a hard refresh. (There is no service worker, and
+  GitHub Pages purges its CDN on every deploy, so the revalidation returns the new source.)
 - **Assembler downloads (`index.html` + staged `wozgen.mjs`):** the Assembler panel offers
   **Download .PRG** (the raw assembled bytes) and **Download .woz** — a bootable 5.25″ WOZ2
   disk image of the current program, generated fully client-side by `wozgen.mjs` (a
@@ -152,7 +156,7 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 | WASM build of the VM core + WozLib + SD | Shipped | `web/build.ps1`, Emscripten 6.0.1. |
 | Canvas video + keyboard | Shipped | text/lo-res/hi-res, `$C000` input. |
 | Disk II WOZ boot + micro-SD DOS shell | Shipped | **Boot Disk** / **Mount SD** buttons. |
-| In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; ~11 samples; `?src=`. |
+| In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; ~11 samples; `?src=`. Sample sources fetched with `cache:"no-cache"` (revalidate) so a new deploy isn't masked by the browser cache. |
 | Program downloads (.PRG / .woz) | Shipped | **Download .PRG** (raw bytes) + **Download .woz** (bootable WOZ2 via `wozgen.mjs`, a port of `dsk2woz2`, with a multi-track boot loader); verified by `web/test_woz_download.cjs`. |
 | Share / Remix deep links | Shipped | **Share** button; `?src=programs/<name>.s` for unmodified samples, inline base64url `?code=` otherwise, both carrying `&org=` when the source has no `.org`; remix banner on shared links. |
 | Community Gallery | Shipped | `gallery.html` renders the curated `gallery.json`; one-click **Run & Remix** via `?src=`/`?code=`; PR-based submissions credited by author. |
