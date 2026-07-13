@@ -184,7 +184,6 @@ txtoff   = $6A7F          ; text-HUD high-byte offset for the draw page ($00 or 
 HOLD     = 4              ; frames an action stays live after its key event
 MAXVI    = 4              ; max |velocity| integer part (px/frame)
 ANGUP    = 24             ; heading that points up (-y)
-DELAYO   = 20             ; frame-delay outer count (game pacing)
 BULLET_LIFE = 60          ; frames a shot lives (~1 screen width @ 4.2 px/frame)
 FIRE_CD  = 8              ; frames between shots (auto-fire cadence while held)
 NDRIFT   = 16             ; rock drift-direction table size
@@ -237,10 +236,14 @@ start:
         jsr flip_show           ; hide page 1, draw the first frame on page 2 (no
                                 ; first-frame teardown flicker on the visible page)
 sg_loop:
-        jsr game_frame
-        jsr flip_show           ; reveal the finished page, hide the other one
-        jsr frame_delay
+        jsr live_frame
         jmp sg_loop
+
+; live_frame : compose and reveal one frame.  Rendering itself sets the pace;
+;   adding a fixed delay here only lowers the frame rate on a 1 MHz machine.
+live_frame:
+        jsr game_frame
+        jmp flip_show           ; reveal the finished page, hide the other one
 
 ; ---------------------------------------------------------------------------
 ; video_init : select hi-res mixed mode, build the row table, clear the screen.
@@ -356,12 +359,12 @@ fs_adv:
         sta pgoff
         lda #$04
         sta txtoff
-        rts
+        jmp toggle_clear_page
 fs_p1:
         lda #0                 ; new draw page is page 1
         sta pgoff
         sta txtoff
-        rts
+        jmp toggle_clear_page
 
 ; play_frame : advance one frame of actual gameplay.
 play_frame:
@@ -1844,18 +1847,6 @@ dc4:
 dc_ret:
         rts
 
-; frame_delay : crude busy-wait to pace the game (game entry only).
-frame_delay:
-        ldy #DELAYO
-fd_o:
-        ldx #0
-fd_i:
-        dex
-        bne fd_i
-        dey
-        bne fd_o
-        rts
-
 ; ---------------------------------------------------------------------------
 ; set_ship_vp : point vpx/vpy at the ship silhouette for angle A (0..31),
 ;               vcount = 4.
@@ -2230,7 +2221,8 @@ lsy_n1:
 
 ; ---------------------------------------------------------------------------
 ; seedcol : from cx (16-bit signed, >= -21) compute col = cx/7, bitn = cx%7.
-;   Uses a +21 bias so the divide runs on a non-negative value.
+;   Uses a +21 bias so the divide runs on a non-negative value.  The quotient
+;   is assembled from powers of two instead of subtracting 7 up to 45 times.
 ; ---------------------------------------------------------------------------
 seedcol:
         clc
@@ -2241,22 +2233,64 @@ seedcol:
         adc #0
         sta tth
         ldx #0                  ; quotient
-sc_l:
+        ; 224 = 32*7 (the only threshold that can have a high byte)
         lda tth
-        bne sc_sub
+        bne sc_224
         lda tt
-        cmp #7
-        bcc sc_done
-sc_sub:
+        cmp #224
+        bcc sc_112
+sc_224:
         sec
         lda tt
-        sbc #7
+        sbc #224
         sta tt
         lda tth
         sbc #0
         sta tth
+        ldx #32
+sc_112:
+        lda tt
+        cmp #112                ; 16*7
+        bcc sc_56
+        sbc #112
+        sta tt
+        txa
+        ora #16
+        tax
+sc_56:
+        lda tt
+        cmp #56                 ; 8*7
+        bcc sc_28
+        sbc #56
+        sta tt
+        txa
+        ora #8
+        tax
+sc_28:
+        lda tt
+        cmp #28                 ; 4*7
+        bcc sc_14
+        sbc #28
+        sta tt
+        txa
+        ora #4
+        tax
+sc_14:
+        lda tt
+        cmp #14                 ; 2*7
+        bcc sc_7
+        sbc #14
+        sta tt
+        txa
+        ora #2
+        tax
+sc_7:
+        lda tt
+        cmp #7                  ; 1*7
+        bcc sc_done
+        sbc #7
+        sta tt
         inx
-        jmp sc_l
 sc_done:
         lda tt
         sta bitn                ; remainder 0..6
@@ -2305,6 +2339,13 @@ pc_skip:
 ; build_rows : ROWL/ROWH[y] = hi-res address of pixel row y (y = 0..191)
 ; ---------------------------------------------------------------------------
 build_rows:
+        ; The clear loop patches its absolute operands as pages flip.  A game
+        ; restart resets drawing to page 1, so put those operands back too.
+        lda clear_stores+2
+        cmp #$20
+        beq br_clear_p1
+        jsr toggle_clear_page
+br_clear_p1:
         lda #0
         sta drawpg             ; default to page 1 so test hooks draw where they read
         sta pgoff
@@ -2361,40 +2402,63 @@ br_lowdone:
         rts
 
 ; ---------------------------------------------------------------------------
-; clear_screen : hi-res page 1 -> 0
+; clear_screen : clear the hidden 8 KB hi-res page.  Thirty-two absolute,X
+;   stores per iteration are substantially cheaper than an indirect store plus
+;   index update for every byte.  flip_show patches each high-byte operand
+;   between $20-$3F (page 1) and $40-$5F (page 2).
 ; ---------------------------------------------------------------------------
 clear_screen:
-        lda #>SCREEN
-        clc
-        adc pgoff               ; clear the hidden page ($2000 or $4000)
-        sta ptr+1
-        lda #0
-        sta ptr
-        ldx #$20                ; 32 pages
+        ldx #0
         lda #0                  ; fill byte; A stays 0 for the whole loop
-cs_pg:
-        ldy #0
 cs_by:
-        sta (ptr),y             ; 8x-unrolled: amortize the iny/bne per byte
-        iny
-        sta (ptr),y
-        iny
-        sta (ptr),y
-        iny
-        sta (ptr),y
-        iny
-        sta (ptr),y
-        iny
-        sta (ptr),y
-        iny
-        sta (ptr),y
-        iny
-        sta (ptr),y
-        iny
+clear_stores:
+        sta $2000,x
+        sta $2100,x
+        sta $2200,x
+        sta $2300,x
+        sta $2400,x
+        sta $2500,x
+        sta $2600,x
+        sta $2700,x
+        sta $2800,x
+        sta $2900,x
+        sta $2A00,x
+        sta $2B00,x
+        sta $2C00,x
+        sta $2D00,x
+        sta $2E00,x
+        sta $2F00,x
+        sta $3000,x
+        sta $3100,x
+        sta $3200,x
+        sta $3300,x
+        sta $3400,x
+        sta $3500,x
+        sta $3600,x
+        sta $3700,x
+        sta $3800,x
+        sta $3900,x
+        sta $3A00,x
+        sta $3B00,x
+        sta $3C00,x
+        sta $3D00,x
+        sta $3E00,x
+        sta $3F00,x
+        inx
         bne cs_by
-        inc ptr+1
-        dex
-        bne cs_pg
+        rts
+
+toggle_clear_page:
+        ldy #2                  ; high operand of the first absolute,X store
+tcp_loop:
+        lda clear_stores,y
+        eor #$60                ; $20-$3F <-> $40-$5F
+        sta clear_stores,y
+        iny
+        iny
+        iny
+        cpy #98                 ; 32 stores * 3 bytes + initial offset 2
+        bne tcp_loop
         rts
 
 ; ---------------------------------------------------------------------------

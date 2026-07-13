@@ -26,6 +26,8 @@ const haddr = (y) => 0x2000 + (y & 7) * 0x400 + ((y >> 3) & 7) * 0x80 + (y >> 6)
 const src = readFileSync(SRC, "utf8");
 const { org, bytes, symbols: S } = assemble(src);
 console.log(`assembled rocks.s: ${bytes.length} bytes @ $${org.toString(16)} (ends $${(org + bytes.length).toString(16)})`);
+console.log("0) program layout stays below hi-res page 1");
+ok(org + bytes.length <= 0x2000, `image ends at or below $2000 (got $${(org + bytes.length).toString(16)})`);
 
 const s = await boot();
 const vm = s.vm;
@@ -36,6 +38,23 @@ function runHook(entry, label) {
   if (r.halt !== "brk-monitor") throw new Error(`${label}: expected BRK halt, got ${r.halt} after ${r.cycles} cycles`);
   return r;
 }
+
+function measureRoutine(entry, label) {
+  const trampoline = 0x7000;
+  const stop = trampoline + 6;
+  const code = [0xa2, 0xff, 0x9a, 0x20, entry & 0xff, entry >> 8, 0xea];
+  code.forEach((byte, index) => vm.poke(trampoline + index, byte));
+  vm.setPC(trampoline);
+  let cycles = 0;
+  for (let steps = 0; vm.pc() !== stop; steps++) {
+    if (steps >= 1_000_000) throw new Error(`${label}: routine did not return`);
+    cycles += vm.run(1);
+  }
+  return cycles;
+}
+
+vm.poke(0x7100, 0x60); // RTS stub used to remove the measurement trampoline cost.
+const measureOverhead = measureRoutine(0x7100, "measurement overhead");
 const getpix = (x, y) => (vm.peek(haddr(y) + Math.floor(x / 7)) >> (x % 7)) & 1;
 const pokeS16 = (a, v) => { const u = v & 0xffff; vm.poke(a, u & 0xff); vm.poke(a + 1, (u >> 8) & 0xff); };
 // count lit pixels in a row across the whole 280-wide playfield
@@ -50,6 +69,26 @@ function drawLine(a, b, c, d) {
 
 // build the row table once, then reuse
 runHook(S.BUILD_BRK, "build_rows");
+
+console.log("A0) seedcol: bounded divide-by-7 matches every supported X");
+{
+  let all = true, firstBad = null;
+  for (let x = -21; x <= 296; x++) {
+    pokeS16(S.CX, x);
+    measureRoutine(S.SEEDCOL, `seedcol(${x})`);
+    const col = vm.peek(S.COL);
+    const signedCol = col & 0x80 ? col - 0x100 : col;
+    const expectedCol = Math.floor(x / 7);
+    const expectedBit = x - expectedCol * 7;
+    if (signedCol !== expectedCol || vm.peek(S.BITN) !== expectedBit) {
+      all = false;
+      firstBad ??= { x, signedCol, bit: vm.peek(S.BITN), expectedCol, expectedBit };
+    }
+  }
+  ok(all, all
+    ? "all X values -21..296 produce the expected column and bit"
+    : `x=${firstBad.x}: got ${firstBad.signedCol}/${firstBad.bit}, expected ${firstBad.expectedCol}/${firstBad.expectedBit}`);
+}
 
 // ===== A) row-address table =================================================
 console.log("A) build_rows: ROWL/ROWH == hi-res address formula");
@@ -583,6 +622,20 @@ console.log("AG) hyperspace jumps the ship, zeros momentum, and cools down");
   vm.poke(S.HYPCD, 0); clearKey(); press(S.K_H); frame();
   ok(gb("xl") !== x1 || gb("yl") !== y1,
      `jumps again after the cooldown (${x1},${y1} -> ${gb("xl")},${gb("yl")})`);
+}
+
+// AH) a live opening-wave frame stays inside the performance contract, and
+// alternating clears really retarget their self-modified stores to page 2.
+console.log("AH) live frame meets its cycle budget and clears both draw pages");
+{
+  runHook(S.INIT_BRK, "init"); clearKey();
+  const cycles = measureRoutine(S.LIVE_FRAME, "live frame") - measureOverhead;
+  ok(cycles <= 175_000, `opening-wave live frame <= 175,000 cycles (got ${cycles.toLocaleString("en-US")})`);
+
+  const page2Unused = haddr(191) + 0x2000; // mixed mode never draws this row.
+  vm.poke(page2Unused, 0xff);
+  measureRoutine(S.LIVE_FRAME, "page-2 live frame");
+  ok(vm.peek(page2Unused) === 0, "page-2 clear removes stale graphics bytes");
 }
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);

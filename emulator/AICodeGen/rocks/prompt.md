@@ -35,14 +35,23 @@ with an XOR Bresenham line routine. To eliminate flicker it **page-flips**
 between the two hi-res pages (`$2000`/`$4000`) and their matching text-HUD
 pages (`$400`/`$800`): each frame clears the hidden (off-screen) page, redraws
 the whole scene there, then flips the display soft switch (`LOWSCR`/`HISCR`) so
-the player never sees a half-drawn frame. A `pgoff`/`txtoff` offset steers every
-writer (`clear_screen`, `plotcur`, the HUD routines) at the hidden page, and the
-flip alternates it each frame. This full-frame clear-and-redraw replaces the old
-erase-by-redraw pass; the clear loop is 8×-unrolled, the per-pixel line loop
-inlines its `plotcur`/`stepx`/`stepy` helpers, and that loop keeps its Bresenham
-error term in a single byte (every rock/ship edge spans ≤36 px, so the old 16-bit
-error math is provably unnecessary), leaving the frame ~1.7× faster
-**and** flicker-free. Ship, bullets, and rocks share a 16-byte object struct with 8.8
+the player never sees a half-drawn frame. The `pgoff`/`txtoff` offsets steer pixel
+and HUD writes at the hidden page, while `clear_screen` patches its absolute store
+operands to the same target; the flip alternates them together each frame. This
+full-frame clear-and-redraw replaces the old
+erase-by-redraw pass. The clear loop uses 32 unrolled absolute-indexed stores and
+self-modifies their high address bytes when the draw page flips; this cuts an 8 KB
+clear from 61,843 to 34,307 cycles. The line setup divides X by seven with six
+power-of-two subtracts instead of as many as 45 repeated subtracts, reducing a
+four-large-rock draw from 113,775 to 82,213 cycles. The per-pixel loop also inlines
+its `plotcur`/`stepx`/`stepy` helpers and keeps its Bresenham error term in one byte
+(every rock/ship edge spans ≤36 px). Finally, the live loop no longer adds a
+30,861-cycle fixed delay after its renderer has already paced the game.
+
+Together these changes reduce an opening-wave live frame from **225,949 to 133,274
+65C02 cycles** (41% fewer cycles, about 1.69× the throughput, or roughly 4.5→7.7
+fps at 1.023 MHz) while remaining pixel- and state-identical across a 400-frame
+scripted comparison. Ship, bullets, and rocks share a 16-byte object struct with 8.8
 fixed-point position and velocity; motion wraps modulo the playfield. Rocks
 split into two faster children when shot (20/50/100 points by size); the ship
 gets a brief spawn/arrival invulnerability. Waves escalate from four rocks up to
@@ -61,7 +70,8 @@ node codegen/tools/asm6502.mjs emulator/AICodeGen/rocks/rocks.s emulator/AICodeG
 # (optional) regenerate the baked geometry tables
 node emulator/AICodeGen/rocks/rockgen.mjs
 
-# headless engine + gameplay tests (row table, XOR line/clip, polygon draw,
+# headless engine + gameplay tests (layout/cycle budget, both clear pages,
+# row table, XOR line/clip, polygon draw,
 # ship physics/wrap, bullets, rock spawn/drift/split, collisions/score, waves,
 # HUD, attract/game-over flow, thrust flame, hyperspace)
 node codegen/tools/rocks.test.mjs
