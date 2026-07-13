@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>3ric — The Story: I built a 6502 computer, and it became an Apple II</title>
-<meta name="description" content="The story of 3ric — I set out to learn how 8-bit computers really work, so I built one from a pile of chips. To run the games I loved it grew into an Apple II: hardware-generated VGA, Apple II artifact color reproduced in logic I designed, Lode Runner, and finally Ultima IV. Watch the build series and run the machine in your browser." />
+<title>3ric — The Story: I built a 6502 computer that speaks Apple II</title>
+<meta name="description" content="The story of 3ric — I set out to learn how 8-bit computers really work, so I built one from a pile of chips. It's an original design, not an Apple II clone, but it speaks enough Apple II to run Lode Runner and finish Ultima IV — hardware-generated VGA with artifact color reproduced in logic I designed. Run it in your browser, and export bootable .woz disks that boot on a real Apple II." />
 <meta property="og:type" content="website" />
-<meta property="og:title" content="3ric — I built a homebrew Apple II to run the games I loved" />
-<meta property="og:description" content="It started with an Atari 1200XL and one question: how do these 8-bit machines really work? So I built one — and to run Lode Runner and Ultima IV it became an Apple II, artifact-color graphics and all. Watch the build series and run it in your browser." />
+<meta property="og:title" content="3ric — an original 6502 computer that speaks Apple II" />
+<meta property="og:description" content="It started with an Atari 1200XL and one question: how do these 8-bit machines really work? So I built one — an original design that runs Lode Runner and Ultima IV, artifact-color graphics and all. Run it in your browser, and export .woz disks that boot on a real Apple II." />
 <meta property="og:url" content="https://ebadger.github.io/3ric/story.html" />
 <meta property="og:image" content="https://i.ytimg.com/vi/e65qVK7zNGM/hqdefault.jpg" />
 <style>
@@ -121,18 +121,19 @@
   <main>
     <section class="hero">
       <p class="kicker">A homebrew computing story</p>
-      <h2>I wanted to learn how 8-bit computers <em>really</em> work. So I built one &mdash; and it became an <span class="amber">Apple&nbsp;II</span>.</h2>
+      <h2>I wanted to learn how 8-bit computers <em>really</em> work. So I built one &mdash; an original machine that learned to speak <span class="amber">Apple&nbsp;II</span>.</h2>
       <p>
         It started with an Atari&nbsp;1200XL I grew up with and a question I could never shake: how do
         these machines <em>actually</em> work? The only honest way to find out was to build one, so I
         wired up a 6502 from a pile of chips. Then a goal took hold &mdash; get the games I loved
         running on hardware I designed, starting with <strong>Lode&nbsp;Runner</strong> &mdash; and
-        that one goal quietly rebuilt the whole machine into an <strong>Apple&nbsp;II</strong>, because
-        the Apple&nbsp;II had the simplest graphics of its generation you can still build from
-        off-the-shelf parts today. I had no idea if I could pull it off. I did it anyway: ran
-        Lode&nbsp;Runner, then <strong>finished Ultima&nbsp;IV</strong> on it, then a whole lot more.
-        And the best part &mdash; you can <strong>run the finished machine right now, in your
-        browser</strong>.
+        that one goal pushed the whole design toward <strong>Apple&nbsp;II compatibility</strong>,
+        because the Apple&nbsp;II had the simplest graphics of its generation you can still build from
+        off-the-shelf parts today. 3RIC isn&rsquo;t an Apple&nbsp;II clone &mdash; it&rsquo;s an
+        original design with its own ROM and modern I/O &mdash; but it speaks enough Apple&nbsp;II to
+        run Lode&nbsp;Runner, finish <strong>Ultima&nbsp;IV</strong>, and a whole lot more. I had no
+        idea if I could pull it off. I did it anyway. And the best part: you can <strong>run it right
+        now in your browser</strong> &mdash; and even build Apple&nbsp;II software with it.
       </p>
       <div class="cta">
         <a class="btn" href="index.html">&#9654;&nbsp;Run 3ric in your browser</a>
@@ -203,13 +204,16 @@
 
     <section class="chapter">
       <p class="chapnum">Chapter 3 &middot; The twist</p>
-      <h3>To run Lode&nbsp;Runner, I had to build an Apple&nbsp;II</h3>
+      <h3>To run Lode&nbsp;Runner, I had to speak Apple&nbsp;II</h3>
       <p>
-        Here&rsquo;s the plot twist: to run the games I was after, my machine had to <em>become</em>
-        an Apple&nbsp;II &mdash; and that was a deliberate choice. Of that whole generation, the
+        Here&rsquo;s the plot twist: to run the games I was after, my machine had to <em>behave</em>
+        like an Apple&nbsp;II &mdash; and that was a deliberate choice. Of that whole generation, the
         <strong>Apple&nbsp;II had the simplest graphics hardware you can still build from
-        off-the-shelf parts today</strong>, so chasing Lode&nbsp;Runner quietly steered almost every
-        design decision toward Apple&nbsp;II compatibility.
+        off-the-shelf parts today</strong>, so chasing Lode&nbsp;Runner steered almost every design
+        decision toward Apple&nbsp;II compatibility. But 3RIC is <strong>no clone</strong> &mdash; the
+        schematic is an <strong>original design</strong> that doesn&rsquo;t look like an Apple&nbsp;II
+        at all. It just gets <em>close enough in behavior</em> to run a surprising amount of
+        Apple&nbsp;II software.
       </p>
       <p>
         The graphics system is the part I&rsquo;m <span class="hl">proudest of</span>. On 3RIC the
@@ -220,8 +224,16 @@
         designed myself</strong>. And because the CPU and the video hardware <strong>share the same
         RAM</strong>, the whole thing only works with <strong>exact timing</strong>: the two have to
         take turns on the bus so they never collide. Getting that dance right is the engineering
-        I&rsquo;m most proud of &mdash; and a machine that has to think it&rsquo;s an Apple&nbsp;II
-        deserves its own name, so the ebadger6502 became <strong>3RIC</strong>.
+        I&rsquo;m most proud of.
+      </p>
+      <p>
+        And make no mistake &mdash; 3RIC is its own machine. It takes a <strong>PS/2 keyboard and
+        mouse</strong>, <strong>SNES controllers</strong>, and an <strong>SD card</strong> &mdash;
+        none of which the Apple&nbsp;II had &mdash; so its <strong>ROM is significantly different</strong>,
+        and there&rsquo;s no Applesoft BASIC. That originality is half the fun, and it&rsquo;s also why
+        <em>not</em> everything runs: some titles lean on Apple&nbsp;II internals that 3RIC simply does
+        its own way. A machine this original deserves its own name &mdash; so the ebadger6502 became
+        <strong>3RIC</strong>.
       </p>
       <blockquote>
         &ldquo;A new computer deserves a new name &mdash; from now on ebadger6502 is the 3RIC 6502.&rdquo;
@@ -450,6 +462,13 @@
         core that models the chips boots the real 512&nbsp;KB ROM in any browser &mdash; no install, no
         account. Click the screen and type at the monitor prompt, boot a disk, or open the built-in
         <strong>65C02 assembler</strong> and write a program that runs on the machine instantly.
+      </p>
+      <p>
+        And here&rsquo;s my favorite part for tinkerers: it doubles as an <strong>Apple&nbsp;II dev
+        kit</strong>. Write and assemble a program in the browser, get it running, then hit
+        <strong>Download&nbsp;.woz</strong> &mdash; you get a bootable 5.25&Prime; disk image,
+        generated entirely client-side, that boots not just on 3RIC but on a <strong>real
+        Apple&nbsp;II</strong>. Build a game here; run it on real hardware.
       </p>
       <div class="cta">
         <a class="btn" href="index.html">&#9654;&nbsp;Launch the emulator</a>

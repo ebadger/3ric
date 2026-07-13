@@ -48,11 +48,13 @@ host it as static files.
   files are committed (not generated), so the deploy workflow stages them into `_site/`.
 - **Story / landing page (`story.html`):** a committed, WASM-free narrative page that tells
   the story of 3ric and the wider hardware-hacking journey (the Atari-1200XL / learning-journey
-  origin, the Lode-Runner goal that drove the migration to Apple II hardware, the
-  hardware-generated VGA graphics with NTSC-artifact color reproduced in logic — the part the
-  author is proudest of — the shared-RAM CPU/video timing, breadboard → PCB, the Ultima IV
-  payoff, and the related builds — the Badger6502 **Pico** kit/emulator, ESP32/Atari-2600
-  experiments, and the cross-platform Lode Runner saga). It links each chapter to its YouTube
+  origin, the Lode-Runner goal that drove the push toward Apple II *compatibility* — 3ric is an
+  original design, not a clone, with its own ROM and modern I/O (PS/2 keyboard/mouse, SNES pads,
+  SD card), so some Apple II software and Applesoft do not run — the hardware-generated VGA
+  graphics with NTSC-artifact color reproduced in logic (the part the author is proudest of), the
+  shared-RAM CPU/video timing, breadboard → PCB, the Ultima IV payoff, the in-browser build →
+  **Download .woz** Apple II dev-kit angle, and the related builds — the Badger6502 **Pico**
+  kit/emulator, ESP32/Atari-2600 experiments, and the cross-platform Lode Runner saga). It links each chapter to its YouTube
   episode via a **lite-embed facade** (a static `img.youtube.com` thumbnail that, on click,
   swaps in a privacy-friendly `youtube-nocookie.com` iframe — so no third-party player loads
   until the visitor asks for it) and funnels visitors into the live emulator/editor, the
