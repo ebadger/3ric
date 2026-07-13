@@ -3,6 +3,15 @@
   "_readme": "Community Gallery manifest for the 3ric web client. Each entry becomes a card on gallery.html with a one-click 'Run & Remix' link into the in-browser editor. To feature your own program: add its .s source under codegen/programs/ (build.ps1 stages every codegen/programs/*.s into web/programs/) and append an entry below, then open a pull request. Fields: title (required), author, authorUrl, mode (Hi-res|Lo-res|Text|Serial), description, tags[]; and a run target of either src ('programs/<name>.s') or an inline code (URL-safe base64 for ?code=), plus an optional org (hex load address, only when the source has no .org directive).",
   "entries": [
     {
+      "title": "Hello, KansasFest 2026",
+      "author": "3ric",
+      "authorUrl": "https://github.com/ebadger/3ric",
+      "mode": "Text",
+      "src": "programs/kfest.s",
+      "description": "3ric's zero-install greeting to the Apple II crowd for KansasFest 2026 — a framed text welcome you can run, remix, and re-share right in the browser. No install, no account.",
+      "tags": ["demo", "text", "kansasfest", "greeting"]
+    },
+    {
       "title": "Swarm",
       "author": "3ric",
       "authorUrl": "https://github.com/ebadger/3ric",
