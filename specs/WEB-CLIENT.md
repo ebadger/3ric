@@ -33,6 +33,11 @@ host it as static files.
   `asm6502.mjs`). Honors optional `window.ASSET_BASE` / `?assets=` for CDN/R2 offload and
   `?src=` / `?prg=` / `?code=` deep links, plus a **Share** button that builds a one-click
   link to the current editor program.
+- **Assembler downloads (`index.html` + staged `wozgen.mjs`):** the Assembler panel offers
+  **Download .PRG** (the raw assembled bytes) and **Download .woz** — a bootable 5.25″ WOZ2
+  disk image of the current program, generated fully client-side by `wozgen.mjs` (a
+  dependency-free JS port of the `emulator/dsk2woz2` nibbliser). The `.woz` boots the program
+  on a real Apple II or via `C600G` in the emulator.
 - **SD image:** `make_sd_sparse.py` streams `emulator/Data/sd.zip` (2 GB, mostly-zero FAT32)
   into `data/sd.sparse` (~11.5 MB `SDSP` container), fetched lazily.
 - **Gallery (`gallery.html` + `gallery.json`):** a lightweight, WASM-free showcase page that
@@ -78,6 +83,18 @@ host it as static files.
   involved; the link is the whole payload. Large sources make long `?code=` links (the giant
   hi-res samples are shared via `?src=` precisely to avoid this); a future `?codez=` could
   deflate the payload if needed.
+- **Bootable `.woz` export.** `wozgen.mjs`'s `buildBootableWoz(bytes, loadAddr, entryAddr)`
+  lays the program onto a standard 35-track / 16-sector DOS-3.3 disk and nibblises it to WOZ2
+  with the exact encoder ported from `dsk2woz2` (6-and-2, 4-and-4 address fields, `(sector*7)%15`
+  interleave, WOZ2 INFO/TMAP/TRKS + CRC32). Track 0 sector 0 holds a 256-byte boot loader that
+  the `$C600` P5 boot PROM auto-loads then `JMP $0801`s; the loader re-enters the ROM's
+  `ReadSector` (`$C65C`) track-by-track into a page-aligned staging buffer, phase-steps the head
+  inward between tracks, then relocates a position-independent copier to `$0200`, copies staging
+  → the program's load address and `JMP`s its entry. This handles multi-track programs (the
+  default `swarm` sample is ~17 pages / 2 tracks). Constraints: the load address must be
+  page-aligned and ≥ `$0800`, and `loadAddr + 2·nPages·256 ≤ $9000` (staging must fit under the
+  BASIC ROM at `$9000`). The boot loader itself is assembled at generation time by the staged
+  `asm6502.mjs`, so there is a single source of truth for the 65C02 dialect.
 - **Community Gallery.** `gallery.html` is the discovery front door: it reads `gallery.json`
   and shows every program as a one-click **Run & Remix** card that opens in the editor via the
   same `?src=` / `?code=` deep links, so each card lands on an editable, auto-running program.
@@ -98,7 +115,10 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 ## Dependencies
 
 - **Upstream:** the VM core (`EMULATOR.md`), the ROM/font/disk/SD data (`ROM-SOFTWARE.md`),
-  and `codegen/tools/asm6502.mjs` (staged for the in-browser assembler — `CODEGEN.md`).
+  `codegen/tools/asm6502.mjs` (staged for the in-browser assembler and reused to assemble the
+  `.woz` boot loader — `CODEGEN.md`), and `codegen/tools/wozgen.mjs` (staged bootable-`.woz`
+  generator, a JS port of `emulator/dsk2woz2`). The `.woz` boot loader depends on the `$C600`
+  P5 boot PROM contract (`ROM-SOFTWARE.md`) and the Disk II phase-stepping model (`EMULATOR.md`).
 - **Downstream:** GitHub Pages deploy (`.github/workflows/deploy-pages.yml`) — its **Stage
   site** step stages `gallery.html` + `gallery.json` + `llms.txt` + `robots.txt` +
   `sitemap.xml` (alongside `index.html` and `programs/`) into `_site/`; the public users of
@@ -112,6 +132,7 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 | Canvas video + keyboard | Shipped | text/lo-res/hi-res, `$C000` input. |
 | Disk II WOZ boot + micro-SD DOS shell | Shipped | **Boot Disk** / **Mount SD** buttons. |
 | In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; ~11 samples; `?src=`. |
+| Program downloads (.PRG / .woz) | Shipped | **Download .PRG** (raw bytes) + **Download .woz** (bootable WOZ2 via `wozgen.mjs`, a port of `dsk2woz2`, with a multi-track boot loader); verified by `web/test_woz_download.cjs`. |
 | Share / Remix deep links | Shipped | **Share** button; `?src=programs/<name>.s` for unmodified samples, inline base64url `?code=` otherwise, both carrying `&org=` when the source has no `.org`; remix banner on shared links. |
 | Community Gallery | Shipped | `gallery.html` renders the curated `gallery.json`; one-click **Run & Remix** via `?src=`/`?code=`; PR-based submissions credited by author. |
 | AI-contributor entry point (`llms.txt`) | Shipped | machine-readable 65C02 codegen quickstart + links; published at the site root, staged by the deploy workflow. |

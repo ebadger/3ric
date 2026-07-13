@@ -156,6 +156,7 @@
           title="hex load/entry address, used only when the source has no .org directive" />
         <button id="assemble" class="go" title="assemble the source and run it (Ctrl+Enter)">Assemble &amp; Run</button>
         <button id="download" title="download the assembled .PRG image" disabled>Download .PRG</button>
+        <button id="downloadwoz" title="download a bootable 5.25&Prime; .woz disk image of this program" disabled>Download .woz</button>
         <button id="share" title="copy a one-click link to this exact program">Share</button>
       </div>
       <div id="remixnote" class="remix" role="status"></div>
@@ -384,6 +385,7 @@
     const LS_ORG = "3ric.editor.org";
     let lastPrg = null;      // { bytes, org, name } of the last good assembly
     let assembleFn = null;   // asm6502.assemble, imported lazily
+    let wozgenFn = null;     // wozgen.buildBootableWoz, imported lazily
 
     // Shareable-link codec: pack the editor source into a self-contained URL so
     // any program — even one you just wrote — is a one-click link with no server.
@@ -412,6 +414,11 @@
       return assembleFn;
     }
 
+    async function ensureWozgen() {
+      if (!wozgenFn) wozgenFn = (await import("./wozgen.mjs")).buildBootableWoz;
+      return wozgenFn;
+    }
+
     async function loadSampleSrc(name) {
       const resp = await fetch(`programs/${name}.s`);
       if (!resp.ok) throw new Error(`fetch programs/${name}.s: ${resp.status}`);
@@ -423,6 +430,7 @@
       const outEl    = document.getElementById("asmout");
       const addrEl   = document.getElementById("ideaddr");
       const dlBtn    = document.getElementById("download");
+      const wozBtn   = document.getElementById("downloadwoz");
       const asmBtn   = document.getElementById("assemble");
       const sampleEl = document.getElementById("sample");
       const shareBtn = document.getElementById("share");
@@ -449,13 +457,14 @@
           res = hasOrg(src) ? assemble(src) : assemble(src, { org: parseAddr(addrEl.value, 0x0800) });
         } catch (e) {
           setOut(String((e && e.message) || e), "err");
-          dlBtn.disabled = true; lastPrg = null;
+          dlBtn.disabled = true; wozBtn.disabled = true; lastPrg = null;
           return;
         }
         if (!res.bytes.length) { setOut("assembled 0 bytes \u2014 empty source or missing .org?", "err"); return; }
         addrEl.value = hex(res.org, 4);
         lastPrg = { bytes: res.bytes, org: res.org, name: (sampleEl.value || "program") };
         dlBtn.disabled = false;
+        wozBtn.disabled = false;
         const nsym = Object.keys(res.symbols).length;
         const okMsg = `assembled ${res.bytes.length} bytes @ $${hex(res.org, 4)} \u2014 ${nsym} symbols.`;
         setOut(okMsg + " running\u2026", "ok");
@@ -481,6 +490,25 @@
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
         a.download = (lastPrg.name || "program") + ".prg";
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      });
+
+      // Package the current program as a bootable 5.25" .woz (boots on a real
+      // Apple II or via C600G here). The load address doubles as the entry point,
+      // matching the BRUN semantics of Assemble & Run and Download .PRG.
+      wozBtn.addEventListener("click", async () => {
+        if (!lastPrg) return;
+        let buildBootableWoz;
+        try { buildBootableWoz = await ensureWozgen(); }
+        catch (e) { setOut("could not load the .woz generator: " + ((e && e.message) || e), "err"); return; }
+        let woz;
+        try { woz = buildBootableWoz(lastPrg.bytes, lastPrg.org, lastPrg.org); }
+        catch (e) { setOut("could not build .woz: " + ((e && e.message) || e), "err"); return; }
+        const blob = new Blob([woz], { type: "application/octet-stream" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = (lastPrg.name || "program") + ".woz";
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(a.href), 1000);
       });

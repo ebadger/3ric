@@ -21,6 +21,7 @@ on:
       # so republish when the assembler or the sample sources change.
       - 'emulator/AICodeGen/**'
       - 'codegen/tools/asm6502.mjs'
+      - 'codegen/tools/wozgen.mjs'
       - 'codegen/programs/**'
       - '.github/workflows/deploy-pages.yml'
   # Allow manual runs from the Actions tab.
@@ -68,7 +69,7 @@ jobs:
         run: |
           mkdir -p _site
           cp web/index.html web/gallery.html web/tutorials.html web/gallery.json web/llms.txt web/robots.txt web/sitemap.xml web/badger6502.js web/badger6502.wasm _site/
-          cp web/asm6502.mjs _site/
+          cp web/asm6502.mjs web/wozgen.mjs _site/
           cp -r web/data _site/data
           cp -r web/programs _site/programs
           ls -la _site _site/data _site/programs
