@@ -100,8 +100,15 @@
   .linkcard p { margin: 0; font-size: 12px; line-height: 1.5; color: #8fe6a8; }
   .linkcard a.go { align-self: flex-start; margin-top: 2px; text-decoration: none; color: var(--fg); border: 1px solid var(--fg); border-radius: 4px; padding: 4px 11px; font-size: 12px; }
   .linkcard a.go:hover { background: rgba(51,255,102,.08); }
-  .stub { border-style: dashed; }
-  .stub p { color: var(--dim); }
+  /* Reddit real-time timeline */
+  .timeline { list-style: none; margin: 16px 0 0; padding: 0; border-left: 1px solid var(--dim); }
+  .timeline li { position: relative; padding: 0 0 15px 20px; }
+  .timeline li::before { content: ""; position: absolute; left: -5px; top: 4px; width: 9px; height: 9px; border-radius: 50%; background: var(--bg); border: 2px solid var(--fg); }
+  .timeline li:last-child { padding-bottom: 0; }
+  .timeline .when { display: block; font-size: 11px; letter-spacing: .5px; color: var(--amber); text-transform: uppercase; }
+  .timeline .what a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--dim); font-size: 13px; }
+  .timeline .what a:hover { border-bottom-color: var(--fg); }
+  .timeline .what p { margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: #8fe6a8; }
 
   footer { padding: 10px 16px; border-top: 1px solid var(--dim); font-size: 11px; color: var(--dim); }
   footer a { color: var(--dim); }
@@ -478,6 +485,36 @@
     </section>
 
     <section class="chapter">
+      <p class="chapnum">Community &middot; In real time</p>
+      <h3>The whole thing, posted from the workbench</h3>
+      <p>
+        Almost none of this happened in private. From the very first breadboard I shared the build
+        on <a href="https://www.reddit.com/r/beneater/" target="_blank" rel="noopener noreferrer">r/beneater</a>
+        and the wider maker community &mdash; the wins, the dead ends, and the &ldquo;wait, that
+        actually worked?&rdquo; moments. Here&rsquo;s the five-year journey the way it went out, one
+        post at a time.
+      </p>
+      <ol class="timeline">
+        <li><span class="when">Sep 2020</span><div class="what"><a href="https://www.reddit.com/r/beneater/comments/ip871i/how_fast_can_you_run_your_breadboard_65c02/" target="_blank" rel="noopener noreferrer">How fast can you run your breadboard 65C02?</a><p>Day one on the breadboard, and my first question to the community. Mine topped out at 6&nbsp;MHz.</p></div></li>
+        <li><span class="when">Oct 2020</span><div class="what"><a href="https://www.reddit.com/r/beneater/comments/je4lxv/text_mode_vga_adapter_hardware_and_simulator_demo/" target="_blank" rel="noopener noreferrer">Text-mode VGA adapter &mdash; hardware and simulator demo</a><p>I introduced myself and the mission: an Atari kid inspired by Ben Eater, with &ldquo;an irrational notion of porting Lode&nbsp;Runner&rdquo; to a machine I&rsquo;d built myself.</p></div></li>
+        <li><span class="when">Nov 2020</span><div class="what"><a href="https://www.reddit.com/r/beneater/comments/k16f9r/here_is_the_demo_of_my_vga_card_cpu_take_two_with/" target="_blank" rel="noopener noreferrer">VGA card + CPU, take two, with keyboard</a><p>My homemade VGA card driving a display with a PS/2 keyboard attached &mdash; 90 upvotes and a lot of encouragement to keep going.</p></div></li>
+        <li><span class="when">Jan 2022</span><div class="what"><a href="https://www.reddit.com/r/beneater/comments/rzln7p/my_6502_pcb_populated_and_working/" target="_blank" rel="noopener noreferrer">My 6502 PCB, populated and working!</a><p>Breadboards became a real circuit board: my first 6502 PCB, populated and booting.</p></div></li>
+        <li><span class="when">Jan 2022</span><div class="what"><a href="https://www.reddit.com/r/beneater/comments/se473b/vga_requirements_ideas/" target="_blank" rel="noopener noreferrer">VGA requirements &mdash; ideas?</a><p>I said the goal out loud &mdash; &ldquo;My goal is to get the game Lode&nbsp;Runner working&rdquo; &mdash; and started designing the graphics to earn it.</p></div></li>
+        <li><span class="when">Mar 2022</span><div class="what"><a href="https://www.reddit.com/r/beneater/comments/t5j2ln/loderunner_running_on_my_eater_based_6502_emulator/" target="_blank" rel="noopener noreferrer">Lode Runner running on my Eater-based 6502 emulator</a><p>First contact: the game I&rsquo;d been chasing for a year, running on my emulator.</p></div></li>
+        <li><span class="when">Mar 2022</span><div class="what"><a href="https://www.reddit.com/r/beneater/comments/ti7t92/loderunner_stable_at_300khz_back_to_the_drawing/" target="_blank" rel="noopener noreferrer">Lode Runner stable at 300&nbsp;KHz</a><p>&hellip;then on the real hardware &mdash; stable, if only at 300&nbsp;KHz to start. Back to the drawing board on the VGA circuit.</p></div></li>
+        <li><span class="when">Jul 2022</span><div class="what"><a href="https://www.reddit.com/r/raspberrypipico/comments/w6irf9/my_raspberry_pi_pico_6502_emulator_and_an_apple/" target="_blank" rel="noopener noreferrer">My emulator and a real Apple&nbsp;II, side by side</a><p>My homebrew machine and a genuine Apple&nbsp;II, running Lode&nbsp;Runner right next to each other.</p></div></li>
+        <li><span class="when">Jul 2022</span><div class="what"><a href="https://www.reddit.com/r/beneater/comments/w94ps1/check_it_out_tomshardware_wrote_an_article_about/" target="_blank" rel="noopener noreferrer">Tom&rsquo;s Hardware wrote an article about the project!</a><p>The Pi&nbsp;Pico + Lode&nbsp;Runner build got written up. People were watching now.</p></div></li>
+        <li><span class="when">Aug 2022</span><div class="what"><a href="https://www.reddit.com/r/esp32/comments/wjuh55/my_adventures_with_esp32_atari2600_and_the_xac/" target="_blank" rel="noopener noreferrer">Adventures with ESP32, Atari 2600 and the XAC</a><p>A detour with heart: I made the Xbox Adaptive Controller stand in for an Atari joystick, so these games could be played hands-free.</p></div></li>
+        <li><span class="when">Oct 2022</span><div class="what"><a href="https://www.reddit.com/r/RASPBERRY_PI_PROJECTS/comments/yh4m2e/ported_a_zmachine_to_a_raspberry_pi_pico_use_vga/" target="_blank" rel="noopener noreferrer">Ported a Z-machine to a Raspberry Pi Pico</a><p>Zork on a $4 Pico that boots in about a second &mdash; a whole shelf of text adventures crammed into 2&nbsp;MB. 110 upvotes.</p></div></li>
+        <li><span class="when">Feb 2023</span><div class="what"><a href="https://www.reddit.com/r/retrobattlestations/comments/110zcvp/loderunner_anyone/" target="_blank" rel="noopener noreferrer">Lode Runner anyone?</a><p>The build hit r/retrobattlestations and climbed to 123 points.</p></div></li>
+        <li><span class="when">Aug 2023</span><div class="what"><a href="https://www.reddit.com/r/beneater/comments/15rh0dc/ultima_iv_on_a_6502_how_im_bringing_a_classic_rpg/" target="_blank" rel="noopener noreferrer">Ultima IV on a 6502: bringing a classic RPG to life</a><p>The next mountain: getting Ultima&nbsp;IV, a full Apple&nbsp;II RPG, running on my machine.</p></div></li>
+        <li><span class="when">Oct 2023</span><div class="what"><a href="https://www.reddit.com/r/beneater/comments/173fkjf/3ric_6502_am_i_building_an_apple_ii/" target="_blank" rel="noopener noreferrer">3RIC 6502 &mdash; am I building an Apple&nbsp;II?</a><p>The question that gave the computer its name and its identity.</p></div></li>
+        <li><span class="when">Dec 2024</span><div class="what"><a href="https://www.reddit.com/r/Ultima/comments/1hhkeuv/finished_ultima_iv_on_my_homebrew_computer/" target="_blank" rel="noopener noreferrer">Finished Ultima IV on my homebrew computer</a><p>Four years in: Ultima&nbsp;IV, played through to the end on a machine I built from chips.</p></div></li>
+        <li><span class="when">Mar 2025</span><div class="what"><a href="https://www.reddit.com/r/beneater/comments/1j27e0c/3ric_the_conclusion/" target="_blank" rel="noopener noreferrer">3RIC &mdash; the conclusion</a><p>&ldquo;I&rsquo;m wrapping up my 3RIC project. What a ride.&rdquo;</p></div></li>
+      </ol>
+    </section>
+
+    <section class="chapter">
       <p class="chapnum">Community &middot; Follow along</p>
       <h3>Join the build</h3>
       <div class="cards">
@@ -488,7 +525,7 @@
         </div>
         <div class="linkcard">
           <h4>r/beneater</h4>
-          <p>The homebrew-6502 community where a lot of this journey was shared and debated.</p>
+          <p>The homebrew-6502 community where most of the timeline above played out in real time.</p>
           <a class="go" href="https://www.reddit.com/r/beneater/" target="_blank" rel="noopener noreferrer">Open the subreddit</a>
         </div>
         <div class="linkcard">
@@ -501,10 +538,10 @@
           <p>Emulator, ROM, schematics, and the in-browser assembler &mdash; all open.</p>
           <a class="go" href="https://github.com/ebadger/3ric" target="_blank" rel="noopener noreferrer">github.com/ebadger/3ric</a>
         </div>
-        <div class="linkcard stub">
-          <h4>Reddit post highlights</h4>
-          <p>Curated r/beneater posts and milestones will land here soon.</p>
-          <a class="go" href="https://www.reddit.com/r/beneater/" target="_blank" rel="noopener noreferrer">r/beneater &rarr;</a>
+        <div class="linkcard">
+          <h4>Every post, from day one</h4>
+          <p>Five years of build logs, questions, and milestones &mdash; the full archive on my profile.</p>
+          <a class="go" href="https://www.reddit.com/user/ebadger1973/" target="_blank" rel="noopener noreferrer">u/ebadger1973 &rarr;</a>
         </div>
         <div class="linkcard">
           <h4>&#9749; Support the project</h4>

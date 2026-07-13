@@ -58,9 +58,13 @@ host it as static files.
   episode via a **lite-embed facade** (a static `img.youtube.com` thumbnail that, on click,
   swaps in a privacy-friendly `youtube-nocookie.com` iframe — so no third-party player loads
   until the visitor asks for it) and funnels visitors into the live emulator/editor, the
-  Gallery, and the Tutorials. A **Community & discussion** section links the `r/beneater`
-  subreddit and the 6502.org project thread; curated post highlights are added by editing the
-  page. Pure static markup (one small inline script for the facade); no WASM, no bundle
+  Gallery, and the Tutorials. A **Community** section pairs a curated **real-time Reddit
+  timeline** (16 milestone `r/beneater` / maker-community posts from 2020&ndash;2025, each linking
+  to its permalink &mdash; day-one breadboard → the stated Lode-Runner goal → first run → Tom's
+  Hardware writeup → Zork-on-Pico → Ultima IV finished → &ldquo;the conclusion&rdquo;) with link
+  cards to the `r/beneater` subreddit, the `u/ebadger1973` profile, and the 6502.org project
+  thread; the timeline is hand-curated in the page markup. Pure static markup (one small inline
+  script for the facade); no WASM, no bundle
   dependency. Linked from the `index.html` / `gallery.html` / `tutorials.html` headers so it is
   reachable from anywhere in the web client.
 - **`llms.txt`:** a committed, machine-readable entry point (published at the site root) that
@@ -152,7 +156,7 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 | Program downloads (.PRG / .woz) | Shipped | **Download .PRG** (raw bytes) + **Download .woz** (bootable WOZ2 via `wozgen.mjs`, a port of `dsk2woz2`, with a multi-track boot loader); verified by `web/test_woz_download.cjs`. |
 | Share / Remix deep links | Shipped | **Share** button; `?src=programs/<name>.s` for unmodified samples, inline base64url `?code=` otherwise, both carrying `&org=` when the source has no `.org`; remix banner on shared links. |
 | Community Gallery | Shipped | `gallery.html` renders the curated `gallery.json`; one-click **Run & Remix** via `?src=`/`?code=`; PR-based submissions credited by author. |
-| Story / landing page | Shipped | `story.html` — narrative of 3ric + the wider hardware-hacking journey; lite-embed YouTube chapters (facade → `youtube-nocookie` iframe on click); links to emulator/gallery/tutorials + `r/beneater` / 6502.org. Reddit post highlights stubbed for a later curation pass. Linked from the `index.html`/`gallery.html`/`tutorials.html` headers; staged by the deploy workflow. |
+| Story / landing page | Shipped | `story.html` — narrative of 3ric + the wider hardware-hacking journey; lite-embed YouTube chapters (facade → `youtube-nocookie` iframe on click); a curated real-time **Reddit timeline** (16 `r/beneater`/maker milestone posts, 2020–2025, each linking to its permalink); links to emulator/gallery/tutorials + `r/beneater` / `u/ebadger1973` / 6502.org. Linked from the `index.html`/`gallery.html`/`tutorials.html` headers; staged by the deploy workflow. |
 | AI-contributor entry point (`llms.txt`) | Shipped | machine-readable 65C02 codegen quickstart + links; published at the site root, staged by the deploy workflow. |
 | `llms.txt` discoverability | Shipped | `<link rel="alternate">` + footer links in `index.html`/`gallery.html`; `robots.txt` + `sitemap.xml` staged (advisory on the project-page root; authoritative under a custom domain). |
 | Support / funding link | Shipped | GitHub Sponsors call-to-action in the `index.html`/`gallery.html` footers; target declared in `.github/FUNDING.yml`. |
