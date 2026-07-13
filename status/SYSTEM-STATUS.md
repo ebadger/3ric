@@ -44,6 +44,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_screen_text.cjs         # decode the 40x24 text screen to ASCII
 & $node web/test_sd.cjs                  # mount SD + DIR lists the FAT32 root
 & $node web/test_disk.cjs                # boot a WOZ floppy via C600G into a hi-res title
+& $node web/test_woz_download.cjs        # "Download .woz" builds a bootable disk that boots via C600G
 ```
 
 C++ CPU unit tests (`emulator/Badger6502VMTest`, MSTest): **Test → Run All Tests** in
@@ -75,6 +76,8 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   clock. Shared VM core runs identically on Windows and in the browser.
 - **In-browser assembler:** assembles 65C02 source client-side with the project's own
   `asm6502.mjs` and runs it like `BRUN`; ships ~11 sample programs; deep-linkable via `?src=`.
+  Exports the assembled program as a raw **.PRG** or a bootable **.woz** disk image
+  (`wozgen.mjs`, a JS port of `dsk2woz2` with a multi-track boot loader) that boots via `C600G`.
 - **Disk gap:** DOS 3.3 / Quick-DOS and games that chain through an Applesoft auto-run
   greeting don't run — this clone's `$E000` BASIC is generic Microsoft BASIC, not Applesoft.
   Self-booting machine-code disks work.
