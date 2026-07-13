@@ -9,6 +9,10 @@
     <changefreq>weekly</changefreq>
   </url>
   <url>
+    <loc>https://ebadger.github.io/3ric/tutorials.html</loc>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
     <loc>https://ebadger.github.io/3ric/llms.txt</loc>
     <changefreq>monthly</changefreq>
   </url>
