@@ -41,6 +41,8 @@ PAD_LEFT  = 6
 PAD_RIGHT = 7
 PAD_A     = 8
 GP_RATE   = 180         ; read_key calls between pad polls (repeat rate / latency)
+DAS_INIT  = 4           ; pad polls a direction is held before it auto-shifts
+DAS_REP   = 2           ; pad polls between auto-shifts once repeating (tunable)
 
 ; ---- glyphs (normal video = ascii | $80) ----
 BLANK    = $A0          ; ' '
@@ -101,6 +103,8 @@ gcntL    = $28          ; (2) 16-bit gravity countdown
 gcntH    = $29
 gpPoll   = $2A          ; gamepad poll throttle countdown
 gpRot    = $2B          ; gamepad rotate edge latch (1 = rotate held last poll)
+gpHDir   = $2C          ; gamepad horizontal latch (0 none, 1 left, 2 right)
+gpHDas   = $2D          ; gamepad horizontal auto-shift (DAS) countdown
 
         .org $0800
 
@@ -158,6 +162,7 @@ init_game:
         lda #GP_RATE
         sta gpPoll
         stz gpRot
+        stz gpHDir
         jsr spawn_piece
         jsr render_all
         rts
@@ -172,6 +177,8 @@ read_key:
         sta gpPoll
         jsr read_pad
 rk_kbd:
+        lda gover               ; a pad soft-drop this poll may have topped out --
+        bne rk_none             ; don't act on the keyboard on a dead board
         lda KBD
         bpl rk_none
         and #$7F
@@ -251,9 +258,10 @@ rk_rot:
 
 ; ---------------------------------------------------------------------------
 ; read_pad : poll the SNES gamepad (throttled by read_key via gpPoll).  Touch
-; PTRIG so the ROM refreshes GAMEPAD1, then act on the buttons.  Left/Right and
-; Down are level-triggered (they auto-repeat at the poll rate); rotate is
-; edge-detected via gpRot so one press = one turn; SELECT quits.
+; PTRIG so the ROM refreshes GAMEPAD1, then act on the buttons.  Left/Right use
+; auto-shift (DAS): a tap moves one cell, a hold repeats after a short delay.
+; Down soft-drops fast while held; rotate is edge-detected via gpRot so one
+; press = one turn; SELECT quits.
 ;
 ; A real D-pad can never report LEFT+RIGHT or UP+DOWN simultaneously, so those
 ; impossible combinations are rejected.  That also makes the pad a no-op under
@@ -269,14 +277,42 @@ read_pad:
         lda GAMEPAD1 + PAD_UP
         and GAMEPAD1 + PAD_DOWN
         bne rp_done             ; both U+D held -> invalid, ignore this poll
+        ; ---- horizontal move with auto-shift (DAS) ------------------------
+        ; X = held direction (0 none / 1 left / 2 right; L+R already rejected).
+        ; A fresh press moves one cell and arms DAS_INIT; holding waits that
+        ; delay then shifts every DAS_REP polls -- so a tap = one cell.
+        ldx #0
         lda GAMEPAD1 + PAD_LEFT
-        beq rp_nl
-        jsr rk_left
-rp_nl:
+        beq rp_ckr
+        ldx #1
+rp_ckr:
         lda GAMEPAD1 + PAD_RIGHT
-        beq rp_nr
+        beq rp_hdir
+        ldx #2
+rp_hdir:
+        cpx gpHDir
+        bne rp_hnew             ; direction changed (release, press, or L<->R)
+        cpx #0
+        beq rp_down             ; still nothing held -> no horizontal move
+        dec gpHDas
+        bne rp_down             ; holding, but not time to auto-shift yet
+        lda #DAS_REP
+        sta gpHDas
+        bra rp_hmove
+rp_hnew:
+        stx gpHDir              ; latch the new direction (may be 0 = released)
+        cpx #0
+        beq rp_down
+        lda #DAS_INIT
+        sta gpHDas              ; move once now, then hold DAS_INIT before repeat
+rp_hmove:
+        cpx #1
+        bne rp_hright
+        jsr rk_left
+        bra rp_down
+rp_hright:
         jsr rk_right
-rp_nr:
+rp_down:
         lda GAMEPAD1 + PAD_DOWN
         beq rp_nd
         jsr gravity_step        ; soft drop
@@ -534,21 +570,28 @@ game_over:
         ldx #12
         ldy #6
         jsr puts
+        lda #GP_RATE            ; seed the pad-poll throttle for the wait loop
+        sta gpPoll
 go_wait:
-        lda PTRIG               ; refresh the pad
+        lda KBD                 ; keyboard is checked every spin (no NMI cost)
+        bmi go_key
+        dec gpPoll              ; only strobe PTRIG every GP_RATE spins so the NMI
+        bne go_wait             ;   pad scan can't pin the CPU or hammer the latch
+        lda #GP_RATE
+        sta gpPoll
+        lda PTRIG               ; refresh the pad (-> CB2 -> NMI -> ROM scan)
         lda GAMEPAD1 + PAD_LEFT
         and GAMEPAD1 + PAD_RIGHT
-        bne go_kbd              ; invalid combo (also the emulator) -> keys only
+        bne go_wait             ; invalid combo (also the emulator) -> ignore pad
         lda GAMEPAD1 + PAD_UP
         and GAMEPAD1 + PAD_DOWN
-        bne go_kbd
+        bne go_wait
         lda GAMEPAD1 + PAD_START
         bne go_restart          ; START = play again
         lda GAMEPAD1 + PAD_SEL
         bne quit                ; SELECT = quit
-go_kbd:
-        lda KBD
-        bpl go_wait
+        bra go_wait
+go_key:
         and #$7F
         sta KBDSTRB
         cmp #$20
