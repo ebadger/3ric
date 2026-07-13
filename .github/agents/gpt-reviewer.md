@@ -1,7 +1,7 @@
 ---
 name: GPT Reviewer
-description: "Independent code-review specialist powered by a strong non-Claude model (e.g. GPT-5.5). One of two model-diverse reviewers (with Gemini Reviewer) consulted BY RULE before any code/spec/schema PR is published — see docs/CODE-REVIEW-PANEL.md. Reviews a diff for bugs, security holes, data-integrity and critical-path risks, cross-layer breakage, and missing tests, then returns ranked findings with concrete fixes and a verdict. Read-only: never edits code. Do NOT use for feature design, implementation, deployment, or product decisions."
-model: gpt-5.5
+description: "Independent code-review specialist powered by a strong non-Claude model (e.g. GPT-5.6 Sol). One of two model-diverse reviewers (with Gemini Reviewer) consulted BY RULE before any code/spec/schema PR is published — see docs/CODE-REVIEW-PANEL.md. Reviews a diff for bugs, security holes, data-integrity and critical-path risks, cross-layer breakage, and missing tests, then returns ranked findings with concrete fixes and a verdict. Read-only: never edits code. Do NOT use for feature design, implementation, deployment, or product decisions."
+model: gpt-5.6-sol
 tools: ["read", "search"]
 disable-model-invocation: true
 ---
