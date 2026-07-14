@@ -22,6 +22,7 @@ Text/lo-res video page 1 is $0400-$07FF (page 2 $0800-$0BFF); hi-res page 1 $200
 | --- | --- | --- |
 | $C000 | KEYBOARD | Keyboard data (bit7 = key-ready strobe) |
 | $C010 | KEYBD_STROBE | Clear the keyboard strobe |
+| $C030 | SPEAKER | Toggle the system speaker (any read or write access) |
 | $C050 | GRAPHICS | Switch to graphics |
 | $C051 | TEXT | Switch to text |
 | $C052 | FULLSCREEN | Full-screen (clear mixed) |

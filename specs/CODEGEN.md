@@ -27,7 +27,8 @@ graphics / registers → produce a `.PRG` that also `BRUN`s on real hardware.
 
 **Platform reference (`codegen/platform/`)** — the generator's machine/human contract:
 `prompt-system.md` (assembler dialect, entry/exit conventions), `platform-ref.md` +
-`platform-ref.json` (memory map, soft switches, zero page, ROM entry points). These are
+`platform-ref.json` (memory map, including the `$C030` speaker toggle, soft switches, zero
+page, ROM entry points). These are
 **generated** from the VM — regenerate after any `vm.h` `MM_*` or ROM-symbol change.
 
 **Assembler dialect:** `$hex` / `%bin` / decimal / char literals; labels; directives

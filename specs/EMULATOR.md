@@ -10,9 +10,9 @@
 ## Purpose
 
 Faithfully emulate the 3ric machine: a WDC 65C02 CPU, 36 KB RAM, Microsoft BASIC + a 512 KB
-ROM (monitor/DOS), Apple-II-style text/lo-res/hi-res video, keyboard, a 6551 ACIA serial
-port, a 6522 VIA (I/O + bit-banged SPI micro-SD + two serial SNES gamepads), a slot-4
-dual-AY Mockingboard, and a Disk II 5.25″ floppy. It is the **reference implementation of
+ROM (monitor/DOS), Apple-II-style text/lo-res/hi-res video, keyboard, a `$C030` system
+speaker, a 6551 ACIA serial port, a 6522 VIA (I/O + bit-banged SPI micro-SD + two serial
+SNES gamepads), a slot-4 dual-AY Mockingboard, and a Disk II 5.25″ floppy. It is the **reference implementation of
 the target hardware** — the emulator is correct when it behaves like the real machine will.
 
 ## Contracts / Interfaces
@@ -24,7 +24,7 @@ the target hardware** — the emulator is correct when it behaves like the real 
 | `Badger6502VMLib` | The VM core: `vm`, `cpu`, `Instructions`, `acia`, `via`, `snesgamepads`, `mockingboard`, `ay38910`, `PS2Keyboard`, `badgervmpal` (video). Windows-only: `symbols`, `Disassemble`. |
 | `WozLib` | Disk II emulation: `DriveEmulator`, `WozDisk`, `WozFile` (`.woz` images). |
 | `MockMicroSD` | Bit-banged SPI SD card (`SDCard`) over a memory-mapped image (`MappedFile`). |
-| `Badger6502VMTest` | MSTest (native C++) CPU and peripheral tests, including VIA, SNES gamepads, and Mockingboard. |
+| `Badger6502VMTest` | MSTest (native C++) CPU and peripheral tests, including VIA, SNES gamepads, system speaker, and Mockingboard. |
 | `Console`, `Badger6502Emulator`(+Package) | Win32 console and WinUI hosts. |
 | `WozFileTestApp`, `dsk2woz2`, `picodisk` | WOZ tooling / disk conversion / Pico target. |
 
@@ -34,6 +34,7 @@ web bridge, and `codegen/platform-ref.*`):
 ```
 $0000–$8FFF  RAM (36 KB)          $2000–$5FFF  hi-res video pages
 $9000–$BFFF  Microsoft BASIC ROM  $C000        keyboard data / $C010 strobe clear
+$C030        system speaker toggle (any read or write access)
 $C050–$C057  display soft switches (GRAPHICS/TEXT/…/LORES/HIRES)
 $C080–$C08F  language-card bank switches
 $C100–$C10F  ACIA (6551 serial)   $C200–$C20F  VIA1 (SPI micro-SD)
@@ -67,9 +68,9 @@ bridge uses this to clock the SD card and advance the drive).
 
 - CPU is driven **cooperatively**: hosts call `VM::Step()` per instruction. The VM samples
   the shared level-sensitive IRQ line before the instruction and ticks the onboard VIA plus
-  both Mockingboard VIA/AY pairs for every returned CPU cycle. Presentation hosts may then
-  advance host-owned keyboard/disk plumbing. The blocking `VM::Run()` is not used by the web
-  build.
+  both Mockingboard VIA/AY pairs for every returned CPU cycle, then advances the VM-owned
+  PCM sample clock. Presentation hosts may then advance host-owned keyboard/disk plumbing.
+  The blocking `VM::Run()` is not used by the web build.
 - `reset()` loads PC from `$FFFC/$FFFD`. ROM load recipe (mirrored by every host): write the
   first `0x10000` bytes of `badger6502.bin` into `GetData()`, `seedBasicRom()` (copy
   `$9000..$BFFF`), `loadFont()`, then `reset()`.
@@ -84,6 +85,17 @@ bridge uses this to clock the SD card and advance the drive).
   asserted and receiver interrupts are enabled in the 6551 command register. A write to the
   status address performs a programmed reset independent of the written value, preserving
   the control register and command parity bits.
+
+**System speaker and mixed-audio contract:**
+
+- Any bus read or write at `MM_SS_SPEAKER` (`$C030`) toggles the one-bit system-speaker
+  latch, matching the schematic's address-decoded toggle circuit. Reset clears the latch.
+- The latch continues to respond while host audio collection is disabled. At each host PCM
+  sample point, its mono level passes through a DC blocker at 0.25 full-scale gain and is
+  added equally to left and right.
+- PCM scheduling and buffering belong to `VM`, not either sound device: the VM samples both
+  AY outputs and the speaker from the same PHI2-derived clock and exposes one interleaved
+  stereo stream. Enabling/disabling collection must not stop speaker, VIA, or AY state.
 
 **Slot-4 Mockingboard contract (matching `kicad/3ric/Mockingboard.kicad_sch`):**
 
@@ -106,16 +118,17 @@ bridge uses this to clock the SD card and advance the drive).
   VIA IRQ outputs.
 - SNES controller data is applied through VIA1's external PB5/PB4 input pins and obeys DDRB;
   software still performs the real `$C070` → CB2/NMI → ROM bit-bang scan.
-- AY 1 and AY 2 are separate left/right outputs. The shared core produces interleaved stereo
-  PCM; host muting disables sample collection without stopping VIA or AY state progression.
+- AY 1 and AY 2 remain separate left/right sources. The VM-level mixer combines them with
+  the centered system speaker without changing the board's hard-panned stereo behavior.
 
 ## Data flow
 
 `host controller state → VM::SetGamepadState() → SNES latch/clock on VIA1 PB6/PB7 →
 active-low PB5/PB4 → ROM NMI scan → GAMEPAD1/GAMEPAD2`; otherwise
 `6502 ROM/program → VM::Step() → memory/soft-switch access → device
-(video/ACIA/VIA/Mockingboard/SD/Disk II) → framebuffer + serial + stereo PCM + register
-state → host (native window or web bridge → canvas/audio)`.
+(video/ACIA/VIA/$C030 speaker/Mockingboard/SD/Disk II) → VM PCM mixer (mono speaker +
+left/right AY) + framebuffer + serial + register state → host (native window or web bridge
+→ canvas/audio)`.
 
 ## Dependencies
 
@@ -133,5 +146,6 @@ state → host (native window or web bridge → canvas/audio)`.
 | Keyboard + ACIA serial | Shipped | `$C000`/`$C010`; `PS2Keyboard`, `acia`. |
 | VIA1 + bit-banged SPI micro-SD | Shipped | `via` + `MockMicroSD`. |
 | Two serial SNES gamepads on VIA1 | Shipped | Shared native/WASM peripheral; latch/clock, active-low data, reset, and two-pad scans covered by MSTest. |
+| `$C030` system speaker + VM audio mixer | Shipped | Any read/write toggles the mono latch; centered PCM mixes with both AY channels; covered by native and WASM tests. |
 | Slot-4 dual-AY Mockingboard | Shipped | Exact 3RIC `$C400/$C480`, 1.5734375 MHz, VIA IRQ, and hard-panned stereo; covered by native and WASM tests. |
 | Disk II 5.25″ floppy (WozLib) | Shipped | `$C600` boot PROM + `$C0E0–$C0EF`. |

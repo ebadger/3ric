@@ -266,22 +266,22 @@ public:
     }
     bool irqAsserted() { return _vm->IRQAsserted(); }
 
-    // --- Mockingboard audio ------------------------------------------------
+    // --- system speaker + Mockingboard audio -------------------------------
 
     bool enableAudio(int sampleRate)
     {
         if (sampleRate < 0) return false;
-        return _vm->GetMockingboard()->EnableAudio((uint32_t)sampleRate);
+        return _vm->EnableAudio((uint32_t)sampleRate);
     }
 
     void disableAudio()
     {
-        _vm->GetMockingboard()->DisableAudio();
+        _vm->DisableAudio();
     }
 
     val drainAudio()
     {
-        std::vector<float> audio = _vm->GetMockingboard()->DrainAudio();
+        std::vector<float> audio = _vm->DrainAudio();
         if (audio.empty())
         {
             return val::global("Float32Array").new_(0);

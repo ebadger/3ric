@@ -17,6 +17,7 @@
     "MM_SS_BASIC_ROM_ON": 49158,
     "MM_SS_BASIC_ROM_OFF": 49159,
     "MM_SS_KEYBD_STROBE": 49168,
+    "MM_SS_SPEAKER": 49200,
     "MM_SS_GRAPHICS": 49232,
     "MM_SS_TEXT": 49233,
     "MM_SS_FULLSCREEN": 49234,
@@ -122,6 +123,11 @@
       "name": "KEYBD_STROBE",
       "addr": 49168,
       "desc": "Clear the keyboard strobe"
+    },
+    {
+      "name": "SPEAKER",
+      "addr": 49200,
+      "desc": "Toggle the system speaker (any read or write access)"
     },
     {
       "name": "GRAPHICS",

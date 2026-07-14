@@ -11,8 +11,8 @@
 ## Purpose
 
 Define the real 3ric computer at the board and chip level: CPU, RAM/ROM, the video circuit,
-I/O (VIA/ACIA), the Disk II and micro-SD interfaces, and the glue logic that decodes the
-address bus. The goal is a buildable Apple-II-class 65C02 machine whose behavior matches the
+I/O (VIA/ACIA), the `$C030` system speaker, the Disk II and micro-SD interfaces, and the
+glue logic that decodes the address bus. The goal is a buildable Apple-II-class 65C02 machine whose behavior matches the
 emulator.
 
 ## Contracts / Interfaces
@@ -29,8 +29,9 @@ emulator.
 **The load-bearing contract:** the 22V10 address decoder (`3ricDecoder.PLD` /
 `EB6502 DECODER.PLD`) and the color GAL (`A2COLOR.PLD`) must decode exactly the regions in
 the emulator's `MM_*` map (`emulator/Badger6502VMLib/vm.h`) — RAM, BASIC ROM, the `$C0xx`
-device/soft-switch page (keyboard, ACIA `$C1xx`, VIA1 `$C2xx`, ROM disk `$C3xx`, audio
-`$C4xx`, Disk II PROM `$C6xx`), RAM2, and ROM `$D000–$FFFF`.
+device/soft-switch page (keyboard, system speaker `$C030`, ACIA `$C1xx`, VIA1 `$C2xx`,
+ROM disk `$C3xx`, Mockingboard `$C4xx`, Disk II PROM `$C6xx`), RAM2, and ROM
+`$D000–$FFFF`.
 
 ## Behaviour / Rules
 
@@ -46,6 +47,13 @@ device/soft-switch page (keyboard, ACIA `$C1xx`, VIA1 `$C2xx`, ROM disk `$C3xx`,
 `CPU address/data bus → 22V10 decoder → chip selects (RAM / ROM / BASIC / $C0xx devices) →
 device responds; video circuit + A2COLOR GAL → composite/color output`. The emulator models
 this same routing in `VM::DoSoftSwitches` and the device handlers.
+
+### System speaker
+
+- `kicad/3ric/softswitches.kicad_sch` decodes `$C030` without qualifying the access by
+  read/write; every access clocks the one-bit latch in `kicad/3ric/banking.kicad_sch`.
+- That latch drives the onboard `Y_SPEAKER`. The emulator models the same toggling and
+  presents this physical mono source equally in its left/right host PCM channels.
 
 ### SNES gamepads
 
@@ -86,6 +94,7 @@ this same routing in `VM::DoSoftSwitches` and the device handlers.
 | 22V10 address-decode GAL | In progress | `3ricDecoder.PLD` / `EB6502 DECODER.PLD`; mirrors `MM_*`. |
 | Apple-II color GAL | In progress | `A2COLOR.PLD` + `logisim/apple2color.circ`. |
 | Address-map validation | Present | `test/memory_map_test`. |
+| `$C030` system speaker | Shipped (schematic + emulator) | Address-decoded toggle latch drives `Y_SPEAKER`; the emulator exposes its centered mono signal in the combined PCM stream. |
 | Dual SNES controller interface | Shipped (schematic + emulator) | Shared PB6/PB7 latch/clock and active-low PB5/PB4 data; browser controllers exercise the same serial contract. |
 | Slot-4 dual-AY Mockingboard | Shipped | `$C400/$C480`, direct PHI2 clock, dual IRQ, hard stereo; shared emulator and browser implementation matches the schematic. |
 | PCB fabrication / bring-up | Tracked in build series | Emulator is the reference until hardware is verified. |

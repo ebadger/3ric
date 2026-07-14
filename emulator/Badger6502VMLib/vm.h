@@ -7,8 +7,10 @@
 #include "mockingboard.h"
 #include "snesgamepads.h"
 #include "ps2keyboard.h"
+#include <cstddef>
 #include <functional>
 #include <unordered_map>
+#include <vector>
 #include "badgervmpal.h"
 #include <DriveEmulator.h>
 
@@ -35,6 +37,7 @@ enum
 	MM_SS_BASIC_ROM_ON  = 0xC006,
 	MM_SS_BASIC_ROM_OFF = 0xC007,
 	MM_SS_KEYBD_STROBE  = 0xC010,
+	MM_SS_SPEAKER       = 0xC030,
 	MM_SS_GRAPHICS      = 0xC050,
 	MM_SS_TEXT          = 0xC051,
 	MM_SS_FULLSCREEN    = 0xC052,
@@ -153,6 +156,9 @@ public:
 	CPU* GetCPU();
 	VIA* GetVIA1();
 	Mockingboard* GetMockingboard();
+	bool EnableAudio(uint32_t sampleRate);
+	void DisableAudio();
+	std::vector<float> DrainAudio();
 	PS2Keyboard* GetPS2Keyboard();
 	DriveEmulator* GetDriveEmulator();
 	bool SimulateSerialKey(uint8_t key);
@@ -198,6 +204,13 @@ private:
 	void DoSoftSwitches(uint16_t address, bool write);
 	uint8_t DoDisk(uint16_t address, uint8_t data, bool write);
 	void UpdateVIA1NMI();
+	void TickAudio();
+	float SampleSpeaker();
+
+	static constexpr uint32_t VGA_DOT_CLOCK_HZ = 25175000;
+	static constexpr uint32_t PHI2_DIVISOR = 16;
+	static constexpr size_t SPEAKER_DC_BUFFER_LENGTH = 512;
+	static constexpr float SPEAKER_GAIN = 0.25f;
 
 	DriveEmulator _driveEmulator;
 
@@ -207,6 +220,15 @@ private:
 	SNESGamepads *	_gamepads;
 	Mockingboard *	_mockingboard;
 	PS2Keyboard *	_pPS2;
+
+	bool _speakerLevel = false;
+	bool _audioEnabled = false;
+	uint32_t _audioSampleRate = 0;
+	uint64_t _audioSampleAccumulator = 0;
+	std::vector<float> _audio;
+	float _speakerDcSum = 0.0f;
+	size_t _speakerDcPosition = 0;
+	float _speakerDcBuffer[SPEAKER_DC_BUFFER_LENGTH] = { 0.0f };
 	
 	uint8_t			_data[0x10000];  // 64KB address space
 	uint8_t			_basic[0x3000];  // 12KB basic bank ROM

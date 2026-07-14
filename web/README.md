@@ -5,7 +5,8 @@ Apple-II-clone emulator. It compiles the existing C++ VM core
 (`emulator/Badger6502VMLib`) and disk library (`emulator/WozLib`) to WebAssembly,
 boots the real 512KB ROM, renders Apple-II text/hi-res/lo-res video to an HTML
 `<canvas>`, feeds keyboard and gamepad input through the machine's hardware paths,
-and plays the slot-4 dual-AY Mockingboard through Web Audio.
+and plays both the `$C030` system speaker and slot-4 dual-AY Mockingboard through
+Web Audio.
 
 The VM peripherals remain in the shared C++ core so native and WASM builds behave
 identically. Browser-only presentation code stays in the bridge and JavaScript.
@@ -32,10 +33,11 @@ identically. Browser-only presentation code stays in the bridge and JavaScript.
   Applesoft for their auto-run greeting — see below).
 - **Adjustable CPU clock** (**Speed** selector): 0.5× / 1× (≈1.57 MHz, native) /
   2× / 4× / 8× / Max, with a per-frame wall-clock cap so the page stays responsive.
-- **3RIC Mockingboard audio**: two AY-3-8910s at `$C400/$C480`, clocked directly
-  from 1.5734375 MHz PHI2 and hard-panned stereo. **Enable Sound** creates the
-  browser audio context after a user gesture. Audio plays at 1× and pauses at
-  other speed settings while the emulated chips continue to advance.
+- **3RIC audio**: the mono `$C030` system speaker is centered and mixed with two
+  AY-3-8910s at `$C400/$C480`, clocked directly from 1.5734375 MHz PHI2 and
+  hard-panned stereo. **Enable Sound** creates the browser audio context after a
+  user gesture. Audio plays at 1× and pauses at other speed settings while the
+  emulated latch and chips continue to advance.
 - **In-browser assembler** (**Assemble & Run**): edit 65C02 source in the page,
   assemble it client-side with the very same assembler the CLI uses
   (`codegen/tools/asm6502.mjs`), run the resulting image like **Load .PRG**, and
@@ -114,8 +116,9 @@ the DOS shell — it runs the monitor command `EC5CG` (Go to `$EC5C`, the `dos`
 routine) which mounts the FAT32 image and prints a `>` prompt, then auto-runs
 `DIR`. Type `CAT`, `CD <dir>`, `BRUN <file>`, etc. to load games and programs
 from the card. The **Speed** selector sets the CPU clock (0.5×–8× or Max).
-Press **Enable Sound** to start stereo Mockingboard playback. Browser autoplay
-rules require this click; sound is intentionally generated only at native 1×.
+Press **Enable Sound** to start the system-speaker and stereo Mockingboard mix.
+Browser autoplay rules require this click; sound is intentionally generated only
+at native 1×.
 
 > Port 8011 is used because 8000 is taken on this machine.
 
@@ -214,6 +217,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web\test_audio_pacing.cjs # real WASM PCM rate at 60/144 Hz displays
 & $node web\test_audio_worklet.cjs # prebuffer + bounded PCM queue
 & $node web\test_mockingboard.cjs # mirrors, stereo PCM, 3RIC clock, timer IRQ
+& $node web\test_system_speaker.cjs # $C030 read/write toggles + mixed PCM
 & $node web\test_gamepad.cjs    # mapping, VIA serialization, ROM GAMEPAD1/2 scan
 & $node web\test_sd.cjs          # mount the SD card + DIR lists the FAT32 root
 & $node web\test_disk.cjs        # boot a WOZ floppy via C600G into a hi-res title
@@ -230,8 +234,8 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 
 The CPU is driven cooperatively: each animation frame calls `run(maxSteps)`,
 which calls shared `VM::Step()` to sample IRQ and tick the onboard VIA plus both
-Mockingboard VIA/AY pairs per returned cycle, then advances keyboard plumbing
-(the blocking `VM::Run()` is never used).
+Mockingboard VIA/AY pairs and the combined PCM mixer per returned cycle, then
+advances keyboard plumbing (the blocking `VM::Run()` is never used).
 
 ## How the micro-SD card works
 
