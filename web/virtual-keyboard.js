@@ -19,6 +19,7 @@
 
   const KEY_ROWS = Object.freeze([
     Object.freeze([
+      special("Esc", 0x1b, "wide", "Escape"),
       printable("1", "!"),
       printable("2", "@"),
       printable("3", "#"),
@@ -29,8 +30,10 @@
       printable("8", "*"),
       printable("9", "("),
       printable("0", ")"),
+      special("Back", 0x08, "wide", "Backspace"),
     ]),
     Object.freeze([
+      special("Tab", 0x09, "wide"),
       printable("Q"),
       printable("W"),
       printable("E"),
@@ -41,8 +44,10 @@
       printable("I"),
       printable("O"),
       printable("P"),
+      special("Return", 0x0d, "wide"),
     ]),
     Object.freeze([
+      modifier("Ctrl", "control"),
       printable("A"),
       printable("S"),
       printable("D"),
@@ -52,6 +57,8 @@
       printable("J"),
       printable("K"),
       printable("L"),
+      printable(";", ":"),
+      printable("'", "\""),
     ]),
     Object.freeze([
       modifier("Shift", "shift"),
@@ -62,7 +69,9 @@
       printable("B"),
       printable("N"),
       printable("M"),
-      special("Back", 0x08, "wide", "Backspace"),
+      printable(",", "<"),
+      printable(".", ">"),
+      printable("/", "?"),
     ]),
     Object.freeze([
       printable("`", "~"),
@@ -71,24 +80,13 @@
       printable("[", "{"),
       printable("]", "}"),
       printable("\\", "|"),
-      printable(";", ":"),
-      printable("'", "\""),
-    ]),
-    Object.freeze([
-      modifier("Ctrl", "control"),
-      special("Tab", 0x09, "wide"),
-      special("Esc", 0x1b, "wide", "Escape"),
-      printable(",", "<"),
-      printable(".", ">"),
-      printable("/", "?"),
-      special("Return", 0x0d, "wide"),
-    ]),
-    Object.freeze([
-      special("Space", 0x20, "space"),
       special("\u2190", 0x08, "", "Left arrow"),
       special("\u2191", 0x0b, "", "Up arrow"),
       special("\u2193", 0x0a, "", "Down arrow"),
       special("\u2192", 0x15, "", "Right arrow"),
+    ]),
+    Object.freeze([
+      special("Space", 0x20, "space"),
     ]),
   ]);
 
@@ -174,9 +172,10 @@
       }
     }
 
-    for (const keys of KEY_ROWS) {
+    for (let rowIndex = 0; rowIndex < KEY_ROWS.length; rowIndex++) {
+      const keys = KEY_ROWS[rowIndex];
       const row = document.createElement("div");
-      row.className = "vk-row";
+      row.className = `vk-row vk-row-${rowIndex}`;
       for (const key of keys) {
         const button = document.createElement("button");
         button.type = "button";

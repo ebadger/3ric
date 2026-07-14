@@ -42,12 +42,14 @@ client-side so GitHub Pages can host it as static files.
   shows up on the next selection without a hard refresh. (There is no service worker, and
   GitHub Pages purges its CDN on every deploy, so the revalidation returns the new source.)
 - **Mobile virtual keyboard (`virtual-keyboard.js` + `index.html`):** a collapsed
-  `<details>` panel directly below the emulator canvas renders a touch-friendly US keyboard
-  without invoking the phone's incomplete software keyboard. It includes every printable
-  symbol accepted by the emulator, Escape/Tab/Return/Backspace, Apple-style arrows, and
-  one-shot Shift and Control modifiers. Key buttons enqueue the same 7-bit bytes as physical
-  `keydown` events; the frame driver remains the single writer to `keyDown()` and waits for
-  the `$C000` strobe to clear before delivering each byte.
+  `<details>` panel directly below the emulator canvas renders an Apple II-inspired,
+  touch-friendly keyboard without invoking the phone's incomplete software keyboard.
+  Escape, Tab, Control, Shift, Return, and Backspace frame staggered QWERTY rows, while a
+  compact accessory row retains the extra printable symbols and four arrows needed by 3ric;
+  the wide space bar sits by itself, centered on the bottom row. One-shot Shift and Control
+  modifiers complete the emulator's character set. Key buttons enqueue the same 7-bit bytes
+  as physical `keydown` events; the frame driver remains the single writer to `keyDown()` and
+  waits for the `$C000` strobe to clear before delivering each byte.
 - **Browser gamepads (`gamepad.js` + `index.html`):** the frame driver polls the standard
   Gamepad API before running the CPU, keeps the first two connected devices in stable player
   slots, maps each to the 12-button SNES mask, and calls `setGamepadState()` for both slots.
@@ -199,7 +201,7 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 |------|--------|-------|
 | WASM build of the VM core + WozLib + SD | Shipped | `web/build.ps1`, Emscripten 6.0.1. |
 | Canvas video + keyboard | Shipped | text/lo-res/hi-res, `$C000` input. |
-| Mobile virtual keyboard | Shipped | Collapsible touch keyboard below the canvas; full emulator character set, one-shot Shift/Control, and the same strobe-aware `$C000` queue as physical input. |
+| Mobile virtual keyboard | Shipped | Collapsible Apple II-inspired touch layout below the canvas; staggered QWERTY rows, centered space bar, full emulator character set, one-shot Shift/Control, and the same strobe-aware `$C000` queue as physical input. |
 | USB/Bluetooth gamepads | Shipped | Two stable player slots through the standard Gamepad API and shared SNES/VIA peripheral; covered by browser-mapping, serial-protocol, and ROM-table tests. |
 | Disk II WOZ boot + micro-SD DOS shell | Shipped | **Boot Disk** / **Mount SD** buttons. |
 | In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; ~11 samples; `?src=`. Sample sources fetched with `cache:"no-cache"` (revalidate) so a new deploy isn't masked by the browser cache. |
