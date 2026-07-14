@@ -11,9 +11,9 @@
 
 Faithfully emulate the 3ric machine: a WDC 65C02 CPU, 36 KB RAM, Microsoft BASIC + a 512 KB
 ROM (monitor/DOS), Apple-II-style text/lo-res/hi-res video, keyboard, a 6551 ACIA serial
-port, a 6522 VIA (I/O + bit-banged SPI micro-SD), a slot-4 dual-AY Mockingboard, and a Disk
-II 5.25″ floppy. It is the **reference implementation of the target hardware** — the
-emulator is correct when it behaves like the real machine will.
+port, a 6522 VIA (I/O + bit-banged SPI micro-SD + two serial SNES gamepads), a slot-4
+dual-AY Mockingboard, and a Disk II 5.25″ floppy. It is the **reference implementation of
+the target hardware** — the emulator is correct when it behaves like the real machine will.
 
 ## Contracts / Interfaces
 
@@ -21,10 +21,10 @@ emulator is correct when it behaves like the real machine will.
 
 | Project | Role |
 |---------|------|
-| `Badger6502VMLib` | The VM core: `vm`, `cpu`, `Instructions`, `acia`, `via`, `mockingboard`, `ay38910`, `PS2Keyboard`, `badgervmpal` (video). Windows-only: `symbols`, `Disassemble`. |
+| `Badger6502VMLib` | The VM core: `vm`, `cpu`, `Instructions`, `acia`, `via`, `snesgamepads`, `mockingboard`, `ay38910`, `PS2Keyboard`, `badgervmpal` (video). Windows-only: `symbols`, `Disassemble`. |
 | `WozLib` | Disk II emulation: `DriveEmulator`, `WozDisk`, `WozFile` (`.woz` images). |
 | `MockMicroSD` | Bit-banged SPI SD card (`SDCard`) over a memory-mapped image (`MappedFile`). |
-| `Badger6502VMTest` | MSTest (native C++) CPU unit tests — one file per instruction family. |
+| `Badger6502VMTest` | MSTest (native C++) CPU and peripheral tests, including VIA, SNES gamepads, and Mockingboard. |
 | `Console`, `Badger6502Emulator`(+Package) | Win32 console and WinUI hosts. |
 | `WozFileTestApp`, `dsk2woz2`, `picodisk` | WOZ tooling / disk conversion / Pico target. |
 
@@ -48,6 +48,20 @@ $D000–$FFFF  ROM (monitor / OS / DOS shell); reset vector at $FFFC/$FFFD
 Soft switches are dispatched by `VM::DoSoftSwitches(address, write)`; memory-access
 callbacks (`CallbackWriteMemory`, `CallbackSetSoftSwitches`) let hosts hook I/O (the web
 bridge uses this to clock the SD card and advance the drive).
+
+**SNES gamepad contract (onboard VIA1 at `$C200`):**
+
+- VIA1 PB6 drives the shared controller latch and PB7 drives the shared clock. Controller 1
+  returns active-low serial data on PB5 and controller 2 on PB4.
+- `VM::SetGamepadState(index, pressedMask)` accepts controller indexes 0 and 1. Bits 0–11
+  are pressed-state bits in the ROM's wire order: `B`, `Y`, `SELECT`, `START`, `UP`, `DOWN`,
+  `LEFT`, `RIGHT`, `A`, `X`, `L`, `R`; bits 12–15 are unused and ignored.
+- A PB6 rising edge snapshots both live masks. Bit 0 is then visible on PB5/PB4; each PB7
+  rising edge advances to the next bit. Host changes during a scan take effect only at the
+  next latch, just like physical SNES shift registers. After bit 15 the data lines idle high.
+- A machine reset clears only the in-flight serial transaction; it does not disconnect or
+  release host-reported controllers. The peripheral is attached only to the onboard VIA1,
+  not either slot-4 Mockingboard VIA.
 
 ## Behaviour / Rules
 
@@ -90,11 +104,15 @@ bridge uses this to clock the SD card and advance the drive).
 - The onboard `$C200` VIA's enabled interrupt output retains its ROM contract as queued NMI
   edges, including control-pin and timer sources. This is separate from the two Mockingboard
   VIA IRQ outputs.
+- SNES controller data is applied through VIA1's external PB5/PB4 input pins and obeys DDRB;
+  software still performs the real `$C070` → CB2/NMI → ROM bit-bang scan.
 - AY 1 and AY 2 are separate left/right outputs. The shared core produces interleaved stereo
   PCM; host muting disables sample collection without stopping VIA or AY state progression.
 
 ## Data flow
 
+`host controller state → VM::SetGamepadState() → SNES latch/clock on VIA1 PB6/PB7 →
+active-low PB5/PB4 → ROM NMI scan → GAMEPAD1/GAMEPAD2`; otherwise
 `6502 ROM/program → VM::Step() → memory/soft-switch access → device
 (video/ACIA/VIA/Mockingboard/SD/Disk II) → framebuffer + serial + stereo PCM + register
 state → host (native window or web bridge → canvas/audio)`.
@@ -114,5 +132,6 @@ state → host (native window or web bridge → canvas/audio)`.
 | Text / lo-res / hi-res video | Shipped | `badgervmpal`; color/fringe logic shared with hosts. |
 | Keyboard + ACIA serial | Shipped | `$C000`/`$C010`; `PS2Keyboard`, `acia`. |
 | VIA1 + bit-banged SPI micro-SD | Shipped | `via` + `MockMicroSD`. |
+| Two serial SNES gamepads on VIA1 | Shipped | Shared native/WASM peripheral; latch/clock, active-low data, reset, and two-pad scans covered by MSTest. |
 | Slot-4 dual-AY Mockingboard | Shipped | Exact 3RIC `$C400/$C480`, 1.5734375 MHz, VIA IRQ, and hard-panned stereo; covered by native and WASM tests. |
 | Disk II 5.25″ floppy (WozLib) | Shipped | `$C600` boot PROM + `$C0E0–$C0EF`. |

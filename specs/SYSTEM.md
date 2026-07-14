@@ -12,9 +12,9 @@
 schematics, a custom PCB, and 22V10 GAL address-decode logic) plus a cycle-honest **C++
 emulator** of the same machine. The emulator also compiles to **WebAssembly**, so the exact
 same VM core boots the real 512 KB ROM in any browser — text/lo-res/hi-res video on a
-canvas, keyboard input, a Disk II 5.25″ floppy, and a bit-banged micro-SD card. A small
-Node **codegen** toolchain assembles 65C02 programs and validates them headlessly on the
-same WASM core. The "why" lives in `docs/MISSION.md`.
+canvas, keyboard and USB/Bluetooth gamepad input, a Disk II 5.25″ floppy, and a bit-banged
+micro-SD card. A small Node **codegen** toolchain assembles 65C02 programs and validates
+them headlessly on the same WASM core. The "why" lives in `docs/MISSION.md`.
 
 ## Architecture at a glance
 
@@ -25,7 +25,7 @@ same WASM core. The "why" lives in `docs/MISSION.md`.
    Emulator core — 65C02 VM in C++  (emulator/Badger6502VMLib)
      ├─ WozLib       — Disk II 5.25" floppy (.woz)        ┐ shared sources,
      ├─ MockMicroSD  — bit-banged SPI FAT32 card          ├ guarded for both
-     └─ video / keyboard / ACIA (serial) / VIA (I/O)      ┘ native + WASM
+     └─ video / keyboard / SNES pads / ACIA / VIA         ┘ native + WASM
                  │                              │
    native hosts (Windows/WinUI,        Emscripten bridge (web/web_bridge.cpp)
    Console) via Badger6502VM.sln                │
@@ -48,8 +48,8 @@ same WASM core. The "why" lives in `docs/MISSION.md`.
 
 | Layer | Spec | Covers |
 |-------|------|--------|
-| Emulator core (C++ VM) | [`EMULATOR.md`](./EMULATOR.md) | 65C02 CPU, memory map, soft switches, VIA/ACIA/keyboard/video, WozLib, MockMicroSD |
-| Web / WASM client | [`WEB-CLIENT.md`](./WEB-CLIENT.md) | Emscripten build, embind bridge API, canvas UI, in-browser assembler, Pages deploy |
+| Emulator core (C++ VM) | [`EMULATOR.md`](./EMULATOR.md) | 65C02 CPU, memory map, soft switches, VIA/ACIA/keyboard/gamepads/video, WozLib, MockMicroSD |
+| Web / WASM client | [`WEB-CLIENT.md`](./WEB-CLIENT.md) | Emscripten build, embind bridge API, canvas/gamepad UI, in-browser assembler, Pages deploy |
 | Codegen tooling | [`CODEGEN.md`](./CODEGEN.md) | `asm6502` assembler, `run6502`/`harness`, platform-ref generation, validation channels |
 | ROM & software | [`ROM-SOFTWARE.md`](./ROM-SOFTWARE.md) | 512 KB ROM (monitor/DOS/BASIC), fonts, 6502 programs, `.PRG` format |
 | Hardware | [`HARDWARE.md`](./HARDWARE.md) | KiCad schematics/PCB, 22V10 GAL address decode, logisim/diylayout models |
@@ -77,6 +77,7 @@ same WASM core. The "why" lives in `docs/MISSION.md`.
 | 65C02 CPU + memory map + soft switches | Shipped |
 | Text / lo-res / hi-res video rendering | Shipped |
 | Keyboard (`$C000`/`$C010`) + ACIA serial | Shipped |
+| Two SNES pads via VIA1 + browser Gamepad API | Shipped |
 | Disk II 5.25″ WOZ boot (self-booting machine-code disks) | Shipped |
 | Micro-SD FAT32 + ROM DOS shell | Shipped |
 | Slot-4 dual-AY Mockingboard | Shipped |

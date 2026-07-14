@@ -5,6 +5,7 @@
 #include "acia.h"
 #include "via.h"
 #include "mockingboard.h"
+#include "snesgamepads.h"
 #include "ps2keyboard.h"
 #include <functional>
 #include <unordered_map>
@@ -148,6 +149,7 @@ public:
 	void TickDevices(uint32_t cycles);
 	bool IRQAsserted() const;
 	void SignalVIA1Pin(VIA::Pins pin);
+	bool SetGamepadState(uint8_t controller, uint16_t pressedButtons);
 	CPU* GetCPU();
 	VIA* GetVIA1();
 	Mockingboard* GetMockingboard();
@@ -202,6 +204,7 @@ private:
 	CPU	*			_cpu;
 	ACIA *			_acia;
 	VIA *			_via1;
+	SNESGamepads *	_gamepads;
 	Mockingboard *	_mockingboard;
 	PS2Keyboard *	_pPS2;
 	

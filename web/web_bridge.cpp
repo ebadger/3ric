@@ -298,6 +298,19 @@ public:
         _vm->WriteData(0xC000, (uint8_t)(0x80 | toupper(ascii & 0x7F)));
     }
 
+    // --- SNES gamepads ------------------------------------------------------
+
+    bool setGamepadState(int controller, int pressedButtons)
+    {
+        if (controller < 0 || controller >= (int)SNESGamepads::CONTROLLER_COUNT
+            || pressedButtons < 0 || pressedButtons > 0xFFFF)
+        {
+            return false;
+        }
+        return _vm->SetGamepadState(
+            (uint8_t)controller, (uint16_t)pressedButtons);
+    }
+
     // --- direct memory access ---------------------------------------------
 
     void poke(int addr, int value) { _vm->GetData()[addr & 0xFFFF] = (uint8_t)(value & 0xFF); }
@@ -571,6 +584,7 @@ EMSCRIPTEN_BINDINGS(badger6502)
         .function("disableAudio", &WebVM::disableAudio)
         .function("drainAudio",   &WebVM::drainAudio)
         .function("keyDown",      &WebVM::keyDown)
+        .function("setGamepadState", &WebVM::setGamepadState)
         .function("poke",         &WebVM::poke)
         .function("peek",         &WebVM::peek)
         .function("readBus",      &WebVM::readBus)

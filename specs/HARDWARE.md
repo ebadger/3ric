@@ -47,6 +47,17 @@ device/soft-switch page (keyboard, ACIA `$C1xx`, VIA1 `$C2xx`, ROM disk `$C3xx`,
 device responds; video circuit + A2COLOR GAL → composite/color output`. The emulator models
 this same routing in `VM::DoSoftSwitches` and the device handlers.
 
+### SNES gamepads
+
+`kicad/3ric/Communication_sch.kicad_sch` contains two SNES controller sockets:
+
+- VIA1 PB6 drives their shared `GC_LATCH` net and PB7 drives shared `GC_CLOCK`.
+- Controller 1's active-low serial data returns on PB5; controller 2 returns on PB4.
+- A latch pulse snapshots all buttons, then each clock pulse shifts the next bit in SNES
+  order: B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R, then four unused bits.
+- The emulator mirrors these existing connections through VIA1 external input pins; browser
+  controllers change only the host-side button state and do not alter this hardware contract.
+
 ### Slot-4 Mockingboard
 
 `kicad/3ric/Mockingboard.kicad_sch` defines two 65C22-to-AY-3-8910 channels:
@@ -75,5 +86,6 @@ this same routing in `VM::DoSoftSwitches` and the device handlers.
 | 22V10 address-decode GAL | In progress | `3ricDecoder.PLD` / `EB6502 DECODER.PLD`; mirrors `MM_*`. |
 | Apple-II color GAL | In progress | `A2COLOR.PLD` + `logisim/apple2color.circ`. |
 | Address-map validation | Present | `test/memory_map_test`. |
+| Dual SNES controller interface | Shipped (schematic + emulator) | Shared PB6/PB7 latch/clock and active-low PB5/PB4 data; browser controllers exercise the same serial contract. |
 | Slot-4 dual-AY Mockingboard | Shipped | `$C400/$C480`, direct PHI2 clock, dual IRQ, hard stereo; shared emulator and browser implementation matches the schematic. |
 | PCB fabrication / bring-up | Tracked in build series | Emulator is the reference until hardware is verified. |

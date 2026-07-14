@@ -116,6 +116,7 @@
       title="Enable the slot-4 dual-AY Mockingboard at native 1x speed">Enable Sound</button>
     <span class="regs" id="regs">PC:---- A:-- X:-- Y:-- SP:-- P:--</span>
     <span class="regs" id="mode">mode:---</span>
+    <span class="hint" id="gamepads">gamepads: detecting&hellip;</span>
     <span class="hint" id="status">loading wasm&hellip;</span>
   </header>
   <main>
@@ -171,8 +172,9 @@
   <footer>
     65C02 emulator core (C++) + WozLib compiled to WebAssembly via Emscripten. Boots the real 512KB ROM,
     renders Apple-II text/hi-res to the canvas, feeds keystrokes through the memory-mapped keyboard ($C000),
-    and emulates the 3RIC slot-4 dual-AY Mockingboard in stereo.
-    Click the screen and type. &ldquo;Boot Disk&rdquo; boots the bundled 5.25&Prime; floppy (or pick a .woz with
+    maps up to two USB/Bluetooth gamepads through the real SNES/VIA interface, and emulates the 3RIC
+    slot-4 dual-AY Mockingboard in stereo.
+    Click the screen and type, or pair a controller and press a button. &ldquo;Boot Disk&rdquo; boots the bundled 5.25&Prime; floppy (or pick a .woz with
     &ldquo;Insert&rdquo;) through the Disk&nbsp;II ROM at $C600. &ldquo;Mount SD&rdquo; enters the DOS shell
     (prompt &ldquo;&gt;&rdquo;) and lists the micro-SD card &mdash; load games and programs from there.
     &ldquo;Load .PRG&rdquo; loads a raw program image at the given hex address and runs it, exactly like
@@ -198,6 +200,7 @@
   </footer>
 
   <script src="emulation-clock.js"></script>
+  <script src="gamepad.js"></script>
   <script src="badger6502.js"></script>
   <script>
     // The 3ric clocks its 65C02 from the 25.175 MHz VGA dot clock divided by 16,
@@ -216,7 +219,10 @@
     const regsEl  = document.getElementById("regs");
     const modeEl  = document.getElementById("mode");
     const statusEl = document.getElementById("status");
+    const gamepadsEl = document.getElementById("gamepads");
     const soundButton = document.getElementById("sound");
+    const gamepadManager = new BadgerGamepads.GamepadManager();
+    let gamepadAccessBlocked = false;
 
     let vm = null;
     let imageData = null;
@@ -319,6 +325,49 @@
         `mode:${m} pg${vm.gfxPage()+1}${vm.mixed() ? " MIX" : ""} font:${vm.font()}`;
     }
 
+    function pollGamepads() {
+      if (typeof navigator.getGamepads !== "function" || gamepadAccessBlocked) {
+        gamepadsEl.textContent = "gamepads: unavailable";
+        gamepadsEl.title = gamepadAccessBlocked
+          ? "Gamepad access is blocked by this page's browser permissions"
+          : "This browser does not expose the standard Gamepad API";
+        vm.setGamepadState(0, 0);
+        vm.setGamepadState(1, 0);
+        return;
+      }
+
+      let browserGamepads;
+      try {
+        browserGamepads = navigator.getGamepads();
+      } catch (error) {
+        if (!error || error.name !== "SecurityError") throw error;
+        gamepadAccessBlocked = true;
+        gamepadsEl.textContent = "gamepads: unavailable";
+        gamepadsEl.title = "Gamepad access is blocked by this page's browser permissions";
+        vm.setGamepadState(0, 0);
+        vm.setGamepadState(1, 0);
+        return;
+      }
+
+      const slots = gamepadManager.poll(browserGamepads);
+      for (let player = 0; player < slots.length; player++) {
+        vm.setGamepadState(player, slots[player] ? slots[player].mask : 0);
+      }
+
+      const assigned = [];
+      for (let player = 0; player < slots.length; player++) {
+        if (slots[player]) assigned.push(`P${player + 1}`);
+      }
+      gamepadsEl.textContent = assigned.length
+        ? `gamepads: ${assigned.join(" ")}`
+        : "gamepads: press a controller button";
+      gamepadsEl.title = slots
+        .map((slot, player) => slot ? `P${player + 1}: ${slot.id}` : null)
+        .filter(Boolean)
+        .join("\n") ||
+        "Pair a USB/Bluetooth controller with this device, then press one of its buttons";
+    }
+
     function clearAudioQueue() {
       if (audioNode) audioNode.port.postMessage({ type: "clear" });
     }
@@ -412,6 +461,8 @@
     }
 
     function frame(timestamp) {
+      pollGamepads();
+
       // Feed one queued key when the keyboard strobe is clear (bit 7 of $C000).
       if (inputQueue.length && (vm.peek(0xC000) & 0x80) === 0) {
         vm.keyDown(inputQueue.shift());

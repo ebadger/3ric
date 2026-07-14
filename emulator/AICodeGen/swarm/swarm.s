@@ -7,10 +7,9 @@
 ; marches side to side, drops a row and speeds up as its ranks thin, rains bombs,
 ; and hides behind crumbling bunkers while a mystery saucer streaks overhead.
 ; Keyboard: A/D or Left/Right move, SPACE fires and starts/restarts the game.
-; SNES pad (real hardware): D-pad Left/Right move, A/B fire, START starts or
-; restarts, and SELECT quits.  Touching PTRIG refreshes the ROM's GAMEPAD1 table;
-; impossible D-pad states are rejected so the pad stays inert in the emulator,
-; which does not model controller hardware.
+; SNES pad: D-pad Left/Right move, A/B fire, START starts or restarts, and SELECT
+; quits.  Touching PTRIG refreshes the ROM's GAMEPAD1 table on hardware and in the
+; emulator; browser USB/Bluetooth pads follow this same VIA serial path.
 ; All sprite art, code and the name are original; only the un-copyrightable
 ; genre mechanics are shared with the classic.
 ;
@@ -434,9 +433,8 @@ api_select:
 api_ret:
         rts
 
-; pad_valid : carry set when the table contains a physically possible D-pad
-;   state.  The emulator's unmodelled pad reads every button as pressed, so this
-;   guard also prevents phantom movement, firing, starts, and quits there.
+; pad_valid : carry set when the table contains a physically possible D-pad state.
+;   Reject opposing directions defensively for hardware and host controllers.
 pad_valid:
         lda GAMEPAD1 + PAD_LEFT
         and GAMEPAD1 + PAD_RIGHT

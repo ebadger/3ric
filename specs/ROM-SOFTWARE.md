@@ -29,10 +29,11 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   under `sei`), then reads **`GAMEPAD1 $CEE0`** / `GAMEPAD2 $CEF0` — 16-byte tables, one byte
   per button (`1` = pressed): `B`=0, `Y`=1, `SELECT`=2, `START`=3, `UP`=4, `DOWN`=5,
   `LEFT`=6, `RIGHT`=7, `A`=8, `X`=9, `L`=$A, `R`=$B. `JOYSTICK_MODE $CE15` must be `0`
-  (pads — the power-on default). The emulator models no pad hardware (its VIA port reads
-  back the last written value, so a scan reports every button pressed); programs must reject
-  impossible states (e.g. `LEFT`+`RIGHT`) and verify pad input on real hardware. Addresses
-  are exported in `codegen/platform/platform-ref.*`.
+  (pads — the power-on default). The emulator models the same two active-low SNES shift
+  registers on VIA1, so host-supplied controller masks flow through the unmodified ROM scan;
+  a disconnected controller reports no buttons. Programs may still reject impossible states
+  such as `LEFT`+`RIGHT` defensively. Addresses are exported in
+  `codegen/platform/platform-ref.*`.
 - **`.PRG` programs:** assembled by the codegen toolchain (`CODEGEN.md`). Sources: tracked
   `.s` files (`codegen/programs/hello.s`, `emulator/AICodeGen/<name>/<name>.s`); assembled
   `.prg` images are git-ignored (regenerated). Run on hardware/SD via `BRUN NAME.PRG <org>`,
@@ -46,8 +47,8 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     pendulum arc and Jump releases it without immediately re-catching; it also releases
     safely over the far bank.
   - **Hardware controls:** SNES D-pad moves/ducks and A/B jumps via the ROM's
-    `PTRIG`/`GAMEPAD1` contract. Impossible opposing directions reject the emulator's
-    all-buttons-pressed placeholder state, so keyboard behavior remains unchanged in WASM.
+    `PTRIG`/`GAMEPAD1` contract. The browser maps standard USB/Bluetooth controllers through
+    the emulator's SNES/VIA peripheral; impossible opposing directions remain rejected.
     End screens ignore repeated gameplay keys: Return restarts from the keyboard, while
     Start/A/B must be released before a fresh pad restart press.
   - **World:** screen descriptors define up to two ground gaps, two raised platforms, one
@@ -112,5 +113,5 @@ reloads the same descriptor at its checkpoint.
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | ROCK STORM vector game | Shipped / cycle-guarded | Opening-wave live frame is 133,262 cycles against a 175,000-cycle limit; both distributed `.prg` copies are generated from `rocks.s`. |
-| SNES gamepad input | Shipped (hardware) | ROM fills `GAMEPAD1/2` on a `$C070` touch; `blocks` (BLOCK DROP) reads it — D-pad move/soft-drop, `A`/`B`/Up rotate, `SELECT` quit, `START` restart. Inert in the emulator (no pad hardware). |
+| SNES gamepad input | Shipped | ROM fills `GAMEPAD1/2` on a `$C070` touch; the shared emulator peripheral follows the same VIA serial protocol, and the browser maps two standard USB/Bluetooth controllers into it. |
 | Jungle Quest — The Sunstone Run | Shipped | Six-screen `$0800` mixed-hi-res platformer; focused suite includes a complete successful expedition. |

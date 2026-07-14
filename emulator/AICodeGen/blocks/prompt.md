@@ -40,7 +40,9 @@ node codegen/tools/blocks.test.mjs
 ## Run it
 
 - **Hardware / disk:** `BRUN BLOCKS.PRG 0800` — **A/D** move, **W** rotate,
-  **S** soft-drop, **Q** quits.
+  **S** soft-drop, **Q** quits; SNES D-pad moves/drops, A/B rotates, Select
+  quits, and Start restarts.
 - **Hosted emulator:** the **Games** dropdown, deep link
   `?prg=programs/blocks.prg&org=0800`, or **Load .PRG…** at address `0800`.
-  The gravity is tuned for the native **1×** (≈1.57 MHz) Speed setting.
+  Standard USB/Bluetooth controllers use the same SNES controls. The gravity is
+  tuned for the native **1×** (≈1.57 MHz) Speed setting.

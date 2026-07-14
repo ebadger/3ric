@@ -237,6 +237,7 @@
     <ClCompile Include="Compare.cpp" />
     <ClCompile Include="EOR.cpp" />
     <ClCompile Include="Flags.cpp" />
+    <ClCompile Include="GamepadTests.cpp" />
     <ClCompile Include="IncDec_Mem.cpp" />
     <ClCompile Include="JMP.cpp" />
     <ClCompile Include="JSR_RTS.cpp" />

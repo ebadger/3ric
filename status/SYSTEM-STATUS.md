@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-07-13 — ebadger (via Copilot)_
+_Last updated: 2026-07-14 — ebadger (via Copilot)_
 
 ---
 
@@ -46,6 +46,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_audio_pacing.cjs        # real WASM PCM rate at 60/144 Hz displays
 & $node web/test_audio_worklet.cjs       # prebuffer + bounded PCM queue
 & $node web/test_mockingboard.cjs        # slot-4 mirrors, stereo PCM, 3RIC clock, VIA IRQ
+& $node web/test_gamepad.cjs             # browser mapping, VIA serial pads, ROM tables
 & $node web/test_sd.cjs                  # mount SD + DIR lists the FAT32 root
 & $node web/test_disk.cjs                # boot a WOZ floppy via C600G into a hi-res title
 & $node web/test_woz_download.cjs        # "Download .woz" builds a bootable disk that boots via C600G
@@ -76,8 +77,9 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 ## Current state / known gaps
 
 - **Emulator:** boots the unmodified 512 KB ROM to the monitor; text/lo-res/hi-res color
-  video; keyboard; ACIA serial; Disk II WOZ boot; micro-SD FAT32 DOS shell; slot-4
-  dual-AY Mockingboard at the hardware's 1.5734375 MHz clock; adjustable CPU clock.
+  video; keyboard; two serial SNES pads; ACIA serial; Disk II WOZ boot; micro-SD FAT32 DOS
+  shell; slot-4 dual-AY Mockingboard at the hardware's 1.5734375 MHz clock; adjustable CPU
+  clock. The browser maps standard USB/Bluetooth controllers through the SNES/VIA path.
   Shared VM core runs identically on Windows and in the browser.
 - **In-browser assembler:** assembles 65C02 source client-side with the project's own
   `asm6502.mjs` and runs it like `BRUN`; ships ~11 sample programs; deep-linkable via `?src=`.

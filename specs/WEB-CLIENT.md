@@ -10,14 +10,14 @@
 ## Purpose
 
 Boot the real 512 KB ROM in any browser: render Apple-II text/lo-res/hi-res video to a
-`<canvas>`, feed keystrokes through the memory-mapped keyboard, run Disk II and micro-SD
-images, and assemble/run 65C02 source client-side — all 100% client-side so GitHub Pages can
-host it as static files.
+`<canvas>`, feed keyboard and standard Gamepad API input through the machine's real input
+paths, run Disk II and micro-SD images, and assemble/run 65C02 source client-side — all 100%
+client-side so GitHub Pages can host it as static files.
 
 ## Contracts / Interfaces
 
 - **Build:** `web/build.ps1` compiles `Badger6502VMLib` (vm, cpu, Instructions, acia, via,
-  mockingboard, ay38910, PS2Keyboard, badgervmpal) + `WozLib` (DriveEmulator, WozDisk,
+  snesgamepads, mockingboard, ay38910, PS2Keyboard, badgervmpal) + `WozLib` (DriveEmulator, WozDisk,
   WozFile) + `MockMicroSD` (SDCard, MappedFile) + `web/web_bridge.cpp` with
   `-DPLATFORM_WEB`. Excludes `symbols.cpp` and `Disassemble.cpp`. Key flags:
   `-std=c++17 -O2 -lembind -sMODULARIZE=1
@@ -26,11 +26,12 @@ host it as static files.
 - **Bridge API (embind, `web_bridge.cpp`):** `loadData(addr, bytes)`, `seedBasicRom()`,
   `loadFont(bytes)`, `loadSD(bytes)`, `insertDisk(drive, bytes)`, `reset()`, `run(maxSteps)`,
   `runCycles(cycleBudget)`, `setPC`, `poke/peek`, `keyDown(code)`, `drainOutput()` (serial),
+  `setGamepadState(index, pressedMask)`,
   `enableAudio(sampleRate)`, `disableAudio()`, `drainAudio()` (interleaved Float32 stereo PCM),
   `renderFrame()` (RGBA framebuffer), `pc/sp/regA/regX/regY/status`, `sdReadCount()`.
 - **Compat shims (`web_compat.h`):** map MSVC-isms (`OutputDebugString`, `sprintf_s`,
   `fopen_s`, `_ASSERT`, …) onto Emscripten so `WozLib`/`MockMicroSD` compile unchanged.
-- **UI (`index.html`):** `requestAnimationFrame` driver, keyboard, disk/SD/clock/sound
+- **UI (`index.html`):** `requestAnimationFrame` driver, keyboard/gamepad, disk/SD/clock/sound
   controls, and the in-browser **Assembler** panel (imports `assemble()` from the staged
   `asm6502.mjs`). Honors optional `window.ASSET_BASE` / `?assets=` for CDN/R2 offload and
   `?src=` / `?prg=` / `?code=` deep links, plus a **Share** button that builds a one-click
@@ -39,6 +40,14 @@ host it as static files.
   against Pages instead of serving a stale `max-age=600` copy — a freshly deployed program
   shows up on the next selection without a hard refresh. (There is no service worker, and
   GitHub Pages purges its CDN on every deploy, so the revalidation returns the new source.)
+- **Browser gamepads (`gamepad.js` + `index.html`):** the frame driver polls the standard
+  Gamepad API before running the CPU, keeps the first two connected devices in stable player
+  slots, maps each to the 12-button SNES mask, and calls `setGamepadState()` for both slots.
+  Standard-layout face buttons 0/1/2/3 map to SNES B/A/Y/X; 8/9 to Select/Start; 4 or 6 to
+  L; 5 or 7 to R; D-pad buttons 12–15 and left-stick axes 0/1 (0.5 deadzone) map directions.
+  USB and Bluetooth pairing is handled by the operating system — the page does not use Web
+  Bluetooth. Browsers may hide a connected pad until the user presses one of its buttons;
+  the header reports API availability and the currently assigned players.
 - **Assembler downloads (`index.html` + staged `wozgen.mjs`):** the Assembler panel offers
   **Download .PRG** (the raw assembled bytes) and **Download .woz** — a bootable 5.25″ WOZ2
   disk image of the current program, generated fully client-side by `wozgen.mjs` (a
@@ -105,6 +114,10 @@ host it as static files.
   playback, renders without per-sample allocation, and discards only the oldest queued frames
   if a stalled producer exceeds the latency bound. Sound is generated only at 1x speed;
   changing speed mutes and flushes PCM while the emulated VIA/AY state continues to advance.
+- Gamepad state is sampled once per rendered frame, independently of CPU speed. Disconnecting
+  a pad releases every button immediately; reconnecting fills the first free player slot.
+  The shared VM, not JavaScript, performs the SNES latch/clock protocol and active-low VIA
+  input behavior.
 - **Parity is the rule:** the WASM build must behave like the native build. Do not add
   behavior in the bridge that isn't in the shared core unless it's a genuinely
   presentation-only concern (canvas, clock pacing) — and never behind an unguarded fork.
@@ -143,7 +156,8 @@ host it as static files.
 ## Data flow
 
 `build.ps1 → badger6502.js/.wasm + data/ → index.html loads WASM → boot recipe (loadData /
-seedBasicRom / loadFont / reset) → elapsed-time budget→runCycles() per frame →
+seedBasicRom / loadFont / reset) → Gamepad API→gamepad.js mapping→setGamepadState()→shared
+SNES/VIA peripheral; elapsed-time budget→runCycles() per frame →
 renderFrame()→canvas, drainOutput()→log, drainAudio()→AudioWorklet→speakers; keyDown()→$C000;
 Boot Disk/Mount SD →
 insertDisk()/loadSD() → C600G / EC5CG`.
@@ -159,9 +173,9 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
   generator, a JS port of `emulator/dsk2woz2`). The `.woz` boot loader depends on the `$C600`
   P5 boot PROM contract (`ROM-SOFTWARE.md`) and the Disk II phase-stepping model (`EMULATOR.md`).
 - **Downstream:** GitHub Pages deploy (`.github/workflows/deploy-pages.yml`) — its **Stage
-  site** step stages `gallery.html` + `gallery.json` + `story.html` + `llms.txt` + `robots.txt` +
-  `sitemap.xml` (alongside `index.html` and `programs/`) into `_site/`; the public users of
-  the demo, and AI coding tools that fetch `llms.txt`.
+  site** step stages `gamepad.js` + `gallery.html` + `gallery.json` + `story.html` + `llms.txt`
+  + `robots.txt` + `sitemap.xml` (alongside `index.html` and `programs/`) into `_site/`; the
+  public users of the demo, and AI coding tools that fetch `llms.txt`.
 
 ## Implementation Status
 
@@ -169,6 +183,7 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 |------|--------|-------|
 | WASM build of the VM core + WozLib + SD | Shipped | `web/build.ps1`, Emscripten 6.0.1. |
 | Canvas video + keyboard | Shipped | text/lo-res/hi-res, `$C000` input. |
+| USB/Bluetooth gamepads | Shipped | Two stable player slots through the standard Gamepad API and shared SNES/VIA peripheral; covered by browser-mapping, serial-protocol, and ROM-table tests. |
 | Disk II WOZ boot + micro-SD DOS shell | Shipped | **Boot Disk** / **Mount SD** buttons. |
 | In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; ~11 samples; `?src=`. Sample sources fetched with `cache:"no-cache"` (revalidate) so a new deploy isn't masked by the browser cache. |
 | Program downloads (.PRG / .woz) | Shipped | **Download .PRG** (raw bytes) + **Download .woz** (bootable WOZ2 via `wozgen.mjs`, a port of `dsk2woz2`, with a multi-track boot loader); verified by `web/test_woz_download.cjs`. |
@@ -180,5 +195,5 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 | Support / funding link | Shipped | GitHub Sponsors call-to-action in the `index.html`/`gallery.html` footers; target declared in `.github/FUNDING.yml`. |
 | Adjustable CPU clock | Shipped | frontend-only pacing; native **1× ≈ 1.57 MHz** (25.175 MHz VGA dot clock ÷ 16) default. |
 | Slot-4 Mockingboard audio | Shipped | User-gesture AudioWorklet sink for the shared dual-AY stereo PCM; sound enabled only at 1x. |
-| Headless smoke tests | Shipped | `web/test_*.cjs` (boot/render/keyboard/screen/sd/disk). |
+| Headless smoke tests | Shipped | `web/test_*.cjs` (boot/render/input/audio/screen/sd/disk). |
 | GitHub Pages CI deploy | Shipped | on push to `main` touching emulator/web/codegen sources. |
