@@ -11,7 +11,7 @@
 - [ ] **Contract verified** — field names, types, and casing match between the server contract and the client.
 - [ ] **Tests pass** — existing tests pass; new behaviour is covered by at least one test.
 - [ ] **Only relevant files staged** — no accidental config, build output, or unrelated changes.
-- [ ] **Second-model review** — for code/spec/config PRs, both reviewers were run, findings triaged, and the review block added (see `docs/CODE-REVIEW-PANEL.md`). Prose/typo PRs are exempt.
+- [ ] **Second-model review** — for code/spec/config PRs, both reviewers were run, findings triaged, required review-cost decisions were raised with estimates before editing, and the review block was added (see `docs/CODE-REVIEW-PANEL.md`). Prose/typo PRs are exempt.
 
 ## Second-model review
 
