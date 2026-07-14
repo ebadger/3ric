@@ -94,4 +94,4 @@ node codegen/tools/jungle.test.mjs
 - **W / Up / Space** — jump; while swinging, release the vine.
 - **S / Down** — duck under bats and brake precisely.
 - **SNES D-pad + A/B** — equivalent controls on real hardware.
-- **Space or pad Start/A/B** — begin or restart.
+- **Space or pad Start/A/B** — begin; after an end screen, release then press to restart.

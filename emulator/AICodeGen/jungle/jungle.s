@@ -264,6 +264,7 @@ main:
         jmp main
 main_over:
         jsr show_end_msg
+        jsr wait_release
         jsr wait_start
         jmp newgame
 
@@ -301,6 +302,19 @@ show_title:
         jsr wait_start
         rts
 
+; wait_release : discard the last keyboard event and wait for pad start controls
+;   to come up, so a held jump cannot erase the end screen immediately.
+wait_release:
+        lda KBD
+        bpl wr_pad
+        lda KBDSTRB
+        bra wait_release
+wr_pad:
+        lda PTRIG
+        jsr pad_start_pressed
+        bcs wait_release
+        rts
+
 ; wait_start : SPACE or a valid real-hardware pad START/A/B press.
 wait_start:
         lda KBD
@@ -312,17 +326,27 @@ wait_start:
         beq ws_done
 ws_pad:
         lda PTRIG
+        jsr pad_start_pressed
+        bcc wait_start
+ws_done:
+        rts
+
+; pad_start_pressed : carry set only for a valid START/A/B pad state.
+pad_start_pressed:
         lda GAMEPAD1+PAD_LEFT
         and GAMEPAD1+PAD_RIGHT
-        bne wait_start          ; impossible state: emulator placeholder
+        bne psp_none            ; impossible state: emulator placeholder
         lda GAMEPAD1+PAD_UP
         and GAMEPAD1+PAD_DOWN
-        bne wait_start
+        bne psp_none
         lda GAMEPAD1+PAD_START
         ora GAMEPAD1+PAD_A
         ora GAMEPAD1+PAD_B
-        beq wait_start
-ws_done:
+        beq psp_none
+        sec
+        rts
+psp_none:
+        clc
         rts
 
 ; draw_title_text : title / tagline / controls / prompt across the 4 HUD lines.
@@ -2808,6 +2832,15 @@ pad_brk:
         ldx #$FF
         txs
         jsr read_pad
+        brk
+
+startcheck_brk:
+        ldx #$FF
+        txs
+        jsr pad_start_pressed
+        lda #0
+        rol a
+        sta status_code
         brk
 
 init_brk:

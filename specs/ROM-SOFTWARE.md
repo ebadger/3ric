@@ -48,6 +48,7 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   - **Hardware controls:** SNES D-pad moves/ducks and A/B jumps via the ROM's
     `PTRIG`/`GAMEPAD1` contract. Impossible opposing directions reject the emulator's
     all-buttons-pressed placeholder state, so keyboard behavior remains unchanged in WASM.
+    End screens require the start controls to be released before a fresh restart press.
   - **World:** screen descriptors define up to two ground gaps, two raised platforms, one
     vine, a checkpoint, and a distinct moving threat. The route teaches a boulder jump,
     platform traversal, an active vine crossing, and ducking under a bat before combining
@@ -61,8 +62,8 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     score, time, lives, glyph progress, and contextual gate/status messages.
   Focused headless hooks verify renderer primitives, buffered/coyote jumps, platform and
   gap collision, duck-vs-bat behavior, item effects, checkpoint death, gate progression,
-  vine release, timer states, and final victory. The assembled image must end below the
-  hi-res page at `$2000`.
+  vine release, timer states, restart input gating, and final victory. The assembled image
+  must end below the hi-res page at `$2000`.
 - **Disk & card images:** demo `.woz` (staged from `emulator/WozFileTestApp/testdata/`);
   `emulator/Data/sd.zip` → `web/data/sd.sparse` FAT32 image (`WEB-CLIENT.md`).
 

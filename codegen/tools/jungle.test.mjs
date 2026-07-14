@@ -467,6 +467,21 @@ console.log("I) timer and emulator-safe gamepad guard");
     vm.peek(S.MOVETMR) === 0 && vm.peek(S.JUMPBUF) === 0,
     "impossible opposing pad inputs are ignored in the emulator",
   );
+
+  for (let i = 0; i < 16; i++) vm.poke(S.GAMEPAD1 + i, 0);
+  vm.poke(S.GAMEPAD1 + S.PAD_A, 1);
+  runHook(S.STARTCHECK_BRK, "held restart button");
+  const heldStart = vm.peek(S.STATUS_CODE);
+  vm.poke(S.GAMEPAD1 + S.PAD_A, 0);
+  runHook(S.STARTCHECK_BRK, "released restart button");
+  const releasedStart = vm.peek(S.STATUS_CODE);
+  for (let i = 0; i < 16; i++) vm.poke(S.GAMEPAD1 + i, 1);
+  runHook(S.STARTCHECK_BRK, "invalid restart pad");
+  const invalidStart = vm.peek(S.STATUS_CODE);
+  ok(
+    heldStart === 1 && releasedStart === 0 && invalidStart === 0,
+    "end-screen restart gate waits for release and rejects emulator placeholder input",
+  );
 }
 
 console.log("J) complete expedition is traversable with the documented verbs");
