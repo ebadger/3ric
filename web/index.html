@@ -848,6 +848,7 @@
       });
 
       canvas.addEventListener("keydown", (e) => {
+        if (BadgerVirtualKeyboard.isFocusEscape(e)) return;
         if (e.ctrlKey || e.metaKey || e.altKey) return;
         // Ignore OS key-repeat so a held key doesn't flood the queue; the ROM
         // re-reads the latched $C000 char until it touches $C010.

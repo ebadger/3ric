@@ -2,6 +2,7 @@ const assert = require("assert");
 const {
   KEY_ROWS,
   eventToByte,
+  isFocusEscape,
   isPointerActivation,
   keyByte,
   mount,
@@ -136,6 +137,9 @@ assert.strictEqual(eventToByte({ key: "a" }), 0x61);
 assert.strictEqual(eventToByte({ key: "F1" }), null);
 assert.strictEqual(isPointerActivation({ detail: 1 }), true);
 assert.strictEqual(isPointerActivation({ detail: 0 }), false);
+assert.strictEqual(isFocusEscape({ key: "Tab", shiftKey: true }), true);
+assert.strictEqual(isFocusEscape({ key: "Tab", shiftKey: false }), false);
+assert.strictEqual(isFocusEscape({ key: "Enter", shiftKey: true }), false);
 
 const document = new FakeDocument();
 const mountPoint = new FakeElement(document);

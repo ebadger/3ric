@@ -160,6 +160,10 @@
     return !!event && typeof event.detail === "number" && event.detail > 0;
   }
 
+  function isFocusEscape(event) {
+    return !!event && event.key === "Tab" && event.shiftKey === true;
+  }
+
   function mount(element, onByte, focusTarget) {
     if (!element || !element.ownerDocument) {
       throw new TypeError("virtual keyboard mount point must be a DOM element");
@@ -272,5 +276,5 @@
     updateModifiers();
   }
 
-  return { KEY_ROWS, eventToByte, isPointerActivation, keyByte, mount };
+  return { KEY_ROWS, eventToByte, isFocusEscape, isPointerActivation, keyByte, mount };
 });

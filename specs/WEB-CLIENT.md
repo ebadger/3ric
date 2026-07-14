@@ -141,7 +141,8 @@ client-side so GitHub Pages can host it as static files.
 - Pointer/touch activation returns focus to the canvas after expanding the panel or pressing
   any virtual key, preserving immediate physical-keyboard input. Keyboard and assistive-
   technology activation retains focus on the activated control so consecutive accessible
-  navigation is not interrupted.
+  navigation is not interrupted. While the canvas has focus, physical `Shift+Tab` remains a
+  browser focus-navigation escape instead of being consumed as emulator input.
 - Key labels meet normal-text contrast, and dense rows retain at least 24 CSS-pixel key
   widths. On narrower screens the complete 530 CSS-pixel keyboard matrix pans horizontally
   as one unit instead of shrinking targets or distorting the manual-derived key-width ratios;
