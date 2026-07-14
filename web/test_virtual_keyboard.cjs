@@ -152,6 +152,24 @@ assert(
   skipControlIndex < canvasIndex && canvasIndex < keyboardSummaryIndex,
   "skip control, emulator canvas, and virtual-keyboard summary must remain in focus order",
 );
+const phoneStylesIndex = pageHtml.indexOf("@media (max-width: 480px)");
+assert(phoneStylesIndex >= 0, "page must include phone-width styles");
+const phoneStyles = pageHtml.slice(phoneStylesIndex, pageHtml.indexOf("</style>", phoneStylesIndex));
+assert.match(
+  phoneStyles,
+  /#virtual-keyboard-keys\s*\{[^}]*overflow-x:\s*hidden;/s,
+  "phone keyboard must not scroll horizontally",
+);
+assert.match(
+  phoneStyles,
+  /\.vk-row\s*\{[^}]*min-width:\s*0;/s,
+  "phone keyboard rows must fit their container",
+);
+assert.match(
+  phoneStyles,
+  /#virtual-keyboard \.vk-key,\s*#virtual-keyboard \.vk-spacer\s*\{[^}]*min-width:\s*0;/s,
+  "phone key and spacer minimums must collapse so flex units can scale",
+);
 
 const document = new FakeDocument();
 const mountPoint = new FakeElement(document);
