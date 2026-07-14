@@ -76,7 +76,7 @@ them headlessly on the same WASM core. The "why" lives in `docs/MISSION.md`.
 |------|--------|
 | 65C02 CPU + memory map + soft switches | Shipped |
 | Text / lo-res / hi-res video rendering | Shipped |
-| Keyboard (`$C000`/`$C010`) + ACIA serial | Shipped |
+| Keyboard (`$C000`/`$C010`, physical + web virtual keyboard) + ACIA serial | Shipped |
 | Two SNES pads via VIA1 + browser Gamepad API | Shipped |
 | Disk II 5.25″ WOZ boot (self-booting machine-code disks) | Shipped |
 | Micro-SD FAT32 + ROM DOS shell | Shipped |
