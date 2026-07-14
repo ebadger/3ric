@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>3ric — Apple-II-clone 65C02 (WebAssembly)</title>
 <style>
-  :root { --bg:#0b0e0c; --fg:#33ff66; --dim:#1d6b33; --panel:#11140f; }
+  :root { --bg:#0b0e0c; --fg:#33ff66; --dim:#1d6b33; --panel:#11140f; --key-alt:#75bd89; }
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--bg); color: var(--fg);
@@ -42,16 +42,64 @@
   header .grp { display: flex; gap: 6px; align-items: center; }
   header .hint { color: var(--dim); font-size: 12px; }
   main { flex: 1; display: flex; gap: 16px; justify-content: center; align-items: flex-start; padding: 16px; flex-wrap: wrap; }
+  #emulator { position: relative; display: flex; flex: 0 1 640px; flex-direction: column; gap: 8px; width: 640px; max-width: 100%; }
+  .emulator-focus-exit {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  .emulator-focus-exit:focus {
+    z-index: 2; top: 8px; left: 8px; width: auto; height: auto; margin: 0;
+    padding: 6px 8px; overflow: visible; clip: auto; white-space: normal;
+    border: 1px solid var(--fg); border-radius: 3px; background: var(--bg);
+    color: var(--fg); font: 12px/1.2 "Cascadia Code", "Consolas", ui-monospace, monospace;
+  }
   #screen {
     /* Internal framebuffer is 320x384 (non-square pixels). A real Apple-II
        display is 4:3, so the canvas element is shown at 640x480 — the buffer is
        stretched to 4:3 exactly like the original CRT (2x horizontal, 1.25x
        vertical). */
-    width: 640px; height: 480px;
+    display: block; width: 100%; height: auto; aspect-ratio: 4 / 3;
     image-rendering: pixelated; image-rendering: crisp-edges;
     background: #000; border: 1px solid var(--dim); outline: none;
-    max-width: 100%;
   }
+  #virtual-keyboard { border: 1px solid var(--dim); border-radius: 4px; background: var(--panel); }
+  #virtual-keyboard summary {
+    padding: 7px 9px; cursor: pointer; color: var(--fg); font-size: 11px;
+    letter-spacing: .6px; touch-action: manipulation; user-select: none;
+  }
+  #virtual-keyboard[open] summary { border-bottom: 1px solid var(--dim); }
+  #virtual-keyboard .vk-summary-hint { float: right; color: var(--key-alt); letter-spacing: 0; }
+  #virtual-keyboard-keys {
+    display: flex; flex-direction: column; gap: 4px; padding: 8px;
+    overflow-x: auto; overscroll-behavior-inline: contain;
+    user-select: none; -webkit-user-select: none;
+  }
+  .vk-row { display: flex; gap: 4px; min-width: 530px; }
+  .vk-key {
+    display: flex; flex: 1 1 0; min-width: 24px; min-height: 40px; align-items: center;
+    justify-content: center; flex-direction: column; padding: 2px 0;
+    border: 0; border-radius: 4px; background: var(--bg); color: var(--fg);
+    box-shadow: inset 0 0 0 1px var(--dim);
+    font: 12px/1 "Cascadia Code", "Consolas", ui-monospace, monospace;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .vk-key:hover, .vk-key:active { background: #182119; }
+  .vk-key:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; }
+  .vk-key.delete { min-width: 52px; font-size: 9px; }
+  .vk-key.tab { min-width: 52px; font-size: 10px; }
+  .vk-key.control { min-width: 60px; font-size: 9px; }
+  .vk-key.return { min-width: 57px; font-size: 9px; }
+  .vk-key.shift { min-width: 72px; font-size: 10px; }
+  .vk-key.caps { font-size: 8px; line-height: 1.05; white-space: normal; }
+  .vk-key.space { min-width: 150px; }
+  .vk-key[aria-disabled="true"] { opacity: .68; cursor: not-allowed; }
+  .vk-spacer { flex: 1 1 0; min-width: 24px; }
+  .vk-key.is-active { background: var(--fg); color: var(--bg); box-shadow: inset 0 0 0 1px var(--fg); }
+  .vk-shifted { color: var(--key-alt); font-size: 9px; line-height: 1; }
+  .vk-primary { color: var(--fg); line-height: 1.05; }
+  .vk-shift-active .vk-shifted { color: var(--fg); }
+  .vk-shift-active .vk-primary { color: var(--key-alt); }
+  .vk-note { margin: 0; padding: 0 8px 8px; color: var(--key-alt); font-size: 10px; line-height: 1.3; }
   footer { padding: 8px 16px; border-top: 1px solid var(--dim); font-size: 11px; color: var(--dim); }
 
   /* --- in-browser assembler / editor ------------------------------------- */
@@ -87,6 +135,13 @@
     background: var(--panel); color: var(--fg); font-size: 12px; line-height: 1.4;
   }
   #ide .remix.show { display: block; }
+  @media (max-width: 480px) {
+    main { gap: 12px; padding: 8px; }
+    #virtual-keyboard-keys { gap: 3px; padding: 6px; }
+    .vk-row { gap: 3px; }
+    .vk-key { min-height: 38px; font-size: 11px; }
+    #ide { min-width: 0; }
+  }
 </style>
 <link rel="alternate" type="text/markdown" title="llms.txt — 65C02 codegen guide for AI tools" href="llms.txt" />
 </head>
@@ -120,7 +175,15 @@
     <span class="hint" id="status">loading wasm&hellip;</span>
   </header>
   <main>
-    <canvas id="screen" width="320" height="384" tabindex="0" aria-label="emulator video"></canvas>
+    <section id="emulator" aria-label="emulator">
+      <button id="skip-emulator-input" class="emulator-focus-exit" type="button">Skip emulator input</button>
+      <canvas id="screen" width="320" height="384" tabindex="0" aria-label="emulator video"></canvas>
+      <details id="virtual-keyboard">
+        <summary id="virtual-keyboard-summary">VIRTUAL KEYBOARD <span class="vk-summary-hint">1983 Apple IIe layout</span></summary>
+        <div id="virtual-keyboard-keys" role="group" aria-label="Virtual emulator keyboard"></div>
+        <p id="virtual-keyboard-caps-note" class="vk-note">Caps Lock is shown for layout fidelity; 3ric input is uppercase-only.</p>
+      </details>
+    </section>
     <section id="ide" aria-label="in-browser assembler">
       <div class="bar">
         <span class="title">ASSEMBLER</span>
@@ -174,7 +237,7 @@
     renders Apple-II text/hi-res to the canvas, feeds keystrokes through the memory-mapped keyboard ($C000),
     maps up to two USB/Bluetooth gamepads through the real SNES/VIA interface, and emulates the 3RIC
     slot-4 dual-AY Mockingboard in stereo.
-    Click the screen and type, or pair a controller and press a button. &ldquo;Boot Disk&rdquo; boots the bundled 5.25&Prime; floppy (or pick a .woz with
+    Click the screen and type, open the <strong>Virtual Keyboard</strong> on a phone, or pair a controller and press a button. &ldquo;Boot Disk&rdquo; boots the bundled 5.25&Prime; floppy (or pick a .woz with
     &ldquo;Insert&rdquo;) through the Disk&nbsp;II ROM at $C600. &ldquo;Mount SD&rdquo; enters the DOS shell
     (prompt &ldquo;&gt;&rdquo;) and lists the micro-SD card &mdash; load games and programs from there.
     &ldquo;Load .PRG&rdquo; loads a raw program image at the given hex address and runs it, exactly like
@@ -201,6 +264,7 @@
 
   <script src="emulation-clock.js"></script>
   <script src="gamepad.js"></script>
+  <script src="virtual-keyboard.js"></script>
   <script src="badger6502.js"></script>
   <script>
     // The 3ric clocks its 65C02 from the 25.175 MHz VGA dot clock divided by 16,
@@ -298,22 +362,6 @@
           .catch((err) => { console.error(err); sdLoading = null; return false; });
       }
       return sdLoading;
-    }
-
-    // Apple-II key codes. The bridge ORs in bit 7 and uppercases letters.
-    function keyToByte(e) {
-      switch (e.key) {
-        case "Enter":      return 0x0d;
-        case "Backspace":  return 0x08; // left arrow / BS
-        case "Tab":        return 0x09;
-        case "Escape":     return 0x1b;
-        case "ArrowLeft":  return 0x08;
-        case "ArrowRight": return 0x15;
-        case "ArrowUp":    return 0x0b;
-        case "ArrowDown":  return 0x0a;
-      }
-      if (e.key.length === 1) return e.key.charCodeAt(0) & 0x7f;
-      return null;
     }
 
     function updateRegs() {
@@ -800,12 +848,27 @@
       statusEl.textContent = "running";
       canvas.focus();
 
+      BadgerVirtualKeyboard.mount(
+        document.getElementById("virtual-keyboard-keys"),
+        (byte) => inputQueue.push(byte),
+        canvas,
+      );
+      const virtualKeyboardSummary = document.getElementById("virtual-keyboard-summary");
+      document.getElementById("skip-emulator-input").addEventListener("click", () => {
+        virtualKeyboardSummary.focus({ preventScroll: true });
+      });
+      virtualKeyboardSummary.addEventListener("click", (event) => {
+        if (!BadgerVirtualKeyboard.isPointerActivation(event)) return;
+        requestAnimationFrame(() => canvas.focus({ preventScroll: true }));
+      });
+
       canvas.addEventListener("keydown", (e) => {
+        if (BadgerVirtualKeyboard.isFocusEscape(e)) return;
         if (e.ctrlKey || e.metaKey || e.altKey) return;
         // Ignore OS key-repeat so a held key doesn't flood the queue; the ROM
         // re-reads the latched $C000 char until it touches $C010.
         if (e.repeat) { e.preventDefault(); return; }
-        const b = keyToByte(e);
+        const b = BadgerVirtualKeyboard.eventToByte(e);
         if (b !== null) { inputQueue.push(b); e.preventDefault(); }
       });
 

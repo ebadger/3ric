@@ -31,8 +31,9 @@ client-side so GitHub Pages can host it as static files.
   `renderFrame()` (RGBA framebuffer), `pc/sp/regA/regX/regY/status`, `sdReadCount()`.
 - **Compat shims (`web_compat.h`):** map MSVC-isms (`OutputDebugString`, `sprintf_s`,
   `fopen_s`, `_ASSERT`, …) onto Emscripten so `WozLib`/`MockMicroSD` compile unchanged.
-- **UI (`index.html`):** `requestAnimationFrame` driver, keyboard/gamepad, disk/SD/clock/sound
-  controls, and the in-browser **Assembler** panel (imports `assemble()` from the staged
+- **UI (`index.html`):** `requestAnimationFrame` driver, physical/virtual keyboard and gamepad
+  input, disk/SD/clock/sound controls, and the in-browser **Assembler** panel (imports
+  `assemble()` from the staged
   `asm6502.mjs`). Honors optional `window.ASSET_BASE` / `?assets=` for CDN/R2 offload and
   `?src=` / `?prg=` / `?code=` deep links, plus a **Share** button that builds a one-click
   link to the current editor program. The sample-source loads (the **sample** dropdown and
@@ -40,6 +41,16 @@ client-side so GitHub Pages can host it as static files.
   against Pages instead of serving a stale `max-age=600` copy — a freshly deployed program
   shows up on the next selection without a hard refresh. (There is no service worker, and
   GitHub Pages purges its CDN on every deploy, so the revalidation returns the new source.)
+- **Mobile virtual keyboard (`virtual-keyboard.js` + `index.html`):** a collapsed
+  `<details>` panel directly below the emulator canvas renders the five-row keyboard from
+  the **1983 Apple IIe Owner's Manual, Figure 2-1**, without invoking the phone's incomplete
+  software keyboard. Key order and relative widths match that diagram, including Delete,
+  dual Shift, Caps Lock, the separate grave/tilde key, the wide space bar, and arrows ordered
+  left/right/down/up. Reset and the Open/Solid Apple keys are intentionally omitted; blank
+  bottom-row spacers preserve the remaining keys' physical positions. One-shot Shift and
+  Control modifiers complete the emulator's character set. Key buttons enqueue the same
+  7-bit bytes as physical `keydown` events; the frame driver remains the single writer to
+  `keyDown()` and waits for the `$C000` strobe to clear before delivering each byte.
 - **Browser gamepads (`gamepad.js` + `index.html`):** the frame driver polls the standard
   Gamepad API before running the CPU, keeps the first two connected devices in stable player
   slots, maps each to the 12-button SNES mask, and calls `setGamepadState()` for both slots.
@@ -118,6 +129,32 @@ client-side so GitHub Pages can host it as static files.
   a pad releases every button immediately; reconnecting fills the first free player slot.
   The shared VM, not JavaScript, performs the SNES latch/clock protocol and active-low VIA
   input behavior.
+- The virtual keyboard is collapsed by default so it does not displace the emulator or
+  assembler until requested. Shift and Control are one-shot touchscreen modifiers: tapping
+  either toggles its pressed state, and the next non-modifier key consumes both.
+  Control uses conventional ASCII control mappings (`@`/letters/`[` through `_`, plus
+  `?` for DEL). The bridge still uppercases alphabetic input to match the native host and
+  ROM, so the virtual keycaps show uppercase letters. The IIe Caps Lock key is displayed in
+  its physical position but disabled with an explicit uppercase-only label; it does not fake
+  a lowercase mode the bridge cannot deliver. Both the virtual IIe Delete key and a physical
+  keyboard's Delete key emit ASCII DEL (`$7F`).
+- Pointer/touch activation returns focus to the canvas after expanding the panel or pressing
+  any virtual key, preserving immediate physical-keyboard input. Keyboard and assistive-
+  technology activation retains focus on the activated control so consecutive accessible
+  navigation is not interrupted. While the canvas has focus, physical `Shift+Tab` remains a
+  browser focus-navigation escape instead of being consumed as emulator input. A focus-only
+  **Skip emulator input** control immediately before the canvas moves focus to the virtual-
+  keyboard summary, so forward keyboard navigation can bypass the canvas without sacrificing
+  the emulator's unmodified Tab key.
+- Key labels meet normal-text contrast, and dense rows retain at least 24 CSS-pixel key
+  widths. On narrower screens the complete 530 CSS-pixel keyboard matrix pans horizontally
+  as one unit instead of shrinking targets or distorting the manual-derived key-width ratios;
+  the space bar retains its Figure 2-1 position within that matrix. Ratios digitized from the
+  manual crop, normalized to a standard key, are Delete/Tab 1.58, Control 1.86, Return 1.87,
+  left/right Shift 2.48/2.38, and Space 5.86. Every row uses the same key height.
+- The Caps Lock key's uppercase-only limitation is both visible beneath the keys and associated
+  with the focusable `aria-disabled` key, so touch and assistive-technology users do not depend
+  on a hover-only tooltip.
 - **Parity is the rule:** the WASM build must behave like the native build. Do not add
   behavior in the bridge that isn't in the shared core unless it's a genuinely
   presentation-only concern (canvas, clock pacing) — and never behind an unguarded fork.
@@ -158,7 +195,8 @@ client-side so GitHub Pages can host it as static files.
 `build.ps1 → badger6502.js/.wasm + data/ → index.html loads WASM → boot recipe (loadData /
 seedBasicRom / loadFont / reset) → Gamepad API→gamepad.js mapping→setGamepadState()→shared
 SNES/VIA peripheral; elapsed-time budget→runCycles() per frame →
-renderFrame()→canvas, drainOutput()→log, drainAudio()→AudioWorklet→speakers; keyDown()→$C000;
+renderFrame()→canvas, drainOutput()→log, drainAudio()→AudioWorklet→speakers; canvas keydown or
+virtual-keyboard button→shared input queue→strobe-clear frame→keyDown()→$C000;
 Boot Disk/Mount SD →
 insertDisk()/loadSD() → C600G / EC5CG`.
 
@@ -173,9 +211,10 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
   generator, a JS port of `emulator/dsk2woz2`). The `.woz` boot loader depends on the `$C600`
   P5 boot PROM contract (`ROM-SOFTWARE.md`) and the Disk II phase-stepping model (`EMULATOR.md`).
 - **Downstream:** GitHub Pages deploy (`.github/workflows/deploy-pages.yml`) — its **Stage
-  site** step stages `gamepad.js` + `gallery.html` + `gallery.json` + `story.html` + `llms.txt`
-  + `robots.txt` + `sitemap.xml` (alongside `index.html` and `programs/`) into `_site/`; the
-  public users of the demo, and AI coding tools that fetch `llms.txt`.
+  site** step stages `gamepad.js` + `virtual-keyboard.js` + `gallery.html` + `gallery.json`
+  + `story.html` + `llms.txt` + `robots.txt` + `sitemap.xml` (alongside `index.html` and
+  `programs/`) into `_site/`; the public users of the demo, and AI coding tools that fetch
+  `llms.txt`.
 
 ## Implementation Status
 
@@ -183,6 +222,7 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 |------|--------|-------|
 | WASM build of the VM core + WozLib + SD | Shipped | `web/build.ps1`, Emscripten 6.0.1. |
 | Canvas video + keyboard | Shipped | text/lo-res/hi-res, `$C000` input. |
+| Mobile virtual keyboard | Shipped | Exact 1983 Apple IIe Figure 2-1 key order/widths below the canvas, minus Reset and both Apple keys; full emulator character set, one-shot Shift/Control, and the same strobe-aware `$C000` queue as physical input. |
 | USB/Bluetooth gamepads | Shipped | Two stable player slots through the standard Gamepad API and shared SNES/VIA peripheral; covered by browser-mapping, serial-protocol, and ROM-table tests. |
 | Disk II WOZ boot + micro-SD DOS shell | Shipped | **Boot Disk** / **Mount SD** buttons. |
 | In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; ~11 samples; `?src=`. Sample sources fetched with `cache:"no-cache"` (revalidate) so a new deploy isn't masked by the browser cache. |

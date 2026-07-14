@@ -16,7 +16,9 @@ identically. Browser-only presentation code stays in the bridge and JavaScript.
 - Hi-res color, lo-res color, and 40×24 text rendering — ported verbatim from
   the WinUI host renderer (`MainWindow.xaml.cpp`) into the bridge so the color /
   fringe logic is identical.
-- Keyboard input via the Apple-II `$C000` / `$C010` strobe mechanism.
+- Keyboard input via the Apple-II `$C000` / `$C010` strobe mechanism, including a
+  collapsible touch keyboard matching the 1983 Apple IIe layout (minus Reset and
+  both Apple keys) for phones.
 - **Two gamepads** through the standard browser Gamepad API. USB and Bluetooth
   devices use the same path after OS pairing; the shared VM serializes them as real
   SNES pads through VIA1 and the unmodified ROM fills `GAMEPAD1/2`.
@@ -47,6 +49,7 @@ identically. Browser-only presentation code stays in the bridge and JavaScript.
 | --- | --- |
 | `web_bridge.cpp` | embind bridge: wraps `VM`, exposes load/run/keyboard/gamepad/registers/audio, drives the SD card, and produces the RGBA framebuffer. |
 | `gamepad.js` | Dependency-free standard-layout browser controller mapping and stable two-player assignment. |
+| `virtual-keyboard.js` | Touch-keyboard layout, one-shot Shift/Control state, physical-key mapping, and DOM renderer. |
 | `emulation-clock.js` | Elapsed-time cycle pacer that keeps finite CPU speeds independent of display refresh rate and carries instruction overshoot between frames. |
 | `audio-worklet.js` | Stereo PCM queue on the browser audio-rendering thread; no `SharedArrayBuffer` or cross-origin isolation required. |
 | `web_compat.h` | Tiny shims so `WozLib` + `MockMicroSD`'s MSVC-isms (`OutputDebugString`, `sprintf_s`, `swprintf_s`, `fopen_s`, `_ASSERT`, …) compile under Emscripten. |
@@ -103,8 +106,9 @@ cd web
 .\serve.ps1            # python -m http.server 8011
 ```
 
-Open <http://localhost:8011/index.html>, click the canvas, and type. Press
-**Boot Disk** to boot the bundled 5.25″ floppy, or **Insert .woz…** to boot one
+Open <http://localhost:8011/index.html>, click the canvas and type, or expand
+**Virtual Keyboard** below the screen to use its full symbol and arrow layout on a phone.
+Press **Boot Disk** to boot the bundled 5.25″ floppy, or **Insert .woz…** to boot one
 of your own WOZ images. Press **Mount SD** to mount the micro-SD card and enter
 the DOS shell — it runs the monitor command `EC5CG` (Go to `$EC5C`, the `dos`
 routine) which mounts the FAT32 image and prints a `>` prompt, then auto-runs

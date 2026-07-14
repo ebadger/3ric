@@ -36,6 +36,12 @@ the primary model — that would destroy the model diversity this whole procedur
    reason** for not fixing (e.g. "false positive — X is validated upstream at Y").
    - **Reviewers can be wrong too** — verify a claimed bug against ground truth (the spec,
      the schema, the actual API) and **override with a cited reason** when they're mistaken.
+   - **Apply the review-cost gate before editing:** escalate every **BLOCK**, regardless of
+     cost, and any non-blocking finding the primary recommends fixing when the projected
+     end-to-end engineering cost is **more than one minute**. Give ebadger all proposed
+     options, an estimate for each (implementation, validation, and required re-review), and
+     the primary's recommendation; wait for the decision. Sub-minute non-blocking fixes may
+     proceed autonomously.
    - **If your fixes change the diff materially, re-run both reviewers** until they raise
      no new BLOCK/HIGH findings. The diff you ship must be the diff that was reviewed.
 4. **Record the summary in the PR body** (format below) so the review is visible at a glance.
@@ -59,9 +65,10 @@ model reviews on a typo. **When in doubt, run the panel.**
 
 ### Disagreement protocol
 
-- If a reviewer raises a **BLOCK** you disagree with, write **one** rebuttal in the PR
-  body. If still unresolved, **escalate to ebadger** — do not silently override a BLOCK and
-  do not loop the reviewers indefinitely.
+- Escalate **every BLOCK before making a review-driven code change**. Include fix/punt/
+  override options, end-to-end estimates, and the primary's recommendation. If the primary
+  disagrees with the finding, include one evidence-backed rebuttal; ebadger makes the call.
+  Do not silently override a BLOCK or loop the reviewers indefinitely.
 - If the two reviewers disagree with each other, treat the stricter finding as the default
   and note the split for ebadger.
 

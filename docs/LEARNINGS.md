@@ -53,6 +53,11 @@ call. WHY: instruction files changed mid-session aren't in context until re-read
 any `git reset --hard`/branch change re-read `LEARNINGS.md`, `MISSION.md`,
 `copilot-instructions.md`. **Auto-merge exceptions** are narrow, markdown-only paths
 (e.g. `docs/learnings/` per `learnings/README.md`); everything else needs a PR + approval.
+For review feedback, ask ebadger before acting on every **BLOCK**, and before any recommended
+non-blocking fix projected to take more than one minute. Present every proposed option with
+an end-to-end engineering estimate and a recommendation, then wait for the call. Sub-minute
+non-blocking fixes remain autonomous. WHY: protect mission-clock work from review churn while
+keeping consequential tradeoffs human-owned.
 
 **§6. Always check PR state before pushing.** `git fetch origin main` then
 `gh pr view <n> --json state`; if **MERGED**, branch fresh off `origin/main`
