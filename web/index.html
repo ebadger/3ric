@@ -168,7 +168,7 @@
         <option value="max">Max</option>
       </select></span>
     <button id="sound" type="button" aria-pressed="false"
-      title="Enable the slot-4 dual-AY Mockingboard at native 1x speed">Enable Sound</button>
+      title="Enable the system speaker and slot-4 Mockingboard at native 1x speed">Enable Sound</button>
     <span class="regs" id="regs">PC:---- A:-- X:-- Y:-- SP:-- P:--</span>
     <span class="regs" id="mode">mode:---</span>
     <span class="hint" id="gamepads">gamepads: detecting&hellip;</span>
@@ -235,8 +235,8 @@
   <footer>
     65C02 emulator core (C++) + WozLib compiled to WebAssembly via Emscripten. Boots the real 512KB ROM,
     renders Apple-II text/hi-res to the canvas, feeds keystrokes through the memory-mapped keyboard ($C000),
-    maps up to two USB/Bluetooth gamepads through the real SNES/VIA interface, and emulates the 3RIC
-    slot-4 dual-AY Mockingboard in stereo.
+    maps up to two USB/Bluetooth gamepads through the real SNES/VIA interface, and emulates both
+    the $C030 system speaker and 3RIC slot-4 dual-AY Mockingboard.
     Click the screen and type, open the <strong>Virtual Keyboard</strong> on a phone, or pair a controller and press a button. &ldquo;Boot Disk&rdquo; boots the bundled 5.25&Prime; floppy (or pick a .woz with
     &ldquo;Insert&rdquo;) through the Disk&nbsp;II ROM at $C600. &ldquo;Mount SD&rdquo; enters the DOS shell
     (prompt &ldquo;&gt;&rdquo;) and lists the micro-SD card &mdash; load games and programs from there.
@@ -424,13 +424,13 @@
       soundButton.setAttribute("aria-pressed", soundRequested ? "true" : "false");
       if (!soundRequested) {
         soundButton.textContent = "Enable Sound";
-        soundButton.title = "Enable the slot-4 dual-AY Mockingboard at native 1x speed";
+        soundButton.title = "Enable the system speaker and slot-4 Mockingboard at native 1x speed";
       } else if (speedMul !== 1) {
         soundButton.textContent = "Sound Paused";
-        soundButton.title = "Mockingboard audio is available at native 1x speed";
+        soundButton.title = "System-speaker and Mockingboard audio is available at native 1x speed";
       } else {
         soundButton.textContent = "Disable Sound";
-        soundButton.title = "Disable Mockingboard audio";
+        soundButton.title = "Disable system-speaker and Mockingboard audio";
       }
     }
 

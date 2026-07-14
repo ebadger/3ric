@@ -12,8 +12,9 @@
 schematics, a custom PCB, and 22V10 GAL address-decode logic) plus a cycle-honest **C++
 emulator** of the same machine. The emulator also compiles to **WebAssembly**, so the exact
 same VM core boots the real 512 KB ROM in any browser — text/lo-res/hi-res video on a
-canvas, keyboard and USB/Bluetooth gamepad input, a Disk II 5.25″ floppy, and a bit-banged
-micro-SD card. A small Node **codegen** toolchain assembles 65C02 programs and validates
+canvas, keyboard and USB/Bluetooth gamepad input, the `$C030` system speaker, a slot-4
+Mockingboard, a Disk II 5.25″ floppy, and a bit-banged micro-SD card. A small Node
+**codegen** toolchain assembles 65C02 programs and validates
 them headlessly on the same WASM core. The "why" lives in `docs/MISSION.md`.
 
 ## Architecture at a glance
@@ -25,7 +26,7 @@ them headlessly on the same WASM core. The "why" lives in `docs/MISSION.md`.
    Emulator core — 65C02 VM in C++  (emulator/Badger6502VMLib)
      ├─ WozLib       — Disk II 5.25" floppy (.woz)        ┐ shared sources,
      ├─ MockMicroSD  — bit-banged SPI FAT32 card          ├ guarded for both
-     └─ video / keyboard / SNES pads / ACIA / VIA         ┘ native + WASM
+     └─ video / keyboard / speaker / SNES / ACIA / VIA   ┘ native + WASM
                  │                              │
    native hosts (Windows/WinUI,        Emscripten bridge (web/web_bridge.cpp)
    Console) via Badger6502VM.sln                │
@@ -78,6 +79,7 @@ them headlessly on the same WASM core. The "why" lives in `docs/MISSION.md`.
 | Text / lo-res / hi-res video rendering | Shipped |
 | Keyboard (`$C000`/`$C010`, physical + web virtual keyboard) + ACIA serial | Shipped |
 | Two SNES pads via VIA1 + browser Gamepad API | Shipped |
+| System speaker (`$C030`) | Shipped |
 | Disk II 5.25″ WOZ boot (self-booting machine-code disks) | Shipped |
 | Micro-SD FAT32 + ROM DOS shell | Shipped |
 | Slot-4 dual-AY Mockingboard | Shipped |

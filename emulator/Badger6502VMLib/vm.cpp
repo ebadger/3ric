@@ -74,6 +74,15 @@ void VM::Reset()
 	_lores = false;
 	_nmiPending = false;
 	_via1IRQAsserted = false;
+	_speakerLevel = false;
+	_audioSampleAccumulator = 0;
+	_audio.clear();
+	_speakerDcSum = 0.0f;
+	_speakerDcPosition = 0;
+	for (float& sample : _speakerDcBuffer)
+	{
+		sample = 0.0f;
+	}
 
 	_cpu->Reset();
 	_acia->Reset();
@@ -126,6 +135,7 @@ void VM::TickDevices(uint32_t cycles)
 		_gamepads->UpdatePortB(_via1->GetPortBOutput());
 		UpdateVIA1NMI();
 		_mockingboard->Tick();
+		TickAudio();
 	}
 }
 
@@ -192,6 +202,85 @@ Mockingboard* VM::GetMockingboard()
 	return _mockingboard;
 }
 
+bool VM::EnableAudio(uint32_t sampleRate)
+{
+	if (sampleRate < 8000 || sampleRate > 192000)
+	{
+		return false;
+	}
+
+	_audioEnabled = true;
+	_audioSampleRate = sampleRate;
+	_audioSampleAccumulator = 0;
+	_audio.clear();
+	_audio.reserve((size_t)sampleRate / 5);
+
+	const float speakerInput = _speakerLevel ? 1.0f : 0.0f;
+	_speakerDcSum = speakerInput * (float)SPEAKER_DC_BUFFER_LENGTH;
+	_speakerDcPosition = 0;
+	for (float& sample : _speakerDcBuffer)
+	{
+		sample = speakerInput;
+	}
+	return true;
+}
+
+void VM::DisableAudio()
+{
+	_audioEnabled = false;
+	_audioSampleRate = 0;
+	_audioSampleAccumulator = 0;
+	_audio.clear();
+}
+
+std::vector<float> VM::DrainAudio()
+{
+	std::vector<float> result;
+	result.swap(_audio);
+	if (_audioEnabled)
+	{
+		_audio.reserve((size_t)_audioSampleRate / 5);
+	}
+	return result;
+}
+
+float VM::SampleSpeaker()
+{
+	const float input = _speakerLevel ? 1.0f : 0.0f;
+	_speakerDcSum -= _speakerDcBuffer[_speakerDcPosition];
+	_speakerDcSum += input;
+	_speakerDcBuffer[_speakerDcPosition] = input;
+	_speakerDcPosition =
+		(_speakerDcPosition + 1) & (SPEAKER_DC_BUFFER_LENGTH - 1);
+	return (input - (_speakerDcSum / (float)SPEAKER_DC_BUFFER_LENGTH))
+		* SPEAKER_GAIN;
+}
+
+void VM::TickAudio()
+{
+	if (!_audioEnabled)
+	{
+		return;
+	}
+
+	_audioSampleAccumulator += (uint64_t)_audioSampleRate * PHI2_DIVISOR;
+	if (_audioSampleAccumulator < VGA_DOT_CLOCK_HZ)
+	{
+		return;
+	}
+
+	_audioSampleAccumulator -= VGA_DOT_CLOCK_HZ;
+	const size_t maximumSamples = (size_t)_audioSampleRate * 2;
+	if (_audio.size() + 2 > maximumSamples)
+	{
+		return;
+	}
+
+	const float speaker = SampleSpeaker();
+	_audio.push_back(_mockingboard->Sample(0) + speaker);
+	_audio.push_back(_mockingboard->Sample(1) + speaker);
+}
+
 void VM::SetTestMode(bool mode)
 {
 	_testmode = mode;
@@ -224,6 +313,10 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 
 	case MM_SS_JOYSTICK:
 		SignalVIA1Pin(VIA::CB2);
+		break;
+
+	case MM_SS_SPEAKER:
+		_speakerLevel = !_speakerLevel;
 		break;
 
 	case MM_SS_GRAPHICS:
@@ -372,7 +465,7 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 	{
 		if (CallbackSetSoftSwitches)
 		{
-			if (address != 0xC070 && address != 0xC030) // skip joystick and speaker for now
+			if (address != MM_SS_JOYSTICK)
 			{
 				CallbackSetSoftSwitches(address, _graphics, _page2, _mixed, _lores);
 			}

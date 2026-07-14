@@ -16,8 +16,6 @@ void Mockingboard::Reset()
 		_resetAsserted[channel] = false;
 		_ayBusMode[channel] = 0;
 	}
-	_sampleAccumulator = 0;
-	_audio.clear();
 }
 
 size_t Mockingboard::ChannelForAddress(uint16_t address) const
@@ -96,23 +94,6 @@ void Mockingboard::Tick()
 			_ay[channel].Tick();
 		}
 	}
-
-	if (!_audioEnabled)
-	{
-		return;
-	}
-
-	_sampleAccumulator += (uint64_t)_sampleRate * PHI2_DIVISOR;
-	if (_sampleAccumulator >= VGA_DOT_CLOCK_HZ)
-	{
-		_sampleAccumulator -= VGA_DOT_CLOCK_HZ;
-		const size_t maximumSamples = (size_t)_sampleRate * 2;
-		if (_audio.size() + 2 <= maximumSamples)
-		{
-			_audio.push_back(_ay[0].Sample());
-			_audio.push_back(_ay[1].Sample());
-		}
-	}
 }
 
 bool Mockingboard::IRQAsserted() const
@@ -120,37 +101,9 @@ bool Mockingboard::IRQAsserted() const
 	return _via[0].IRQAsserted() || _via[1].IRQAsserted();
 }
 
-bool Mockingboard::EnableAudio(uint32_t sampleRate)
+float Mockingboard::Sample(size_t channel)
 {
-	if (sampleRate < 8000 || sampleRate > 192000)
-	{
-		return false;
-	}
-
-	_audioEnabled = true;
-	_sampleRate = sampleRate;
-	_sampleAccumulator = 0;
-	_audio.clear();
-	_audio.reserve((size_t)sampleRate / 5);
-	return true;
-}
-
-void Mockingboard::DisableAudio()
-{
-	_audioEnabled = false;
-	_sampleAccumulator = 0;
-	_audio.clear();
-}
-
-std::vector<float> Mockingboard::DrainAudio()
-{
-	std::vector<float> result;
-	result.swap(_audio);
-	if (_audioEnabled)
-	{
-		_audio.reserve((size_t)_sampleRate / 5);
-	}
-	return result;
+	return channel < CHANNEL_COUNT ? _ay[channel].Sample() : 0.0f;
 }
 
 VIA* Mockingboard::GetVIA(size_t channel)

@@ -53,12 +53,13 @@ $2000-$5FFF  hi-res video (page 1 $2000, page 2 $4000)
 $9000-$BFFF  BASIC ROM (generic Microsoft BASIC, not Applesoft)
 $C000        keyboard data (bit7 = strobe)
 $C010        keyboard strobe clear
+$C030        system speaker toggle (any read or write access)
 $C050-$C057  display soft switches (gfx/text, page, mixed, lo/hi-res)
 $C0E0-$C0EF  Disk II
 $C100-$C10F  ACIA (6551) serial  <-- writing the data reg emits a byte to drainOutput()
 $C200-$C20F  VIA1 (bit-banged SPI micro-SD lives here)
 $C300-$C30F  ROM disk / char-gen control
-$C400        audio
+$C400-$C4FF  slot-4 dual-AY Mockingboard audio
 $C600-$C6FF  Disk II boot PROM
 $C800-$CFFF  RAM2
 $D000-$FFFF  ROM / monitor / OS / DOS shell

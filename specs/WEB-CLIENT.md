@@ -10,8 +10,9 @@
 ## Purpose
 
 Boot the real 512 KB ROM in any browser: render Apple-II text/lo-res/hi-res video to a
-`<canvas>`, feed keyboard and standard Gamepad API input through the machine's real input
-paths, run Disk II and micro-SD images, and assemble/run 65C02 source client-side — all 100%
+`<canvas>`, play the `$C030` system speaker and slot-4 Mockingboard, feed keyboard and
+standard Gamepad API input through the machine's real input paths, run Disk II and
+micro-SD images, and assemble/run 65C02 source client-side — all 100%
 client-side so GitHub Pages can host it as static files.
 
 ## Contracts / Interfaces
@@ -27,12 +28,14 @@ client-side so GitHub Pages can host it as static files.
   `loadFont(bytes)`, `loadSD(bytes)`, `insertDisk(drive, bytes)`, `reset()`, `run(maxSteps)`,
   `runCycles(cycleBudget)`, `setPC`, `poke/peek`, `keyDown(code)`, `drainOutput()` (serial),
   `setGamepadState(index, pressedMask)`,
-  `enableAudio(sampleRate)`, `disableAudio()`, `drainAudio()` (interleaved Float32 stereo PCM),
+  `enableAudio(sampleRate)`, `disableAudio()`, `drainAudio()` (interleaved Float32 stereo PCM:
+  centered system speaker summed with hard-panned Mockingboard AY channels),
   `renderFrame()` (RGBA framebuffer), `pc/sp/regA/regX/regY/status`, `sdReadCount()`.
 - **Compat shims (`web_compat.h`):** map MSVC-isms (`OutputDebugString`, `sprintf_s`,
   `fopen_s`, `_ASSERT`, …) onto Emscripten so `WozLib`/`MockMicroSD` compile unchanged.
 - **UI (`index.html`):** `requestAnimationFrame` driver, physical/virtual keyboard and gamepad
-  input, disk/SD/clock/sound controls, and the in-browser **Assembler** panel (imports
+  input, disk/SD/clock/sound controls (one opt-in control for both system-speaker and
+  Mockingboard output), and the in-browser **Assembler** panel (imports
   `assemble()` from the staged
   `asm6502.mjs`). Honors optional `window.ASSET_BASE` / `?assets=` for CDN/R2 offload and
   `?src=` / `?prg=` / `?code=` deep links, plus a **Share** button that builds a one-click
@@ -119,12 +122,15 @@ client-side so GitHub Pages can host it as static files.
   displays. A wall-clock execution cap keeps the tab responsive; **Max** remains unthrottled
   within that cap. Timing debt is reset after a machine reset, speed change, or hidden-tab
   transition rather than replaying a stale wall-clock interval.
-- Sound is opt-in because browsers require a user gesture to start `AudioContext`.
+- Sound is opt-in because browsers require a user gesture to start `AudioContext`. The
+  bridge drains the VM's combined stream: `$C030` is centered mono and the two AYs retain
+  their left/right placement.
   `audio-worklet.js` consumes transferable Float32 chunks from the bridge without requiring
   `SharedArrayBuffer` or cross-origin isolation. It prebuffers a short bounded lead before
   playback, renders without per-sample allocation, and discards only the oldest queued frames
   if a stalled producer exceeds the latency bound. Sound is generated only at 1x speed;
-  changing speed mutes and flushes PCM while the emulated VIA/AY state continues to advance.
+  changing speed mutes and flushes PCM while the speaker latch and emulated VIA/AY state
+  continue to advance.
 - Gamepad state is sampled once per rendered frame, independently of CPU speed. Disconnecting
   a pad releases every button immediately; reconnecting fills the first free player slot.
   The shared VM, not JavaScript, performs the SNES latch/clock protocol and active-low VIA
@@ -195,7 +201,8 @@ client-side so GitHub Pages can host it as static files.
 `build.ps1 → badger6502.js/.wasm + data/ → index.html loads WASM → boot recipe (loadData /
 seedBasicRom / loadFont / reset) → Gamepad API→gamepad.js mapping→setGamepadState()→shared
 SNES/VIA peripheral; elapsed-time budget→runCycles() per frame →
-renderFrame()→canvas, drainOutput()→log, drainAudio()→AudioWorklet→speakers; canvas keydown or
+renderFrame()→canvas, drainOutput()→log, `$C030` + AYs→VM mixer→drainAudio()→AudioWorklet→
+speakers; canvas keydown or
 virtual-keyboard button→shared input queue→strobe-clear frame→keyDown()→$C000;
 Boot Disk/Mount SD →
 insertDisk()/loadSD() → C600G / EC5CG`.
@@ -234,6 +241,7 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 | `llms.txt` discoverability | Shipped | `<link rel="alternate">` + footer links in `index.html`/`gallery.html`; `robots.txt` + `sitemap.xml` staged (advisory on the project-page root; authoritative under a custom domain). |
 | Support / funding link | Shipped | GitHub Sponsors call-to-action in the `index.html`/`gallery.html` footers; target declared in `.github/FUNDING.yml`. |
 | Adjustable CPU clock | Shipped | frontend-only pacing; native **1× ≈ 1.57 MHz** (25.175 MHz VGA dot clock ÷ 16) default. |
-| Slot-4 Mockingboard audio | Shipped | User-gesture AudioWorklet sink for the shared dual-AY stereo PCM; sound enabled only at 1x. |
+| `$C030` system speaker audio | Shipped | Centered mono output shares the VM PCM clock and browser sound control with the Mockingboard; covered by `test_system_speaker.cjs`. |
+| Slot-4 Mockingboard audio | Shipped | User-gesture AudioWorklet sink for the combined speaker/dual-AY stereo PCM; sound enabled only at 1x. |
 | Headless smoke tests | Shipped | `web/test_*.cjs` (boot/render/input/audio/screen/sd/disk). |
 | GitHub Pages CI deploy | Shipped | on push to `main` touching emulator/web/codegen sources. |

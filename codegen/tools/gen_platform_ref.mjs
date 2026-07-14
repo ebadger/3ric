@@ -110,6 +110,7 @@ const REGION_KEYS = [
 const SOFTSWITCH_KEYS = [
   ["MM_SS_KEYBOARD", "Keyboard data (bit7 = key-ready strobe)"],
   ["MM_SS_KEYBD_STROBE", "Clear the keyboard strobe"],
+  ["MM_SS_SPEAKER", "Toggle the system speaker (any read or write access)"],
   ["MM_SS_GRAPHICS", "Switch to graphics"],
   ["MM_SS_TEXT", "Switch to text"],
   ["MM_SS_FULLSCREEN", "Full-screen (clear mixed)"],

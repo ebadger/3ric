@@ -5,14 +5,10 @@
 
 #include <array>
 #include <cstdint>
-#include <vector>
 
 class Mockingboard
 {
 public:
-	static constexpr uint32_t VGA_DOT_CLOCK_HZ = 25175000;
-	static constexpr uint32_t PHI2_DIVISOR = 16;
-
 	Mockingboard();
 
 	void Reset();
@@ -20,10 +16,7 @@ public:
 	void Write(uint16_t address, uint8_t data);
 	void Tick();
 	bool IRQAsserted() const;
-
-	bool EnableAudio(uint32_t sampleRate);
-	void DisableAudio();
-	std::vector<float> DrainAudio();
+	float Sample(size_t channel);
 
 	VIA* GetVIA(size_t channel);
 	const AY38910* GetAY(size_t channel) const;
@@ -39,9 +32,4 @@ private:
 	std::array<AY38910, CHANNEL_COUNT> _ay;
 	std::array<bool, CHANNEL_COUNT> _resetAsserted = { false, false };
 	std::array<uint8_t, CHANNEL_COUNT> _ayBusMode = { 0, 0 };
-
-	bool _audioEnabled = false;
-	uint32_t _sampleRate = 0;
-	uint64_t _sampleAccumulator = 0;
-	std::vector<float> _audio;
 };
