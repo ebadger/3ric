@@ -30,12 +30,12 @@
       "tags": ["shooter", "hi-res", "game"]
     },
     {
-      "title": "Jungle",
+      "title": "Jungle Quest: Sunstone Run",
       "author": "3ric",
       "authorUrl": "https://github.com/ebadger/3ric",
       "mode": "Hi-res",
       "src": "programs/jungle.s",
-      "description": "Jungle platformer — dash through hazards, leap pits, grab the treasure, and beat the clock.",
+      "description": "Six-screen jungle platformer — master jumps, duck bats, release a vine, recover four glyphs, and open the Sun Temple.",
       "tags": ["platformer", "hi-res", "game"]
     },
     {

@@ -1,12 +1,15 @@
 ; ============================================================================
-; JUNGLE QUEST  -  an original jungle-platformer for the 3ric
+; JUNGLE QUEST: THE SUNSTONE RUN
+;                 an original action-platformer for the 3ric
 ;                 (65C02, Apple-II compatible)
 ;
-; An original game inspired by the classic jungle-runner genre: dash through a
-; hazard-filled jungle, leap the pits, hop the hazards, grab the treasure and
-; beat the clock.  All art, levels, name and code are original.
+; Six authored screens build a compact adventure out of a small verb set:
+; run, jump, duck, climb, grab and release.  Recover four glyphs, open the
+; temple, and claim the Sunstone before the expedition clock expires.  Fruit is
+; optional but rewards risk with points and time.  Death restarts the current
+; challenge instead of discarding all progress.
 ;
-; This file is built up in tested milestones.  M1 lays the hi-res engine:
+; The renderer uses:
 ;   * mixed hi-res mode (160px graphics + 4 text rows of HUD)
 ;   * 192-entry hi-res row-address table   (ROWL/ROWH at $6000/$6100)
 ;   * pixel-plot + sprite blit (OR draw)   with one x/7 divide per sprite
@@ -24,6 +27,16 @@ LOWSCR   = $C054        ; display page 1
 HIRES_SW = $C057        ; hi-res
 KBD      = $C000        ; keyboard data (bit7 = key ready)
 KBDSTRB  = $C010        ; clear keyboard strobe
+PTRIG    = $C070        ; refresh ROM SNES-pad table (real hardware)
+JOYMODE  = $CE15        ; 0 = SNES pads
+GAMEPAD1 = $CEE0        ; one byte per button, 1 = pressed
+PAD_B    = 0
+PAD_START = 3
+PAD_UP   = 4
+PAD_DOWN = 5
+PAD_LEFT = 6
+PAD_RIGHT = 7
+PAD_A    = 8
 
 ; ---- memory map ----
 SCREEN   = $2000        ; hi-res page 1 (displayed)   $2000-$3FFF
@@ -38,8 +51,7 @@ TLINE21  = $06D0
 TLINE22  = $0750
 TLINE23  = $07D0
 
-; ---- persistent game state (absolute RAM at $6200, above the row tables;
-;      pristine RAM, so it survives the monitor's BRK handler in test hooks) --
+; ---- persistent game state (absolute RAM at $6200, above the row tables) ----
 STATE    = $6200
 px_lo    = STATE+0      ; player x (pixels, 16-bit 0..279)
 px_hi    = STATE+1
@@ -48,11 +60,11 @@ yfrac    = STATE+3      ; fractional part of y (8.8 fixed point with py)
 vy_lo    = STATE+4      ; vertical velocity, signed 16-bit 8.8 px/frame
 vy_hi    = STATE+5
 facing   = STATE+6      ; 0 = right, 1 = left
-pstate   = STATE+7      ; 0 stand/run, 2 jump/fall, 3 dead
+pstate   = STATE+7      ; reserved for future animation states
 onground = STATE+8      ; 1 = standing on ground
 movetmr  = STATE+9      ; frames left of a horizontal move impulse
 movedir  = STATE+10     ; 0 = right, 1 = left
-jumpreq  = STATE+11     ; jump requested this frame
+jumpreq  = STATE+11     ; raw jump edge this frame
 lives    = STATE+12
 opx_lo   = STATE+13     ; previous drawn x (for erase)
 opx_hi   = STATE+14
@@ -61,72 +73,113 @@ ocol     = STATE+16     ; previous drawn byte column
 score0   = STATE+17     ; BCD score (6 digits, little-endian pairs)
 score1   = STATE+18
 score2   = STATE+19
-timeL    = STATE+20     ; countdown timer
+timeL    = STATE+20     ; reserved
 timeH    = STATE+21
-seedL    = STATE+22     ; RNG state
+seedL    = STATE+22
 seedH    = STATE+23
-hz_x_lo  = STATE+24     ; rolling-log hazard x (16-bit)
+hz_x_lo  = STATE+24     ; moving threat x (16-bit)
 hz_x_hi  = STATE+25
-hz_dir   = STATE+26     ; reserved (roll direction)
-olog_lo  = STATE+27     ; previous drawn log x (for erase)
-olog_hi  = STATE+28
-olog_y   = STATE+29
-olog_col = STATE+30
+hz_dir   = STATE+26     ; 0 right, 1 left
+ohz_lo   = STATE+27     ; previous drawn threat position
+ohz_hi   = STATE+28
+ohz_y    = STATE+29
+ohz_col  = STATE+30
 gamestate = STATE+31    ; 0 play, 1 win, 2 game over, 3 time up
-tsec     = STATE+32     ; countdown seconds shown in the HUD
+tsec     = STATE+32     ; countdown units shown in the HUD
 tframe   = STATE+33     ; frame subcounter for the timer
-trleft   = STATE+34     ; treasures still to collect (whole world)
+itemleft = STATE+34     ; active items (diagnostic / tests)
 curscr   = STATE+35     ; current jungle screen (0..NSCR-1)
-hz_active = STATE+36    ; 1 = a rolling log patrols this screen
+hz_type  = STATE+36     ; current threat kind
 flipreq  = STATE+37     ; 0 none, 1 = go to next screen, $FF = previous
-cur_plc  = STATE+38     ; this screen's pit: left byte column
-cur_prc  = STATE+39     ; this screen's pit: right byte column (exclusive)
-vine_on  = STATE+40     ; 1 = this screen has a swingable vine (M7)
+gap1_l   = STATE+38     ; ground gaps use byte-column [left,right)
+gap1_r   = STATE+39
+vine_on  = STATE+40     ; 1 = this screen has a swingable vine
 vine_x   = STATE+41     ; vine anchor x (pixels)
 onvine   = STATE+42     ; 1 = player currently riding the vine
 vphase   = STATE+43     ; vine swing phase index
-; world-wide treasure table (NT entries, tagged by screen)
-tr_x     = STATE+48     ; treasure x positions (<256)
-tr_y     = STATE+54     ; treasure y positions
-tr_on    = STATE+60     ; active flags
-tr_scr   = STATE+66     ; which screen each treasure lives on
+gap2_l   = STATE+44
+gap2_r   = STATE+45
+plat1_l  = STATE+46     ; raised platform descriptors (byte columns + top y)
+plat1_r  = STATE+47
+plat1_y  = STATE+48
+plat2_l  = STATE+49
+plat2_r  = STATE+50
+plat2_y  = STATE+51
+spawn_lo = STATE+52     ; checkpoint x for this screen
+spawn_hi = STATE+53
+coyote   = STATE+54     ; grace frames after leaving a ledge
+jumpbuf  = STATE+55     ; buffered jump frames
+ducktmr  = STATE+56     ; duck / brake latch
+invuln   = STATE+57     ; post-respawn collision grace
+prevpy   = STATE+58     ; y before integration (platform crossing test)
+anim     = STATE+59     ; global animation phase
+glyphs   = STATE+60     ; mandatory glyph count (0..4)
+status_code = STATE+61  ; transient HUD message selector
+status_tmr = STATE+62
+pad_jump = STATE+63     ; gamepad jump edge latch
+hz_min   = STATE+64
+hz_max   = STATE+65
+hz_spd   = STATE+66
+hz_y     = STATE+67
+hz_w     = STATE+68
+hz_h     = STATE+69
+
+; world-wide item table (NITEM entries, tagged by screen and kind)
+item_x   = STATE+96
+item_y   = STATE+107
+item_on  = STATE+118
+item_scr = STATE+129
+item_kind = STATE+140
 
 ; ---- gameplay constants ----
-RUNSPEED = 2            ; px / frame
-MOVE_HOLD = 8           ; frames a key-press keeps you moving (bridges auto-repeat)
+RUNSPEED = 3            ; px / frame
+MOVE_HOLD = 14          ; one browser key event creates a useful run impulse
+PAD_HOLD = 2            ; refreshed while a real D-pad direction is held
+DUCK_HOLD = 10          ; duck is also the keyboard brake
+COYOTE_MAX = 4
+JUMPBUF_MAX = 5
 PLAYER_W = 12
 PLAYER_FEET = 14        ; foot line = py + PLAYER_FEET
 GROUND_TOP = 136        ; top pixel row of the ground band
 STAND_Y  = 122          ; GROUND_TOP - PLAYER_FEET
 DEATH_Y  = 170          ; falling past this = death
-SPAWN_X  = 20
 XMAX     = 267          ; 279 - PLAYER_W
-NSCR     = 4            ; number of flip-screens in the world
+NSCR     = 6            ; number of flip-screens in the expedition
 ENTER_L  = 4            ; x when entering a screen from the left edge
 ENTER_R  = 263          ; x when entering a screen from the right edge (XMAX-4)
-; GRAV = +$0030 (0.1875 px/frame^2), JUMP_V = -$0300, TERMV = +$0300
+TEMPLE_SCREEN = 4       ; right edge is gated until all glyphs are found
+FINAL_SCREEN = 5
+GLYPH_GOAL = 4
+; GRAV = +$0030 (0.1875 px/frame^2), JUMP_V = -$0380, TERMV = +$0300
 GRAV_LO  = $30
 GRAV_HI  = $00
-JUMP_LO  = $00
-JUMP_HI  = $FD          ; -$0300
+JUMP_LO  = $80
+JUMP_HI  = $FC          ; -$0380
 TERM_LO  = $00
 TERM_HI  = $03
-; rolling-log hazard (rolls along the left platform, forcing timed jumps)
-LOG_W    = 16
-LOG_H    = 8
-LOG_Y    = 128          ; sits on the ground band (bottom at row 136)
-LOG_SPD  = 2
-LOG_MAX  = 152          ; right end of its run; wraps back here at the left edge
-; treasures, timer, scoring
-NT       = 6            ; number of treasures across the whole world
-TR_W     = 8
-TR_H     = 10
-TR_VAL_M = $20          ; +2000 (BCD) per treasure, added to score byte 1
-TSEC0    = 60           ; starting countdown value
-TICK     = 12           ; frames per countdown tick
-; swingable vine (lets the hero cross the wide pit on screen 1)
+; threat and item kinds (suffixes avoid the assembler's case-insensitive names)
+HZ_NONE_KIND = 0
+HZ_BOULDER_KIND = 1
+HZ_SNAKE_KIND = 2
+HZ_BAT_KIND = 3
+NITEM    = 11
+ITEM_FRUIT_KIND = 0
+ITEM_GLYPH_KIND = 1
+ITEM_SUN_KIND = 2
+ITEM_W   = 8
+ITEM_H   = 10
+FRUIT_SCORE_M = $05     ; +500 BCD
+GLYPH_SCORE_M = $20     ; +2000 BCD
+SUN_SCORE_M = $50       ; +5000 BCD
+FRUIT_TIME = 5
+TSEC0    = 90           ; starting countdown value
+TICK     = 24           ; gameplay frames per displayed clock unit
+DEATH_TIME = 5
+RESPAWN_GRACE = 20
+STATUS_HOLD = 28
+; swingable vine
 GRAB_R   = 16           ; grab if |centre_x - vine_x| <= this and airborne
-SWING_VX = 3            ; px / frame the vine carries you to the right
+SWING_VX = 4            ; px / frame the vine carries you to the right
 VINE_Y0  = STAND_Y-20   ; body-top y at the top of the swing arc
 SWING_HALF = 16         ; arc peaks (lowest point) at this frame...
 SWING_FULL = 32         ; ...and folds back down by this frame
@@ -159,6 +212,7 @@ er_y     = $1E          ; rect-erase: top row
 er_wb    = $1F          ; rect-erase: width in bytes
 er_h     = $20          ; rect-erase: height in rows
 ti       = $21          ; loop index passed to helpers
+fillv    = $22          ; background rectangle fill byte
 
         .org $0800
 
@@ -170,6 +224,7 @@ start:
         cld
         ldx #$FF
         txs
+        stz JOYMODE             ; prior programs may have selected mouse mode
         lda TXTCLR              ; graphics on
         lda MIXSET              ; mixed mode (text HUD at bottom)
         lda LOWSCR              ; page 1
@@ -187,47 +242,39 @@ newgame:
         jsr draw_scene          ; static scene into BG, then copy to screen
         jsr draw_hud
         jsr init_render         ; seed prev-position + first player blit
+        jsr draw_items
 main:
         lda gamestate
         bne main_over
         jsr read_input
+        jsr read_pad
         jsr update_player
-        jsr update_log
-        jsr collide_log
-        jsr collect_treasures
+        jsr update_hazard
+        jsr collide_hazard
+        jsr collect_items
         jsr tick_timer
+        jsr tick_status
+        inc anim
         jsr render_player
-        jsr render_log
-        jsr draw_treasures
+        jsr render_hazard
+        jsr draw_items
         jsr update_hud
         jsr frame_delay
         jmp main
 main_over:
         jsr show_end_msg
-        lda KBD
-        bpl mo_wait
-        tax
-        lda KBDSTRB
-        txa
-        cmp #$A0                ; SPACE restarts
-        beq mo_restart
-mo_wait:
-        jsr frame_delay
-        jmp main
-mo_restart:
+        jsr wait_start
         jmp newgame
 
 ; ---------------------------------------------------------------------------
-; show_title : attract screen.  Paints a screen-1 backdrop (ground, pit, vine)
-;   with a hero and a gem for flavour, prints the title text, and waits for
-;   SPACE before returning to start a new game.
+; show_title : temple backdrop, hero + Sunstone, then keyboard/pad start.
 ; ---------------------------------------------------------------------------
 show_title:
-        lda #1                  ; borrow the screen-1 backdrop (it has a vine)
+        lda #FINAL_SCREEN
         sta curscr
         jsr set_screen_vars
-        jsr draw_scene          ; ground + pit + vine into the hi-res page
-        lda #40                 ; a hero standing on the left ledge
+        jsr draw_scene
+        lda #42
         sta sx_lo
         lda #0
         sta sx_hi
@@ -238,26 +285,43 @@ show_title:
         lda #>hero
         sta sprptr+1
         jsr draw_sprite
-        lda #236                ; a gem glinting on the right ledge
+        lda #180
         sta sx_lo
         lda #0
         sta sx_hi
-        lda #118
+        lda #84
         sta sy
-        lda #<gem_spr
+        lda #<sun_spr
         sta sprptr
-        lda #>gem_spr
+        lda #>sun_spr
         sta sprptr+1
         jsr draw_sprite
         jsr draw_title_text
-st_wait:
+        jsr wait_start
+        rts
+
+; wait_start : SPACE or a valid real-hardware pad START/A/B press.
+wait_start:
         lda KBD
-        bpl st_wait
+        bpl ws_pad
         tax
-        lda KBDSTRB             ; clear the strobe
+        lda KBDSTRB
         txa
-        cmp #$A0                ; wait specifically for SPACE
-        bne st_wait
+        cmp #$A0
+        beq ws_done
+ws_pad:
+        lda PTRIG
+        lda GAMEPAD1+PAD_LEFT
+        and GAMEPAD1+PAD_RIGHT
+        bne wait_start          ; impossible state: emulator placeholder
+        lda GAMEPAD1+PAD_UP
+        and GAMEPAD1+PAD_DOWN
+        bne wait_start
+        lda GAMEPAD1+PAD_START
+        ora GAMEPAD1+PAD_A
+        ora GAMEPAD1+PAD_B
+        beq wait_start
+ws_done:
         rts
 
 ; draw_title_text : title / tagline / controls / prompt across the 4 HUD lines.
@@ -305,15 +369,9 @@ draw_title_text:
         rts
 
 ; ---------------------------------------------------------------------------
-; init_state : starting player position / lives / physics vars
+; init_state : reset run-wide state, items, and the first screen checkpoint.
 ; ---------------------------------------------------------------------------
 init_state:
-        lda #<SPAWN_X
-        sta px_lo
-        lda #>SPAWN_X
-        sta px_hi
-        lda #STAND_Y
-        sta py
         lda #0
         sta yfrac
         sta vy_lo
@@ -323,78 +381,123 @@ init_state:
         sta movetmr
         sta movedir
         sta jumpreq
-        lda #1
-        sta onground
-        lda #3
-        sta lives
-        lda #<LOG_MAX           ; rolling log starts at the right of its run
-        sta hz_x_lo
-        lda #>LOG_MAX
-        sta hz_x_hi
-        lda #1
-        sta hz_dir
-        lda #0                  ; reset score / timer / game state
+        sta jumpbuf
+        sta coyote
+        sta ducktmr
+        sta invuln
+        sta anim
+        sta glyphs
+        sta status_code
+        sta status_tmr
+        sta pad_jump
         sta score0
         sta score1
         sta score2
         sta tframe
         sta gamestate
-        sta curscr              ; start in the first jungle screen
+        sta curscr
         sta flipreq
         sta onvine
+        lda #1
+        sta onground
+        lda #3
+        sta lives
         lda #TSEC0
         sta tsec
-        jsr init_treasures
-        jsr set_screen_vars     ; cur_plc/cur_prc/hz_active + log position
+        jsr init_items
+        jsr set_screen_vars
+        lda spawn_lo
+        sta px_lo
+        lda spawn_hi
+        sta px_hi
+        lda #STAND_Y
+        sta py
         rts
 
-; init_treasures : lay out the world's gems (tagged with the screen they sit on).
-init_treasures:
+; init_items : copy immutable world data into the mutable item table.
+init_items:
         ldx #0
-it_loop:
-        lda tr_x0,x
-        sta tr_x,x
-        lda tr_y0,x
-        sta tr_y,x
-        lda tr_scr0,x
-        sta tr_scr,x
+ii_loop:
+        lda item_x0,x
+        sta item_x,x
+        lda item_y0,x
+        sta item_y,x
+        lda item_scr0,x
+        sta item_scr,x
+        lda item_kind0,x
+        sta item_kind,x
         lda #1
-        sta tr_on,x
+        sta item_on,x
         inx
-        cpx #NT
-        bne it_loop
-        lda #NT
-        sta trleft
+        cpx #NITEM
+        bne ii_loop
+        lda #NITEM
+        sta itemleft
         rts
 
-; set_screen_vars : load the current screen's pit / hazard / vine descriptor
-; and reset the rolling log to the right end of its run.
+; set_screen_vars : load terrain, checkpoint, vine, and threat descriptors.
 set_screen_vars:
         ldx curscr
-        lda scr_plc,x
-        sta cur_plc
-        lda scr_prc,x
-        sta cur_prc
-        lda scr_hz,x
-        sta hz_active
+        lda scr_g1l,x
+        sta gap1_l
+        lda scr_g1r,x
+        sta gap1_r
+        lda scr_g2l,x
+        sta gap2_l
+        lda scr_g2r,x
+        sta gap2_r
+        lda scr_p1l,x
+        sta plat1_l
+        lda scr_p1r,x
+        sta plat1_r
+        lda scr_p1y,x
+        sta plat1_y
+        lda scr_p2l,x
+        sta plat2_l
+        lda scr_p2r,x
+        sta plat2_r
+        lda scr_p2y,x
+        sta plat2_y
+        lda scr_spawn,x
+        sta spawn_lo
+        lda #0
+        sta spawn_hi
         lda scr_vine,x
         sta vine_on
         lda scr_vx,x
         sta vine_x
-        lda #<LOG_MAX
+        lda scr_hztype,x
+        sta hz_type
+        lda scr_hzmin,x
+        sta hz_min
+        lda scr_hzmax,x
+        sta hz_max
         sta hz_x_lo
-        lda #>LOG_MAX
+        lda #0
         sta hz_x_hi
+        lda scr_hzspd,x
+        sta hz_spd
+        lda scr_hzy,x
+        sta hz_y
+        lda scr_hzw,x
+        sta hz_w
+        lda scr_hzh,x
+        sta hz_h
+        lda #1
+        sta hz_dir
         lda #0
         sta onvine
+        sta invuln
         rts
 
-; load_screen : rebuild the whole playfield for the current screen index.
+; load_screen : rebuild the current screen and its HUD.
 load_screen:
         jsr set_screen_vars
         jsr clear_screen
         jsr clear_bg
         jsr draw_scene
+        jsr draw_hud
+        jsr draw_items
         rts
 
 ; flip_screen : cross to the neighbouring screen (flipreq: 1 next, $FF prev),
@@ -421,6 +524,8 @@ fs_common:
         sta vy_lo
         sta vy_hi
         sta movetmr
+        sta ducktmr
+        sta jumpbuf
         lda #STAND_Y
         sta py
         lda #1
@@ -435,8 +540,6 @@ init_render:
         sta opx_lo
         lda px_hi
         sta opx_hi
-        lda py
-        sta opy
         lda px_lo
         sta x_lo
         lda px_hi
@@ -445,30 +548,30 @@ init_render:
         lda col
         sta ocol
         jsr draw_player
-        lda hz_active           ; only prime/draw the log if this screen has one
+        lda py                  ; 16-row physics box covers every player pose
+        sta opy
+        lda hz_type
         beq ir_done
-        lda hz_x_lo             ; prime log prev-position + draw it once
-        sta olog_lo
+        lda hz_x_lo
+        sta ohz_lo
         lda hz_x_hi
-        sta olog_hi
-        lda #LOG_Y
-        sta olog_y
+        sta ohz_hi
+        lda hz_y
+        sta ohz_y
         lda hz_x_lo
         sta x_lo
         lda hz_x_hi
         sta x_hi
         jsr div7
         lda col
-        sta olog_col
-        jsr draw_log
+        sta ohz_col
+        jsr draw_hazard
 ir_done:
         rts
 
 ; ---------------------------------------------------------------------------
-; read_input : poll the keyboard, set the move/jump latches for this frame.
-;   left  = left-arrow ($88) or A ($C1)
-;   right = right-arrow ($95) or D ($C4)
-;   jump  = space ($A0), up-arrow ($8B) or W ($D7)
+; read_input : keyboard events become short action latches.  That lets a single
+; browser keydown carry motion while a later jump/duck event remains responsive.
 ; ---------------------------------------------------------------------------
 read_input:
         lda #0
@@ -492,6 +595,10 @@ read_input:
         beq ri_jump
         cmp #$D7
         beq ri_jump
+        cmp #$8A
+        beq ri_duck
+        cmp #$D3
+        beq ri_duck
         bne ri_done
 ri_left:
         lda #1
@@ -508,28 +615,133 @@ ri_right:
 ri_jump:
         lda #1
         sta jumpreq
+        lda #JUMPBUF_MAX
+        sta jumpbuf
+        lda #0
+        sta ducktmr
+        bra ri_done
+ri_duck:
+        lda #DUCK_HOLD
+        sta ducktmr
+        lda #0                  ; duck doubles as a precise brake
+        sta movetmr
 ri_done:
         rts
 
 ; ---------------------------------------------------------------------------
-; update_player : one step of physics (jump, gravity, movement, collision).
+; read_pad : continuous controls on real hardware.  Reject opposing directions;
+; the emulator's unmodelled pad reports all buttons and is therefore ignored.
+; ---------------------------------------------------------------------------
+read_pad:
+        lda PTRIG
+        lda GAMEPAD1+PAD_LEFT
+        and GAMEPAD1+PAD_RIGHT
+        bne rpad_done
+        lda GAMEPAD1+PAD_UP
+        and GAMEPAD1+PAD_DOWN
+        bne rpad_done
+        lda GAMEPAD1+PAD_LEFT
+        beq rpad_right
+        lda #1
+        sta movedir
+        lda #PAD_HOLD
+        sta movetmr
+rpad_right:
+        lda GAMEPAD1+PAD_RIGHT
+        beq rpad_down
+        lda #0
+        sta movedir
+        lda #PAD_HOLD
+        sta movetmr
+rpad_down:
+        lda GAMEPAD1+PAD_DOWN
+        beq rpad_jumpcheck
+        lda #PAD_HOLD
+        sta ducktmr
+        lda #0
+        sta movetmr
+rpad_jumpcheck:
+        lda GAMEPAD1+PAD_UP
+        ora GAMEPAD1+PAD_A
+        ora GAMEPAD1+PAD_B
+        beq rpad_release
+        lda pad_jump
+        bne rpad_done
+        lda #1
+        sta pad_jump
+        sta jumpreq
+        lda #JUMPBUF_MAX
+        sta jumpbuf
+        lda #0
+        sta ducktmr
+        rts
+rpad_release:
+        lda #0
+        sta pad_jump
+rpad_done:
+        rts
+
+; ---------------------------------------------------------------------------
+; update_player : buffered/coyote jump, movement, 8.8 gravity, terrain collision.
 ; ---------------------------------------------------------------------------
 update_player:
-        lda onvine              ; already swinging on a vine? follow the arc
+        lda invuln
+        beq up_duck
+        dec invuln
+up_duck:
+        lda ducktmr
+        beq up_grace
+        dec ducktmr
+up_grace:
+        lda onground
+        beq up_decaygrace
+        lda #COYOTE_MAX
+        sta coyote
+        bra up_vine
+up_decaygrace:
+        lda coyote
+        beq up_vine
+        dec coyote
+up_vine:
+        lda onvine
         beq up_notvine
+        lda jumpbuf             ; Jump actively releases the vine
+        beq up_swing
+        lda #0
+        sta onvine
+        sta jumpbuf
+        sta yfrac
+        sta movedir             ; release keeps rightward momentum
+        lda #10
+        sta movetmr
+        lda #$80
+        sta vy_lo
+        lda #$FD                ; -$0280, enough to risk the bonus fruit
+        sta vy_hi
+        rts
+up_swing:
         jsr vine_swing
         rts
 up_notvine:
-        lda jumpreq             ; start a jump only when standing
+        lda jumpbuf
         beq up_nojump
         lda onground
-        beq up_nojump
+        bne up_jump
+        lda coyote
+        beq up_agejump
+up_jump:
         lda #JUMP_LO
         sta vy_lo
         lda #JUMP_HI
         sta vy_hi
         lda #0
         sta onground
+        sta coyote
+        sta jumpbuf
+        sta ducktmr
+        bra up_nojump
+up_agejump:
+        dec jumpbuf
 up_nojump:
         lda movetmr             ; horizontal move impulse
         beq up_nomove
@@ -546,6 +758,8 @@ up_nomove:
         jsr flip_screen         ; cross to the neighbour, rebuild, redraw
         rts                     ; fresh screen: resume physics next frame
 up_nofl:
+        lda py
+        sta prevpy
         clc                     ; y (8.8) += vy
         lda yfrac
         adc vy_lo
@@ -591,6 +805,13 @@ try_grab_vine:
         bne tg_no               ; already swinging
         lda onground
         bne tg_no               ; must be airborne
+        lda py                  ; body must overlap the visible rope
+        cmp #VINE_BOT
+        bcs tg_no
+        clc
+        adc #PLAYER_FEET
+        cmp #VINE_TOP+1
+        bcc tg_no
         clc                     ; centre x = px + 6
         lda px_lo
         adc #6
@@ -631,8 +852,8 @@ tg_no:
         rts
 
 ; ---------------------------------------------------------------------------
-; vine_swing : one frame on the vine.  Slide right SWING_VX px, follow a shallow
-;   pendulum arc, and let go once we clear the pit (or on a jump / timeout).
+; vine_swing : carry right along a shallow pendulum arc.  Jump can release early;
+; reaching the far bank releases automatically so the crossing stays forgiving.
 ; ---------------------------------------------------------------------------
 vine_swing:
         clc                     ; carry the hero rightward across the pit
@@ -672,7 +893,7 @@ vs_pos:
         sta x_hi
         jsr div7
         lda col
-        cmp cur_prc
+        cmp gap1_r
         bcs vs_release          ; over solid ground on the far side -> drop
         lda vphase
         cmp #SWING_MAX
@@ -687,9 +908,8 @@ vs_hold:
         rts
 
 ; ---------------------------------------------------------------------------
-; check_ground : land the player if falling onto solid ground; else airborne.
-;   Ground exists everywhere except the pit x-range [PIT_L, PIT_R], tested at
-;   the player's horizontal centre (px + 6).
+; check_ground : land on either raised platform or solid ground.  Platforms are
+; one-way: the previous and current foot positions must cross their top.
 ; ---------------------------------------------------------------------------
 check_ground:
         clc                     ; centre x = px + 6
@@ -700,23 +920,80 @@ check_ground:
         adc #0
         sta x_hi
         jsr div7                ; col = centre / 7
-        lda col
-        cmp cur_plc
-        bcc cg_ground           ; col < pit-left  -> solid ground
-        cmp cur_prc
-        bcs cg_ground           ; col >= pit-right -> solid ground
-        lda #0                  ; over the pit -> no ground
-        sta onground
-        rts
-cg_ground:
         lda vy_hi
-        bmi cg_done             ; rising -> not landing yet
+        bpl cg_falling
+        jmp cg_air              ; rising: pass upward through platforms
+cg_falling:
+
+        lda plat1_l
+        cmp plat1_r
+        beq cg_p2
+        lda col
+        cmp plat1_l
+        bcc cg_p2
+        cmp plat1_r
+        bcs cg_p2
+        lda prevpy
+        clc
+        adc #PLAYER_FEET
+        cmp plat1_y
+        bcc cg_p1new
+        bne cg_p2
+cg_p1new:
+        lda py
+        clc
+        adc #PLAYER_FEET
+        cmp plat1_y
+        bcc cg_p2
+        lda plat1_y
+        jmp cg_land
+
+cg_p2:
+        lda plat2_l
+        cmp plat2_r
+        beq cg_groundcheck
+        lda col
+        cmp plat2_l
+        bcc cg_groundcheck
+        cmp plat2_r
+        bcs cg_groundcheck
+        lda prevpy
+        clc
+        adc #PLAYER_FEET
+        cmp plat2_y
+        bcc cg_p2new
+        bne cg_groundcheck
+cg_p2new:
+        lda py
+        clc
+        adc #PLAYER_FEET
+        cmp plat2_y
+        bcc cg_groundcheck
+        lda plat2_y
+        jmp cg_land
+
+cg_groundcheck:
+        lda col
+        cmp gap1_l
+        bcc cg_gap2
+        cmp gap1_r
+        bcc cg_air
+cg_gap2:
+        lda col
+        cmp gap2_l
+        bcc cg_ground
+        cmp gap2_r
+        bcc cg_air
+cg_ground:
         lda py
         clc
         adc #PLAYER_FEET
         cmp #GROUND_TOP
-        bcc cg_air              ; feet still above the ground
-        lda #STAND_Y            ; land
+        bcc cg_air
+        lda #GROUND_TOP
+cg_land:
+        sec
+        sbc #PLAYER_FEET
         sta py
         lda #0
         sta yfrac
@@ -728,7 +1005,6 @@ cg_ground:
 cg_air:
         lda #0
         sta onground
-cg_done:
         rts
 
 ; move_right / move_left : shift px by RUNSPEED, clamp to [0, XMAX], set facing.
@@ -750,6 +1026,18 @@ move_right:
         cmp #<XMAX+1
         bcc mr_ok               ; px <= XMAX
 mr_over:
+        lda curscr
+        cmp #TEMPLE_SCREEN
+        bne mr_world
+        lda glyphs
+        cmp #GLYPH_GOAL
+        bcs mr_world
+        lda #3                  ; gate message; stay at the ruins edge
+        sta status_code
+        lda #STATUS_HOLD
+        sta status_tmr
+        bra mr_clamp
+mr_world:
         lda curscr
         cmp #NSCR-1
         bcs mr_clamp            ; last screen -> clamp at world edge
@@ -788,7 +1076,8 @@ ml_clamp:
 ml_ok:
         rts
 
-; player_die : lose a life and respawn at the start (game-over screen is M8).
+; player_die : keep run progress, but charge a life and five clock units before
+; respawning at this screen's checkpoint with brief collision grace.
 player_die:
         dec lives
         bne pd_respawn
@@ -796,9 +1085,21 @@ player_die:
         sta gamestate
         rts
 pd_respawn:
-        lda #<SPAWN_X
+        lda tsec
+        cmp #DEATH_TIME+1
+        bcs pd_timeok
+        lda #0
+        sta tsec
+        lda #3
+        sta gamestate
+        rts
+pd_timeok:
+        sec
+        sbc #DEATH_TIME
+        sta tsec
+        lda spawn_lo
         sta px_lo
-        lda #>SPAWN_X
+        lda spawn_hi
         sta px_hi
         lda #STAND_Y
         sta py
@@ -807,8 +1108,19 @@ pd_respawn:
         sta vy_lo
         sta vy_hi
         sta movetmr
+        sta ducktmr
+        sta jumpbuf
+        sta onvine
         lda #1
         sta onground
+        lda #COYOTE_MAX
+        sta coyote
+        lda #RESPAWN_GRACE
+        sta invuln
+        lda #4
+        sta status_code
+        lda #STATUS_HOLD
+        sta status_tmr
         rts
 
 ; ---------------------------------------------------------------------------
@@ -838,7 +1150,7 @@ rp_wbset:
         sta opx_lo
         lda px_hi
         sta opx_hi
-        lda py
+        lda py                  ; never let the duck offset push erase past row 191
         sta opy
         lda px_lo
         sta x_lo
@@ -850,204 +1162,295 @@ rp_wbset:
         rts
 
 ; ---------------------------------------------------------------------------
-; update_log : roll the log left; wrap to LOG_MAX when it runs off the left.
+; update_hazard : ping-pong the screen's threat between descriptor bounds.
 ; ---------------------------------------------------------------------------
-update_log:
-        lda hz_active
-        bne ul_go
+update_hazard:
+        lda hz_type
+        bne uh_go
         rts
-ul_go:
+uh_go:
+        lda hz_dir
+        beq uh_right
         sec
         lda hz_x_lo
-        sbc #LOG_SPD
+        sbc hz_spd
         sta hz_x_lo
-        lda hz_x_hi
-        sbc #0
-        sta hz_x_hi
-        lda hz_x_hi
-        bpl ul_ok               ; still >= 0
-        lda #<LOG_MAX
+        cmp hz_min
+        bcs uh_done
+        lda hz_min
         sta hz_x_lo
-        lda #>LOG_MAX
-        sta hz_x_hi
-ul_ok:
+        lda #0
+        sta hz_dir
+        rts
+uh_right:
+        clc
+        lda hz_x_lo
+        adc hz_spd
+        sta hz_x_lo
+        cmp hz_max
+        bcc uh_done
+        lda hz_max
+        sta hz_x_lo
+        lda #1
+        sta hz_dir
+uh_done:
         rts
 
 ; ---------------------------------------------------------------------------
-; collide_log : AABB player-vs-log; on overlap the player dies (respawns).
-;   player box [px, px+PLAYER_W) x [py, py+PLAYER_FEET)
-;   log box    [hz_x, hz_x+LOG_W) x [LOG_Y, LOG_Y+LOG_H)
+; collide_hazard : AABB with a low ducking box.  A shoulder-height bat hits a
+; standing runner but passes over a duck; ground threats still require jumping.
 ; ---------------------------------------------------------------------------
-collide_log:
-        lda hz_active
-        bne cl_go
-        rts
-cl_go:
-        clc                     ; tmp = log right = hz_x + LOG_W
+collide_hazard:
+        lda hz_type
+        beq ch_no
+        lda invuln
+        bne ch_no
+        clc                     ; threat right -> tmp/tmp2
         lda hz_x_lo
-        adc #LOG_W
+        adc hz_w
         sta tmp
         lda hz_x_hi
         adc #0
         sta tmp2
-        lda px_lo               ; px < log_right ?
+        lda px_lo
         cmp tmp
         lda px_hi
         sbc tmp2
-        bcs cl_no               ; px >= log_right -> no overlap
-        clc                     ; tmp = player right = px + PLAYER_W
+        bcs ch_no
+        clc                     ; player right -> tmp/tmp2
         lda px_lo
         adc #PLAYER_W
         sta tmp
         lda px_hi
         adc #0
         sta tmp2
-        lda hz_x_lo             ; hz_x < player_right ?
+        lda hz_x_lo
         cmp tmp
         lda hz_x_hi
         sbc tmp2
-        bcs cl_no               ; hz_x >= player_right -> no overlap
-        lda py                  ; py < LOG_Y + LOG_H ?
-        cmp #LOG_Y+LOG_H
-        bcs cl_no               ; player below the log
-        lda py                  ; py + PLAYER_FEET > LOG_Y ?
+        bcs ch_no
+        lda py                  ; player collision top/height
+        sta er_y
+        lda #PLAYER_FEET
+        sta er_h
+        lda ducktmr
+        beq ch_vertical
+        lda py
         clc
-        adc #PLAYER_FEET
-        cmp #LOG_Y+1
-        bcc cl_no               ; player above the log
+        adc #8
+        sta er_y
+        lda #6
+        sta er_h
+ch_vertical:
+        clc
+        lda hz_y
+        adc hz_h
+        sta tmp
+        lda er_y
+        cmp tmp
+        bcs ch_no
+        clc
+        lda er_y
+        adc er_h
+        cmp hz_y
+        bcc ch_no
+        beq ch_no
         jsr player_die
-cl_no:
+ch_no:
         rts
 
-; draw_log : blit the log sprite at (hz_x, LOG_Y)
-draw_log:
+; draw_hazard : select art by threat kind, then blit at descriptor position.
+draw_hazard:
         lda hz_x_lo
         sta sx_lo
         lda hz_x_hi
         sta sx_hi
-        lda #LOG_Y
+        lda hz_y
         sta sy
-        lda #<log_spr
+        lda hz_type
+        cmp #HZ_BOULDER_KIND
+        bne dh_snake
+        lda #<boulder_spr
         sta sprptr
-        lda #>log_spr
+        lda #>boulder_spr
         sta sprptr+1
-        jsr draw_sprite
-        rts
+        jmp draw_sprite
+dh_snake:
+        cmp #HZ_SNAKE_KIND
+        bne dh_bat
+        lda #<snake_spr
+        sta sprptr
+        lda #>snake_spr
+        sta sprptr+1
+        jmp draw_sprite
+dh_bat:
+        lda anim
+        and #4
+        beq dh_bat1
+        lda #<bat2_spr
+        sta sprptr
+        lda #>bat2_spr
+        sta sprptr+1
+        jmp draw_sprite
+dh_bat1:
+        lda #<bat1_spr
+        sta sprptr
+        lda #>bat1_spr
+        sta sprptr+1
+        jmp draw_sprite
 
-; render_log : erase the log's previous cell from BG, redraw, save position.
-render_log:
-        lda hz_active
-        bne rl_go
+; render_hazard : erase the previous maximum-size cell, redraw, save position.
+render_hazard:
+        lda hz_type
+        bne rh_go
         rts
-rl_go:
-        lda olog_col
+rh_go:
+        lda ohz_col
         sta er_col
-        lda olog_y
+        lda ohz_y
         sta er_y
         lda #40
         sec
-        sbc olog_col
+        sbc ohz_col
         cmp #4
-        bcs rl_wb4
+        bcs rh_wb4
         sta er_wb
-        jmp rl_wbset
-rl_wb4:
-        lda #4                  ; 16px + shift spans up to 4 bytes
+        jmp rh_wbset
+rh_wb4:
+        lda #4
         sta er_wb
-rl_wbset:
-        lda #LOG_H
+rh_wbset:
+        lda #12
         sta er_h
         jsr rect_erase
-        jsr draw_log
+        jsr draw_hazard
         lda hz_x_lo
-        sta olog_lo
+        sta ohz_lo
         lda hz_x_hi
-        sta olog_hi
-        lda #LOG_Y
-        sta olog_y
+        sta ohz_hi
+        lda hz_y
+        sta ohz_y
         lda hz_x_lo
         sta x_lo
         lda hz_x_hi
         sta x_hi
         jsr div7
         lda col
-        sta olog_col
+        sta ohz_col
         rts
 
 ; ---------------------------------------------------------------------------
-; collect_treasures : AABB player-vs-each active treasure; collect on overlap.
+; collect_items : active on-screen item AABB, then apply kind-specific reward.
 ; ---------------------------------------------------------------------------
-collect_treasures:
+collect_items:
         ldx #0
-ctr_loop:
+ci_loop:
         stx ti
-        lda tr_on,x
-        beq ctr_next
-        lda tr_scr,x
+        lda item_on,x
+        beq ci_miss
+        lda item_scr,x
         cmp curscr
-        bne ctr_next            ; treasure lives on another screen
-        lda tr_x,x              ; tr_right = tr_x + TR_W  -> tmp/tmp2
+        bne ci_miss
+        lda item_x,x            ; item right -> tmp/tmp2
         clc
-        adc #TR_W
+        adc #ITEM_W
         sta tmp
         lda #0
         adc #0
         sta tmp2
-        lda px_lo               ; px < tr_right ?
+        lda px_lo
         cmp tmp
         lda px_hi
         sbc tmp2
-        bcs ctr_next            ; px >= tr_right -> miss
-        clc                     ; player_right = px + PLAYER_W
+        bcs ci_miss
+        clc
         lda px_lo
         adc #PLAYER_W
         sta tmp
         lda px_hi
         adc #0
         sta tmp2
-        lda tr_x,x              ; tr_x < player_right ?
+        lda item_x,x
         cmp tmp
         lda #0
         sbc tmp2
-        bcs ctr_next            ; tr_x >= player_right -> miss
-        lda tr_y,x              ; tr_bottom = tr_y + TR_H
+        bcs ci_miss
+        lda item_y,x
         clc
-        adc #TR_H
+        adc #ITEM_H
         sta tmp
-        lda py                  ; py < tr_bottom ?
+        lda py
         cmp tmp
-        bcs ctr_next            ; player below treasure -> miss
-        lda py                  ; py + PLAYER_FEET > tr_y ?
+        bcs ci_miss
+        lda py
         clc
         adc #PLAYER_FEET
-        cmp tr_y,x
-        bcc ctr_next            ; player above treasure -> miss
-        lda #0                  ; --- collect ---
-        sta tr_on,x
-        jsr add_score
-        jsr erase_treasure      ; uses ti
-        dec trleft
-        bne ctr_next
-        lda #1                  ; all collected -> win
+        cmp item_y,x
+        bcc ci_miss
+        bra ci_hit
+ci_miss:
+        jmp ci_next
+ci_hit:
+        lda #0
+        sta item_on,x
+        dec itemleft
+        jsr erase_item
+        ldx ti
+        lda item_kind,x
+        cmp #ITEM_GLYPH_KIND
+        beq ci_glyph
+        cmp #ITEM_SUN_KIND
+        beq ci_sun
+ci_fruit:
+        lda #FRUIT_SCORE_M
+        jsr add_score_m
+        clc
+        lda tsec
+        adc #FRUIT_TIME
+        cmp #100
+        bcc ci_fruit_time
+        lda #99
+ci_fruit_time:
+        sta tsec
+        lda #1
+        sta status_code
+        bra ci_status
+ci_glyph:
+        inc glyphs
+        lda #GLYPH_SCORE_M
+        jsr add_score_m
+        lda #2
+        sta status_code
+        bra ci_status
+ci_sun:
+        lda #SUN_SCORE_M
+        jsr add_score_m
+        lda #1
         sta gamestate
-ctr_next:
+        lda #5
+        sta status_code
+ci_status:
+        lda #STATUS_HOLD
+        sta status_tmr
+ci_next:
         ldx ti
         inx
-        cpx #NT
-        beq ctr_end
-        jmp ctr_loop
-ctr_end:
+        cpx #NITEM
+        beq ci_done
+        jmp ci_loop
+ci_done:
         rts
 
-; add_score : += 2000 (BCD) to the 6-digit score
-add_score:
+; add_score_m : A is a packed-BCD increment for score1 (hundreds/thousands).
+add_score_m:
+        sta tmp
         sed
         clc
         lda score0
         adc #$00
         sta score0
         lda score1
-        adc #TR_VAL_M
+        adc tmp
         sta score1
         lda score2
         adc #$00
@@ -1055,12 +1458,12 @@ add_score:
         cld
         rts
 
-; erase_treasure : clear treasure[ti] from the screen (copy BG back).
-erase_treasure:
+; erase_item : clear item[ti] from the screen by restoring the static BG.
+erase_item:
         ldy ti
-        lda tr_y,y
+        lda item_y,y
         sta er_y
-        lda tr_x,y
+        lda item_x,y
         sta x_lo
         lda #0
         sta x_hi
@@ -1078,41 +1481,61 @@ et_wb3:
         lda #3
         sta er_wb
 et_wbset:
-        lda #TR_H
+        lda #ITEM_H
         sta er_h
         jsr rect_erase
         rts
 
-; draw_treasures : blit every active treasure (on top of the scene each frame).
-draw_treasures:
+; draw_items : fruit, progression glyphs, and the final Sunstone.
+draw_items:
         ldx #0
 dt_loop:
         stx ti
-        lda tr_on,x
+        lda item_on,x
         beq dt_next
-        lda tr_scr,x
+        lda item_scr,x
         cmp curscr
-        bne dt_next             ; treasure lives on another screen
-        lda tr_x,x
+        bne dt_next
+        lda item_x,x
         sta sx_lo
         lda #0
         sta sx_hi
-        lda tr_y,x
+        lda item_y,x
         sta sy
-        lda #<gem_spr
+        lda item_kind,x
+        cmp #ITEM_GLYPH_KIND
+        beq dt_glyph
+        cmp #ITEM_SUN_KIND
+        beq dt_sun
+        lda #<fruit_spr
         sta sprptr
-        lda #>gem_spr
+        lda #>fruit_spr
         sta sprptr+1
+        bra dt_draw
+dt_glyph:
+        lda #<glyph_spr
+        sta sprptr
+        lda #>glyph_spr
+        sta sprptr+1
+        bra dt_draw
+dt_sun:
+        lda #<sun_spr
+        sta sprptr
+        lda #>sun_spr
+        sta sprptr+1
+dt_draw:
         jsr draw_sprite
 dt_next:
         ldx ti
         inx
-        cpx #NT
+        cpx #NITEM
         bne dt_loop
         rts
 
 ; tick_timer : advance the countdown; time-up ends the game.
 tick_timer:
+        lda gamestate
+        bne tt_done             ; victory/death resolved earlier in this frame
         inc tframe
         lda tframe
         cmp #TICK
@@ -1130,6 +1553,16 @@ tt_zero:
 tt_done:
         rts
 
+tick_status:
+        lda status_tmr
+        beq ts_done
+        dec status_tmr
+        bne ts_done
+        lda #0
+        sta status_code
+ts_done:
+        rts
+
 ; ---------------------------------------------------------------------------
 ; update_hud : refresh the score / time / lives digits on the HUD line.
 ; ---------------------------------------------------------------------------
@@ -1143,16 +1576,64 @@ update_hud:
         jsr emit2
         lda tsec                ; time digits at columns 19..20
         jsr bin2bcd
-        ldx #19
+        ldx #18
         jsr emit2
-        lda lives               ; lives digit at column 29
+        lda lives
         ora #$B0
-        sta TLINE22+29
-        lda curscr              ; area number (1-based) at column 37
-        clc
-        adc #$B1
-        sta TLINE22+37
+        sta TLINE22+26
+        lda glyphs
+        ora #$B0
+        sta TLINE22+34
+        jsr draw_status_line
         rts
+
+draw_status_line:
+        lda #<TLINE23
+        sta ptr
+        lda #>TLINE23
+        sta ptr+1
+        jsr clear_line
+        lda status_code
+        beq dsl_controls
+        cmp #1
+        beq dsl_fruit
+        cmp #2
+        beq dsl_glyph
+        cmp #3
+        beq dsl_gate
+        cmp #4
+        beq dsl_ouch
+        lda #<msg_sun
+        sta sprptr
+        lda #>msg_sun
+        bra dsl_print_hi
+dsl_controls:
+        lda #<str_playctl
+        sta sprptr
+        lda #>str_playctl
+        bra dsl_print_hi
+dsl_fruit:
+        lda #<msg_fruit
+        sta sprptr
+        lda #>msg_fruit
+        bra dsl_print_hi
+dsl_glyph:
+        lda #<msg_glyph
+        sta sprptr
+        lda #>msg_glyph
+        bra dsl_print_hi
+dsl_gate:
+        lda #<msg_gate
+        sta sprptr
+        lda #>msg_gate
+        bra dsl_print_hi
+dsl_ouch:
+        lda #<msg_ouch
+        sta sprptr
+        lda #>msg_ouch
+dsl_print_hi:
+        sta sprptr+1
+        jmp print
 
 ; emit2 : A = BCD byte, X = column offset into TLINE22; writes 2 digits, X += 2
 emit2:
@@ -1555,35 +2036,244 @@ cbg_by:
         rts
 
 ; ---------------------------------------------------------------------------
-; draw_scene : paint the static level into BG, then copy BG -> SCREEN.
-;   M1 scene: black sky, a solid ground band, a simple pit gap.
-;   Ground band = pixel rows 136..159 filled ($7F = 7 lit pixels/byte).
+; fill_bg_rect : er_col/er_y/er_wb/er_h rectangle in BG, filled with fillv.
 ; ---------------------------------------------------------------------------
-draw_scene:
-        lda #136
+fill_bg_rect:
+        lda er_y
         sta cury
-ds_gnd:
+        lda er_h
+        sta rowsleft
+fbr_row:
         ldy cury
         lda ROWL,y
-        sta bgptr               ; screen addr of this row...
+        sta bgptr
         lda ROWH,y
         clc
-        adc #BGDELTA            ; ...moved into BG space
+        adc #BGDELTA
         sta bgptr+1
-        ldy #0
-        lda #$7F
-ds_gfill:
+        ldy er_col
+        ldx er_wb
+        lda fillv
+fbr_col:
         sta (bgptr),y
         iny
-        cpy #40
-        bne ds_gfill
+        dex
+        bne fbr_col
         inc cury
-        lda cury
-        cmp #160
-        bne ds_gnd
-        jsr punch_pit           ; carve a pit into the ground band
-        jsr draw_vine           ; hang the vine, if this screen has one
+        dec rowsleft
+        bne fbr_row
+        rts
+
+; ---------------------------------------------------------------------------
+; draw_scene : layered jungle, textured ground, water gaps, raised platforms,
+; vines, and ruins.  Everything lands in BG before one copy to the display.
+; ---------------------------------------------------------------------------
+draw_scene:
+        lda #0                  ; canopy shadow
+        sta er_col
+        lda #8
+        sta er_y
+        lda #40
+        sta er_wb
+        lda #5
+        sta er_h
+        lda #$15
+        sta fillv
+        jsr fill_bg_rect
+        lda #13
+        sta er_y
+        lda #2
+        sta er_h
+        lda #$2A
+        sta fillv
+        jsr fill_bg_rect
+
+        lda #2                  ; two distant trunks frame the route
+        sta er_col
+        lda #15
+        sta er_y
+        lda #2
+        sta er_wb
+        lda #121
+        sta er_h
+        lda #$49
+        sta fillv
+        jsr fill_bg_rect
+        lda #36
+        sta er_col
+        jsr fill_bg_rect
+
+        lda #0                  ; bright ground lip
+        sta er_col
+        lda #GROUND_TOP
+        sta er_y
+        lda #40
+        sta er_wb
+        lda #4
+        sta er_h
+        lda #$7F
+        sta fillv
+        jsr fill_bg_rect
+        lda #140                ; textured soil below it
+        sta er_y
+        lda #20
+        sta er_h
+        lda #$55
+        sta fillv
+        jsr fill_bg_rect
+
+        jsr draw_gaps
+        jsr draw_platforms
+        jsr draw_landmark
+        jsr draw_vine
         jsr copy_bg
+        rts
+
+; draw_gaps : cut each descriptor gap and add a low water shimmer.
+draw_gaps:
+        lda gap1_l
+        cmp gap1_r
+        beq dg_second
+        sta er_col
+        lda gap1_r
+        sec
+        sbc gap1_l
+        sta er_wb
+        jsr carve_gap
+dg_second:
+        lda gap2_l
+        cmp gap2_r
+        beq dg_done
+        sta er_col
+        lda gap2_r
+        sec
+        sbc gap2_l
+        sta er_wb
+        jsr carve_gap
+dg_done:
+        rts
+
+carve_gap:
+        lda #GROUND_TOP
+        sta er_y
+        lda #24
+        sta er_h
+        lda #0
+        sta fillv
+        jsr fill_bg_rect
+        lda #152
+        sta er_y
+        lda #8
+        sta er_h
+        lda #$11
+        sta fillv
+        jmp fill_bg_rect
+
+; draw_platforms : two byte-aligned one-way platforms with end supports.
+draw_platforms:
+        lda plat1_l
+        cmp plat1_r
+        beq dp_second
+        sta er_col
+        lda plat1_r
+        sec
+        sbc plat1_l
+        sta er_wb
+        lda plat1_y
+        jsr draw_one_platform
+dp_second:
+        lda plat2_l
+        cmp plat2_r
+        beq dp_done
+        sta er_col
+        lda plat2_r
+        sec
+        sbc plat2_l
+        sta er_wb
+        lda plat2_y
+        jsr draw_one_platform
+dp_done:
+        rts
+
+draw_one_platform:
+        sta er_y
+        pha
+        lda #4
+        sta er_h
+        lda #$7F
+        sta fillv
+        jsr fill_bg_rect
+        pla
+        clc
+        adc #4
+        sta er_y
+        lda #GROUND_TOP
+        sec
+        sbc er_y
+        sta er_h
+        lda #1
+        sta er_wb
+        lda #$49
+        sta fillv
+        jsr fill_bg_rect
+        rts
+
+; draw_landmark : the ruins announce the gate; the final screen is a temple.
+draw_landmark:
+        lda curscr
+        cmp #TEMPLE_SCREEN
+        bcc dl_done
+        beq dl_gate
+        lda #4                  ; temple side walls
+        sta er_col
+        lda #40
+        sta er_y
+        lda #5
+        sta er_wb
+        lda #96
+        sta er_h
+        lda #$6D
+        sta fillv
+        jsr fill_bg_rect
+        lda #31
+        sta er_col
+        jsr fill_bg_rect
+        lda #3                  ; lintel
+        sta er_col
+        lda #34
+        sta er_y
+        lda #34
+        sta er_wb
+        lda #8
+        sta er_h
+        lda #$7F
+        sta fillv
+        jsr fill_bg_rect
+        rts
+dl_gate:
+        lda #36                 ; sealed arch at the expedition edge
+        sta er_col
+        lda #62
+        sta er_y
+        lda #4
+        sta er_wb
+        lda #74
+        sta er_h
+        lda #$6D
+        sta fillv
+        jsr fill_bg_rect
+        lda #33
+        sta er_col
+        lda #56
+        sta er_y
+        lda #7
+        sta er_wb
+        lda #6
+        sta er_h
+        lda #$7F
+        sta fillv
+        jsr fill_bg_rect
+dl_done:
         rts
 
 ; ---------------------------------------------------------------------------
@@ -1630,38 +2320,7 @@ dv_done:
         rts
 
 ; ---------------------------------------------------------------------------
-; punch_pit : clear a rectangular pit (byte cols 24..29) out of the ground.
-; ---------------------------------------------------------------------------
-punch_pit:
-        lda cur_plc
-        cmp cur_prc
-        beq pp_done             ; empty range -> this screen has no pit
-        lda #136
-        sta cury
-pp_row:
-        ldy cury
-        lda ROWL,y
-        sta bgptr
-        lda ROWH,y
-        clc
-        adc #BGDELTA
-        sta bgptr+1
-        ldy cur_plc
-        lda #0
-pp_col:
-        sta (bgptr),y
-        iny
-        cpy cur_prc
-        bne pp_col
-        inc cury
-        lda cury
-        cmp #160
-        bne pp_row
-pp_done:
-        rts
-
-; ---------------------------------------------------------------------------
-; draw_player : blit the hero sprite at (px, py)
+; draw_player : choose a readable pose; duck art is offset to keep its feet put.
 ; ---------------------------------------------------------------------------
 draw_player:
         lda px_lo
@@ -1670,35 +2329,96 @@ draw_player:
         sta sx_hi
         lda py
         sta sy
-        lda #<hero
+        lda ducktmr
+        beq dpl_visible
+        lda sy
+        clc
+        adc #8
+        sta sy
+dpl_visible:
+        lda invuln
+        beq dpl_pose
+        lda anim
+        and #2
+        bne dpl_done            ; blink during respawn grace
+dpl_pose:
+        lda ducktmr
+        beq dpl_air
+        lda #<hero_duck
         sta sprptr
-        lda #>hero
+        lda #>hero_duck
         sta sprptr+1
-        jsr draw_sprite
+        jmp draw_sprite
+dpl_air:
+        lda onground
+        bne dpl_run
+        lda #<hero_jump
+        sta sprptr
+        lda #>hero_jump
+        sta sprptr+1
+        jmp draw_sprite
+dpl_run:
+        lda movetmr
+        beq dpl_stand
+        lda anim
+        and #4
+        beq dpl_run1
+        lda #<hero_run2
+        sta sprptr
+        lda #>hero_run2
+        sta sprptr+1
+        jmp draw_sprite
+dpl_run1:
+        lda #<hero_run1
+        sta sprptr
+        lda #>hero_run1
+        sta sprptr+1
+        jmp draw_sprite
+dpl_stand:
+        lda #<hero_stand
+        sta sprptr
+        lda #>hero_stand
+        sta sprptr+1
+        jmp draw_sprite
+dpl_done:
         rts
 
 ; ---------------------------------------------------------------------------
 ; draw_hud : write the HUD text lines
 ; ---------------------------------------------------------------------------
 draw_hud:
-        lda #<str_title
-        sta sprptr
-        lda #>str_title
-        sta sprptr+1
         lda #<TLINE20
         sta ptr
         lda #>TLINE20
         sta ptr+1
-        jsr print
-        lda #<str_stats
+        jsr clear_line
+        lda #<str_title
         sta sprptr
-        lda #>str_stats
+        lda #>str_title
         sta sprptr+1
+        jsr print
+        lda #<TLINE21
+        sta ptr
+        lda #>TLINE21
+        sta ptr+1
+        jsr clear_line
+        ldx curscr
+        lda screen_name_lo,x
+        sta sprptr
+        lda screen_name_hi,x
+        sta sprptr+1
+        jsr print
         lda #<TLINE22
         sta ptr
         lda #>TLINE22
         sta ptr+1
+        jsr clear_line
+        lda #<str_stats
+        sta sprptr
+        lda #>str_stats
+        sta sprptr+1
         jsr print
+        jsr update_hud
         rts
 
 ; print : copy the $00-terminated string at sprptr to (ptr), forcing bit7.
@@ -1720,27 +2440,58 @@ pr_done:
 BITMASK:
         .byte $01,$02,$04,$08,$10,$20,$40
 
-; ---- per-screen world descriptor (NSCR entries) ----
-;   pit = byte columns [plc, prc); plc==prc means no pit.
-scr_plc:                        ; pit left column
-        .byte 24, 22, 14, 0
-scr_prc:                        ; pit right column (exclusive)
-        .byte 30, 30, 19, 0
-scr_hz:                         ; 1 = a rolling log patrols this screen
-        .byte 1, 0, 1, 0
-scr_vine:                       ; 1 = a swingable vine crosses this screen
-        .byte 0, 1, 0, 0
-scr_vx:                         ; vine anchor x (pixels)
-        .byte 0, 168, 0, 0
+; ---- per-screen world descriptor (NSCR entries) ----------------------------
+; Gaps and platforms use 7-pixel byte columns [left,right); left==right = none.
+scr_g1l: .byte 31,  8, 15, 34, 12, 11
+scr_g1r: .byte 34, 14, 31, 38, 17, 19
+scr_g2l: .byte  0, 25,  0,  0, 28, 22
+scr_g2r: .byte  0, 31,  0,  0, 33, 31
+scr_p1l: .byte  0,  9,  0, 10, 13, 12
+scr_p1r: .byte  0, 13,  0, 18, 16, 18
+scr_p1y: .byte 136,116,136,116,116,116
+scr_p2l: .byte  0, 26,  0, 22, 29, 23
+scr_p2r: .byte  0, 30,  0, 30, 32, 30
+scr_p2y: .byte 136,108,136,108,116,104
+scr_spawn:
+        .byte 16,16,16,16,16,16
+scr_vine:
+        .byte 0,0,1,0,0,0
+scr_vx:
+        .byte 0,0,112,0,0,0
+scr_hztype:
+        .byte HZ_BOULDER_KIND,HZ_SNAKE_KIND,HZ_NONE_KIND
+        .byte HZ_BAT_KIND,HZ_BOULDER_KIND,HZ_SNAKE_KIND
+scr_hzmin:
+        .byte 70,148,0,50,30,30
+scr_hzmax:
+        .byte 190,166,0,230,180,65
+scr_hzspd:
+        .byte 2,1,0,2,3,2
+scr_hzy:
+        .byte 124,128,0,116,124,128
+scr_hzw:
+        .byte 12,16,0,16,12,16
+scr_hzh:
+        .byte 12,8,0,8,12,8
 
-; ---- world treasure layout (NT entries) ----
-tr_x0:  .byte 60, 232, 236, 40, 232, 140
-tr_y0:  .byte 126, 126, 126, 126, 126, 126
-tr_scr0:                        ; which screen each gem sits on
-        .byte 0, 0, 1, 2, 2, 3
+; ---- world items: four glyphs, six optional fruit, final Sunstone -----------
+item_x0:
+        .byte 195,188,235,205, 125,74,180,105,212,88,235
+item_y0:
+        .byte 118,98,126,126, 104,106,96,106,106,126,126
+item_scr0:
+        .byte 0,1,2,3, 0,1,2,3,4,5,5
+item_kind0:
+        .byte 1,1,1,1, 0,0,0,0,0,0,2
 
-; hero : 12 x 16, left-justified rows (hi byte = cols 0-7, lo byte = cols 8-15)
+screen_name_lo:
+        .byte <name0,<name1,<name2,<name3,<name4,<name5
+screen_name_hi:
+        .byte >name0,>name1,>name2,>name3,>name4,>name5
+
+; ---- player poses: 12 pixels wide, MSB-first rows ---------------------------
 hero:
+hero_stand:
         .byte 12, 16
         .byte %00011110, %00000000
         .byte %00111111, %00000000
@@ -1759,50 +2510,200 @@ hero:
         .byte %00000000, %00000000
         .byte %00000000, %00000000
 
-; log_spr : 16 x 8 rolling log (original art; hi byte = cols 0-7, lo = cols 8-15)
-log_spr:
-        .byte 16, 8
-        .byte %00111111, %11111100
-        .byte %01111111, %11111110
-        .byte %11111111, %11111111
-        .byte %11011011, %01101101
-        .byte %11111111, %11111111
-        .byte %11011011, %01101101
-        .byte %01111111, %11111110
-        .byte %00111111, %11111100
+hero_run1:
+        .byte 12, 16
+        .byte %00011110,%00000000
+        .byte %00111111,%00000000
+        .byte %00011110,%00000000
+        .byte %00010010,%00000000
+        .byte %00011110,%00000000
+        .byte %00111111,%00000000
+        .byte %01101101,%10000000
+        .byte %01101101,%10000000
+        .byte %00011110,%00000000
+        .byte %00011110,%00000000
+        .byte %00110010,%00000000
+        .byte %00100100,%00000000
+        .byte %01000100,%00000000
+        .byte %10000110,%00000000
+        .byte %00000000,%00000000
+        .byte %00000000,%00000000
 
-; gem_spr : 8 x 10 treasure gem (original art)
-gem_spr:
+hero_run2:
+        .byte 12, 16
+        .byte %00011110,%00000000
+        .byte %00111111,%00000000
+        .byte %00011110,%00000000
+        .byte %00010010,%00000000
+        .byte %00011110,%00000000
+        .byte %00111111,%00000000
+        .byte %01101101,%10000000
+        .byte %01101101,%10000000
+        .byte %00011110,%00000000
+        .byte %00011110,%00000000
+        .byte %00001100,%00000000
+        .byte %00011000,%00000000
+        .byte %00011000,%00000000
+        .byte %00111100,%00000000
+        .byte %00000000,%00000000
+        .byte %00000000,%00000000
+
+hero_jump:
+        .byte 12, 16
+        .byte %00011110,%00000000
+        .byte %00111111,%00000000
+        .byte %00011110,%00000000
+        .byte %00010010,%00000000
+        .byte %01011110,%10000000
+        .byte %00111111,%00000000
+        .byte %00011110,%00000000
+        .byte %00011110,%00000000
+        .byte %00111100,%00000000
+        .byte %01100110,%00000000
+        .byte %01000010,%00000000
+        .byte %00000000,%00000000
+        .byte %00000000,%00000000
+        .byte %00000000,%00000000
+        .byte %00000000,%00000000
+        .byte %00000000,%00000000
+
+hero_duck:
+        .byte 12, 8
+        .byte %00011110,%00000000
+        .byte %00111111,%00000000
+        .byte %01111110,%00000000
+        .byte %11111111,%00000000
+        .byte %00111100,%00000000
+        .byte %01100110,%00000000
+        .byte %11000011,%00000000
+        .byte %00000000,%00000000
+
+; ---- moving threats ---------------------------------------------------------
+boulder_spr:
+        .byte 12, 12
+        .byte %00011110,%00000000
+        .byte %01111111,%10000000
+        .byte %11100111,%11000000
+        .byte %11011011,%11000000
+        .byte %11110111,%11000000
+        .byte %10111101,%11000000
+        .byte %11101111,%11000000
+        .byte %11011011,%11000000
+        .byte %11111111,%11000000
+        .byte %01111111,%10000000
+        .byte %00111111,%00000000
+        .byte %00011110,%00000000
+
+snake_spr:
+        .byte 16, 8
+        .byte %00000011,%10000000
+        .byte %00000111,%11000000
+        .byte %00000011,%10000000
+        .byte %11000001,%10000011
+        .byte %11100111,%11100111
+        .byte %01111110,%01111110
+        .byte %00111100,%00111100
+        .byte %00000000,%00000000
+
+bat1_spr:
+        .byte 16, 8
+        .byte %10000001,%10000001
+        .byte %11000011,%11000011
+        .byte %01100111,%11100110
+        .byte %00111111,%11111100
+        .byte %00011111,%11111000
+        .byte %00000110,%01100000
+        .byte %00000000,%00000000
+        .byte %00000000,%00000000
+
+bat2_spr:
+        .byte 16, 8
+        .byte %00000001,%10000000
+        .byte %00000111,%11100000
+        .byte %00011111,%11111000
+        .byte %01111111,%11111110
+        .byte %11011110,%01111011
+        .byte %10001100,%00110001
+        .byte %00000000,%00000000
+        .byte %00000000,%00000000
+
+; ---- pickups ----------------------------------------------------------------
+fruit_spr:
+        .byte 8, 10
+        .byte %00010000,%00000000
+        .byte %00111000,%00000000
+        .byte %00010000,%00000000
+        .byte %01111110,%00000000
+        .byte %11111111,%00000000
+        .byte %11111111,%00000000
+        .byte %01111110,%00000000
+        .byte %00111100,%00000000
+        .byte %00011000,%00000000
+        .byte %00000000,%00000000
+
+glyph_spr:
         .byte 8, 10
         .byte %00011000, %00000000
-        .byte %00111100, %00000000
         .byte %01111110, %00000000
+        .byte %11011011, %00000000
+        .byte %10111101, %00000000
         .byte %11111111, %00000000
-        .byte %11111111, %00000000
+        .byte %10100101, %00000000
+        .byte %11011011, %00000000
         .byte %01111110, %00000000
-        .byte %00111100, %00000000
-        .byte %00011000, %00000000
         .byte %00011000, %00000000
         .byte %00111100, %00000000
 
+sun_spr:
+        .byte 8, 10
+        .byte %10011001,%00000000
+        .byte %01011010,%00000000
+        .byte %00111100,%00000000
+        .byte %11111111,%00000000
+        .byte %01111110,%00000000
+        .byte %11111111,%00000000
+        .byte %00111100,%00000000
+        .byte %01011010,%00000000
+        .byte %10011001,%00000000
+        .byte %00011000,%00000000
+
 str_title:
-        .asciiz "JUNGLE QUEST"
+        .asciiz "JUNGLE QUEST: THE SUNSTONE RUN"
 str_ttl:
-        .asciiz "        * * *  JUNGLE QUEST  * * *"
+        .asciiz "      JUNGLE QUEST: THE SUNSTONE RUN"
 str_tag:
-        .asciiz "     an original jungle adventure"
+        .asciiz "   FOUR GLYPHS OPEN THE SUN TEMPLE"
 str_ctl:
-        .asciiz "  A / D  MOVE      SPACE  JUMP & GRAB"
+        .asciiz " A/D RUN  W/SPACE JUMP  S/DOWN DUCK"
 str_go:
-        .asciiz "        PRESS SPACE TO EXPLORE"
+        .asciiz "       PRESS SPACE OR PAD START"
 str_stats:
-        .asciiz "SCORE 000000  TIME 60  LIVES 3  AREA 1"
+        .asciiz "SCORE 000000 TIME 90 LIFE 3 GLYPH 0/4"
+str_playctl:
+        .asciiz "RUN  JUMP  DUCK - FIND FOUR GLYPHS"
+msg_fruit:
+        .asciiz "FRUIT +500 / CLOCK +5"
+msg_glyph:
+        .asciiz "GLYPH FOUND - THE TEMPLE STIRS"
+msg_gate:
+        .asciiz "THE TEMPLE NEEDS ALL FOUR GLYPHS"
+msg_ouch:
+        .asciiz "CHECKPOINT -1 LIFE / CLOCK -5"
+msg_sun:
+        .asciiz "THE SUNSTONE IS YOURS"
 msg_win:
-        .asciiz "YOU WIN!  PRESS SPACE TO PLAY AGAIN"
+        .asciiz "SUNSTONE FOUND! SPACE/PAD TO RUN AGAIN"
 msg_over:
-        .asciiz "GAME OVER  PRESS SPACE TO PLAY AGAIN"
+        .asciiz "EXPEDITION LOST - SPACE/PAD TO RETRY"
 msg_time:
-        .asciiz "TIME UP!  PRESS SPACE TO PLAY AGAIN"
+        .asciiz "NIGHT FELL - SPACE/PAD TO TRY AGAIN"
+
+name0:  .asciiz "1 TRAILHEAD - LEAP THE BOULDER"
+name1:  .asciiz "2 BROKEN STEPS - TRUST YOUR JUMP"
+name2:  .asciiz "3 BLACKWATER - GRAB, THEN RELEASE"
+name3:  .asciiz "4 BAT CANOPY - DUCK OR CLIMB"
+name4:  .asciiz "5 FALLEN RUINS - THE SEALED GATE"
+name5:  .asciiz "6 SUN TEMPLE - CLAIM THE STONE"
 
 ; ---------------------------------------------------------------------------
 ; test hooks : harness pokes state, sets PC here, runs to BRK (monitor dump).
@@ -1846,26 +2747,76 @@ step_brk:
         jsr update_player
         brk
 
+hazard_brk:
 logstep_brk:
         ldx #$FF
         txs
-        jsr update_log
+        jsr update_hazard
         brk
 
 coll_brk:
         ldx #$FF
         txs
-        jsr collide_log
+        jsr collide_hazard
         brk
 
 collect_brk:
         ldx #$FF
         txs
-        jsr collect_treasures
+        jsr collect_items
         brk
 
 timer_brk:
         ldx #$FF
         txs
         jsr tick_timer
+        brk
+
+screenvars_brk:
+        ldx #$FF
+        txs
+        jsr set_screen_vars
+        brk
+
+scene_brk:
+        ldx #$FF
+        txs
+        jsr clear_screen
+        jsr clear_bg
+        jsr draw_scene
+        brk
+
+death_brk:
+        ldx #$FF
+        txs
+        jsr player_die
+        brk
+
+pad_brk:
+        ldx #$FF
+        txs
+        jsr read_pad
+        brk
+
+init_brk:
+        ldx #$FF
+        txs
+        jsr init_state
+        brk
+
+gameframe_brk:
+        ldx #$FF
+        txs
+        jsr read_input
+        jsr update_player
+        jsr update_hazard
+        jsr collide_hazard
+        jsr collect_items
+        jsr tick_timer
+        brk
+
+render_brk:
+        ldx #$FF
+        txs
+        jsr render_player
         brk
