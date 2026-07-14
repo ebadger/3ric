@@ -1,4 +1,6 @@
 const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
 const {
   KEY_ROWS,
   eventToByte,
@@ -140,6 +142,16 @@ assert.strictEqual(isPointerActivation({ detail: 0 }), false);
 assert.strictEqual(isFocusEscape({ key: "Tab", shiftKey: true }), true);
 assert.strictEqual(isFocusEscape({ key: "Tab", shiftKey: false }), false);
 assert.strictEqual(isFocusEscape({ key: "Enter", shiftKey: true }), false);
+
+const pageHtml = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
+const skipControlIndex = pageHtml.indexOf('id="skip-emulator-input"');
+const canvasIndex = pageHtml.indexOf('id="screen"');
+const keyboardSummaryIndex = pageHtml.indexOf('id="virtual-keyboard-summary"');
+assert(skipControlIndex >= 0, "page must include a focusable emulator skip control");
+assert(
+  skipControlIndex < canvasIndex && canvasIndex < keyboardSummaryIndex,
+  "skip control, emulator canvas, and virtual-keyboard summary must remain in focus order",
+);
 
 const document = new FakeDocument();
 const mountPoint = new FakeElement(document);
