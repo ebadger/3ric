@@ -91,11 +91,11 @@ assert.deepStrictEqual(KEY_ROWS.map((row) => row.map(layoutToken)), [
   ["CAPS LOCK", "`", "<gap>", "<gap>", "SPACE", "<gap>", "\u2190", "\u2192", "\u2193", "\u2191"],
 ]);
 assert.deepStrictEqual(KEY_ROWS.map((row) => row.map((key) => key.units)), [
-  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1.65],
-  [1.65, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-  [1.9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1.8],
-  [2.3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2.3],
-  [1, 1, 1, 1, 6.2, 1, 1, 1, 1, 1],
+  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1.58],
+  [1.58, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+  [1.86, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1.87],
+  [2.48, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2.38],
+  [1, 1, 1, 1, 5.86, 1, 1, 1, 1, 1],
 ]);
 
 const emitted = new Set();
@@ -161,10 +161,17 @@ button("S").activate(0);
 assert.deepStrictEqual(emittedBytes, [0x41, 0x53]);
 assert.strictEqual(focusCount, 1, "keyboard activation should retain virtual-key focus");
 assert(buttons("SHIFT").every((key) => key.getAttribute("aria-pressed") === "false"));
-assert.strictEqual(button("Caps Lock").disabled, true);
-assert.strictEqual(button("Delete").style.flexGrow, "1.65");
-assert.strictEqual(button("Space").style.flexGrow, "6.2");
+assert.strictEqual(button("Caps Lock").getAttribute("aria-disabled"), "true");
+assert.strictEqual(
+  button("Caps Lock").getAttribute("aria-describedby"),
+  "virtual-keyboard-caps-note",
+);
+assert.strictEqual(button("Delete").style.flexGrow, "1.58");
+assert.strictEqual(button("Space").style.flexGrow, "5.86");
+button("Caps Lock").activate(1);
+assert.deepStrictEqual(emittedBytes, [0x41, 0x53]);
+assert.strictEqual(focusCount, 2, "pointer Caps Lock activation should restore canvas focus");
 button("D").activate(1);
-assert.strictEqual(focusCount, 2, "pointer character activation should restore canvas focus");
+assert.strictEqual(focusCount, 3, "pointer character activation should restore canvas focus");
 
 console.log("PASS (virtual keyboard layout and byte mappings)");

@@ -145,7 +145,12 @@ client-side so GitHub Pages can host it as static files.
 - Key labels meet normal-text contrast, and dense rows retain at least 24 CSS-pixel key
   widths. On narrower screens the complete 530 CSS-pixel keyboard matrix pans horizontally
   as one unit instead of shrinking targets or distorting the manual-derived key-width ratios;
-  the space bar retains its Figure 2-1 position within that matrix.
+  the space bar retains its Figure 2-1 position within that matrix. Ratios digitized from the
+  manual crop, normalized to a standard key, are Delete/Tab 1.58, Control 1.86, Return 1.87,
+  left/right Shift 2.48/2.38, and Space 5.86. Every row uses the same key height.
+- The Caps Lock key's uppercase-only limitation is both visible beneath the keys and associated
+  with the focusable `aria-disabled` key, so touch and assistive-technology users do not depend
+  on a hover-only tooltip.
 - **Parity is the rule:** the WASM build must behave like the native build. Do not add
   behavior in the bridge that isn't in the shared core unless it's a genuinely
   presentation-only concern (canvas, clock pacing) — and never behind an unguarded fork.

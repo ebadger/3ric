@@ -19,12 +19,20 @@
     });
   }
 
-  function modifier(label, name, className, units) {
+  function modifier(label, name, className, units = 1) {
     return Object.freeze({ label, modifier: name, className, units });
   }
 
-  function disabledKey(label, className, ariaLabel, title, units = 1) {
-    return Object.freeze({ label, className, ariaLabel, title, units, disabled: true });
+  function disabledKey(label, className, ariaLabel, title, descriptionId, units = 1) {
+    return Object.freeze({
+      label,
+      className,
+      ariaLabel,
+      title,
+      descriptionId,
+      units,
+      disabled: true,
+    });
   }
 
   function spacer(className, units = 1) {
@@ -46,10 +54,10 @@
       printable("0", ")"),
       printable("-", "_"),
       printable("=", "+"),
-      special("DELETE", 0x7f, "delete", "Delete", 1.65),
+      special("DELETE", 0x7f, "delete", "Delete", 1.58),
     ]),
     Object.freeze([
-      special("TAB", 0x09, "tab", "Tab", 1.65),
+      special("TAB", 0x09, "tab", "Tab", 1.58),
       printable("Q"),
       printable("W"),
       printable("E"),
@@ -65,7 +73,7 @@
       printable("\\", "|"),
     ]),
     Object.freeze([
-      modifier("CONTROL", "control", "control", 1.9),
+      modifier("CONTROL", "control", "control", 1.86),
       printable("A"),
       printable("S"),
       printable("D"),
@@ -77,10 +85,10 @@
       printable("L"),
       printable(";", ":"),
       printable("'", "\""),
-      special("RETURN", 0x0d, "return", "Return", 1.8),
+      special("RETURN", 0x0d, "return", "Return", 1.87),
     ]),
     Object.freeze([
-      modifier("SHIFT", "shift", "shift", 2.3),
+      modifier("SHIFT", "shift", "shift", 2.48),
       printable("Z"),
       printable("X"),
       printable("C"),
@@ -91,7 +99,7 @@
       printable(",", "<"),
       printable(".", ">"),
       printable("/", "?"),
-      modifier("SHIFT", "shift", "shift", 2.3),
+      modifier("SHIFT", "shift", "shift", 2.38),
     ]),
     Object.freeze([
       disabledKey(
@@ -99,11 +107,12 @@
         "caps",
         "Caps Lock",
         "3ric keyboard input is uppercase-only",
+        "virtual-keyboard-caps-note",
       ),
       printable("`", "~"),
       spacer("case-gap"),
       spacer("apple-slot"),
-      special("", 0x20, "space", "Space", 6.2),
+      special("", 0x20, "space", "Space", 5.86),
       spacer("apple-slot"),
       special("\u2190", 0x08, "", "Left arrow"),
       special("\u2192", 0x15, "", "Right arrow"),
@@ -228,8 +237,9 @@
         if (key.disabled) {
           button.textContent = key.label;
           button.setAttribute("aria-label", key.ariaLabel);
+          button.setAttribute("aria-disabled", "true");
+          button.setAttribute("aria-describedby", key.descriptionId);
           button.title = key.title;
-          button.disabled = true;
         } else if (key.modifier) {
           button.textContent = key.label;
           button.setAttribute("aria-label", key.label);
@@ -250,9 +260,9 @@
           button.setAttribute("aria-label", key.ariaLabel || key.label || key.value || "");
         }
 
-        if (!key.disabled) {
-          button.addEventListener("click", (event) => press(key, event));
-        }
+        button.addEventListener("click", key.disabled
+          ? restorePointerFocus
+          : (event) => press(key, event));
         row.appendChild(button);
       }
       fragment.appendChild(row);
