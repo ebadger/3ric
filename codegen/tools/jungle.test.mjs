@@ -440,7 +440,7 @@ console.log("H) active vine release");
   );
 }
 
-console.log("I) timer and emulator-safe gamepad guard");
+console.log("I) timer and restart input guards");
 {
   vm.poke(S.TSEC, 1);
   vm.poke(S.TFRAME, S.TICK - 1);
@@ -481,6 +481,17 @@ console.log("I) timer and emulator-safe gamepad guard");
   ok(
     heldStart === 1 && releasedStart === 0 && invalidStart === 0,
     "end-screen restart gate waits for release and rejects emulator placeholder input",
+  );
+
+  key(0xa0);
+  runHook(S.RESTARTKEY_BRK, "repeated gameplay key at end screen");
+  const gameplayRestart = vm.peek(S.STATUS_CODE);
+  key(0x8d);
+  runHook(S.RESTARTKEY_BRK, "Return at end screen");
+  const returnRestart = vm.peek(S.STATUS_CODE);
+  ok(
+    gameplayRestart === 0 && returnRestart === 1,
+    "end-screen keyboard ignores repeated Jump and requires Return",
   );
 }
 

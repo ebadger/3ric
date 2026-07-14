@@ -48,7 +48,8 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   - **Hardware controls:** SNES D-pad moves/ducks and A/B jumps via the ROM's
     `PTRIG`/`GAMEPAD1` contract. Impossible opposing directions reject the emulator's
     all-buttons-pressed placeholder state, so keyboard behavior remains unchanged in WASM.
-    End screens require the start controls to be released before a fresh restart press.
+    End screens ignore repeated gameplay keys: Return restarts from the keyboard, while
+    Start/A/B must be released before a fresh pad restart press.
   - **World:** screen descriptors define up to two ground gaps, two raised platforms, one
     vine, a checkpoint, and a distinct moving threat. The route teaches a boulder jump,
     platform traversal, an active vine crossing, and ducking under a bat before combining

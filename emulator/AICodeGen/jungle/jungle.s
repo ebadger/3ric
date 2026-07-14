@@ -265,7 +265,7 @@ main:
 main_over:
         jsr show_end_msg
         jsr wait_release
-        jsr wait_start
+        jsr wait_restart
         jmp newgame
 
 ; ---------------------------------------------------------------------------
@@ -329,6 +329,33 @@ ws_pad:
         jsr pad_start_pressed
         bcc wait_start
 ws_done:
+        rts
+
+; wait_restart : Return or a fresh pad press.  Gameplay-key repeats are consumed
+;   but cannot dismiss the end screen.
+wait_restart:
+        lda KBD
+        bpl wrs_pad
+        tax
+        lda KBDSTRB
+        txa
+        jsr restart_key_pressed
+        bcs wrs_done
+wrs_pad:
+        lda PTRIG
+        jsr pad_start_pressed
+        bcc wait_restart
+wrs_done:
+        rts
+
+; restart_key_pressed : A is an Apple-keyboard code; carry set only for Return.
+restart_key_pressed:
+        cmp #$8D
+        bne rkp_none
+        sec
+        rts
+rkp_none:
+        clc
         rts
 
 ; pad_start_pressed : carry set only for a valid START/A/B pad state.
@@ -2728,11 +2755,11 @@ msg_ouch:
 msg_sun:
         .asciiz "THE SUNSTONE IS YOURS"
 msg_win:
-        .asciiz "SUNSTONE FOUND! SPACE/PAD TO RUN AGAIN"
+        .asciiz "SUNSTONE FOUND! RETURN/PAD TO RUN AGAIN"
 msg_over:
-        .asciiz "EXPEDITION LOST - SPACE/PAD TO RETRY"
+        .asciiz "EXPEDITION LOST - RETURN/PAD TO RETRY"
 msg_time:
-        .asciiz "NIGHT FELL - SPACE/PAD TO TRY AGAIN"
+        .asciiz "NIGHT FELL - RETURN/PAD TO TRY AGAIN"
 
 name0:  .asciiz "1 TRAILHEAD - LEAP THE BOULDER"
 name1:  .asciiz "2 BROKEN STEPS - TRUST YOUR JUMP"
@@ -2838,6 +2865,16 @@ startcheck_brk:
         ldx #$FF
         txs
         jsr pad_start_pressed
+        lda #0
+        rol a
+        sta status_code
+        brk
+
+restartkey_brk:
+        ldx #$FF
+        txs
+        lda KBD
+        jsr restart_key_pressed
         lda #0
         rol a
         sta status_code
