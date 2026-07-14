@@ -124,6 +124,10 @@
     return event.key.length === 1 ? event.key.charCodeAt(0) & 0x7f : null;
   }
 
+  function isPointerActivation(event) {
+    return !!event && typeof event.detail === "number" && event.detail > 0;
+  }
+
   function mount(element, onByte, focusTarget) {
     if (!element || !element.ownerDocument) {
       throw new TypeError("virtual keyboard mount point must be a DOM element");
@@ -151,15 +155,24 @@
       }
     }
 
-    function press(key) {
+    function restorePointerFocus(event) {
+      if (isPointerActivation(event) &&
+          focusTarget && typeof focusTarget.focus === "function") {
+        focusTarget.focus({ preventScroll: true });
+      }
+    }
+
+    function press(key, event) {
       if (key.modifier === "shift") {
         shiftActive = !shiftActive;
         updateModifiers();
+        restorePointerFocus(event);
         return;
       }
       if (key.modifier === "control") {
         controlActive = !controlActive;
         updateModifiers();
+        restorePointerFocus(event);
         return;
       }
 
@@ -167,9 +180,7 @@
       shiftActive = false;
       controlActive = false;
       updateModifiers();
-      if (focusTarget && typeof focusTarget.focus === "function") {
-        focusTarget.focus({ preventScroll: true });
-      }
+      restorePointerFocus(event);
     }
 
     for (let rowIndex = 0; rowIndex < KEY_ROWS.length; rowIndex++) {
@@ -200,7 +211,7 @@
           button.setAttribute("aria-label", key.ariaLabel || key.label || key.value);
         }
 
-        button.addEventListener("click", () => press(key));
+        button.addEventListener("click", (event) => press(key, event));
         row.appendChild(button);
       }
       fragment.appendChild(row);
@@ -210,5 +221,5 @@
     updateModifiers();
   }
 
-  return { KEY_ROWS, eventToByte, keyByte, mount };
+  return { KEY_ROWS, eventToByte, isPointerActivation, keyByte, mount };
 });

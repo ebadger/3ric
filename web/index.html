@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>3ric — Apple-II-clone 65C02 (WebAssembly)</title>
 <style>
-  :root { --bg:#0b0e0c; --fg:#33ff66; --dim:#1d6b33; --panel:#11140f; }
+  :root { --bg:#0b0e0c; --fg:#33ff66; --dim:#1d6b33; --panel:#11140f; --key-alt:#75bd89; }
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--bg); color: var(--fg);
@@ -61,6 +61,7 @@
   #virtual-keyboard .vk-summary-hint { float: right; color: var(--dim); letter-spacing: 0; }
   #virtual-keyboard-keys {
     display: flex; flex-direction: column; gap: 4px; padding: 8px;
+    overflow-x: auto; overscroll-behavior-inline: contain;
     user-select: none; -webkit-user-select: none;
   }
   .vk-row { display: flex; gap: 4px; }
@@ -68,9 +69,12 @@
   .vk-row-2 { margin-inline: 3%; }
   .vk-row-3 { margin-inline: 5%; }
   .vk-row-4 { margin-inline: 10%; }
-  .vk-row-5 { justify-content: center; padding-top: 2px; }
+  .vk-row-5 {
+    position: sticky; left: 0; justify-content: center; padding-top: 2px;
+    background: var(--panel);
+  }
   .vk-key {
-    display: flex; flex: 1 1 0; min-width: 0; min-height: 40px; align-items: center;
+    display: flex; flex: 1 1 0; min-width: 24px; min-height: 40px; align-items: center;
     justify-content: center; flex-direction: column; padding: 2px;
     border: 1px solid var(--dim); border-radius: 4px; background: var(--bg); color: var(--fg);
     font: 12px/1 "Cascadia Code", "Consolas", ui-monospace, monospace;
@@ -78,13 +82,13 @@
   }
   .vk-key:hover, .vk-key:active { background: #182119; }
   .vk-key:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; }
-  .vk-key.wide { flex-grow: 1.55; font-size: 10px; }
+  .vk-key.wide { flex-grow: 1.4; min-width: 42px; font-size: 10px; }
   .vk-row-5 .vk-key.space { flex: 0 0 46%; min-height: 44px; }
   .vk-key.is-active { background: var(--fg); color: var(--bg); border-color: var(--fg); }
-  .vk-shifted { color: var(--dim); font-size: 9px; line-height: 1; }
+  .vk-shifted { color: var(--key-alt); font-size: 9px; line-height: 1; }
   .vk-primary { color: var(--fg); line-height: 1.05; }
   .vk-shift-active .vk-shifted { color: var(--fg); }
-  .vk-shift-active .vk-primary { color: var(--dim); }
+  .vk-shift-active .vk-primary { color: var(--key-alt); }
   footer { padding: 8px 16px; border-top: 1px solid var(--dim); font-size: 11px; color: var(--dim); }
 
   /* --- in-browser assembler / editor ------------------------------------- */
@@ -842,6 +846,10 @@
         (byte) => inputQueue.push(byte),
         canvas,
       );
+      document.querySelector("#virtual-keyboard summary").addEventListener("click", (event) => {
+        if (!BadgerVirtualKeyboard.isPointerActivation(event)) return;
+        requestAnimationFrame(() => canvas.focus({ preventScroll: true }));
+      });
 
       canvas.addEventListener("keydown", (e) => {
         if (e.ctrlKey || e.metaKey || e.altKey) return;
