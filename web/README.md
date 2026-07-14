@@ -17,7 +17,8 @@ identically. Browser-only presentation code stays in the bridge and JavaScript.
   the WinUI host renderer (`MainWindow.xaml.cpp`) into the bridge so the color /
   fringe logic is identical.
 - Keyboard input via the Apple-II `$C000` / `$C010` strobe mechanism, including a
-  collapsible touch keyboard with the full emulator character set for phones.
+  collapsible touch keyboard matching the 1983 Apple IIe layout (minus Reset and
+  both Apple keys) for phones.
 - **Two gamepads** through the standard browser Gamepad API. USB and Bluetooth
   devices use the same path after OS pairing; the shared VM serializes them as real
   SNES pads through VIA1 and the unmodified ROM fills `GAMEPAD1/2`.

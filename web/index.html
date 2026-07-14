@@ -64,15 +64,7 @@
     overflow-x: auto; overscroll-behavior-inline: contain;
     user-select: none; -webkit-user-select: none;
   }
-  .vk-row { display: flex; gap: 4px; }
-  .vk-row-1 { margin-inline: 1.5%; }
-  .vk-row-2 { margin-inline: 3%; }
-  .vk-row-3 { margin-inline: 5%; }
-  .vk-row-4 { margin-inline: 10%; }
-  .vk-row-5 {
-    position: sticky; left: 0; justify-content: center; padding-top: 2px;
-    background: var(--panel);
-  }
+  .vk-row { display: flex; gap: 4px; min-width: 430px; }
   .vk-key {
     display: flex; flex: 1 1 0; min-width: 24px; min-height: 40px; align-items: center;
     justify-content: center; flex-direction: column; padding: 2px;
@@ -82,8 +74,15 @@
   }
   .vk-key:hover, .vk-key:active { background: #182119; }
   .vk-key:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; }
-  .vk-key.wide { flex-grow: 1.4; min-width: 42px; font-size: 10px; }
-  .vk-row-5 .vk-key.space { flex: 0 0 46%; min-height: 44px; }
+  .vk-key.delete { flex-grow: 1.65; min-width: 52px; font-size: 9px; }
+  .vk-key.tab { flex-grow: 1.65; min-width: 52px; font-size: 10px; }
+  .vk-key.control { flex-grow: 1.9; min-width: 62px; font-size: 9px; }
+  .vk-key.return { flex-grow: 1.8; min-width: 58px; font-size: 9px; }
+  .vk-key.shift { flex-grow: 2.3; min-width: 72px; font-size: 10px; }
+  .vk-key.caps { min-width: 42px; font-size: 8px; line-height: 1.05; white-space: normal; }
+  .vk-key.space { flex-grow: 6.2; min-width: 150px; min-height: 44px; }
+  .vk-key:disabled { opacity: .68; cursor: not-allowed; }
+  .vk-spacer { flex: 1 1 0; min-width: 24px; }
   .vk-key.is-active { background: var(--fg); color: var(--bg); border-color: var(--fg); }
   .vk-shifted { color: var(--key-alt); font-size: 9px; line-height: 1; }
   .vk-primary { color: var(--fg); line-height: 1.05; }
@@ -128,13 +127,7 @@
     main { gap: 12px; padding: 8px; }
     #virtual-keyboard-keys { gap: 3px; padding: 6px; }
     .vk-row { gap: 3px; }
-    .vk-row-1 { margin-inline: 1%; }
-    .vk-row-2 { margin-inline: 2%; }
-    .vk-row-3 { margin-inline: 3%; }
-    .vk-row-4 { margin-inline: 6%; }
-    .vk-row-5 .vk-key.space { flex-basis: 52%; }
     .vk-key { min-height: 38px; font-size: 11px; }
-    .vk-key.wide { font-size: 9px; }
     #ide { min-width: 0; }
   }
 </style>
@@ -173,7 +166,7 @@
     <section id="emulator" aria-label="emulator">
       <canvas id="screen" width="320" height="384" tabindex="0" aria-label="emulator video"></canvas>
       <details id="virtual-keyboard">
-        <summary>VIRTUAL KEYBOARD <span class="vk-summary-hint">full symbols + arrows</span></summary>
+        <summary>VIRTUAL KEYBOARD <span class="vk-summary-hint">1983 Apple IIe layout</span></summary>
         <div id="virtual-keyboard-keys" role="group" aria-label="Virtual emulator keyboard"></div>
       </details>
     </section>

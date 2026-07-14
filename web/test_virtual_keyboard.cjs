@@ -76,6 +76,19 @@ const keys = KEY_ROWS.flat();
 const findValue = (value) => keys.find((key) => key.value === value);
 const findModifier = (name) => keys.find((key) => key.modifier === name);
 const findAriaLabel = (label) => keys.find((key) => key.ariaLabel === label);
+const layoutToken = (key) => {
+  if (key.spacer) return "<gap>";
+  if (key.ariaLabel === "Space") return "SPACE";
+  return key.label || key.value;
+};
+
+assert.deepStrictEqual(KEY_ROWS.map((row) => row.map(layoutToken)), [
+  ["ESC", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "DELETE"],
+  ["TAB", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "[", "]", "\\"],
+  ["CONTROL", "A", "S", "D", "F", "G", "H", "J", "K", "L", ";", "'", "RETURN"],
+  ["SHIFT", "Z", "X", "C", "V", "B", "N", "M", ",", ".", "/", "SHIFT"],
+  ["CAPS LOCK", "`", "<gap>", "<gap>", "SPACE", "<gap>", "\u2190", "\u2192", "\u2193", "\u2191"],
+]);
 
 const emitted = new Set();
 for (const key of keys) {
@@ -101,8 +114,9 @@ assert.strictEqual(keyByte(findValue("/"), true, true), 0x7f);
 assert.strictEqual(keyByte(findModifier("shift"), false, false), null);
 assert.strictEqual(keyByte(findAriaLabel("Escape"), false, false), 0x1b);
 assert.strictEqual(keyByte(findAriaLabel("Tab"), false, false), 0x09);
-assert.strictEqual(keyByte(findAriaLabel("Backspace"), false, false), 0x08);
+assert.strictEqual(keyByte(findAriaLabel("Delete"), false, false), 0x7f);
 assert.strictEqual(keyByte(findAriaLabel("Return"), false, false), 0x0d);
+assert.strictEqual(keyByte(findAriaLabel("Caps Lock"), false, false), null);
 assert.strictEqual(keyByte(findAriaLabel("Up arrow"), false, false), 0x0b);
 assert.strictEqual(keyByte(findAriaLabel("Down arrow"), false, false), 0x0a);
 assert.strictEqual(keyByte(findAriaLabel("Right arrow"), false, false), 0x15);
@@ -126,17 +140,19 @@ mount(mountPoint, (byte) => emittedBytes.push(byte), {
 });
 
 const mountedButtons = mountPoint.children.flatMap((row) => row.children);
-const button = (label) =>
-  mountedButtons.find((candidate) => candidate.getAttribute("aria-label") === label);
+const buttons = (label) =>
+  mountedButtons.filter((candidate) => candidate.getAttribute("aria-label") === label);
+const button = (label) => buttons(label)[0];
 
-button("Shift").activate(1);
+button("SHIFT").activate(1);
 assert.strictEqual(focusCount, 1, "pointer modifier activation should restore canvas focus");
-assert.strictEqual(button("Shift").getAttribute("aria-pressed"), "true");
+assert(buttons("SHIFT").every((key) => key.getAttribute("aria-pressed") === "true"));
 button("A").activate(0);
 button("S").activate(0);
 assert.deepStrictEqual(emittedBytes, [0x41, 0x53]);
 assert.strictEqual(focusCount, 1, "keyboard activation should retain virtual-key focus");
-assert.strictEqual(button("Shift").getAttribute("aria-pressed"), "false");
+assert(buttons("SHIFT").every((key) => key.getAttribute("aria-pressed") === "false"));
+assert.strictEqual(button("Caps Lock").disabled, true);
 button("D").activate(1);
 assert.strictEqual(focusCount, 2, "pointer character activation should restore canvas focus");
 

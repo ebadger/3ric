@@ -13,13 +13,21 @@
     return Object.freeze({ label, code, className: className || "", ariaLabel: ariaLabel || label });
   }
 
-  function modifier(label, name) {
-    return Object.freeze({ label, modifier: name, className: "wide" });
+  function modifier(label, name, className) {
+    return Object.freeze({ label, modifier: name, className });
+  }
+
+  function disabledKey(label, className, ariaLabel, title) {
+    return Object.freeze({ label, className, ariaLabel, title, disabled: true });
+  }
+
+  function spacer(className) {
+    return Object.freeze({ spacer: true, className });
   }
 
   const KEY_ROWS = Object.freeze([
     Object.freeze([
-      special("Esc", 0x1b, "wide", "Escape"),
+      special("ESC", 0x1b, "", "Escape"),
       printable("1", "!"),
       printable("2", "@"),
       printable("3", "#"),
@@ -30,10 +38,12 @@
       printable("8", "*"),
       printable("9", "("),
       printable("0", ")"),
-      special("Back", 0x08, "wide", "Backspace"),
+      printable("-", "_"),
+      printable("=", "+"),
+      special("DELETE", 0x7f, "delete", "Delete"),
     ]),
     Object.freeze([
-      special("Tab", 0x09, "wide"),
+      special("TAB", 0x09, "tab", "Tab"),
       printable("Q"),
       printable("W"),
       printable("E"),
@@ -44,10 +54,12 @@
       printable("I"),
       printable("O"),
       printable("P"),
-      special("Return", 0x0d, "wide"),
+      printable("[", "{"),
+      printable("]", "}"),
+      printable("\\", "|"),
     ]),
     Object.freeze([
-      modifier("Ctrl", "control"),
+      modifier("CONTROL", "control", "control"),
       printable("A"),
       printable("S"),
       printable("D"),
@@ -59,9 +71,10 @@
       printable("L"),
       printable(";", ":"),
       printable("'", "\""),
+      special("RETURN", 0x0d, "return", "Return"),
     ]),
     Object.freeze([
-      modifier("Shift", "shift"),
+      modifier("SHIFT", "shift", "shift"),
       printable("Z"),
       printable("X"),
       printable("C"),
@@ -72,26 +85,29 @@
       printable(",", "<"),
       printable(".", ">"),
       printable("/", "?"),
+      modifier("SHIFT", "shift", "shift"),
     ]),
     Object.freeze([
+      disabledKey(
+        "CAPS LOCK",
+        "caps",
+        "Caps Lock",
+        "3ric keyboard input is uppercase-only",
+      ),
       printable("`", "~"),
-      printable("-", "_"),
-      printable("=", "+"),
-      printable("[", "{"),
-      printable("]", "}"),
-      printable("\\", "|"),
+      spacer("case-gap"),
+      spacer("apple-slot"),
+      special("", 0x20, "space", "Space"),
+      spacer("apple-slot"),
       special("\u2190", 0x08, "", "Left arrow"),
-      special("\u2191", 0x0b, "", "Up arrow"),
-      special("\u2193", 0x0a, "", "Down arrow"),
       special("\u2192", 0x15, "", "Right arrow"),
-    ]),
-    Object.freeze([
-      special("Space", 0x20, "space"),
+      special("\u2193", 0x0a, "", "Down arrow"),
+      special("\u2191", 0x0b, "", "Up arrow"),
     ]),
   ]);
 
   function keyByte(key, shifted, controlled) {
-    if (!key || key.modifier) return null;
+    if (!key || key.modifier || key.disabled || key.spacer) return null;
 
     let value;
     if (typeof key.code === "number") {
@@ -145,13 +161,13 @@
     function updateModifiers() {
       element.classList.toggle("vk-shift-active", shiftActive);
       element.classList.toggle("vk-control-active", controlActive);
-      if (modifierButtons.shift) {
-        modifierButtons.shift.classList.toggle("is-active", shiftActive);
-        modifierButtons.shift.setAttribute("aria-pressed", String(shiftActive));
+      for (const button of modifierButtons.shift || []) {
+        button.classList.toggle("is-active", shiftActive);
+        button.setAttribute("aria-pressed", String(shiftActive));
       }
-      if (modifierButtons.control) {
-        modifierButtons.control.classList.toggle("is-active", controlActive);
-        modifierButtons.control.setAttribute("aria-pressed", String(controlActive));
+      for (const button of modifierButtons.control || []) {
+        button.classList.toggle("is-active", controlActive);
+        button.setAttribute("aria-pressed", String(controlActive));
       }
     }
 
@@ -188,15 +204,29 @@
       const row = document.createElement("div");
       row.className = `vk-row vk-row-${rowIndex}`;
       for (const key of keys) {
+        if (key.spacer) {
+          const gap = document.createElement("span");
+          gap.className = "vk-spacer" + (key.className ? ` ${key.className}` : "");
+          gap.setAttribute("aria-hidden", "true");
+          row.appendChild(gap);
+          continue;
+        }
+
         const button = document.createElement("button");
         button.type = "button";
         button.className = "vk-key" + (key.className ? ` ${key.className}` : "");
 
-        if (key.modifier) {
+        if (key.disabled) {
+          button.textContent = key.label;
+          button.setAttribute("aria-label", key.ariaLabel);
+          button.title = key.title;
+          button.disabled = true;
+        } else if (key.modifier) {
           button.textContent = key.label;
           button.setAttribute("aria-label", key.label);
           button.setAttribute("aria-pressed", "false");
-          modifierButtons[key.modifier] = button;
+          if (!modifierButtons[key.modifier]) modifierButtons[key.modifier] = [];
+          modifierButtons[key.modifier].push(button);
         } else if (typeof key.shifted === "string") {
           const shiftedLabel = document.createElement("span");
           shiftedLabel.className = "vk-shifted";
@@ -207,11 +237,13 @@
           button.append(shiftedLabel, primaryLabel);
           button.setAttribute("aria-label", `${key.value}; Shift ${key.shifted}`);
         } else {
-          button.textContent = key.label || key.value;
-          button.setAttribute("aria-label", key.ariaLabel || key.label || key.value);
+          button.textContent = key.label || key.value || "";
+          button.setAttribute("aria-label", key.ariaLabel || key.label || key.value || "");
         }
 
-        button.addEventListener("click", (event) => press(key, event));
+        if (!key.disabled) {
+          button.addEventListener("click", (event) => press(key, event));
+        }
         row.appendChild(button);
       }
       fragment.appendChild(row);
