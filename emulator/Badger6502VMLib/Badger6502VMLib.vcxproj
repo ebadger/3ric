@@ -35,6 +35,7 @@
     <ClCompile Include="ay38910.cpp" />
     <ClCompile Include="mockingboard.cpp" />
     <ClCompile Include="PS2Keyboard.cpp" />
+    <ClCompile Include="snesgamepads.cpp" />
     <ClCompile Include="symbols.cpp" />
     <ClCompile Include="via.cpp" />
     <ClCompile Include="vm.cpp" />
@@ -47,6 +48,7 @@
     <ClInclude Include="opcodes.h" />
     <ClInclude Include="mockingboard.h" />
     <ClInclude Include="ps2keyboard.h" />
+    <ClInclude Include="snesgamepads.h" />
     <ClInclude Include="symbols.h" />
     <ClInclude Include="via.h" />
     <ClInclude Include="vm.h" />

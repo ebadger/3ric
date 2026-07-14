@@ -75,10 +75,10 @@ node codegen/tools/swarm.test.mjs
 - **D / right** — move the cannon right
 - **SPACE** — fire; also starts the game from the title screen and restarts on
   the game-over screen
-- **SNES D-pad left / right** — move the cannon on real hardware
+- **SNES D-pad left / right** — move the cannon
 - **SNES A / B** — fire
 - **SNES START** — start or restart; **SELECT** — quit to the monitor
 
 The ROM refreshes its `GAMEPAD1` table when the game touches `PTRIG`; impossible
-D-pad states are ignored so the unmodelled controller stays inert in the
-emulator. Verify pad input on real hardware.
+D-pad states are ignored defensively. The shared emulator models the same VIA/SNES
+serial path, with browser USB/Bluetooth controllers supplying the button state.

@@ -33,6 +33,7 @@ VM::~VM()
 {
 	delete _cpu;
 	delete _acia;
+	delete _gamepads;
 	delete _via1;
 	delete _mockingboard;
 	delete _pPS2;
@@ -44,6 +45,7 @@ void VM::Init()
 	_cpu = new CPU(this);
 	_acia = new ACIA(this);
 	_via1 = new VIA(this);
+	_gamepads = new SNESGamepads(*_via1);
 	_mockingboard = new Mockingboard();
 	_pPS2 = new PS2Keyboard(this);
 	srand(*(unsigned int*)(void*)this);
@@ -77,6 +79,7 @@ void VM::Reset()
 	_acia->Reset();
 	_pPS2->Reset();
 	_via1->Reset();
+	_gamepads->Reset();
 	_mockingboard->Reset();
 }
 
@@ -110,11 +113,17 @@ void VM::SignalVIA1Pin(VIA::Pins pin)
 	UpdateVIA1NMI();
 }
 
+bool VM::SetGamepadState(uint8_t controller, uint16_t pressedButtons)
+{
+	return _gamepads->SetState(controller, pressedButtons);
+}
+
 void VM::TickDevices(uint32_t cycles)
 {
 	for (uint32_t i = 0; i < cycles; ++i)
 	{
 		_via1->Tick();
+		_gamepads->UpdatePortB(_via1->GetPortBOutput());
 		UpdateVIA1NMI();
 		_mockingboard->Tick();
 	}
@@ -592,6 +601,7 @@ void VM::WriteData(uint16_t address, uint8_t byte)
 	{
 		// VIA1
 		_via1->WriteRegister(address & 0xF, byte);
+		_gamepads->UpdatePortB(_via1->GetPortBOutput());
 		UpdateVIA1NMI();
 	}
 	else if (address >= MM_MOCKINGBOARD_VIA1_START

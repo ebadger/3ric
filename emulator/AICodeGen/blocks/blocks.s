@@ -4,11 +4,11 @@
 ;   * Generic falling-block stacker in a 10 x 20 well.
 ;   * Controls: Left/Right arrows or A/D move, Up/W rotates, Down/S drops,
 ;     Q quits.  SPACE restarts after game over.
-;   * SNES gamepad (real hardware): D-pad Left/Right move, Down soft-drops,
-;     Up / A / B rotate, SELECT quits, START restarts after game over.  The pad
-;     is read from the ROM's GAMEPAD1 ($CEE0) table, refreshed by touching PTRIG
-;     ($C070) which raises the VIA CB2 edge -> NMI pad-scan.  The emulator has no
-;     gamepad hardware, so the pad is a no-op there; verify on real hardware.
+;   * SNES gamepad: D-pad Left/Right move, Down soft-drops, Up / A / B rotate,
+;     SELECT quits, START restarts after game over.  The pad is read from the
+;     ROM's GAMEPAD1 ($CEE0) table, refreshed by touching PTRIG ($C070) which
+;     raises the VIA CB2 edge -> NMI pad-scan.  Browser USB/Bluetooth pads use
+;     this same VIA serial path.
 ;   * The well contents live in RAM; the text screen is rendered from that model.
 ;   * Gravity is paced by a 16-bit counter (GRAV) tuned for the native ~1.57 MHz
 ;     clock (~0.8 s/cell) so the drop is a comfortable classic pace, not too fast.
@@ -263,11 +263,9 @@ rk_rot:
 ; Down soft-drops fast while held; rotate is edge-detected via gpRot so one
 ; press = one turn; SELECT quits.
 ;
-; A real D-pad can never report LEFT+RIGHT or UP+DOWN simultaneously, so those
-; impossible combinations are rejected.  That also makes the pad a no-op under
-; emulation: the emulator models no pad hardware, so the ROM's bit-bang reads
-; every button as pressed -- the guard catches that and leaves the game on the
-; keyboard.  A disconnected pad reads all-zero (also safe).
+; A D-pad should not report LEFT+RIGHT or UP+DOWN simultaneously, so those
+; impossible combinations are rejected defensively.  A disconnected pad reads
+; all-zero.
 ; ---------------------------------------------------------------------------
 read_pad:
         lda PTRIG               ; strobe -> CB2 -> NMI -> ROM fills GAMEPAD1
@@ -582,7 +580,7 @@ go_wait:
         lda PTRIG               ; refresh the pad (-> CB2 -> NMI -> ROM scan)
         lda GAMEPAD1 + PAD_LEFT
         and GAMEPAD1 + PAD_RIGHT
-        bne go_wait             ; invalid combo (also the emulator) -> ignore pad
+        bne go_wait             ; invalid opposing directions -> ignore pad
         lda GAMEPAD1 + PAD_UP
         and GAMEPAD1 + PAD_DOWN
         bne go_wait
@@ -945,4 +943,3 @@ sh_j3: .byte 0,0, 0,1, 1,1, 2,1
 msg_status: .byte "BLOCK DROP  SCORE:000 A/D W/S ROT Q +PAD", 0
 msg_over:   .byte "**** GAME OVER ****", 0
 msg_again:  .byte "SPACE = PLAY AGAIN     Q = QUIT", 0
-

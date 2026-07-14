@@ -4,12 +4,11 @@ This folder is a self-contained Emscripten/WebAssembly port of the `3ric` 65C02
 Apple-II-clone emulator. It compiles the existing C++ VM core
 (`emulator/Badger6502VMLib`) and disk library (`emulator/WozLib`) to WebAssembly,
 boots the real 512KB ROM, renders Apple-II text/hi-res/lo-res video to an HTML
-`<canvas>`, feeds keystrokes through the memory-mapped keyboard at `$C000`, and
-plays the slot-4 dual-AY Mockingboard through Web Audio.
+`<canvas>`, feeds keyboard and gamepad input through the machine's hardware paths,
+and plays the slot-4 dual-AY Mockingboard through Web Audio.
 
-Everything here is additive. The shared VM/WozLib sources gained only
-`__EMSCRIPTEN__` / `PLATFORM_WEB`-guarded branches, so the Windows (WinUI) and
-Pico builds compile and behave exactly as before.
+The VM peripherals remain in the shared C++ core so native and WASM builds behave
+identically. Browser-only presentation code stays in the bridge and JavaScript.
 
 ## What works
 
@@ -18,6 +17,9 @@ Pico builds compile and behave exactly as before.
   the WinUI host renderer (`MainWindow.xaml.cpp`) into the bridge so the color /
   fringe logic is identical.
 - Keyboard input via the Apple-II `$C000` / `$C010` strobe mechanism.
+- **Two gamepads** through the standard browser Gamepad API. USB and Bluetooth
+  devices use the same path after OS pairing; the shared VM serializes them as real
+  SNES pads through VIA1 and the unmodified ROM fills `GAMEPAD1/2`.
 - **Micro-SD card** (bit-banged SPI through VIA1) backing a FAT32 disk image. A
   **Mount SD** button drops into the ROM's DOS shell (`>` prompt) and lists the
   card; from there `DIR`, `CAT`, `CD <dir>`, `BLOAD`/`BRUN <file>` all work.
@@ -43,7 +45,8 @@ Pico builds compile and behave exactly as before.
 
 | File | Purpose |
 | --- | --- |
-| `web_bridge.cpp` | embind bridge: wraps `VM`, exposes load/run/keyboard/registers/audio, drives the SD card, and produces the RGBA framebuffer. |
+| `web_bridge.cpp` | embind bridge: wraps `VM`, exposes load/run/keyboard/gamepad/registers/audio, drives the SD card, and produces the RGBA framebuffer. |
+| `gamepad.js` | Dependency-free standard-layout browser controller mapping and stable two-player assignment. |
 | `emulation-clock.js` | Elapsed-time cycle pacer that keeps finite CPU speeds independent of display refresh rate and carries instruction overshoot between frames. |
 | `audio-worklet.js` | Stereo PCM queue on the browser audio-rendering thread; no `SharedArrayBuffer` or cross-origin isolation required. |
 | `web_compat.h` | Tiny shims so `WozLib` + `MockMicroSD`'s MSVC-isms (`OutputDebugString`, `sprintf_s`, `swprintf_s`, `fopen_s`, `_ASSERT`, …) compile under Emscripten. |
@@ -53,7 +56,7 @@ Pico builds compile and behave exactly as before.
 | `asm6502.mjs` | The 65C02 assembler, staged from `codegen/tools/asm6502.mjs` (git-ignored). Dual-use: the same file is a Node CLI and a browser ES module — `index.html` imports its `assemble()` for **Assemble & Run**. |
 | `serve.ps1` | Starts `python -m http.server` (defaults to port 8011) for local dev. |
 | `Caddyfile` | Production static server config (compression + cache headers) for hosting behind a Cloudflare Tunnel. |
-| `test_*.cjs` | Headless Node validations (boot, render, keyboard, screen decode, SD, disk). |
+| `test_*.cjs` | Headless Node validations (boot, render, input, audio, screen decode, SD, disk). |
 
 Build outputs (`badger6502.js`, `badger6502.wasm`), the staged `data/` copies,
 and the editor's staged `asm6502.mjs` + `programs/*.s` sample sources are
@@ -79,7 +82,7 @@ cd web
 This compiles these sources with `-DPLATFORM_WEB`:
 
 ```
-Badger6502VMLib: vm cpu Instructions acia via ay38910 mockingboard PS2Keyboard badgervmpal
+Badger6502VMLib: vm cpu Instructions acia via snesgamepads ay38910 mockingboard PS2Keyboard badgervmpal
 WozLib:          DriveEmulator WozDisk WozFile
 MockMicroSD:     SDCard MappedFile
 bridge:          web_bridge.cpp
@@ -111,6 +114,18 @@ Press **Enable Sound** to start stereo Mockingboard playback. Browser autoplay
 rules require this click; sound is intentionally generated only at native 1×.
 
 > Port 8011 is used because 8000 is taken on this machine.
+
+## Browser gamepads
+
+Pair a Bluetooth controller in the operating system, or connect one over USB, then
+press a controller button after opening the page. The browser may not expose a pad
+until that first input. The header assigns the first two connected devices to stable
+**P1** and **P2** slots and releases every button immediately on disconnect.
+
+Standard-layout face buttons map to SNES B/A/Y/X, Select/Start map to the center
+buttons, either bumper or trigger maps to L/R, and the D-pad or left stick controls
+directions (0.5 deadzone). Games read the normal ROM `PTRIG` and `GAMEPAD1/2`
+interface; JavaScript does not bypass the VIA or ROM scan.
 
 ## In-browser assembler (Assemble & Run)
 
@@ -195,6 +210,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web\test_audio_pacing.cjs # real WASM PCM rate at 60/144 Hz displays
 & $node web\test_audio_worklet.cjs # prebuffer + bounded PCM queue
 & $node web\test_mockingboard.cjs # mirrors, stereo PCM, 3RIC clock, timer IRQ
+& $node web\test_gamepad.cjs    # mapping, VIA serialization, ROM GAMEPAD1/2 scan
 & $node web\test_sd.cjs          # mount the SD card + DIR lists the FAT32 root
 & $node web\test_disk.cjs        # boot a WOZ floppy via C600G into a hi-res title
 ```
