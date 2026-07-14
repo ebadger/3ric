@@ -26,15 +26,17 @@ binary live in
 node codegen/tools/asm6502.mjs emulator/AICodeGen/life/life.s web/programs/life.prg --org 0x0800
 ```
 
-`jungle.prg` is **JUNGLE QUEST**, an original hi-res jungle platformer — explore a
-four-screen jungle: run and jump across platforms, dodge a rolling log, swing on a
-vine over a wide pit, and grab all six gems before the 60-second timer runs out
-(**A/D** move and cross between areas, **W/SPACE** jump — jump into a vine to grab
-it; **SPACE** starts the game from the title screen and restarts on an end screen).
+`jungle.prg` is **JUNGLE QUEST: THE SUNSTONE RUN**, an original six-screen hi-res
+action-platformer. Recover four glyphs to open the Sun Temple, then cross its
+broken steps and claim the Sunstone. The route mixes raised platforms, two-gap
+rooms, boulders, snakes, a bat you can duck under, and a Blackwater vine you
+actively release. Optional fruit restores time; a death keeps progress and
+returns to the current checkpoint. **A/D** or arrows run, **W/Up/Space** jumps
+and releases the vine, and **S/Down** ducks/brakes. Real hardware also supports
+the SNES D-pad and A/B.
 Source, prompt, and binary live in
 [`emulator/AICodeGen/jungle/`](../../emulator/AICodeGen/jungle); deep-link it at
-`?prg=programs/jungle.prg&org=0800` (set **Speed** to **1MHz** or **2MHz** for a
-playable pace):
+`?prg=programs/jungle.prg&org=0800` (native **1×** is the tuned speed):
 
 ```sh
 node codegen/tools/asm6502.mjs emulator/AICodeGen/jungle/jungle.s web/programs/jungle.prg --org 0x0800

@@ -111,7 +111,7 @@ browser emulator (open one from the editor's sample picker):
 | --- | --- | --- |
 | **Star Swarm** | `swarm/swarm.s` | The hi-res Space Invaders this series builds toward — sprite blitting, a HUD, bombs, a saucer. The "full version" of Lesson 7. |
 | **Rock Storm** | `rocks/rocks.s` | Asteroids-style vector drawing, rotation, thrust, and wrap-around motion. |
-| **Jungle Quest** | `jungle/jungle.s` | A hi-res platformer: gravity, jumping, scrolling, and tile collision. |
+| **Jungle Quest** | `jungle/jungle.s` | A six-screen hi-res platformer: fixed-point gravity, buffered/coyote jumps, one-way platforms, descriptor-driven terrain, sprite restoration, and AABB collision. |
 | **Brick Buster** | `bricks/bricks.s` | Breakout in text mode — a compact take on ball/paddle/brick collision. |
 | **Paddles** | `paddles/paddles.s` | Two-player Pong; the simplest place to study game *rules* and scoring. |
 | **Minefield** | `mines/mines.s` | Minesweeper — grids, flood fill, and mouse-free cursor UI. |

@@ -43,7 +43,7 @@ runs). The editor uses the very same assembler as the CLI above
 | Project | Description | Load addr |
 | --- | --- | --- |
 | [`life`](life) | Conway's Game of Life — full-screen lo-res colour, toroidal wrap, **SPACE** reseeds. | `$0800` |
-| [`jungle`](jungle) | JUNGLE QUEST — original hi-res jungle platformer: a four-screen world with run/jump physics, a rolling-log hazard, a swinging vine, six gems, a countdown timer, and a title screen. | `$0800` |
+| [`jungle`](jungle) | JUNGLE QUEST: THE SUNSTONE RUN — six-screen hi-res action-platformer with buffered/coyote jumps, ducking, raised platforms, boulders/snakes/bats, an active vine release, optional fruit, four temple glyphs, checkpoints, and SNES-pad controls. | `$0800` |
 | [`rocks`](rocks) | ROCK STORM — original hi-res vector rock-shooter: a rotate/thrust/inertia ship, shots that split drifting rocks, screen wrap, a thrust flame, hyperspace, escalating waves, score/lives, and attract/game-over screens. | `$0800` |
 | [`swarm`](swarm) | STAR SWARM — original hi-res fixed-shooter: a formation of aliens that marches, drops, and speeds up while raining bombs, a bottom cannon that fires up, destructible shields, a bonus saucer, escalating waves, score/lives/high score, and attract/game-over screens. | `$0800` |
 | [`snake`](snake) | SNAKE — lo-res colour arcade classic: steer a growing snake around a 40×40 playfield to eat food; hitting a wall or yourself ends the game. Arrows/WASD, **SPACE** restarts. | `$0800` |

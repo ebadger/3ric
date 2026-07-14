@@ -37,6 +37,34 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   `.s` files (`codegen/programs/hello.s`, `emulator/AICodeGen/<name>/<name>.s`); assembled
   `.prg` images are git-ignored (regenerated). Run on hardware/SD via `BRUN NAME.PRG <org>`,
   or in the browser via **Load .PRG** / **Assemble & Run**.
+- **Jungle Quest — The Sunstone Run:** `emulator/AICodeGen/jungle/jungle.s` is an original
+  mixed-hi-res action platformer loaded at `$0800`. Its six flip-screens form one authored
+  expedition rather than interchangeable obstacle rooms:
+  - **Movement:** A/D or Left/Right runs; W/Up/Space jumps; S/Down ducks. Input includes a
+    short movement latch for the keyboard's event-driven interface, a four-frame coyote
+    window, a five-frame jump buffer, and a low ducking hitbox. A grabbed vine follows a
+    pendulum arc and Jump releases it without immediately re-catching; it also releases
+    safely over the far bank.
+  - **Hardware controls:** SNES D-pad moves/ducks and A/B jumps via the ROM's
+    `PTRIG`/`GAMEPAD1` contract. Impossible opposing directions reject the emulator's
+    all-buttons-pressed placeholder state, so keyboard behavior remains unchanged in WASM.
+    End screens ignore repeated gameplay keys: Return restarts from the keyboard, while
+    Start/A/B must be released before a fresh pad restart press.
+  - **World:** screen descriptors define up to two ground gaps, two raised platforms, one
+    vine, a checkpoint, and a distinct moving threat. The route teaches a boulder jump,
+    platform traversal, an active vine crossing, and ducking under a bat before combining
+    those verbs at the ruins and temple.
+  - **Objective and rewards:** four mandatory glyphs on the first four screens unlock the
+    temple; optional fruit awards score and restores time. The final Sunstone ends the run.
+    Death costs one of three lives and five clock units but respawns at the current screen's
+    checkpoint with collected items preserved. The initial gameplay clock is 90 units.
+  - **Presentation:** a textured jungle/ruins background, water-filled gaps, raised masonry
+    and animated player/threat sprites make each screen readable. The mixed-mode HUD shows
+    score, time, lives, glyph progress, and contextual gate/status messages.
+  Focused headless hooks verify renderer primitives, buffered/coyote jumps, platform and
+  gap collision, duck-vs-bat behavior, item effects, checkpoint death, gate progression,
+  vine release, timer states, restart input gating, and final victory. The assembled image
+  must end below the hi-res page at `$2000`.
 - **Disk & card images:** demo `.woz` (staged from `emulator/WozFileTestApp/testdata/`);
   `emulator/Data/sd.zip` → `web/data/sd.sparse` FAT32 image (`WEB-CLIENT.md`).
 
@@ -62,6 +90,12 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
 `badger6502.bin → mapped $D000–$FFFF + banks; reset → monitor → (Disk II C600G | DOS EC5CG |
 BRUN) → user program runs → COUT/screen/serial output`.
 
+For Jungle Quest:
+`keyboard event or SNES poll → movement/jump/duck latches → 8.8 physics → terrain/platform/
+hazard/item collision → lives/time/glyph/score state → BG restore + sprite redraw → hi-res
+page and mixed-mode HUD`; a screen-edge transition loads the next descriptor, while death
+reloads the same descriptor at its checkpoint.
+
 ## Dependencies
 
 - **Upstream:** the assembler/build (cc65/ca65 for the ROM; `CODEGEN.md` for programs).
@@ -79,3 +113,4 @@ BRUN) → user program runs → COUT/screen/serial output`.
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | ROCK STORM vector game | Shipped / cycle-guarded | Opening-wave live frame is 133,262 cycles against a 175,000-cycle limit; both distributed `.prg` copies are generated from `rocks.s`. |
 | SNES gamepad input | Shipped (hardware) | ROM fills `GAMEPAD1/2` on a `$C070` touch; `blocks` (BLOCK DROP) reads it — D-pad move/soft-drop, `A`/`B`/Up rotate, `SELECT` quit, `START` restart. Inert in the emulator (no pad hardware). |
+| Jungle Quest — The Sunstone Run | Shipped | Six-screen `$0800` mixed-hi-res platformer; focused suite includes a complete successful expedition. |
