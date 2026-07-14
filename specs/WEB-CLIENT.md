@@ -53,7 +53,9 @@ client-side so GitHub Pages can host it as static files.
   bottom-row spacers preserve the remaining keys' physical positions. One-shot Shift and
   Control modifiers complete the emulator's character set. Key buttons enqueue the same
   7-bit bytes as physical `keydown` events; the frame driver remains the single writer to
-  `keyDown()` and waits for the `$C000` strobe to clear before delivering each byte.
+  `keyDown()` and waits for the `$C000` strobe to clear before delivering each byte. At
+  phone widths (480 CSS pixels or less), each row fits the keyboard panel's available width
+  without horizontal scrolling while retaining the diagram's relative key widths.
 - **Browser gamepads (`gamepad.js` + `index.html`):** the frame driver polls the standard
   Gamepad API before running the CPU, keeps the first two connected devices in stable player
   slots, maps each to the 12-button SNES mask, and calls `setGamepadState()` for both slots.
@@ -143,7 +145,9 @@ client-side so GitHub Pages can host it as static files.
   ROM, so the virtual keycaps show uppercase letters. The IIe Caps Lock key is displayed in
   its physical position but disabled with an explicit uppercase-only label; it does not fake
   a lowercase mode the bridge cannot deliver. Both the virtual IIe Delete key and a physical
-  keyboard's Delete key emit ASCII DEL (`$7F`).
+  keyboard's Delete key emit ASCII DEL (`$7F`). On phone-width viewports, key and spacer
+  minimums collapse so the flex-unit layout scales to the panel rather than overflowing it;
+  wider viewports retain the full-size 530-pixel keyboard and its horizontal fallback.
 - Pointer/touch activation returns focus to the canvas after expanding the panel or pressing
   any virtual key, preserving immediate physical-keyboard input. Keyboard and assistive-
   technology activation retains focus on the activated control so consecutive accessible
@@ -229,7 +233,7 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 |------|--------|-------|
 | WASM build of the VM core + WozLib + SD | Shipped | `web/build.ps1`, Emscripten 6.0.1. |
 | Canvas video + keyboard | Shipped | text/lo-res/hi-res, `$C000` input. |
-| Mobile virtual keyboard | Shipped | Exact 1983 Apple IIe Figure 2-1 key order/widths below the canvas, minus Reset and both Apple keys; full emulator character set, one-shot Shift/Control, and the same strobe-aware `$C000` queue as physical input. |
+| Mobile virtual keyboard | Shipped | Exact 1983 Apple IIe Figure 2-1 key order/widths below the canvas, minus Reset and both Apple keys; full emulator character set, one-shot Shift/Control, the same strobe-aware `$C000` queue as physical input, and viewport-fitting rows without phone-width horizontal scrolling. |
 | USB/Bluetooth gamepads | Shipped | Two stable player slots through the standard Gamepad API and shared SNES/VIA peripheral; covered by browser-mapping, serial-protocol, and ROM-table tests. |
 | Disk II WOZ boot + micro-SD DOS shell | Shipped | **Boot Disk** / **Mount SD** buttons. |
 | In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; ~11 samples; `?src=`. Sample sources fetched with `cache:"no-cache"` (revalidate) so a new deploy isn't masked by the browser cache. |

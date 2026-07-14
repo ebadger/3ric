@@ -62,7 +62,10 @@
     image-rendering: pixelated; image-rendering: crisp-edges;
     background: #000; border: 1px solid var(--dim); outline: none;
   }
-  #virtual-keyboard { border: 1px solid var(--dim); border-radius: 4px; background: var(--panel); }
+  #virtual-keyboard {
+    width: 100%; min-width: 0; max-width: 100%;
+    border: 1px solid var(--dim); border-radius: 4px; background: var(--panel);
+  }
   #virtual-keyboard summary {
     padding: 7px 9px; cursor: pointer; color: var(--fg); font-size: 11px;
     letter-spacing: .6px; touch-action: manipulation; user-select: none;
@@ -137,9 +140,18 @@
   #ide .remix.show { display: block; }
   @media (max-width: 480px) {
     main { gap: 12px; padding: 8px; }
-    #virtual-keyboard-keys { gap: 3px; padding: 6px; }
-    .vk-row { gap: 3px; }
-    .vk-key { min-height: 38px; font-size: 11px; }
+    #virtual-keyboard-keys { gap: 3px; padding: 6px; overflow-x: hidden; }
+    .vk-row { gap: 3px; min-width: 0; width: 100%; }
+    /* Let the flex-unit widths shrink proportionally instead of forcing a 530px row. */
+    #virtual-keyboard .vk-key, #virtual-keyboard .vk-spacer { min-width: 0; }
+    .vk-key {
+      min-height: 38px; overflow: hidden;
+      font-size: clamp(8px, 3vw, 11px);
+    }
+    #virtual-keyboard .vk-key.delete,
+    #virtual-keyboard .vk-key.control,
+    #virtual-keyboard .vk-key.return { font-size: clamp(6px, 2.2vw, 9px); }
+    #virtual-keyboard .vk-key.caps { font-size: clamp(5px, 1.9vw, 8px); }
     #ide { min-width: 0; }
   }
 </style>
