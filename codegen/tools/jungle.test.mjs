@@ -75,6 +75,7 @@ function flatTerrain() {
   vm.poke(S.PLAT2_Y, S.GROUND_TOP);
   vm.poke(S.VINE_ON, 0);
   vm.poke(S.ONVINE, 0);
+  vm.poke(S.VINELOCK, 0);
   vm.poke(S.HZ_TYPE, S.HZ_NONE_KIND);
 }
 
@@ -412,6 +413,17 @@ console.log("H) active vine release");
     vm.peek(S.ONVINE) === 0 && (vm.peek(S.VY_HI) & 0x80) &&
       vm.peek(S.MOVEDIR) === 0 && vm.peek(S.MOVETMR) === 10,
     "Jump releases the vine with an upward/rightward bonus arc",
+  );
+  const releaseX = peekWord(S.PX_LO);
+  let regrabbed = false;
+  for (let frame = 0; frame < 10; frame++) {
+    key(0);
+    runHook(S.STEP_BRK, `post-release arc ${frame}`);
+    regrabbed ||= vm.peek(S.ONVINE) === 1;
+  }
+  ok(
+    !regrabbed && peekWord(S.PX_LO) > releaseX + S.GRAB_R,
+    "release arc clears the catch radius without immediately re-grabbing",
   );
 
   resetPlayer(106, 169);

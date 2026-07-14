@@ -123,6 +123,7 @@ hz_spd   = STATE+66
 hz_y     = STATE+67
 hz_w     = STATE+68
 hz_h     = STATE+69
+vinelock = STATE+70     ; released vine stays locked until player leaves GRAB_R
 
 ; world-wide item table (NITEM entries, tagged by screen and kind)
 item_x   = STATE+96
@@ -398,6 +399,7 @@ init_state:
         sta curscr
         sta flipreq
         sta onvine
+        sta vinelock
         lda #1
         sta onground
         lda #3
@@ -488,6 +490,7 @@ set_screen_vars:
         lda #0
         sta onvine
         sta invuln
+        sta vinelock
         rts
 
 ; load_screen : rebuild the current screen and its HUD.
@@ -712,6 +715,8 @@ up_vine:
         sta jumpbuf
         sta yfrac
         sta movedir             ; release keeps rightward momentum
+        lda #1
+        sta vinelock
         lda #10
         sta movetmr
         lda #$80
@@ -803,15 +808,6 @@ try_grab_vine:
         beq tg_no
         lda onvine
         bne tg_no               ; already swinging
-        lda onground
-        bne tg_no               ; must be airborne
-        lda py                  ; body must overlap the visible rope
-        cmp #VINE_BOT
-        bcs tg_no
-        clc
-        adc #PLAYER_FEET
-        cmp #VINE_TOP+1
-        bcc tg_no
         clc                     ; centre x = px + 6
         lda px_lo
         adc #6
@@ -837,10 +833,21 @@ try_grab_vine:
         sta tmp2
 tg_abs:
         lda tmp2
-        bne tg_no               ; |d| >= 256 -> far away
+        bne tg_outside          ; |d| >= 256 -> far away
         lda tmp
         cmp #GRAB_R+1
-        bcs tg_no               ; |d| > GRAB_R
+        bcs tg_outside          ; |d| > GRAB_R
+        lda vinelock
+        bne tg_no               ; Jump release stays detached inside catch radius
+        lda onground
+        bne tg_no               ; must be airborne
+        lda py                  ; body must overlap the visible rope
+        cmp #VINE_BOT
+        bcs tg_no
+        clc
+        adc #PLAYER_FEET
+        cmp #VINE_TOP+1
+        bcc tg_no
         lda #1                  ; grab!
         sta onvine
         lda #0
@@ -849,6 +856,10 @@ tg_abs:
         sta vy_hi
         sta yfrac
 tg_no:
+        rts
+tg_outside:
+        lda #0
+        sta vinelock
         rts
 
 ; ---------------------------------------------------------------------------
@@ -1111,6 +1122,7 @@ pd_timeok:
         sta ducktmr
         sta jumpbuf
         sta onvine
+        sta vinelock
         lda #1
         sta onground
         lda #COYOTE_MAX

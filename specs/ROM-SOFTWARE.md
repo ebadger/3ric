@@ -43,7 +43,8 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   - **Movement:** A/D or Left/Right runs; W/Up/Space jumps; S/Down ducks. Input includes a
     short movement latch for the keyboard's event-driven interface, a four-frame coyote
     window, a five-frame jump buffer, and a low ducking hitbox. A grabbed vine follows a
-    pendulum arc and Jump releases it; it also releases safely over the far bank.
+    pendulum arc and Jump releases it without immediately re-catching; it also releases
+    safely over the far bank.
   - **Hardware controls:** SNES D-pad moves/ducks and A/B jumps via the ROM's
     `PTRIG`/`GAMEPAD1` contract. Impossible opposing directions reject the emulator's
     all-buttons-pressed placeholder state, so keyboard behavior remains unchanged in WASM.
