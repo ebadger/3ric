@@ -122,18 +122,14 @@ public:
             if (address == (uint16_t)(MM_VIA1_START + (uint16_t)VIA::ORA_IRA)
                 || address == (uint16_t)(MM_VIA1_START + (uint16_t)VIA::ORA_IRA_2))
             {
-                uint8_t reg = _vm->GetVIA1()->ReadRegister(VIA::ORA_IRA);
+                uint8_t reg = _vm->GetVIA1()->GetPortAOutput();
 
                 _sd.SetCS(reg & 0x10);
                 _sd.SetMOSI(reg & 0x04);
                 _sd.SetSCK(reg & 0x08);
 
-                if (_sd.GetMISO())
-                    reg |= 0x02;
-                else
-                    reg &= (uint8_t)~0x02;
-
-                _vm->GetVIA1()->WriteRegister(VIA::ORA_IRA, reg);
+                _vm->GetVIA1()->SetPortAInputBits(
+                    0x02, _sd.GetMISO() ? 0x02 : 0x00);
             }
         };
     }
@@ -238,31 +234,60 @@ public:
 
     // --- execution ---------------------------------------------------------
 
-    // Execute up to maxSteps instructions, ticking both VIAs once per CPU cycle
-    // so timer NMIs (delivered synchronously from VIA::Tick) fire. Mirrors the
-    // host run loop, which always Steps and never honours waitForInterrupt.
+    // Execute up to maxSteps instructions. Kept for headless tools and Max speed.
     int run(int maxSteps)
     {
-        CPU* cpu  = _vm->GetCPU();
-        VIA* via1 = _vm->GetVIA1();
-        VIA* via2 = _vm->GetVIA2();
         int cycles = 0;
         for (int i = 0; i < maxSteps; i++)
         {
-            uint8_t c = cpu->Step();
-            cycles += c;
-            _cycles += c;
-            for (uint8_t k = 0; k < c; k++)
-            {
-                via1->Tick();
-                via2->Tick();
-            }
-            _vm->GetPS2Keyboard()->ProcessKeys((uint32_t)_cycles);
+            cycles += stepOnce();
         }
         return cycles;
     }
 
-    bool waiting() { return _vm->GetCPU()->waitForInterrupt; }
+    // Execute whole instructions until at least cycleBudget cycles have elapsed.
+    // The browser carries the final instruction's overshoot into its next budget.
+    int runCycles(int cycleBudget)
+    {
+        if (cycleBudget <= 0) return 0;
+
+        int cycles = 0;
+        do
+        {
+            cycles += stepOnce();
+        } while (cycles < cycleBudget);
+        return cycles;
+    }
+
+    bool waiting()
+    {
+        CPU* cpu = _vm->GetCPU();
+        return cpu->waitForInterrupt || cpu->stopped;
+    }
+    bool irqAsserted() { return _vm->IRQAsserted(); }
+
+    // --- Mockingboard audio ------------------------------------------------
+
+    bool enableAudio(int sampleRate)
+    {
+        if (sampleRate < 0) return false;
+        return _vm->GetMockingboard()->EnableAudio((uint32_t)sampleRate);
+    }
+
+    void disableAudio()
+    {
+        _vm->GetMockingboard()->DisableAudio();
+    }
+
+    val drainAudio()
+    {
+        std::vector<float> audio = _vm->GetMockingboard()->DrainAudio();
+        if (audio.empty())
+        {
+            return val::global("Float32Array").new_(0);
+        }
+        return val(typed_memory_view(audio.size(), audio.data())).call<val>("slice");
+    }
 
     // --- keyboard ----------------------------------------------------------
 
@@ -362,6 +387,14 @@ public:
     }
 
 private:
+    int stepOnce()
+    {
+        const uint8_t cycles = _vm->Step();
+        _cycles += cycles;
+        _vm->GetPS2Keyboard()->ProcessKeys((uint32_t)_cycles);
+        return cycles;
+    }
+
     // Video RAM accessors. Hires page 1 = $2000, page 2 = $4000; text/lores
     // page 1 = $400, page 2 = $800. These regions are always plain RAM.
     inline uint8_t hiresByte(int page, uint16_t laddr)
@@ -531,7 +564,12 @@ EMSCRIPTEN_BINDINGS(badger6502)
         .function("removeDisk",   &WebVM::removeDisk)
         .function("diskPresent",  &WebVM::diskPresent)
         .function("run",          &WebVM::run)
+        .function("runCycles",    &WebVM::runCycles)
         .function("waiting",      &WebVM::waiting)
+        .function("irqAsserted",  &WebVM::irqAsserted)
+        .function("enableAudio",  &WebVM::enableAudio)
+        .function("disableAudio", &WebVM::disableAudio)
+        .function("drainAudio",   &WebVM::drainAudio)
         .function("keyDown",      &WebVM::keyDown)
         .function("poke",         &WebVM::poke)
         .function("peek",         &WebVM::peek)

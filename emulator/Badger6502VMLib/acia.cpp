@@ -4,6 +4,33 @@
 ACIA::ACIA(VM *vm)
 {
 	_vm = vm;
+	Reset();
+}
+
+void ACIA::Reset()
+{
+	_regTransfer = 0;
+	_regStatus = 0x10;
+	_regControl = 0;
+	_regCommand = 0;
+}
+
+bool ACIA::IRQAsserted() const
+{
+	return (_regStatus & 0x80) != 0;
+}
+
+void ACIA::UpdateIRQ()
+{
+	const bool receiverIRQEnabled = (_regCommand & 0x03) == 0x01;
+	if (receiverIRQEnabled && (_regStatus & 0x08))
+	{
+		_regStatus |= 0x80;
+	}
+	else
+	{
+		_regStatus &= 0x7F;
+	}
 }
 
 /*
@@ -52,6 +79,7 @@ uint8_t ACIA::ReadData(uint16_t address)
 			_regStatus &= 0xF7;
 			// set tx bit
 			_regStatus &= 0x10;
+			UpdateIRQ();
 			ret = _regTransfer;
 			_regTransfer = 0;
 			return ret;
@@ -84,11 +112,13 @@ void ACIA::WriteData(uint16_t address, uint8_t data)
 		_regStatus |= 0x10; // ready for transmit
 		break;
 	case 1:
-		_regStatus = data | 0x10;  // ready for transmit
-	
+		_regTransfer = 0;
+		_regStatus = 0x10;
+		_regCommand &= 0xE0;
 		break;
 	case 2:
 		_regCommand = data;
+		UpdateIRQ();
 		break;
 	case 3:
 		_regControl  = data;
@@ -98,14 +128,14 @@ void ACIA::WriteData(uint16_t address, uint8_t data)
 
 bool ACIA::Receive(uint8_t byte)
 {
-	if (_regStatus & 0x80 || _vm->GetCPU()->flags.bits.I == 1)
+	if (_regStatus & 0x08)
 	{
 		return false;
 	}
 
-	_regStatus |= 0x88; // flip on interrupt bit and flip on receive full bit
+	_regStatus |= 0x08;
 	_regTransfer = byte;
+	UpdateIRQ();
 
-	_vm->GetCPU()->MaskableInterrupt(false);  // fire an interrupt	
 	return true;
 }

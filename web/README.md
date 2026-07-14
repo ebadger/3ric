@@ -4,7 +4,8 @@ This folder is a self-contained Emscripten/WebAssembly port of the `3ric` 65C02
 Apple-II-clone emulator. It compiles the existing C++ VM core
 (`emulator/Badger6502VMLib`) and disk library (`emulator/WozLib`) to WebAssembly,
 boots the real 512KB ROM, renders Apple-II text/hi-res/lo-res video to an HTML
-`<canvas>`, and feeds keystrokes through the memory-mapped keyboard at `$C000`.
+`<canvas>`, feeds keystrokes through the memory-mapped keyboard at `$C000`, and
+plays the slot-4 dual-AY Mockingboard through Web Audio.
 
 Everything here is additive. The shared VM/WozLib sources gained only
 `__EMSCRIPTEN__` / `PLATFORM_WEB`-guarded branches, so the Windows (WinUI) and
@@ -27,6 +28,10 @@ Pico builds compile and behave exactly as before.
   Applesoft for their auto-run greeting — see below).
 - **Adjustable CPU clock** (**Speed** selector): 0.5× / 1× (≈1.57 MHz, native) /
   2× / 4× / 8× / Max, with a per-frame wall-clock cap so the page stays responsive.
+- **3RIC Mockingboard audio**: two AY-3-8910s at `$C400/$C480`, clocked directly
+  from 1.5734375 MHz PHI2 and hard-panned stereo. **Enable Sound** creates the
+  browser audio context after a user gesture. Audio plays at 1× and pauses at
+  other speed settings while the emulated chips continue to advance.
 - **In-browser assembler** (**Assemble & Run**): edit 65C02 source in the page,
   assemble it client-side with the very same assembler the CLI uses
   (`codegen/tools/asm6502.mjs`), run the resulting image like **Load .PRG**, and
@@ -38,11 +43,13 @@ Pico builds compile and behave exactly as before.
 
 | File | Purpose |
 | --- | --- |
-| `web_bridge.cpp` | embind bridge: wraps `VM`, exposes load/run/keyboard/registers, drives the SD card, and produces the RGBA framebuffer. |
+| `web_bridge.cpp` | embind bridge: wraps `VM`, exposes load/run/keyboard/registers/audio, drives the SD card, and produces the RGBA framebuffer. |
+| `emulation-clock.js` | Elapsed-time cycle pacer that keeps finite CPU speeds independent of display refresh rate and carries instruction overshoot between frames. |
+| `audio-worklet.js` | Stereo PCM queue on the browser audio-rendering thread; no `SharedArrayBuffer` or cross-origin isolation required. |
 | `web_compat.h` | Tiny shims so `WozLib` + `MockMicroSD`'s MSVC-isms (`OutputDebugString`, `sprintf_s`, `swprintf_s`, `fopen_s`, `_ASSERT`, …) compile under Emscripten. |
 | `make_sd_sparse.py` | Streams `emulator/Data/sd.zip` (a 2GB, mostly-zero FAT32 image) into a compact `data/sd.sparse` keeping only the ~11.5MB of non-zero sectors. |
 | `build.ps1` | Compiles the core + WozLib + MockMicroSD + bridge to `badger6502.js` / `.wasm`, stages the data files, generates `sd.sparse`, and stages the demo `disk.woz`. |
-| `index.html` | Canvas UI + `requestAnimationFrame` driver + keyboard + clock-speed/disk controls + the in-browser assembler/editor. Honors an optional `ASSET_BASE` (R2/CDN offload). |
+| `index.html` | Canvas UI + `requestAnimationFrame` driver + keyboard + clock-speed/disk/sound controls + the in-browser assembler/editor. Honors an optional `ASSET_BASE` (R2/CDN offload). |
 | `asm6502.mjs` | The 65C02 assembler, staged from `codegen/tools/asm6502.mjs` (git-ignored). Dual-use: the same file is a Node CLI and a browser ES module — `index.html` imports its `assemble()` for **Assemble & Run**. |
 | `serve.ps1` | Starts `python -m http.server` (defaults to port 8011) for local dev. |
 | `Caddyfile` | Production static server config (compression + cache headers) for hosting behind a Cloudflare Tunnel. |
@@ -72,7 +79,7 @@ cd web
 This compiles these sources with `-DPLATFORM_WEB`:
 
 ```
-Badger6502VMLib: vm cpu Instructions acia via PS2Keyboard badgervmpal
+Badger6502VMLib: vm cpu Instructions acia via ay38910 mockingboard PS2Keyboard badgervmpal
 WozLib:          DriveEmulator WozDisk WozFile
 MockMicroSD:     SDCard MappedFile
 bridge:          web_bridge.cpp
@@ -100,6 +107,8 @@ the DOS shell — it runs the monitor command `EC5CG` (Go to `$EC5C`, the `dos`
 routine) which mounts the FAT32 image and prints a `>` prompt, then auto-runs
 `DIR`. Type `CAT`, `CD <dir>`, `BRUN <file>`, etc. to load games and programs
 from the card. The **Speed** selector sets the CPU clock (0.5×–8× or Max).
+Press **Enable Sound** to start stereo Mockingboard playback. Browser autoplay
+rules require this click; sound is intentionally generated only at native 1×.
 
 > Port 8011 is used because 8000 is taken on this machine.
 
@@ -182,6 +191,10 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web\test_render.cjs      # framebuffer has lit pixels
 & $node web\test_keyboard.cjs    # monitor echoes typed commands
 & $node web\test_screen_text.cjs # decode the text screen to ASCII
+& $node web\test_emulation_clock.cjs # 1x timing at 60/120/144 Hz displays
+& $node web\test_audio_pacing.cjs # real WASM PCM rate at 60/144 Hz displays
+& $node web\test_audio_worklet.cjs # prebuffer + bounded PCM queue
+& $node web\test_mockingboard.cjs # mirrors, stereo PCM, 3RIC clock, timer IRQ
 & $node web\test_sd.cjs          # mount the SD card + DIR lists the FAT32 root
 & $node web\test_disk.cjs        # boot a WOZ floppy via C600G into a hi-res title
 ```
@@ -196,16 +209,17 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 4. `reset()` — loads PC from `$FFFC/$FFFD`.
 
 The CPU is driven cooperatively: each animation frame calls `run(maxSteps)`,
-which `Step()`s the CPU and ticks the VIAs/keyboard per returned cycle (the
-blocking `VM::Run()` is never used).
+which calls shared `VM::Step()` to sample IRQ and tick the onboard VIA plus both
+Mockingboard VIA/AY pairs per returned cycle, then advances keyboard plumbing
+(the blocking `VM::Run()` is never used).
 
 ## How the micro-SD card works
 
 The card is a bit-banged SPI device wired to VIA1's port-A register, exactly like
 the WinUI host (`MainWindow.xaml.cpp`). Each CPU write to `$C201`/`$C20F` clocks
 the SD state machine (`emulator/MockMicroSD/SDCard.cpp`): `CS`=bit4, `SCK`=bit3,
-`MOSI`=bit2, and the resulting `MISO`=bit1 is folded back into the register. The
-bridge installs this pump via `VM::CallbackWriteMemory`.
+`MOSI`=bit2, and the resulting `MISO` drives the VIA's external port-A bit1
+input. The bridge installs this pump via `VM::CallbackWriteMemory`.
 
 The disk image (`emulator/Data/sd.zip`) decompresses to a **2GB** FAT32 image
 that is almost entirely zeros — far too large to fetch or allocate in a browser.
@@ -247,12 +261,13 @@ screen without trapping.
 
 ## CPU clock speed
 
-The frame loop runs `NATIVE_CYCLES_PER_FRAME` (≈26224, i.e. the machine's native
-~1.57 MHz clock — the 25.175 MHz VGA dot clock ÷ 16, at 60 fps) times the
-**Speed** multiplier each animation frame, bounded by a ~12 ms wall-clock
-budget so the tab never locks up. `Max` sets the multiplier to `Infinity`, so the
-CPU runs as many cycles as fit in that budget. Clock speed is purely a frontend
-concern — the VM core is unchanged.
+The frame loop converts elapsed monotonic time to cycle debt at the machine's
+native 1.5734375 MHz clock (25.175 MHz VGA dot clock ÷ 16), then calls
+`runCycles()` in bounded batches. Whole-instruction overshoot is carried into the
+next frame, so 1× remains 1× on 60 Hz, high-refresh, and variable-refresh
+displays. Catch-up is bounded and reset after machine resets, speed changes, and
+hidden-tab transitions. `Max` runs as many instructions as fit in the same
+~12 ms wall-clock budget.
 
 ## Hosting on GitHub Pages (zero-cost, public)
 

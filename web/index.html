@@ -112,6 +112,8 @@
         <option value="8">8&times; (12.6&nbsp;MHz)</option>
         <option value="max">Max</option>
       </select></span>
+    <button id="sound" type="button" aria-pressed="false"
+      title="Enable the slot-4 dual-AY Mockingboard at native 1x speed">Enable Sound</button>
     <span class="regs" id="regs">PC:---- A:-- X:-- Y:-- SP:-- P:--</span>
     <span class="regs" id="mode">mode:---</span>
     <span class="hint" id="status">loading wasm&hellip;</span>
@@ -168,7 +170,8 @@
   </main>
   <footer>
     65C02 emulator core (C++) + WozLib compiled to WebAssembly via Emscripten. Boots the real 512KB ROM,
-    renders Apple-II text/hi-res to the canvas, and feeds keystrokes through the memory-mapped keyboard ($C000).
+    renders Apple-II text/hi-res to the canvas, feeds keystrokes through the memory-mapped keyboard ($C000),
+    and emulates the 3RIC slot-4 dual-AY Mockingboard in stereo.
     Click the screen and type. &ldquo;Boot Disk&rdquo; boots the bundled 5.25&Prime; floppy (or pick a .woz with
     &ldquo;Insert&rdquo;) through the Disk&nbsp;II ROM at $C600. &ldquo;Mount SD&rdquo; enters the DOS shell
     (prompt &ldquo;&gt;&rdquo;) and lists the micro-SD card &mdash; load games and programs from there.
@@ -177,6 +180,8 @@
     <code>?prg=programs/hello.prg&amp;org=0800</code>).
     &ldquo;Speed&rdquo; sets the CPU clock (native 1&times; &asymp; 1.57&nbsp;MHz &mdash; the 25.175&nbsp;MHz VGA
     dot clock &divide;&nbsp;16; &ldquo;Max&rdquo; runs as fast as the frame allows).
+    &ldquo;Enable Sound&rdquo; starts browser audio at native 1&times; speed; other speeds pause and flush audio
+    while the emulated sound hardware continues to run.
     The <strong>Assembler</strong> panel assembles 65C02 source in your browser (the same assembler the
     project uses on the command line) and runs it just like &ldquo;Load&nbsp;.PRG&rdquo; &mdash; pick a sample,
     edit it, <code>Assemble&nbsp;&amp;&nbsp;Run</code> (or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>), and download the
@@ -192,29 +197,36 @@
     &mdash; sponsorship funds parts, boards, and more build videos.
   </footer>
 
+  <script src="emulation-clock.js"></script>
   <script src="badger6502.js"></script>
   <script>
     // The 3ric clocks its 65C02 from the 25.175 MHz VGA dot clock divided by 16,
-    // i.e. ~1.5734 MHz — the machine's native "1x" speed. Each frame we run that
-    // many cycles (ticking VIAs per cycle) at 60 fps, mirroring the host. The
-    // "Speed" selector scales this; "Max" runs as many cycles as fit in FRAME_BUDGET_MS.
+    // i.e. 1.5734375 MHz — the machine's native "1x" speed. Finite speeds use
+    // elapsed time rather than assuming a 60 Hz display; "Max" remains unthrottled.
     const VGA_DOT_CLOCK_HZ = 25_175_000;              // master VGA dot clock
-    const CPU_CLOCK_HZ = VGA_DOT_CLOCK_HZ / 16;       // ~1.5734 MHz — the 65C02 clock
-    const NATIVE_CYCLES_PER_FRAME = Math.round(CPU_CLOCK_HZ / 60); // ~26224 at 60 fps
+    const CPU_CLOCK_HZ = VGA_DOT_CLOCK_HZ / 16;       // 1.5734375 MHz 65C02/PHI2
     const FRAME_BUDGET_MS = 12; // wall-clock cap so the tab stays responsive
+    const RUN_CYCLE_BATCH = 4096;
     let speedMul = 1;           // 1x = native 1.57 MHz; Infinity = "Max"
+    const emulationClock =
+      new BadgerEmulationClock.EmulationClock(CPU_CLOCK_HZ);
 
     const canvas  = document.getElementById("screen");
     const ctx     = canvas.getContext("2d", { alpha: false });
     const regsEl  = document.getElementById("regs");
     const modeEl  = document.getElementById("mode");
     const statusEl = document.getElementById("status");
+    const soundButton = document.getElementById("sound");
 
     let vm = null;
     let imageData = null;
     let sdLoaded = false;
     let sdLoading = null;
     let demoDisk = null;
+    let audioContext = null;
+    let audioNode = null;
+    let soundRequested = false;
+    let audioGenerating = false;
     const inputQueue = [];
 
     function hex(n, w) { return (n >>> 0).toString(16).toUpperCase().padStart(w, "0"); }
@@ -307,21 +319,123 @@
         `mode:${m} pg${vm.gfxPage()+1}${vm.mixed() ? " MIX" : ""} font:${vm.font()}`;
     }
 
-    function frame() {
+    function clearAudioQueue() {
+      if (audioNode) audioNode.port.postMessage({ type: "clear" });
+    }
+
+    function updateSoundButton() {
+      soundButton.setAttribute("aria-pressed", soundRequested ? "true" : "false");
+      if (!soundRequested) {
+        soundButton.textContent = "Enable Sound";
+        soundButton.title = "Enable the slot-4 dual-AY Mockingboard at native 1x speed";
+      } else if (speedMul !== 1) {
+        soundButton.textContent = "Sound Paused";
+        soundButton.title = "Mockingboard audio is available at native 1x speed";
+      } else {
+        soundButton.textContent = "Disable Sound";
+        soundButton.title = "Disable Mockingboard audio";
+      }
+    }
+
+    function setAudioGeneration(enabled) {
+      if (!vm || enabled === audioGenerating) return true;
+      if (enabled) {
+        clearAudioQueue();
+        if (!audioContext || !vm.enableAudio(audioContext.sampleRate)) return false;
+      } else {
+        vm.disableAudio();
+        clearAudioQueue();
+      }
+      audioGenerating = enabled;
+      return true;
+    }
+
+    function syncAudioForSpeed() {
+      const shouldGenerate = soundRequested && speedMul === 1;
+      if (!setAudioGeneration(shouldGenerate)) {
+        soundRequested = false;
+        setAudioGeneration(false);
+        statusEl.textContent = "sound unavailable: unsupported sample rate";
+      }
+      updateSoundButton();
+    }
+
+    async function toggleSound() {
+      if (soundRequested) {
+        soundRequested = false;
+        syncAudioForSpeed();
+        return;
+      }
+
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) {
+        soundButton.disabled = true;
+        soundButton.textContent = "Sound Unavailable";
+        statusEl.textContent = "sound unavailable: Web Audio is not supported";
+        return;
+      }
+
+      try {
+        if (!audioContext) {
+          audioContext = new AudioContextClass({ latencyHint: "interactive" });
+          if (!audioContext.audioWorklet) {
+            throw new Error("AudioWorklet is not supported");
+          }
+          await audioContext.audioWorklet.addModule(
+            new URL("audio-worklet.js", document.baseURI));
+          audioNode = new AudioWorkletNode(audioContext, "badger-audio", {
+            numberOfInputs: 0,
+            numberOfOutputs: 1,
+            outputChannelCount: [2],
+          });
+          audioNode.connect(audioContext.destination);
+        }
+        await audioContext.resume();
+        soundRequested = true;
+        syncAudioForSpeed();
+      } catch (error) {
+        soundRequested = false;
+        setAudioGeneration(false);
+        if (audioContext) {
+          try {
+            await audioContext.close();
+          } catch (closeError) {
+            console.error(closeError);
+          }
+          audioContext = null;
+          audioNode = null;
+        }
+        soundButton.textContent = "Sound Unavailable";
+        statusEl.textContent = "sound unavailable: " + error.message;
+        console.error(error);
+      }
+    }
+
+    function frame(timestamp) {
       // Feed one queued key when the keyboard strobe is clear (bit 7 of $C000).
       if (inputQueue.length && (vm.peek(0xC000) & 0x80) === 0) {
         vm.keyDown(inputQueue.shift());
       }
 
-      // Run the CPU for this frame's cycle budget, but never spend more than
-      // FRAME_BUDGET_MS of wall-clock time so the page stays responsive even at
-      // high / "Max" speeds.
-      const target = speedMul === Infinity ? Infinity : NATIVE_CYCLES_PER_FRAME * speedMul;
       const start = performance.now();
-      let cyc = 0;
-      while (cyc < target) {
-        cyc += vm.run(1000);
-        if (performance.now() - start > FRAME_BUDGET_MS) break;
+      if (speedMul === Infinity) {
+        do {
+          vm.run(1000);
+        } while (performance.now() - start <= FRAME_BUDGET_MS);
+      } else {
+        let cyclesDue = emulationClock.advance(timestamp, speedMul);
+        while (cyclesDue > 0) {
+          const cycles = vm.runCycles(Math.min(cyclesDue, RUN_CYCLE_BATCH));
+          if (cycles <= 0) break;
+          emulationClock.consume(cycles);
+          if (performance.now() - start > FRAME_BUDGET_MS) break;
+          cyclesDue = emulationClock.cyclesDue();
+        }
+      }
+
+      if (audioGenerating && audioNode) {
+        const audio = vm.drainAudio();
+        if (audio.length) audioNode.port.postMessage(audio, [audio.buffer]);
       }
 
       const fb = vm.renderFrame(); // Uint8Array RGBA view over wasm heap
@@ -347,6 +461,8 @@
       vm.seedBasicRom();
       vm.loadFont(font);
       vm.reset();
+      emulationClock.reset();
+      clearAudioQueue();
     }
 
     // Boot a 5.25" floppy: re-seed a clean machine (back to the monitor), insert
@@ -374,6 +490,7 @@
       inputQueue.length = 0;
       await loadRom();                              // clean reset to the monitor
       for (let i = 0; i < 25; i++) vm.run(50000);   // settle into the "*" monitor
+      if (audioGenerating) vm.drainAudio();          // discard pre-program silence
       vm.loadData(org & 0xFFFF, bytes);
       vm.setPC(org & 0xFFFF);
       statusEl.textContent = `running ${label || ".PRG"} @ $${hex(org, 4)}`;
@@ -647,6 +764,9 @@
         canvas.focus();
       });
 
+      soundButton.addEventListener("click", toggleSound);
+      updateSoundButton();
+
       // Mount the micro-SD card and drop into the ROM's DOS shell. "EC5CG" is
       // the monitor's Go command pointed at $EC5C (the `dos` routine), which
       // mounts the FAT32 card (fat32_start) and shows the ">" prompt; the
@@ -702,6 +822,13 @@
       // CPU clock speed selector. "Max" runs unthrottled within the frame budget.
       document.getElementById("speed").addEventListener("change", (e) => {
         speedMul = e.target.value === "max" ? Infinity : parseFloat(e.target.value);
+        emulationClock.reset();
+        syncAudioForSpeed();
+      });
+
+      document.addEventListener("visibilitychange", () => {
+        emulationClock.reset();
+        clearAudioQueue();
       });
 
       requestAnimationFrame(frame);

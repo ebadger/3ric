@@ -57,6 +57,7 @@ struct CPU
 
 	uint8_t A, X, Y; // registers
 	bool waitForInterrupt = false;
+	bool stopped = false;
 	bool _output = false;
 	char _debugstring[255];
 

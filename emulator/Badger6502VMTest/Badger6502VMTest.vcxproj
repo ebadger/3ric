@@ -241,6 +241,7 @@
     <ClCompile Include="JMP.cpp" />
     <ClCompile Include="JSR_RTS.cpp" />
     <ClCompile Include="LDA.cpp" />
+    <ClCompile Include="MockingboardTests.cpp" />
     <ClCompile Include="LDX.cpp" />
     <ClCompile Include="LDY.cpp" />
     <ClCompile Include="ORA.cpp" />
@@ -262,6 +263,7 @@
     <ClCompile Include="STY.cpp" />
     <ClCompile Include="STZ.cpp" />
     <ClCompile Include="TSB_TRB.cpp" />
+    <ClCompile Include="VIA.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />

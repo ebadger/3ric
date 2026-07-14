@@ -17,19 +17,21 @@ host it as static files.
 ## Contracts / Interfaces
 
 - **Build:** `web/build.ps1` compiles `Badger6502VMLib` (vm, cpu, Instructions, acia, via,
-  PS2Keyboard, badgervmpal) + `WozLib` (DriveEmulator, WozDisk, WozFile) + `MockMicroSD`
-  (SDCard, MappedFile) + `web/web_bridge.cpp` with `-DPLATFORM_WEB`. Excludes `symbols.cpp`
-  and `Disassemble.cpp`. Key flags: `-std=c++17 -O2 -lembind -sMODULARIZE=1
+  mockingboard, ay38910, PS2Keyboard, badgervmpal) + `WozLib` (DriveEmulator, WozDisk,
+  WozFile) + `MockMicroSD` (SDCard, MappedFile) + `web/web_bridge.cpp` with
+  `-DPLATFORM_WEB`. Excludes `symbols.cpp` and `Disassemble.cpp`. Key flags:
+  `-std=c++17 -O2 -lembind -sMODULARIZE=1
   -sEXPORT_NAME=createBadgerVM -sALLOW_MEMORY_GROWTH=1 -sENVIRONMENT=web,node`. Output:
   `web/badger6502.js` + `web/badger6502.wasm` (git-ignored — regenerated).
 - **Bridge API (embind, `web_bridge.cpp`):** `loadData(addr, bytes)`, `seedBasicRom()`,
   `loadFont(bytes)`, `loadSD(bytes)`, `insertDisk(drive, bytes)`, `reset()`, `run(maxSteps)`,
-  `setPC`, `poke/peek`, `keyDown(code)`, `drainOutput()` (serial), `renderFrame()` (RGBA
-  framebuffer), `pc/sp/regA/regX/regY/status`, `sdReadCount()`.
+  `runCycles(cycleBudget)`, `setPC`, `poke/peek`, `keyDown(code)`, `drainOutput()` (serial),
+  `enableAudio(sampleRate)`, `disableAudio()`, `drainAudio()` (interleaved Float32 stereo PCM),
+  `renderFrame()` (RGBA framebuffer), `pc/sp/regA/regX/regY/status`, `sdReadCount()`.
 - **Compat shims (`web_compat.h`):** map MSVC-isms (`OutputDebugString`, `sprintf_s`,
   `fopen_s`, `_ASSERT`, …) onto Emscripten so `WozLib`/`MockMicroSD` compile unchanged.
-- **UI (`index.html`):** `requestAnimationFrame` driver, keyboard, disk/SD/clock controls,
-  and the in-browser **Assembler** panel (imports `assemble()` from the staged
+- **UI (`index.html`):** `requestAnimationFrame` driver, keyboard, disk/SD/clock/sound
+  controls, and the in-browser **Assembler** panel (imports `assemble()` from the staged
   `asm6502.mjs`). Honors optional `window.ASSET_BASE` / `?assets=` for CDN/R2 offload and
   `?src=` / `?prg=` / `?code=` deep links, plus a **Share** button that builds a one-click
   link to the current editor program. The sample-source loads (the **sample** dropdown and
@@ -90,9 +92,19 @@ host it as static files.
 
 ## Behaviour / Rules
 
-- The CPU is stepped per animation frame (`run(maxSteps)`), bounded by a wall-clock budget so
-  the tab stays responsive; the **Speed** selector scales cycles/frame around the machine's
-  native **1× ≈ 1.57 MHz** (25.175 MHz VGA dot clock ÷ 16), through 0.5×–8× and an uncapped **Max**.
+- The CPU is paced from elapsed monotonic time, not an assumed display refresh rate.
+  `runCycles(cycleBudget)` executes each finite-speed budget in bounded batches and carries
+  instruction-boundary overshoot into the next animation frame. This keeps native **1× =
+  1.5734375 MHz** (25.175 MHz VGA dot clock ÷ 16) on 60 Hz, high-refresh, and variable-refresh
+  displays. A wall-clock execution cap keeps the tab responsive; **Max** remains unthrottled
+  within that cap. Timing debt is reset after a machine reset, speed change, or hidden-tab
+  transition rather than replaying a stale wall-clock interval.
+- Sound is opt-in because browsers require a user gesture to start `AudioContext`.
+  `audio-worklet.js` consumes transferable Float32 chunks from the bridge without requiring
+  `SharedArrayBuffer` or cross-origin isolation. It prebuffers a short bounded lead before
+  playback, renders without per-sample allocation, and discards only the oldest queued frames
+  if a stalled producer exceeds the latency bound. Sound is generated only at 1x speed;
+  changing speed mutes and flushes PCM while the emulated VIA/AY state continues to advance.
 - **Parity is the rule:** the WASM build must behave like the native build. Do not add
   behavior in the bridge that isn't in the shared core unless it's a genuinely
   presentation-only concern (canvas, clock pacing) — and never behind an unguarded fork.
@@ -131,8 +143,10 @@ host it as static files.
 ## Data flow
 
 `build.ps1 → badger6502.js/.wasm + data/ → index.html loads WASM → boot recipe (loadData /
-seedBasicRom / loadFont / reset) → run() per frame → renderFrame()→canvas, drainOutput()→
-log; keyDown()→$C000; Boot Disk/Mount SD → insertDisk()/loadSD() → C600G / EC5CG`.
+seedBasicRom / loadFont / reset) → elapsed-time budget→runCycles() per frame →
+renderFrame()→canvas, drainOutput()→log, drainAudio()→AudioWorklet→speakers; keyDown()→$C000;
+Boot Disk/Mount SD →
+insertDisk()/loadSD() → C600G / EC5CG`.
 
 Gallery: `gallery.html → fetch gallery.json → render cards → click Run & Remix →
 index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
@@ -165,5 +179,6 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 | `llms.txt` discoverability | Shipped | `<link rel="alternate">` + footer links in `index.html`/`gallery.html`; `robots.txt` + `sitemap.xml` staged (advisory on the project-page root; authoritative under a custom domain). |
 | Support / funding link | Shipped | GitHub Sponsors call-to-action in the `index.html`/`gallery.html` footers; target declared in `.github/FUNDING.yml`. |
 | Adjustable CPU clock | Shipped | frontend-only pacing; native **1× ≈ 1.57 MHz** (25.175 MHz VGA dot clock ÷ 16) default. |
+| Slot-4 Mockingboard audio | Shipped | User-gesture AudioWorklet sink for the shared dual-AY stereo PCM; sound enabled only at 1x. |
 | Headless smoke tests | Shipped | `web/test_*.cjs` (boot/render/keyboard/screen/sd/disk). |
 | GitHub Pages CI deploy | Shipped | on push to `main` touching emulator/web/codegen sources. |

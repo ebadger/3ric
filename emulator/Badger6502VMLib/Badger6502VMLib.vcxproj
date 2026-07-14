@@ -32,6 +32,8 @@
     <ClCompile Include="badgervmpal.cpp" />
     <ClCompile Include="cpu.cpp" />
     <ClCompile Include="Instructions.cpp" />
+    <ClCompile Include="ay38910.cpp" />
+    <ClCompile Include="mockingboard.cpp" />
     <ClCompile Include="PS2Keyboard.cpp" />
     <ClCompile Include="symbols.cpp" />
     <ClCompile Include="via.cpp" />
@@ -40,8 +42,10 @@
   <ItemGroup>
     <ClInclude Include="acia.h" />
     <ClInclude Include="badgervmpal.h" />
+    <ClInclude Include="ay38910.h" />
     <ClInclude Include="cpu.h" />
     <ClInclude Include="opcodes.h" />
+    <ClInclude Include="mockingboard.h" />
     <ClInclude Include="ps2keyboard.h" />
     <ClInclude Include="symbols.h" />
     <ClInclude Include="via.h" />
