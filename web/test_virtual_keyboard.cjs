@@ -29,6 +29,7 @@ class FakeElement {
     this.classList = new FakeClassList();
     this.listeners = {};
     this.attributes = {};
+    this.style = {};
   }
 
   append(...children) {
@@ -89,6 +90,13 @@ assert.deepStrictEqual(KEY_ROWS.map((row) => row.map(layoutToken)), [
   ["SHIFT", "Z", "X", "C", "V", "B", "N", "M", ",", ".", "/", "SHIFT"],
   ["CAPS LOCK", "`", "<gap>", "<gap>", "SPACE", "<gap>", "\u2190", "\u2192", "\u2193", "\u2191"],
 ]);
+assert.deepStrictEqual(KEY_ROWS.map((row) => row.map((key) => key.units)), [
+  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1.65],
+  [1.65, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+  [1.9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1.8],
+  [2.3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2.3],
+  [1, 1, 1, 1, 6.2, 1, 1, 1, 1, 1],
+]);
 
 const emitted = new Set();
 for (const key of keys) {
@@ -122,6 +130,7 @@ assert.strictEqual(keyByte(findAriaLabel("Down arrow"), false, false), 0x0a);
 assert.strictEqual(keyByte(findAriaLabel("Right arrow"), false, false), 0x15);
 
 assert.strictEqual(eventToByte({ key: "Enter" }), 0x0d);
+assert.strictEqual(eventToByte({ key: "Delete" }), 0x7f);
 assert.strictEqual(eventToByte({ key: "ArrowRight" }), 0x15);
 assert.strictEqual(eventToByte({ key: "a" }), 0x61);
 assert.strictEqual(eventToByte({ key: "F1" }), null);
@@ -153,6 +162,8 @@ assert.deepStrictEqual(emittedBytes, [0x41, 0x53]);
 assert.strictEqual(focusCount, 1, "keyboard activation should retain virtual-key focus");
 assert(buttons("SHIFT").every((key) => key.getAttribute("aria-pressed") === "false"));
 assert.strictEqual(button("Caps Lock").disabled, true);
+assert.strictEqual(button("Delete").style.flexGrow, "1.65");
+assert.strictEqual(button("Space").style.flexGrow, "6.2");
 button("D").activate(1);
 assert.strictEqual(focusCount, 2, "pointer character activation should restore canvas focus");
 

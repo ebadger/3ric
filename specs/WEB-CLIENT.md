@@ -136,14 +136,16 @@ client-side so GitHub Pages can host it as static files.
   `?` for DEL). The bridge still uppercases alphabetic input to match the native host and
   ROM, so the virtual keycaps show uppercase letters. The IIe Caps Lock key is displayed in
   its physical position but disabled with an explicit uppercase-only label; it does not fake
-  a lowercase mode the bridge cannot deliver. The IIe Delete key emits ASCII DEL (`$7F`).
+  a lowercase mode the bridge cannot deliver. Both the virtual IIe Delete key and a physical
+  keyboard's Delete key emit ASCII DEL (`$7F`).
 - Pointer/touch activation returns focus to the canvas after expanding the panel or pressing
   any virtual key, preserving immediate physical-keyboard input. Keyboard and assistive-
   technology activation retains focus on the activated control so consecutive accessible
   navigation is not interrupted.
 - Key labels meet normal-text contrast, and dense rows retain at least 24 CSS-pixel key
-  widths. On narrower screens the key area pans horizontally instead of shrinking targets;
-  the centered space-bar row remains fixed to the visible panel width.
+  widths. On narrower screens the complete 530 CSS-pixel keyboard matrix pans horizontally
+  as one unit instead of shrinking targets or distorting the manual-derived key-width ratios;
+  the space bar retains its Figure 2-1 position within that matrix.
 - **Parity is the rule:** the WASM build must behave like the native build. Do not add
   behavior in the bridge that isn't in the shared core unless it's a genuinely
   presentation-only concern (canvas, clock pacing) — and never behind an unguarded fork.

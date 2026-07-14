@@ -5,24 +5,30 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  function printable(value, shifted) {
-    return Object.freeze({ value, shifted });
+  function printable(value, shifted, units = 1) {
+    return Object.freeze({ value, shifted, units });
   }
 
-  function special(label, code, className, ariaLabel) {
-    return Object.freeze({ label, code, className: className || "", ariaLabel: ariaLabel || label });
+  function special(label, code, className, ariaLabel, units = 1) {
+    return Object.freeze({
+      label,
+      code,
+      units,
+      className: className || "",
+      ariaLabel: ariaLabel || label,
+    });
   }
 
-  function modifier(label, name, className) {
-    return Object.freeze({ label, modifier: name, className });
+  function modifier(label, name, className, units) {
+    return Object.freeze({ label, modifier: name, className, units });
   }
 
-  function disabledKey(label, className, ariaLabel, title) {
-    return Object.freeze({ label, className, ariaLabel, title, disabled: true });
+  function disabledKey(label, className, ariaLabel, title, units = 1) {
+    return Object.freeze({ label, className, ariaLabel, title, units, disabled: true });
   }
 
-  function spacer(className) {
-    return Object.freeze({ spacer: true, className });
+  function spacer(className, units = 1) {
+    return Object.freeze({ spacer: true, className, units });
   }
 
   const KEY_ROWS = Object.freeze([
@@ -40,10 +46,10 @@
       printable("0", ")"),
       printable("-", "_"),
       printable("=", "+"),
-      special("DELETE", 0x7f, "delete", "Delete"),
+      special("DELETE", 0x7f, "delete", "Delete", 1.65),
     ]),
     Object.freeze([
-      special("TAB", 0x09, "tab", "Tab"),
+      special("TAB", 0x09, "tab", "Tab", 1.65),
       printable("Q"),
       printable("W"),
       printable("E"),
@@ -59,7 +65,7 @@
       printable("\\", "|"),
     ]),
     Object.freeze([
-      modifier("CONTROL", "control", "control"),
+      modifier("CONTROL", "control", "control", 1.9),
       printable("A"),
       printable("S"),
       printable("D"),
@@ -71,10 +77,10 @@
       printable("L"),
       printable(";", ":"),
       printable("'", "\""),
-      special("RETURN", 0x0d, "return", "Return"),
+      special("RETURN", 0x0d, "return", "Return", 1.8),
     ]),
     Object.freeze([
-      modifier("SHIFT", "shift", "shift"),
+      modifier("SHIFT", "shift", "shift", 2.3),
       printable("Z"),
       printable("X"),
       printable("C"),
@@ -85,7 +91,7 @@
       printable(",", "<"),
       printable(".", ">"),
       printable("/", "?"),
-      modifier("SHIFT", "shift", "shift"),
+      modifier("SHIFT", "shift", "shift", 2.3),
     ]),
     Object.freeze([
       disabledKey(
@@ -97,7 +103,7 @@
       printable("`", "~"),
       spacer("case-gap"),
       spacer("apple-slot"),
-      special("", 0x20, "space", "Space"),
+      special("", 0x20, "space", "Space", 6.2),
       spacer("apple-slot"),
       special("\u2190", 0x08, "", "Left arrow"),
       special("\u2192", 0x15, "", "Right arrow"),
@@ -130,6 +136,7 @@
     switch (event.key) {
       case "Enter":      return 0x0d;
       case "Backspace":  return 0x08;
+      case "Delete":     return 0x7f;
       case "Tab":        return 0x09;
       case "Escape":     return 0x1b;
       case "ArrowLeft":  return 0x08;
@@ -207,6 +214,7 @@
         if (key.spacer) {
           const gap = document.createElement("span");
           gap.className = "vk-spacer" + (key.className ? ` ${key.className}` : "");
+          gap.style.flexGrow = String(key.units);
           gap.setAttribute("aria-hidden", "true");
           row.appendChild(gap);
           continue;
@@ -215,6 +223,7 @@
         const button = document.createElement("button");
         button.type = "button";
         button.className = "vk-key" + (key.className ? ` ${key.className}` : "");
+        button.style.flexGrow = String(key.units);
 
         if (key.disabled) {
           button.textContent = key.label;
