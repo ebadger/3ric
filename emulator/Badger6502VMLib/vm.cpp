@@ -32,6 +32,10 @@ VM::VM(bool bTestMode)
 VM::~VM()
 {
 	delete _cpu;
+	delete _acia;
+	delete _via1;
+	delete _mockingboard;
+	delete _pPS2;
 	pal_freeromdisk(&_romdisk);
 }
 
@@ -40,7 +44,7 @@ void VM::Init()
 	_cpu = new CPU(this);
 	_acia = new ACIA(this);
 	_via1 = new VIA(this);
-	_via2 = new VIA(this);
+	_mockingboard = new Mockingboard();
 	_pPS2 = new PS2Keyboard(this);
 	srand(*(unsigned int*)(void*)this);
 
@@ -66,17 +70,92 @@ void VM::Reset()
 	_page2 = false;
 	_mixed = false;
 	_lores = false;
+	_nmiPending = false;
+	_via1IRQAsserted = false;
 
 	_cpu->Reset();
+	_acia->Reset();
 	_pPS2->Reset();
 	_via1->Reset();
-	_via2->Reset();
+	_mockingboard->Reset();
 }
 
 void VM::Run()
 {
-	_cpu->Reset();
-	_cpu->Run();
+	Reset();
+	while (true)
+	{
+		Step();
+	}
+}
+
+bool VM::IRQAsserted() const
+{
+	return _acia->IRQAsserted() || _mockingboard->IRQAsserted();
+}
+
+void VM::UpdateVIA1NMI()
+{
+	const bool asserted = _via1->IRQAsserted();
+	if (asserted && !_via1IRQAsserted)
+	{
+		_nmiPending = true;
+	}
+	_via1IRQAsserted = asserted;
+}
+
+void VM::SignalVIA1Pin(VIA::Pins pin)
+{
+	_via1->SignalPin(pin);
+	UpdateVIA1NMI();
+}
+
+void VM::TickDevices(uint32_t cycles)
+{
+	for (uint32_t i = 0; i < cycles; ++i)
+	{
+		_via1->Tick();
+		UpdateVIA1NMI();
+		_mockingboard->Tick();
+	}
+}
+
+uint8_t VM::Step()
+{
+	const bool irq = IRQAsserted();
+
+	if (_cpu->stopped)
+	{
+		TickDevices(1);
+		return 1;
+	}
+
+	if (_cpu->waitForInterrupt)
+	{
+		if (!_nmiPending && !irq)
+		{
+			TickDevices(1);
+			return 1;
+		}
+		_cpu->waitForInterrupt = false;
+	}
+
+	uint8_t cycles = 0;
+	if (_nmiPending)
+	{
+		_nmiPending = false;
+		cycles = _cpu->NonMaskableInterrupt();
+	}
+	else if (irq && !_cpu->flags.bits.I)
+	{
+		cycles = _cpu->MaskableInterrupt(false);
+	}
+	else
+	{
+		cycles = _cpu->Step();
+	}
+	TickDevices(cycles);
+	return cycles;
 }
 
 PS2Keyboard* VM::GetPS2Keyboard()
@@ -99,9 +178,9 @@ VIA* VM::GetVIA1()
 	return _via1;
 }
 
-VIA* VM::GetVIA2()
+Mockingboard* VM::GetMockingboard()
 {
-	return _via2;
+	return _mockingboard;
 }
 
 void VM::SetTestMode(bool mode)
@@ -125,7 +204,7 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 	switch (address)
 	{
 	case MM_SS_KEYBD_STROBE:
-		_via1->SignalPin(VIA::CB1);
+		SignalVIA1Pin(VIA::CB1);
 #if defined(PLATFORM_WEB)
 		// Apple II semantics: any access to $C010 clears the keyboard strobe
 		// (bit 7 of $C000). The Windows/Pico hosts manage this differently, so
@@ -135,7 +214,7 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 		break;
 
 	case MM_SS_JOYSTICK:
-		_via1->SignalPin(VIA::CB2);
+		SignalVIA1Pin(VIA::CB2);
 		break;
 
 	case MM_SS_GRAPHICS:
@@ -336,7 +415,14 @@ uint8_t VM::ReadData(uint16_t address)
 	else if (address >= MM_VIA1_START && address <= MM_VIA1_END)
 	{
 		// VIA1
-		return _via1->ReadRegister(address & 0xF);
+		result = _via1->ReadRegister(address & 0xF);
+		UpdateVIA1NMI();
+		return result;
+	}
+	else if (address >= MM_MOCKINGBOARD_VIA1_START
+		&& address <= MM_MOCKINGBOARD_VIA2_END)
+	{
+		return _mockingboard->Read(address);
 	}
 	else if (address >= MM_ROMDISK_START && address <= MM_ROMDISK_END)
 	{
@@ -506,6 +592,12 @@ void VM::WriteData(uint16_t address, uint8_t byte)
 	{
 		// VIA1
 		_via1->WriteRegister(address & 0xF, byte);
+		UpdateVIA1NMI();
+	}
+	else if (address >= MM_MOCKINGBOARD_VIA1_START
+		&& address <= MM_MOCKINGBOARD_VIA2_END)
+	{
+		_mockingboard->Write(address, byte);
 	}
 	else if (address >= MM_ROMDISK_START && address <= MM_ROMDISK_END)
 	{
@@ -532,24 +624,6 @@ void VM::WriteData(uint16_t address, uint8_t byte)
 
 	}
 #if 0
-	else if (address >= MM_AUDIO_START && address <= MM_AUDIO_END)
-	{
-		switch(address & 0xF)
-		{
-			case 0:
-				_duration = byte;
-				break;
-			case 1:
-				_pitch = byte;
-				break;
-			case 3:
-				if (CallbackAudio)
-				{
-					CallbackAudio(_duration, _pitch);
-				}
-				break;
-		}
-	}
 	else if (address >= MM_FILE_START && address <= MM_FILE_END)
 	{
 		std::string filename = "";

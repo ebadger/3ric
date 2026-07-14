@@ -12,8 +12,11 @@ public:
 	void    WriteData(uint16_t address, uint8_t data);
 
 	bool Receive(uint8_t byte);
+	bool IRQAsserted() const;
+	void Reset();
 
 private:
+	void UpdateIRQ();
 
 	uint8_t _regTransfer = 0;
 	uint8_t _regStatus = 0x10;

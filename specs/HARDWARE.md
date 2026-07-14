@@ -47,6 +47,20 @@ device/soft-switch page (keyboard, ACIA `$C1xx`, VIA1 `$C2xx`, ROM disk `$C3xx`,
 device responds; video circuit + A2COLOR GAL → composite/color output`. The emulator models
 this same routing in `VM::DoSoftSwitches` and the device handlers.
 
+### Slot-4 Mockingboard
+
+`kicad/3ric/Mockingboard.kicad_sch` defines two 65C22-to-AY-3-8910 channels:
+
+- `~CS_MB` selects `$C400–$C4FF`; A7 selects VIA 1 (`$C400–$C47F`) or VIA 2
+  (`$C480–$C4FF`). A0–A3 select registers and A4–A6 are not decoded.
+- Each VIA PA0–PA7 connects to AY DA0–DA7. PB0 is BC1, PB1 is BDIR, PB2 is active-low
+  reset, and AY BC2 is tied high.
+- Both AY clock inputs connect directly to PHI2, which is 25.175 MHz / 16 =
+  **1,573,437.5 Hz** on 3RIC.
+- `~IRQ_MB1` and `~IRQ_MB2` join the CPU's shared active-low IRQ logic.
+- The two AY channel mixes feed separate stereo outputs. There is no Mockingboard speech
+  device in the 3RIC design.
+
 ## Dependencies
 
 - **Upstream:** the target machine definition — i.e. the emulator's memory map and device
@@ -61,4 +75,5 @@ this same routing in `VM::DoSoftSwitches` and the device handlers.
 | 22V10 address-decode GAL | In progress | `3ricDecoder.PLD` / `EB6502 DECODER.PLD`; mirrors `MM_*`. |
 | Apple-II color GAL | In progress | `A2COLOR.PLD` + `logisim/apple2color.circ`. |
 | Address-map validation | Present | `test/memory_map_test`. |
+| Slot-4 dual-AY Mockingboard | Shipped | `$C400/$C480`, direct PHI2 clock, dual IRQ, hard stereo; shared emulator and browser implementation matches the schematic. |
 | PCB fabrication / bring-up | Tracked in build series | Emulator is the reference until hardware is verified. |

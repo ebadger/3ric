@@ -118,11 +118,8 @@ void PS2Keyboard::ProcessRaw(uint8_t bit)
     //data &= 0x3F;  // bit 6 is low
 
     bit <<= 7;
-    //data |= bit;
-
-    _vm->WriteData(MM_VIA1_START + VIA::ORA_IRA_2, bit); // via2 PORTA 7 bit, 
-    //_vm->WriteData(MM_VIA1_START + VIA::ORA_IRA, data); // via2 PORTA 7 bit, 
-    _vm->GetVIA1()->SignalPin(VIA::CA2);
+    _vm->GetVIA1()->SetPortAInputBits(0x80, bit);
+    _vm->SignalVIA1Pin(VIA::CA2);
 }
 
 uint8_t PS2Keyboard::TranslateScancode(uint8_t sc)

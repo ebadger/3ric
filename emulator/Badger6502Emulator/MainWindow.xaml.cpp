@@ -1052,22 +1052,14 @@ namespace winrt::Badger6502Emulator::implementation
                 || address == MM_VIA1_START + (uint16_t)VIA::ORA_IRA)
             {
                 // SD Card
-                uint8_t reg = _vm.GetVIA1()->ReadRegister(VIA::ORA_IRA);
+                uint8_t reg = _vm.GetVIA1()->GetPortAOutput();
 
                 _sdcard.SetCS(reg & 0x10);
                 _sdcard.SetMOSI(reg & 0x4);
                 _sdcard.SetSCK(reg & 0x8);
 
-                if (_sdcard.GetMISO())
-                {
-                    reg |= 0x2;
-                }
-                else
-                {
-                    reg = reg & (uint8_t)~2;
-                }
-
-                _vm.GetVIA1()->WriteRegister(VIA::ORA_IRA, reg);
+                _vm.GetVIA1()->SetPortAInputBits(
+                    0x02, _sdcard.GetMISO() ? 0x02 : 0x00);
 
             }
 #if 0
@@ -1311,7 +1303,6 @@ namespace winrt::Badger6502Emulator::implementation
                     continue;
 
                 case ExecutionState::Reset:
-                    pCPU->Reset();
                     _vm.Reset();
                     totalcycles = 0;
                     _sourceFilename = "";
@@ -1341,21 +1332,10 @@ namespace winrt::Badger6502Emulator::implementation
                     return 0;
                 }
 
-                cycles += pCPU->Step();
+                cycles += _vm.Step();
                 _cycles += cycles;
 
                 totalcycles += cycles;
-
-
-                for (uint32_t i = 0; i < cycles; i++)
-                {
-                    _vm.GetVIA1()->Tick();
-                    _vm.GetVIA2()->Tick();
-
-                    //bool isInInterrupt = pCPU->flags.bits.I;
-                    //if (!isInInterrupt)
-
-                }
 
                 EnterCriticalSection(&_cs);
                 _vm.GetPS2Keyboard()->ProcessKeys(totalcycles);

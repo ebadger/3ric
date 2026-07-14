@@ -190,7 +190,7 @@ DWORD WINAPI VMThread(LPVOID)
                 continue;
 
             case ExecutionState::Reset:
-                pCPU->Reset();
+                vm.Reset();
                 _sourceFilename = "";
                 // fall through
 
@@ -214,7 +214,7 @@ DWORD WINAPI VMThread(LPVOID)
             }
 
 
-            pCPU->Step();
+            vm.Step();
 
             if (_executionState == ExecutionState::Stopped)
             {

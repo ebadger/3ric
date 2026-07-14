@@ -40,6 +40,8 @@ $sources = @(
     (Join-Path $lib "Instructions.cpp"),
     (Join-Path $lib "acia.cpp"),
     (Join-Path $lib "via.cpp"),
+    (Join-Path $lib "ay38910.cpp"),
+    (Join-Path $lib "mockingboard.cpp"),
     (Join-Path $lib "PS2Keyboard.cpp"),
     (Join-Path $lib "badgervmpal.cpp"),
     # WozLib (DriveEmulator is embedded in VM; WozDisk/WozFile are needed to link).

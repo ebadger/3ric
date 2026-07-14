@@ -45,6 +45,12 @@ under the license shipped with them:
       FatFs - Generic FAT Filesystem Module by ChaN. FatFs License (BSD-style,
       1-clause). See emulator/picodisk/sdlib/FatFs_SPI/ff15/LICENSE.txt.
 
+  - emulator/Badger6502VMLib/ay38910.{h,cpp}
+      AY-3-8910 sound-chip emulation adapted from floooh/chips ay38910.h,
+      commit 9371bfcb8478aec05ad10a1293206363373c1489, by Andre Weissflog.
+      zlib/libpng License; the preserved notice and adaptation details are in
+      emulator/Badger6502VMLib/ay38910.cpp.
+
   - kicad/libraries/KiCad-RP-Pico-main/
       TPCWare KiCad Library (Raspberry Pi Pico footprint/3D model).
       Creative Commons Attribution-ShareAlike 4.0. See the LICENSE in that

@@ -64,11 +64,19 @@ jobs:
       - name: Build WebAssembly emulator
         run: pwsh -File web/build.ps1
 
+      - name: Test WebAssembly emulator
+        run: |
+          node web/test_emulation_clock.cjs
+          node web/test_audio_worklet.cjs
+          node web/test_audio_pacing.cjs
+          node web/test_mockingboard.cjs
+          node web/test_boot.cjs
+
       # Stage only what the page needs (not the C++/test sources) as the site root.
       - name: Stage site
         run: |
           mkdir -p _site
-          cp web/index.html web/gallery.html web/tutorials.html web/story.html web/gallery.json web/llms.txt web/robots.txt web/sitemap.xml web/badger6502.js web/badger6502.wasm _site/
+          cp web/index.html web/emulation-clock.js web/audio-worklet.js web/gallery.html web/tutorials.html web/story.html web/gallery.json web/llms.txt web/robots.txt web/sitemap.xml web/badger6502.js web/badger6502.wasm _site/
           cp web/asm6502.mjs web/wozgen.mjs _site/
           cp -r web/data _site/data
           cp -r web/programs _site/programs

@@ -79,6 +79,7 @@ same WASM core. The "why" lives in `docs/MISSION.md`.
 | Keyboard (`$C000`/`$C010`) + ACIA serial | Shipped |
 | Disk II 5.25″ WOZ boot (self-booting machine-code disks) | Shipped |
 | Micro-SD FAT32 + ROM DOS shell | Shipped |
+| Slot-4 dual-AY Mockingboard | Shipped |
 | WebAssembly browser build + in-browser assembler | Shipped |
 | DOS 3.3 / Applesoft-dependent disks | Not supported (this clone's BASIC is generic MS-BASIC, not Applesoft) |
 | Hardware (KiCad/PCB/GAL) | In progress (documented in the build series) |

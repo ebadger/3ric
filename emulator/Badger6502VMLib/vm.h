@@ -4,6 +4,7 @@
 #include "cpu.h"
 #include "acia.h"
 #include "via.h"
+#include "mockingboard.h"
 #include "ps2keyboard.h"
 #include <functional>
 #include <unordered_map>
@@ -117,7 +118,10 @@ enum
 	MM_VIA1_END			= 0xC20F,
 	MM_ROMDISK_START    = 0xC300,
 	MM_ROMDISK_END      = 0xC30F,
-	MM_AUDIO_START      = 0xC400,
+	MM_MOCKINGBOARD_VIA1_START = 0xC400,
+	MM_MOCKINGBOARD_VIA1_END   = 0xC47F,
+	MM_MOCKINGBOARD_VIA2_START = 0xC480,
+	MM_MOCKINGBOARD_VIA2_END   = 0xC4FF,
 	MM_DISKROM_START    = 0xC600,
 	MM_DISKROM_END      = 0xC6FF,
 	MM_RAM2_START       = 0xC800,
@@ -140,9 +144,13 @@ public:
 
 	void Run();
 	void Reset();
+	uint8_t Step();
+	void TickDevices(uint32_t cycles);
+	bool IRQAsserted() const;
+	void SignalVIA1Pin(VIA::Pins pin);
 	CPU* GetCPU();
 	VIA* GetVIA1();
-	VIA* GetVIA2();
+	Mockingboard* GetMockingboard();
 	PS2Keyboard* GetPS2Keyboard();
 	DriveEmulator* GetDriveEmulator();
 	bool SimulateSerialKey(uint8_t key);
@@ -167,7 +175,6 @@ public:
 	std::function<void(uint8_t)> CallbackReceiveChar;
 	std::function<void(char*)> CallbackDebugString;
 	std::function<void(uint16_t, uint8_t)> CallbackWriteVideo;
-	std::function<void(uint8_t, uint8_t)> CallbackAudio;
     std::function<void(uint16_t, uint8_t)> CallbackHires1;
     std::function<void(uint16_t, uint8_t)> CallbackHires2;
 	std::function<void(uint16_t, uint8_t)> CallbackText1;
@@ -188,13 +195,14 @@ private:
 	void Init();
 	void DoSoftSwitches(uint16_t address, bool write);
 	uint8_t DoDisk(uint16_t address, uint8_t data, bool write);
+	void UpdateVIA1NMI();
 
 	DriveEmulator _driveEmulator;
 
 	CPU	*			_cpu;
 	ACIA *			_acia;
 	VIA *			_via1;
-	VIA *			_via2;
+	Mockingboard *	_mockingboard;
 	PS2Keyboard *	_pPS2;
 	
 	uint8_t			_data[0x10000];  // 64KB address space
@@ -214,8 +222,6 @@ private:
 	unordered_map<int16_t, int32_t>		_mapAddressToLine;
 	unordered_map<int16_t, int32_t>		_mapAddressToOffset;
 	
-	uint8_t _pitch = 0;
-	uint8_t _duration = 0;
 	uint8_t _result = 0;
 
 	bool _basicbank = false;
@@ -231,4 +237,6 @@ private:
 	bool _lores = false;
 
 	bool _testmode = false;
+	bool _nmiPending = false;
+	bool _via1IRQAsserted = false;
 };

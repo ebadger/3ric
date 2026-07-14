@@ -226,6 +226,8 @@ void CPU::Reset()
 	uint8_t lsb, msb;
 
 	A = X = Y = 0;
+	waitForInterrupt = false;
+	stopped = false;
 
 	flags.reg = 0;
 	flags.bits.R = 1;
@@ -246,7 +248,7 @@ void CPU::Run()
 
 	while (true)
 	{
-		while (waitForInterrupt)
+		while (waitForInterrupt || stopped)
 		{
 			pal_sleep(500);
 		}
@@ -831,14 +833,14 @@ uint8_t CPU::Execute(uint8_t opCode)
 		// WAI - wait for hardware interrupt
 		case WAI:
 			cycles = 3;
+			++PC;
 			waitForInterrupt = true;
 			break;
 
-		// STP - Stop mode (like WAI but also resets)
+		// STP - stop until the reset input is asserted
 		case STP:
 			cycles = 3;
-			waitForInterrupt = true;
-			Reset();
+			stopped = true;
 			break;
 
 		// NOP - No operation

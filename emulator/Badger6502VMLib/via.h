@@ -1,29 +1,30 @@
 #pragma once
-#include "vm.h"
+
+#include <cstdint>
+
+class VM;
 
 class VIA
 {
-
 public:
-
 	enum Register
 	{
-		ORB_IRB = 0,    // output register "b" / input register "b"
-		ORA_IRA = 1,    // output register "a" / input register "a" 
-		DDRB = 2,    // data direction register "b"
-		DDRA = 3,    // data direction register "a"
-		T1CL = 4,    // t1 low order latches / t1 low order counter
-		T1CH = 5,    // t1 high order counter
-		T1LL = 6,    // t1 low order latches
-		T1LH = 7,    // t1 high order latches
-		T2CL = 8,    // t2 low order latches / t2 low order counter
-		T2CH = 9,    // t2 high order counter
-		SR = 10,   // shift register
-		ACR = 11,   // auxillary control register
-		PCR = 12,   // peripheral control register
-		IFR = 13,   // interrupt flag register
-		IER = 14,   // interrupt enable register
-		ORA_IRA_2 = 15,   // same as reg 1 except no handshake
+		ORB_IRB = 0,
+		ORA_IRA = 1,
+		DDRB = 2,
+		DDRA = 3,
+		T1CL = 4,
+		T1CH = 5,
+		T1LL = 6,
+		T1LH = 7,
+		T2CL = 8,
+		T2CH = 9,
+		SR = 10,
+		ACR = 11,
+		PCR = 12,
+		IFR = 13,
+		IER = 14,
+		ORA_IRA_2 = 15,
 		MAX_ENUM = 16
 	};
 
@@ -37,20 +38,49 @@ public:
 		CA2
 	};
 
-private:
-	VM*		 _vm = nullptr;
-	uint8_t  _register[MAX_ENUM] = { 0 };
+	explicit VIA(VM* vm = nullptr);
 
-	uint16_t _t1_count = 0;
-	uint16_t _t2_count = 0;
-
-public:
-
-	VIA(VM* p);
-
-	void    SignalPin(Pins pin);
-	void    WriteRegister(uint8_t reg, uint8_t data);
+	bool SignalPin(Pins pin);
+	void WriteRegister(uint8_t reg, uint8_t data);
 	uint8_t ReadRegister(uint8_t reg);
-	void    Tick();
-	void	Reset();
+	void Tick();
+	void Reset();
+
+	bool IRQAsserted() const;
+	void SetPortAInput(uint8_t data);
+	void SetPortAInputBits(uint8_t mask, uint8_t data);
+	void SetPortBInput(uint8_t data);
+	void SetPortBInputBits(uint8_t mask, uint8_t data);
+	uint8_t GetPortAOutput() const;
+	uint8_t GetPortBOutput() const;
+
+private:
+	static constexpr uint8_t IFR_CA2 = 0x01;
+	static constexpr uint8_t IFR_CA1 = 0x02;
+	static constexpr uint8_t IFR_SR = 0x04;
+	static constexpr uint8_t IFR_CB2 = 0x08;
+	static constexpr uint8_t IFR_CB1 = 0x10;
+	static constexpr uint8_t IFR_T2 = 0x20;
+	static constexpr uint8_t IFR_T1 = 0x40;
+
+	void ClearPortAInterrupts(bool handshake);
+	void ClearPortBInterrupts();
+	void ClockTimer2();
+	uint8_t ReadPortA() const;
+	uint8_t ReadPortB() const;
+
+	uint8_t _register[MAX_ENUM] = { 0 };
+
+	uint16_t _t1Latch = 0;
+	uint16_t _t1Counter = 0;
+	uint16_t _t2Latch = 0;
+	uint16_t _t2Counter = 0;
+	bool _t1Running = false;
+	bool _t1Fired = false;
+	bool _t2Running = false;
+	bool _t2Fired = false;
+	bool _pb7Output = true;
+
+	uint8_t _portAInput = 0xFF;
+	uint8_t _portBInput = 0xFF;
 };
