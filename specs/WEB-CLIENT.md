@@ -199,6 +199,15 @@ client-side so GitHub Pages can host it as static files.
   `build.ps1`) plus an entry in `gallery.json` — so every featured program credits its author
   and turns a visitor into a contributor. The page builds card text with `textContent` only:
   the manifest is repo-reviewed, but no entry field is ever injected as HTML.
+- **Usage analytics are privacy-first and cookieless.** Every staged HTML page
+  (`index.html`, `gallery.html`, `tutorials.html`, `story.html`) loads one async GoatCounter
+  snippet in `<head>` — `data-goatcounter="https://3ric.goatcounter.com/count"`, script
+  `//gc.zgo.at/count.js`. It sets no cookies, stores no personal data, and needs no server: a
+  page hit is a fire-and-forget beacon and nothing else. Totals live on the owner-only
+  dashboard at <https://3ric.goatcounter.com>. It is inert if blocked (ad blocker/offline) and
+  the emulator never depends on it. The pages declare no `Content-Security-Policy`, so no CSP
+  allowlist entry is required today; if one is ever added it must allow `gc.zgo.at` and
+  `*.goatcounter.com`.
 
 ## Data flow
 
@@ -214,6 +223,10 @@ insertDisk()/loadSD() → C600G / EC5CG`.
 Gallery: `gallery.html → fetch gallery.json → render cards → click Run & Remix →
 index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 
+Analytics: `any page load → async GoatCounter beacon (//gc.zgo.at/count.js) →
+POST https://3ric.goatcounter.com/count`. Fire-and-forget; no cookies, no PII, and no effect
+on the emulator whether it succeeds, is blocked, or 404s.
+
 ## Dependencies
 
 - **Upstream:** the VM core (`EMULATOR.md`), the ROM/font/disk/SD data (`ROM-SOFTWARE.md`),
@@ -226,6 +239,11 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
   + `story.html` + `llms.txt` + `robots.txt` + `sitemap.xml` (alongside `index.html` and
   `programs/`) into `_site/`; the public users of the demo, and AI coding tools that fetch
   `llms.txt`.
+- **External (analytics):** GoatCounter — the `//gc.zgo.at/count.js` script and the
+  `https://3ric.goatcounter.com/count` endpoint. A privacy-friendly, third-party hit counter
+  loaded by every staged HTML page; best-effort and non-essential — the site behaves
+  identically if it is blocked or the snippet is removed. Owner-managed account (the login is
+  ebadger's; nothing about it is committed to the repo).
 
 ## Implementation Status
 
@@ -249,3 +267,4 @@ index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 | Slot-4 Mockingboard audio | Shipped | User-gesture AudioWorklet sink for the combined speaker/dual-AY stereo PCM; sound enabled only at 1x. |
 | Headless smoke tests | Shipped | `web/test_*.cjs` (boot/render/input/audio/screen/sd/disk). |
 | GitHub Pages CI deploy | Shipped | on push to `main` touching emulator/web/codegen sources. |
+| Usage analytics (GoatCounter) | Shipped | Cookieless, privacy-first hit counter on all staged pages (`index`/`gallery`/`tutorials`/`story`); async `//gc.zgo.at/count.js` → `3ric.goatcounter.com`; no cookies/PII, no server, no CSP change. Owner dashboard `https://3ric.goatcounter.com` (register the `3ric` code once to claim it). |
