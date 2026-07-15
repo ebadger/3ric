@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-07-14 — ebadger (via Copilot)_
+_Last updated: 2026-07-15 — ebadger (via Copilot)_
 
 ---
 
@@ -93,5 +93,9 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   Self-booting machine-code disks work.
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
+- **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**
+  counter (`//gc.zgo.at/count.js` → `https://3ric.goatcounter.com/count`); no cookies, no PII,
+  no server, and the site is unaffected if it is blocked. Totals live on the owner dashboard at
+  <https://3ric.goatcounter.com> — **register the `3ric` code there once to claim the stats.**
 - **Hardware:** schematics, PCB, and 22V10 GAL logic are in progress and tracked through the
   YouTube build series; the emulator is the reference implementation of the target machine.
