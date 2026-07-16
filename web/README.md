@@ -1,7 +1,8 @@
-# 3ric — Apple-II-clone 65C02 emulator in the browser (WebAssembly)
+# 3RIC Studio — 65C02 emulator and editor in the browser (WebAssembly)
 
-This folder is a self-contained Emscripten/WebAssembly port of the `3ric` 65C02
-Apple-II-clone emulator. It compiles the existing C++ VM core
+This folder powers **3RIC Studio**, the browser-based emulator, editor, gallery, and
+learning hub for the `3RIC` Apple-II-class 65C02 computer. It compiles the existing C++
+VM core
 (`emulator/Badger6502VMLib`) and disk library (`emulator/WozLib`) to WebAssembly,
 boots the real 512KB ROM, renders Apple-II text/hi-res/lo-res video to an HTML
 `<canvas>`, feeds keyboard and gamepad input through the machine's hardware paths,
@@ -171,7 +172,7 @@ Implementation notes:
 
 ## Community Gallery
 
-`gallery.html` is a lightweight, WASM-free showcase of programs written for 3ric,
+`gallery.html` is a lightweight, WASM-free showcase of programs written for 3RIC,
 linked from the emulator header. It fetches the committed **`gallery.json`** manifest
 and renders one card per program; each card's **&#9654; Run & Remix** button is just a
 `?src=`/`?code=` deep link into `index.html`, so a click loads the source into the

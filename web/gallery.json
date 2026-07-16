@@ -1,19 +1,19 @@
 {
   "version": 1,
-  "_readme": "Community Gallery manifest for the 3ric web client. Each entry becomes a card on gallery.html with a one-click 'Run & Remix' link into the in-browser editor. To feature your own program: add its .s source under codegen/programs/ (build.ps1 stages every codegen/programs/*.s into web/programs/) and append an entry below, then open a pull request. Fields: title (required), author, authorUrl, mode (Hi-res|Lo-res|Text|Serial), description, tags[]; and a run target of either src ('programs/<name>.s') or an inline code (URL-safe base64 for ?code=), plus an optional org (hex load address, only when the source has no .org directive).",
+  "_readme": "Community Gallery manifest for 3RIC Studio. Each entry becomes a card on gallery.html with a one-click 'Run & Remix' link into the in-browser editor. To feature your own program: add its .s source under codegen/programs/ (build.ps1 stages every codegen/programs/*.s into web/programs/) and append an entry below, then open a pull request. Fields: title (required), author, authorUrl, mode (Hi-res|Lo-res|Text|Serial), description, tags[]; and a run target of either src ('programs/<name>.s') or an inline code (URL-safe base64 for ?code=), plus an optional org (hex load address, only when the source has no .org directive).",
   "entries": [
     {
       "title": "Hello, KansasFest 2026",
-      "author": "3ric",
+      "author": "3RIC Studio",
       "authorUrl": "https://github.com/ebadger/3ric",
       "mode": "Text",
       "src": "programs/kfest.s",
-      "description": "3ric's zero-install greeting to the Apple II crowd for KansasFest 2026 — a framed text welcome you can run, remix, and re-share right in the browser. No install, no account.",
+      "description": "3RIC Studio's zero-install greeting to the Apple II crowd for KansasFest 2026 — a framed text welcome you can run, remix, and re-share right in the browser. No install, no account.",
       "tags": ["demo", "text", "kansasfest", "greeting"]
     },
     {
       "title": "Swarm",
-      "author": "3ric",
+      "author": "3RIC Studio",
       "authorUrl": "https://github.com/ebadger/3ric",
       "mode": "Hi-res",
       "src": "programs/swarm.s",
@@ -22,7 +22,7 @@
     },
     {
       "title": "Rocks",
-      "author": "3ric",
+      "author": "3RIC Studio",
       "authorUrl": "https://github.com/ebadger/3ric",
       "mode": "Hi-res",
       "src": "programs/rocks.s",
@@ -31,7 +31,7 @@
     },
     {
       "title": "Jungle Quest: Sunstone Run",
-      "author": "3ric",
+      "author": "3RIC Studio",
       "authorUrl": "https://github.com/ebadger/3ric",
       "mode": "Hi-res",
       "src": "programs/jungle.s",
@@ -40,7 +40,7 @@
     },
     {
       "title": "Snake",
-      "author": "3ric",
+      "author": "3RIC Studio",
       "authorUrl": "https://github.com/ebadger/3ric",
       "mode": "Lo-res",
       "src": "programs/snake.s",
@@ -49,7 +49,7 @@
     },
     {
       "title": "Game of Life",
-      "author": "3ric",
+      "author": "3RIC Studio",
       "authorUrl": "https://github.com/ebadger/3ric",
       "mode": "Lo-res",
       "src": "programs/life.s",
@@ -58,7 +58,7 @@
     },
     {
       "title": "Blocks",
-      "author": "3ric",
+      "author": "3RIC Studio",
       "authorUrl": "https://github.com/ebadger/3ric",
       "mode": "Text",
       "src": "programs/blocks.s",
@@ -67,7 +67,7 @@
     },
     {
       "title": "Bricks",
-      "author": "3ric",
+      "author": "3RIC Studio",
       "authorUrl": "https://github.com/ebadger/3ric",
       "mode": "Text",
       "src": "programs/bricks.s",
@@ -76,7 +76,7 @@
     },
     {
       "title": "Paddles",
-      "author": "3ric",
+      "author": "3RIC Studio",
       "authorUrl": "https://github.com/ebadger/3ric",
       "mode": "Text",
       "src": "programs/paddles.s",
@@ -85,7 +85,7 @@
     },
     {
       "title": "2048",
-      "author": "3ric",
+      "author": "3RIC Studio",
       "authorUrl": "https://github.com/ebadger/3ric",
       "mode": "Text",
       "src": "programs/2048.s",
@@ -94,7 +94,7 @@
     },
     {
       "title": "Minesweeper",
-      "author": "3ric",
+      "author": "3RIC Studio",
       "authorUrl": "https://github.com/ebadger/3ric",
       "mode": "Text",
       "src": "programs/mines.s",
@@ -103,11 +103,11 @@
     },
     {
       "title": "Hello, world",
-      "author": "3ric",
+      "author": "3RIC Studio",
       "authorUrl": "https://github.com/ebadger/3ric",
       "mode": "Serial",
       "src": "programs/hello.s",
-      "description": "A tiny greeting printed via COUT ($FDED), then BRK back to the monitor — the perfect starting point for your first 3ric program.",
+      "description": "A tiny greeting printed via COUT ($FDED), then BRK back to the monitor — the perfect starting point for your first 3RIC program.",
       "tags": ["demo", "serial", "starter"]
     }
   ]
