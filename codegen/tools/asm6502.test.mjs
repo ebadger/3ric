@@ -9,6 +9,14 @@ function eqBytes(name, got, expected) {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}`);
   if (!ok) { console.log("   got     :", g); console.log("   expected:", e); }
 }
+function eqJson(name, got, expected) {
+  const g = JSON.stringify(got);
+  const e = JSON.stringify(expected);
+  const ok = g === e;
+  if (!ok) fails++;
+  console.log(`${ok ? "PASS" : "FAIL"}  ${name}`);
+  if (!ok) { console.log("   got     :", g); console.log("   expected:", e); }
+}
 
 // 1) The full "HI via COUT" loop — verifies labels, abs,X, branches, .byte string.
 const hi = `
@@ -23,8 +31,21 @@ loop:   lda msg,x
 done:   brk
 msg:    .byte "HI", $8D, 0
 `;
-eqBytes("HI loop", assemble(hi).bytes,
+const hiResult = assemble(hi);
+eqBytes("HI loop", hiResult.bytes,
   [0xA2,0x00, 0xBD,0x0E,0x08, 0xF0,0x06, 0x20,0xED,0xFD, 0xE8, 0xD0,0xF5, 0x00, 0x48,0x49,0x8D,0x00]);
+eqJson("source listing metadata",
+  hiResult.listing.map(({ pc, line, kind }) => ({ pc, line, kind })),
+  [
+    { pc:0x0800, line:4, kind:"instruction" },
+    { pc:0x0802, line:5, kind:"instruction" },
+    { pc:0x0805, line:6, kind:"instruction" },
+    { pc:0x0807, line:7, kind:"instruction" },
+    { pc:0x080A, line:8, kind:"instruction" },
+    { pc:0x080B, line:9, kind:"instruction" },
+    { pc:0x080D, line:10, kind:"instruction" },
+    { pc:0x080E, line:11, kind:"data" },
+  ]);
 
 // 2) Addressing-mode coverage.
 const modes = `

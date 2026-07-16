@@ -36,6 +36,7 @@ in a headless harness."
 | `seedBasicRom()`, `loadFont(bytes)`, `loadSD(bytes)` | Standard boot setup + attach the FAT32 SD sparse image |
 | `reset()` | Load PC from the reset vector `$FFFC` |
 | `run(maxSteps)` | Cooperatively step the CPU (never uses the blocking `VM::Run`) |
+| `step()` / breakpoint methods | Execute exactly one instruction or stop `run*` before a configured PC (browser debugger) |
 | `setPC(addr)` | Jump directly to an address (for RAM-loaded test runs) |
 | `poke(addr,v)` / `peek(addr)` | Byte access to the bus |
 | `keyDown(code)` | Memory-mapped `$C000` keyboard strobe (drives the DOS shell) |
@@ -127,6 +128,27 @@ The generated program therefore just needs to be assembled at a chosen ORG and
 be entered at that ORG; the manifest records that ORG as the `BRUN` address.
 (The exact `BSAVE` argument form used to *write* a file from the shell is still
 confirmed empirically in Phase 0 (§10); `BRUN` itself is settled.)
+
+### 2.5 Browser debugger metadata
+
+The dependency-free assembler's result includes a `listing` record for each statement that
+emits bytes:
+
+```js
+{ pc: 0x0800, bytes: [0xA9, 0x01], line: 12, kind: "instruction" }
+```
+
+`line` is one-based and `kind` is either `instruction` or `data`. This is additive to the
+existing `org`, `bytes`, and `symbols` result, remains browser-safe, and is the authoritative
+map used by 3RIC Studio for source breakpoints and current-PC highlighting. Directives are
+shown for context but are not offered as executable breakpoints.
+
+The browser's WebVM wrapper keeps breakpoint tests inside its C++ instruction loops and
+exposes a one-instruction `step()` operation. This preserves normal execution throughput
+while allowing exact pre-instruction stops. Separately, the web build stages the existing
+ca65 `emulator/Data/badger6502.dbg`; a dependency-free browser parser can map ROM PCs to
+symbols and source filename/line coordinates. The corresponding ROM source text is not
+present in this repository and is therefore not part of the browser payload.
 
 ## 3. How the physical-SD requirement changes the original plan
 

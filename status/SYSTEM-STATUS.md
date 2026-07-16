@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-07-15 — ebadger (via Copilot)_
+_Last updated: 2026-07-16 — ebadger (via Copilot)_
 
 ---
 
@@ -49,6 +49,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_mockingboard.cjs        # slot-4 mirrors, stereo PCM, 3RIC clock, VIA IRQ
 & $node web/test_system_speaker.cjs     # $C030 read/write toggles + mixed speaker/AY PCM
 & $node web/test_gamepad.cjs             # browser mapping, VIA serial pads, ROM tables
+& $node web/test_debugger.cjs            # breakpoints, stepping, source map, ROM debug lookup
 & $node web/test_sd.cjs                  # mount SD + DIR lists the FAT32 root
 & $node web/test_disk.cjs                # boot a WOZ floppy via C600G into a hi-res title
 & $node web/test_woz_download.cjs        # "Download .woz" builds a bootable disk that boots via C600G
@@ -88,6 +89,9 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   `asm6502.mjs` and runs it like `BRUN`; ships ~11 sample programs; deep-linkable via `?src=`.
   Exports the assembled program as a raw **.PRG** or a bootable **.woz** disk image
   (`wozgen.mjs`, a JS port of `dsk2woz2` with a multi-track boot loader) that boots via `C600G`.
+- **Browser debugger:** source-correlated instruction breakpoints for assembled programs,
+  pause/continue, step into/over, live registers, raw-memory inspection, arbitrary PC
+  breakpoints, and lazy ROM symbol/source-file:line correlation from `badger6502.dbg`.
 - **Disk gap:** DOS 3.3 / Quick-DOS and games that chain through an Applesoft auto-run
   greeting don't run — this clone's `$E000` BASIC is generic Microsoft BASIC, not Applesoft.
   Self-booting machine-code disks work.

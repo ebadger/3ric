@@ -72,6 +72,7 @@ jobs:
           node web/test_mockingboard.cjs
           node web/test_gamepad.cjs
           node web/test_virtual_keyboard.cjs
+          node web/test_debugger.cjs
           node web/test_keyboard.cjs
           node web/test_boot.cjs
 
@@ -79,7 +80,7 @@ jobs:
       - name: Stage site
         run: |
           mkdir -p _site
-          cp web/index.html web/emulation-clock.js web/audio-worklet.js web/gamepad.js web/virtual-keyboard.js web/gallery.html web/tutorials.html web/story.html web/gallery.json web/llms.txt web/robots.txt web/sitemap.xml web/badger6502.js web/badger6502.wasm _site/
+          cp web/index.html web/emulation-clock.js web/audio-worklet.js web/gamepad.js web/virtual-keyboard.js web/debugger.js web/gallery.html web/tutorials.html web/story.html web/gallery.json web/llms.txt web/robots.txt web/sitemap.xml web/badger6502.js web/badger6502.wasm _site/
           cp web/asm6502.mjs web/wozgen.mjs _site/
           cp -r web/data _site/data
           cp -r web/programs _site/programs

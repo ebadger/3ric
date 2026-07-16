@@ -45,6 +45,10 @@ identically. Browser-only presentation code stays in the bridge and JavaScript.
   download the `.PRG`. Ships the project's sample programs; deep-linkable with
   `?src=` / `?code=`, and a **Share** button that copies a one-click link to the
   current program.
+- **Source debugger**: instruction breakpoints on the assembled source listing,
+  pause/continue, step into/over, live registers, arbitrary-address breakpoints, and
+  raw-memory inspection. PCs in the ROM are correlated to ca65 symbol and
+  source-file/line metadata from `badger6502.dbg`.
 
 ## Layout
 
@@ -53,12 +57,13 @@ identically. Browser-only presentation code stays in the bridge and JavaScript.
 | `web_bridge.cpp` | embind bridge: wraps `VM`, exposes load/run/keyboard/gamepad/registers/audio, drives the SD card, and produces the RGBA framebuffer. |
 | `gamepad.js` | Dependency-free standard-layout browser controller mapping and stable two-player assignment. |
 | `virtual-keyboard.js` | Touch-keyboard layout, one-shot Shift/Control state, physical-key mapping, and DOM renderer. |
+| `debugger.js` | Dependency-free assembled-source mapper and ca65 `.dbg` parser for ROM symbol/file:line correlation. |
 | `emulation-clock.js` | Elapsed-time cycle pacer that keeps finite CPU speeds independent of display refresh rate and carries instruction overshoot between frames. |
 | `audio-worklet.js` | Stereo PCM queue on the browser audio-rendering thread; no `SharedArrayBuffer` or cross-origin isolation required. |
 | `web_compat.h` | Tiny shims so `WozLib` + `MockMicroSD`'s MSVC-isms (`OutputDebugString`, `sprintf_s`, `swprintf_s`, `fopen_s`, `_ASSERT`, …) compile under Emscripten. |
 | `make_sd_sparse.py` | Streams `emulator/Data/sd.zip` (a 2GB, mostly-zero FAT32 image) into a compact `data/sd.sparse` keeping only the ~11.5MB of non-zero sectors. |
 | `build.ps1` | Compiles the core + WozLib + MockMicroSD + bridge to `badger6502.js` / `.wasm`, stages the data files, generates `sd.sparse`, and stages the demo `disk.woz`. |
-| `index.html` | Canvas UI + `requestAnimationFrame` driver + keyboard + clock-speed/disk/sound controls + the in-browser assembler/editor. Honors an optional `ASSET_BASE` (R2/CDN offload). |
+| `index.html` | Canvas UI + `requestAnimationFrame` driver + keyboard + clock-speed/disk/sound controls + the in-browser assembler/editor/debugger. Honors an optional `ASSET_BASE` (R2/CDN offload). |
 | `asm6502.mjs` | The 65C02 assembler, staged from `codegen/tools/asm6502.mjs` (git-ignored). Dual-use: the same file is a Node CLI and a browser ES module — `index.html` imports its `assemble()` for **Assemble & Run**. |
 | `serve.ps1` | Starts `python -m http.server` (defaults to port 8011) for local dev. |
 | `Caddyfile` | Production static server config (compression + cache headers) for hosting behind a Cloudflare Tunnel. |
@@ -97,7 +102,7 @@ bridge:          web_bridge.cpp
 `symbols.cpp` and `Disassemble.cpp` are excluded (Windows-only). Key flags:
 `-std=c++17 -O2 -lembind -sMODULARIZE=1 -sEXPORT_NAME=createBadgerVM
 -sALLOW_MEMORY_GROWTH=1 -sENVIRONMENT=web,node`. The data files
-(`badger6502.bin`, `fontrom.dat`) are copied from
+(`badger6502.bin`, `fontrom.dat`, `badger6502.dbg`) are copied from
 `emulator/Data` into `web/data`, `sd.sparse` is generated from
 `emulator/Data/sd.zip` (first run only; ~20s), and the demo `disk.woz` is staged
 from the in-repo WOZ test images.
@@ -149,6 +154,9 @@ the browser and runs it in the emulator — no CLI, no server round-trip:
    Assembler errors show as `line N: …` and are non-fatal.
 3. **Download .PRG** saves the assembled image so you can `BRUN` it on real
    hardware or off the SD card.
+4. Expand **Debugger** to click instruction rows as breakpoints, pause/continue,
+   step into or over an absolute `JSR`, add a breakpoint by address, and inspect
+   128 bytes of memory from any hexadecimal address.
 
 Implementation notes:
 
@@ -169,6 +177,12 @@ Implementation notes:
 - `build.ps1` stages `asm6502.mjs` and every `codegen/programs/*.s` plus the ten
   `emulator/AICodeGen` sample sources into `web/` and `web/programs/` (git-ignored,
   regenerated each build; CI does the same before publishing).
+- `assemble()` listing records carry the emitted PC/bytes, one-based source line,
+  and instruction/data kind. Breakpoint checks remain in the C++ `WebVM` loop so
+  normal and Max-speed execution do not cross the JS/WASM boundary per instruction.
+  The ROM `.dbg` map is fetched only when the debugger is opened; the source files
+  named by that map are not in this repository, so the UI shows their file/line
+  coordinate rather than the ROM source text.
 
 ## Community Gallery
 
@@ -220,6 +234,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web\test_mockingboard.cjs # mirrors, stereo PCM, 3RIC clock, timer IRQ
 & $node web\test_system_speaker.cjs # $C030 read/write toggles + mixed PCM
 & $node web\test_gamepad.cjs    # mapping, VIA serialization, ROM GAMEPAD1/2 scan
+& $node web\test_debugger.cjs   # source map, ROM lookup, breakpoints, step-over
 & $node web\test_sd.cjs          # mount the SD card + DIR lists the FAT32 root
 & $node web\test_disk.cjs        # boot a WOZ floppy via C600G into a hi-res title
 ```

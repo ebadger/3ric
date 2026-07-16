@@ -144,6 +144,45 @@
     background: var(--panel); color: var(--fg); font-size: 12px; line-height: 1.4;
   }
   #ide .remix.show { display: block; }
+  #debugger {
+    border: 1px solid var(--dim); border-radius: 4px; background: var(--panel);
+  }
+  #debugger summary {
+    padding: 7px 9px; cursor: pointer; font-size: 11px; letter-spacing: .6px;
+  }
+  #debugstate { float: right; color: var(--key-alt); letter-spacing: 0; }
+  #debugger .debug-body { display: flex; flex-direction: column; gap: 8px; padding: 8px; border-top: 1px solid var(--dim); }
+  #debugger .debug-toolbar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  #debugger .debug-location, #debugger .debug-breakpoints { color: var(--key-alt); font-size: 11px; }
+  #debugger .debug-grid {
+    display: grid; grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr); gap: 8px;
+  }
+  #debugger .debug-pane { min-width: 0; }
+  #debugger .debug-pane-title { margin-bottom: 4px; color: var(--dim); font-size: 10px; letter-spacing: .6px; }
+  #debuglisting {
+    max-height: 300px; overflow: auto; border: 1px solid var(--dim); background: #000;
+    font-size: 11px;
+  }
+  .debug-row {
+    display: grid; grid-template-columns: 24px 52px 88px minmax(0, 1fr);
+    min-height: 20px; align-items: start; border-bottom: 1px solid #102016;
+  }
+  .debug-row:last-child { border-bottom: 0; }
+  .debug-row.current { background: #193d23; color: #fff; }
+  .debug-row.breakpoint { color: #ffcf66; }
+  .debug-row .debug-marker {
+    width: 20px; min-height: 18px; margin: 1px; padding: 0; border: 0;
+    color: inherit; background: transparent; font: inherit; text-align: center;
+  }
+  .debug-row .debug-marker:disabled { opacity: .35; }
+  .debug-row .debug-address, .debug-row .debug-bytes, .debug-row .debug-source {
+    padding: 2px 4px; white-space: pre; overflow: hidden; text-overflow: ellipsis;
+  }
+  .debug-row .debug-source { color: inherit; }
+  #debugmemory {
+    min-height: 154px; margin: 4px 0 0; padding: 6px; overflow: auto;
+    border: 1px solid var(--dim); background: #000; color: var(--fg); font-size: 11px;
+  }
   @media (max-width: 480px) {
     main { gap: 12px; padding: 8px; }
     #virtual-keyboard-keys { gap: 3px; padding: 6px; overflow-x: hidden; }
@@ -159,6 +198,9 @@
     #virtual-keyboard .vk-key.return { font-size: clamp(6px, 2.2vw, 9px); }
     #virtual-keyboard .vk-key.caps { font-size: clamp(5px, 1.9vw, 8px); }
     #ide { min-width: 0; }
+  }
+  @media (max-width: 760px) {
+    #debugger .debug-grid { grid-template-columns: 1fr; }
   }
 </style>
 <link rel="alternate" type="text/markdown" title="llms.txt — 65C02 codegen guide for AI tools" href="llms.txt" />
@@ -248,6 +290,37 @@
       <textarea id="src" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off"
         aria-label="6502 assembly source" placeholder="; write 65C02 assembly here, then Assemble & Run"></textarea>
       <pre id="asmout">Pick a sample or write 65C02 assembly, then Assemble &amp; Run.</pre>
+      <details id="debugger">
+        <summary>DEBUGGER <span id="debugstate">running</span></summary>
+        <div class="debug-body">
+          <div class="debug-toolbar">
+            <button id="debugpause" type="button">Pause</button>
+            <button id="debugcontinue" type="button" disabled>Continue</button>
+            <button id="debugstep" type="button" disabled>Step Into</button>
+            <button id="debugover" type="button" title="step over an absolute JSR; other opcodes step once" disabled>Step Over</button>
+            <span class="hint">break&nbsp;@$</span>
+            <input class="addr" id="debugbreakaddr" value="0800" spellcheck="false" aria-label="hex breakpoint address" />
+            <button id="debugtogglebreak" type="button">Toggle Breakpoint</button>
+            <button id="debugclearbreaks" type="button">Clear Breakpoints</button>
+          </div>
+          <div id="debuglocation" class="debug-location">PC not mapped to assembled source.</div>
+          <div id="debugbreakpoints" class="debug-breakpoints">breakpoints: none</div>
+          <div class="debug-grid">
+            <section class="debug-pane" aria-label="assembled source listing">
+              <div class="debug-pane-title">ASSEMBLED SOURCE (click B to toggle an instruction breakpoint)</div>
+              <div id="debuglisting"><div class="debug-row"><span></span><span></span><span></span><span class="debug-source">Assemble a program to create a source map.</span></div></div>
+            </section>
+            <section class="debug-pane" aria-label="memory inspector">
+              <div class="debug-toolbar">
+                <span class="debug-pane-title">MEMORY&nbsp;$</span>
+                <input class="addr" id="debugmemaddr" value="0000" spellcheck="false" aria-label="hex memory start address" />
+                <button id="debugrefreshmemory" type="button">Refresh</button>
+              </div>
+              <pre id="debugmemory">Pause execution to inspect memory.</pre>
+            </section>
+          </div>
+        </div>
+      </details>
     </section>
   </main>
   <footer>
@@ -271,6 +344,9 @@
     resulting <code>.PRG</code> to <code>BRUN</code> on hardware. Hit <strong>Share</strong>
     to copy a one-click link to your program (a short <code>?src=</code> for the built-in
     samples, or your source inlined in <code>?code=</code>).
+    Open <strong>Debugger</strong> to set breakpoints on assembled source lines, pause/continue,
+    step into or over subroutines, and inspect memory. ROM execution is identified from the
+    machine&rsquo;s ca65 debug map when available.
     <br />Building with an AI tool? Point it at <a href="llms.txt"><code>llms.txt</code></a>
     &mdash; a machine-readable 65C02 codegen guide &mdash; or see
     <a href="https://github.com/ebadger/3ric/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">CONTRIBUTING</a>.
@@ -283,6 +359,7 @@
   <script src="emulation-clock.js"></script>
   <script src="gamepad.js"></script>
   <script src="virtual-keyboard.js"></script>
+  <script src="debugger.js"></script>
   <script src="badger6502.js"></script>
   <script>
     // The 3ric clocks its 65C02 from the 25.175 MHz VGA dot clock divided by 16,
@@ -315,6 +392,7 @@
     let audioNode = null;
     let soundRequested = false;
     let audioGenerating = false;
+    let debuggerController = null;
     const inputQueue = [];
 
     function hex(n, w) { return (n >>> 0).toString(16).toUpperCase().padStart(w, "0"); }
@@ -530,21 +608,32 @@
       pollGamepads();
 
       // Feed one queued key when the keyboard strobe is clear (bit 7 of $C000).
-      if (inputQueue.length && (vm.peek(0xC000) & 0x80) === 0) {
+      if (!debuggerController?.isPaused() &&
+          inputQueue.length && (vm.peek(0xC000) & 0x80) === 0) {
         vm.keyDown(inputQueue.shift());
       }
 
       const start = performance.now();
-      if (speedMul === Infinity) {
+      if (!debuggerController?.isPaused() && speedMul === Infinity) {
         do {
-          vm.run(1000);
+          const cycles = vm.run(1000);
+          if (vm.breakpointHit()) {
+            debuggerController?.onBreakpoint();
+            break;
+          }
+          if (cycles <= 0) break;
         } while (performance.now() - start <= FRAME_BUDGET_MS);
-      } else {
+      } else if (!debuggerController?.isPaused()) {
         let cyclesDue = emulationClock.advance(timestamp, speedMul);
         while (cyclesDue > 0) {
           const cycles = vm.runCycles(Math.min(cyclesDue, RUN_CYCLE_BATCH));
+          const breakpointHit = vm.breakpointHit();
+          if (cycles > 0) emulationClock.consume(cycles);
+          if (breakpointHit) {
+            debuggerController?.onBreakpoint();
+            break;
+          }
           if (cycles <= 0) break;
-          emulationClock.consume(cycles);
           if (performance.now() - start > FRAME_BUDGET_MS) break;
           cyclesDue = emulationClock.cyclesDue();
         }
@@ -560,6 +649,7 @@
       ctx.putImageData(imageData, 0, 0);
 
       updateRegs();
+      debuggerController?.refresh();
       requestAnimationFrame(frame);
     }
 
@@ -580,6 +670,7 @@
       vm.reset();
       emulationClock.reset();
       clearAudioQueue();
+      debuggerController?.onMachineReset();
     }
 
     // Boot a 5.25" floppy: re-seed a clean machine (back to the monitor), insert
@@ -603,15 +694,21 @@
     // the monitor initialize first, so COUT's output vector ($36/$37) is live
     // before the program runs; otherwise a program that calls COUT would jump
     // through an uninitialized vector.
-    async function loadPrg(bytes, org, label) {
+    async function loadPrg(bytes, org, label, preserveDebugListing = false) {
       inputQueue.length = 0;
-      await loadRom();                              // clean reset to the monitor
-      for (let i = 0; i < 25; i++) vm.run(50000);   // settle into the "*" monitor
-      if (audioGenerating) vm.drainAudio();          // discard pre-program silence
-      vm.loadData(org & 0xFFFF, bytes);
-      vm.setPC(org & 0xFFFF);
-      statusEl.textContent = `running ${label || ".PRG"} @ $${hex(org, 4)}`;
-      canvas.focus();
+      if (!preserveDebugListing) debuggerController?.setProgram("", []);
+      debuggerController?.beginProgramLoad();
+      try {
+        await loadRom();                              // clean reset to the monitor
+        for (let i = 0; i < 25; i++) vm.run(50000);   // settle into the "*" monitor
+        if (audioGenerating) vm.drainAudio();          // discard pre-program silence
+        vm.loadData(org & 0xFFFF, bytes);
+        vm.setPC(org & 0xFFFF);
+        statusEl.textContent = `running ${label || ".PRG"} @ $${hex(org, 4)}`;
+        canvas.focus();
+      } finally {
+        debuggerController?.endProgramLoad();
+      }
     }
 
     // ---- in-browser assembler / editor ------------------------------------
@@ -656,6 +753,336 @@
       return wozgenFn;
     }
 
+    function createDebuggerController() {
+      const detailsEl = document.getElementById("debugger");
+      const stateEl = document.getElementById("debugstate");
+      const locationEl = document.getElementById("debuglocation");
+      const breakpointsEl = document.getElementById("debugbreakpoints");
+      const listingEl = document.getElementById("debuglisting");
+      const pauseBtn = document.getElementById("debugpause");
+      const continueBtn = document.getElementById("debugcontinue");
+      const stepBtn = document.getElementById("debugstep");
+      const overBtn = document.getElementById("debugover");
+      const breakAddrEl = document.getElementById("debugbreakaddr");
+      const toggleBreakBtn = document.getElementById("debugtogglebreak");
+      const clearBreaksBtn = document.getElementById("debugclearbreaks");
+      const memoryAddrEl = document.getElementById("debugmemaddr");
+      const memoryEl = document.getElementById("debugmemory");
+      const refreshMemoryBtn = document.getElementById("debugrefreshmemory");
+
+      const manualBreakpoints = new Set();
+      const sourceBreakpointLines = new Set();
+      const sourceBreakpoints = new Set();
+      let rows = [];
+      let rowElements = new Map();
+      let paused = false;
+      let suspended = false;
+      let temporaryBreakpoint = null;
+      let currentAddress = -1;
+      let memoryDirty = true;
+      let romDebug = null;
+      let romDebugLoading = null;
+
+      function parseDebuggerAddress(value) {
+        const match = String(value).trim().match(/^\$?([0-9a-f]{1,4})$/i);
+        return match ? parseInt(match[1], 16) : null;
+      }
+
+      function rebuildSourceBreakpoints() {
+        sourceBreakpoints.clear();
+        for (const row of rows) {
+          if (row.kind === "instruction" && sourceBreakpointLines.has(row.line)) {
+            sourceBreakpoints.add(row.address);
+          }
+        }
+      }
+
+      function allBreakpointAddresses() {
+        return new Set([...manualBreakpoints, ...sourceBreakpoints]);
+      }
+
+      function renderBreakpointSummary() {
+        const addresses = Array.from(allBreakpointAddresses()).sort((a, b) => a - b);
+        breakpointsEl.textContent = addresses.length
+          ? `breakpoints: ${addresses.map((address) => "$" + hex(address, 4)).join(" ")}`
+          : "breakpoints: none";
+      }
+
+      function refreshBreakpointRows() {
+        for (const [address, item] of rowElements) {
+          const enabled = sourceBreakpointLines.has(item.row.line);
+          item.element.classList.toggle("breakpoint", enabled);
+          item.button.textContent = enabled ? "B" : ".";
+          item.button.setAttribute("aria-pressed", enabled ? "true" : "false");
+          item.button.title = `${enabled ? "remove" : "set"} breakpoint at $${hex(address, 4)}`;
+        }
+      }
+
+      function syncBreakpoints() {
+        vm.clearBreakpoints();
+        rebuildSourceBreakpoints();
+        if (!suspended) {
+          for (const address of allBreakpointAddresses()) vm.addBreakpoint(address);
+          if (temporaryBreakpoint != null) vm.addBreakpoint(temporaryBreakpoint);
+        }
+        refreshBreakpointRows();
+        renderBreakpointSummary();
+      }
+
+      function renderListing() {
+        listingEl.textContent = "";
+        rowElements = new Map();
+        if (!rows.length) {
+          const empty = document.createElement("div");
+          empty.className = "debug-row";
+          const message = document.createElement("span");
+          message.className = "debug-source";
+          message.style.gridColumn = "1 / -1";
+          message.textContent = "Assemble a program to create a source map.";
+          empty.appendChild(message);
+          listingEl.appendChild(empty);
+          return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        for (const row of rows) {
+          const element = document.createElement("div");
+          element.className = "debug-row";
+
+          const marker = document.createElement("button");
+          marker.type = "button";
+          marker.className = "debug-marker";
+          marker.disabled = row.kind !== "instruction";
+          marker.textContent = row.kind === "instruction" ? "." : "-";
+          marker.setAttribute("aria-label", row.kind === "instruction"
+            ? `toggle breakpoint at $${hex(row.address, 4)}, source line ${row.line}`
+            : `data at $${hex(row.address, 4)}`);
+          if (row.kind === "instruction") {
+            marker.addEventListener("click", () => {
+              if (sourceBreakpointLines.has(row.line)) sourceBreakpointLines.delete(row.line);
+              else sourceBreakpointLines.add(row.line);
+              syncBreakpoints();
+            });
+          }
+
+          const address = document.createElement("span");
+          address.className = "debug-address";
+          address.textContent = "$" + hex(row.address, 4);
+
+          const bytes = document.createElement("span");
+          bytes.className = "debug-bytes";
+          const shown = row.bytes.slice(0, 6).map((byte) => hex(byte, 2)).join(" ");
+          bytes.textContent = shown + (row.bytes.length > 6 ? " ..." : "");
+
+          const source = document.createElement("span");
+          source.className = "debug-source";
+          source.textContent = `${String(row.line).padStart(4, " ")}  ${row.source}`;
+
+          element.append(marker, address, bytes, source);
+          fragment.appendChild(element);
+          if (row.kind === "instruction") {
+            rowElements.set(row.address, { row, element, button: marker });
+          }
+        }
+        listingEl.appendChild(fragment);
+        refreshBreakpointRows();
+      }
+
+      function renderMemory() {
+        const start = parseDebuggerAddress(memoryAddrEl.value);
+        if (start == null) {
+          memoryEl.textContent = "Enter a hexadecimal address from 0000 through FFFF.";
+          return;
+        }
+        const output = [];
+        for (let row = 0; row < 8; row++) {
+          const address = (start + row * 16) & 0xFFFF;
+          const bytes = [];
+          let ascii = "";
+          for (let column = 0; column < 16; column++) {
+            const value = vm.peek((address + column) & 0xFFFF);
+            bytes.push(hex(value, 2));
+            ascii += value >= 32 && value <= 126 ? String.fromCharCode(value) : ".";
+          }
+          output.push(`${hex(address, 4)}  ${bytes.join(" ")}  |${ascii}|`);
+        }
+        memoryEl.textContent = output.join("\n");
+        memoryDirty = false;
+      }
+
+      function removeTemporaryBreakpoint() {
+        if (temporaryBreakpoint == null) return;
+        temporaryBreakpoint = null;
+        syncBreakpoints();
+      }
+
+      function setPaused(value, reason) {
+        paused = value;
+        pauseBtn.disabled = value;
+        continueBtn.disabled = !value;
+        stepBtn.disabled = !value;
+        overBtn.disabled = !value;
+        stateEl.textContent = value ? `paused${reason ? ": " + reason : ""}` : (reason || "running");
+        if (value) {
+          memoryDirty = true;
+          clearAudioQueue();
+        }
+        emulationClock.reset();
+        refresh(true);
+      }
+
+      function formatRomLocation(address) {
+        const info = romDebug && romDebug.lookup(address);
+        if (!info) return `$${hex(address, 4)} (outside assembled source)`;
+        const parts = [`$${hex(address, 4)}`];
+        if (info.symbol) parts.push(info.symbol.name);
+        const location = info.location ||
+          (info.symbol && info.symbol.file ? { file: info.symbol.file, line: info.symbol.line } : null);
+        if (location && location.file) parts.push(`${location.file}:${location.line}`);
+        if (parts.length === 1) parts.push("(outside assembled source)");
+        return parts.join("  ");
+      }
+
+      function refresh(force = false) {
+        const address = vm.pc() & 0xFFFF;
+        if (force || address !== currentAddress) {
+          const previous = rowElements.get(currentAddress);
+          if (previous) previous.element.classList.remove("current");
+          currentAddress = address;
+          const current = rowElements.get(address);
+          if (current) {
+            current.element.classList.add("current");
+            locationEl.textContent =
+              `$${hex(address, 4)}  assembled source line ${current.row.line}: ${current.row.source.trim()}`;
+            if (paused) current.element.scrollIntoView({ block: "nearest" });
+          } else {
+            locationEl.textContent = formatRomLocation(address);
+          }
+        }
+        if (paused && (force || memoryDirty)) renderMemory();
+      }
+
+      async function ensureRomDebug() {
+        if (romDebug || romDebugLoading) return romDebugLoading;
+        locationEl.textContent = "loading ROM debug map...";
+        romDebugLoading = fetch(assetUrl("data/badger6502.dbg"))
+          .then((response) => {
+            if (!response.ok) throw new Error(`fetch ROM debug map: ${response.status}`);
+            return response.text();
+          })
+          .then((text) => {
+            romDebug = BadgerDebugger.parseCa65Debug(text);
+            refresh(true);
+            return romDebug;
+          })
+          .catch((error) => {
+            locationEl.textContent = "ROM debug map unavailable: " + error.message;
+            console.error(error);
+            throw error;
+          });
+        return romDebugLoading;
+      }
+
+      pauseBtn.addEventListener("click", () => setPaused(true, "manual"));
+      continueBtn.addEventListener("click", () => {
+        removeTemporaryBreakpoint();
+        if (vm.hasBreakpoint(vm.pc())) vm.step();
+        setPaused(false, "running");
+      });
+      stepBtn.addEventListener("click", () => {
+        removeTemporaryBreakpoint();
+        vm.step();
+        setPaused(true, "step");
+      });
+      overBtn.addEventListener("click", () => {
+        removeTemporaryBreakpoint();
+        const address = vm.pc() & 0xFFFF;
+        if (vm.peek(address) !== 0x20) {
+          vm.step();
+          setPaused(true, "step");
+          return;
+        }
+        const returnAddress = (address + 3) & 0xFFFF;
+        vm.step();
+        temporaryBreakpoint = returnAddress;
+        syncBreakpoints();
+        setPaused(false, `step over to $${hex(returnAddress, 4)}`);
+      });
+      toggleBreakBtn.addEventListener("click", () => {
+        const address = parseDebuggerAddress(breakAddrEl.value);
+        if (address == null) {
+          locationEl.textContent = "Breakpoint address must be hexadecimal 0000 through FFFF.";
+          return;
+        }
+        if (manualBreakpoints.has(address)) manualBreakpoints.delete(address);
+        else manualBreakpoints.add(address);
+        syncBreakpoints();
+      });
+      breakAddrEl.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          toggleBreakBtn.click();
+        }
+      });
+      clearBreaksBtn.addEventListener("click", () => {
+        manualBreakpoints.clear();
+        sourceBreakpointLines.clear();
+        temporaryBreakpoint = null;
+        syncBreakpoints();
+      });
+      refreshMemoryBtn.addEventListener("click", () => {
+        memoryDirty = true;
+        renderMemory();
+      });
+      memoryAddrEl.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          memoryDirty = true;
+          renderMemory();
+        }
+      });
+      detailsEl.addEventListener("toggle", () => {
+        if (detailsEl.open) {
+          ensureRomDebug().catch(() => {});
+          refresh(true);
+        }
+      });
+
+      syncBreakpoints();
+      return {
+        isPaused: () => paused,
+        onBreakpoint() {
+          const address = vm.pc() & 0xFFFF;
+          if (temporaryBreakpoint === address) removeTemporaryBreakpoint();
+          detailsEl.open = true;
+          setPaused(true, `breakpoint $${hex(address, 4)}`);
+        },
+        onMachineReset() {
+          temporaryBreakpoint = null;
+          if (!suspended) syncBreakpoints();
+          setPaused(false, "running");
+        },
+        beginProgramLoad() {
+          suspended = true;
+          temporaryBreakpoint = null;
+          vm.clearBreakpoints();
+          setPaused(false, "loading");
+        },
+        endProgramLoad() {
+          suspended = false;
+          syncBreakpoints();
+          setPaused(false, "running");
+        },
+        setProgram(source, listing) {
+          rows = BadgerDebugger.buildSourceListing(source, listing);
+          renderListing();
+          syncBreakpoints();
+          refresh(true);
+        },
+        refresh,
+      };
+    }
+
     async function loadSampleSrc(name) {
       // Revalidate rather than trust the browser's cached copy: sample sources
       // are static files served with max-age=600, so a repeat visitor could
@@ -681,6 +1108,7 @@
       let loadedRef = null;  // { name, text }: set while the editor holds an unmodified sample
 
       const setOut = (msg, cls) => { outEl.textContent = msg; outEl.className = cls || ""; };
+      debuggerController = createDebuggerController();
       const save = () => {
         try { localStorage.setItem(LS_SRC, srcEl.value); localStorage.setItem(LS_ORG, addrEl.value); } catch (e) {}
       };
@@ -709,9 +1137,10 @@
         wozBtn.disabled = false;
         const nsym = Object.keys(res.symbols).length;
         const okMsg = `assembled ${res.bytes.length} bytes @ $${hex(res.org, 4)} \u2014 ${nsym} symbols.`;
+        debuggerController.setProgram(src, res.listing);
         setOut(okMsg + " running\u2026", "ok");
         try {
-          await loadPrg(res.bytes, res.org, "editor");
+          await loadPrg(res.bytes, res.org, "editor", true);
           setOut(okMsg + " running now \u2014 click the screen and play.", "ok");
           canvas.focus();
         } catch (e) {

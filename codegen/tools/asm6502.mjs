@@ -267,7 +267,7 @@ export function assemble(source, opts = {}) {
       const items = args.map((a) => a[0] === '"' ? { str: a } : { expr: a });
       let len = 0;
       for (const it of items) len += it.str ? parseString(it.str, lineNo).length : 1;
-      records.push({ pc: startPc, len, gen: (sym) => {
+      records.push({ pc: startPc, len, line: lineNo, kind: "data", gen: (sym) => {
         const b = [];
         for (const it of items) {
           if (it.str) b.push(...parseString(it.str, lineNo));
@@ -283,7 +283,7 @@ export function assemble(source, opts = {}) {
       const startPc = pc;
       let len = 1;
       for (const a of args) len += a[0] === '"' ? parseString(a, lineNo).length : 1;
-      records.push({ pc: startPc, len, gen: (sym) => {
+      records.push({ pc: startPc, len, line: lineNo, kind: "data", gen: (sym) => {
         const b = [];
         for (const a of args) b.push(...(a[0] === '"' ? parseString(a, lineNo) : [evalExpr(a, sym, startPc, lineNo) & 0xFF]));
         b.push(0); return b;
@@ -294,7 +294,7 @@ export function assemble(source, opts = {}) {
       requireOrg(lineNo);
       const args = splitArgs(parsed.operand);
       const startPc = pc;
-      records.push({ pc: startPc, len: args.length * 2, gen: (sym) => {
+      records.push({ pc: startPc, len: args.length * 2, line: lineNo, kind: "data", gen: (sym) => {
         const b = [];
         for (const a of args) { const v = evalExpr(a, sym, startPc, lineNo) & 0xFFFF; b.push(v & 0xFF, (v >> 8) & 0xFF); }
         return b;
@@ -306,7 +306,7 @@ export function assemble(source, opts = {}) {
       const args = splitArgs(parsed.operand);
       const n = evalExpr(args[0], symbols, pc, lineNo);
       const fill = args.length > 1 ? evalExpr(args[1], symbols, pc, lineNo) & 0xFF : 0;
-      records.push({ pc, len: n, gen: () => new Array(n).fill(fill) });
+      records.push({ pc, len: n, line: lineNo, kind: "data", gen: () => new Array(n).fill(fill) });
       pc += n; return;
     }
     if (dir[0] === ".") throw new AsmError(`unknown directive "${mnem}"`, lineNo);
@@ -349,7 +349,7 @@ export function assemble(source, opts = {}) {
     const opcode = table[mode];
     const startPc = pc;
     const expr = po.expr;
-    records.push({ pc: startPc, len: size, gen: (sym) => {
+    records.push({ pc: startPc, len: size, line: lineNo, kind: "instruction", gen: (sym) => {
       if (mode === "imp" || mode === "acc") return [opcode];
       const v = evalExpr(expr, sym, startPc, lineNo);
       if (["imm","zp","zpx","zpy","izx","izy","izp"].includes(mode)) return [opcode, v & 0xFF];
@@ -375,7 +375,7 @@ export function assemble(source, opts = {}) {
     const bytes = r.gen(symbols);
     if (bytes.length !== r.len) throw new AsmError(`internal size mismatch at $${r.pc.toString(16)} (${bytes.length} != ${r.len})`);
     for (let k = 0; k < bytes.length; k++) out[r.pc - base + k] = bytes[k] & 0xFF;
-    listing.push({ pc: r.pc, bytes });
+    listing.push({ pc: r.pc, bytes, line: r.line, kind: r.kind });
   }
   return { org, bytes: out, symbols, listing };
 }
