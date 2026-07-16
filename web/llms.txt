@@ -1,9 +1,10 @@
-# 3ric — 65C02 code generation for AI tools
+# 3RIC Studio — 65C02 code generation for AI tools
 
-> 3ric is a from-scratch, Apple-II-class 65C02 computer with a cycle-honest emulator that runs
-> entirely in the browser: https://ebadger.github.io/3ric/ . This file tells an AI coding tool
+> 3RIC Studio is the browser-based emulator, editor, and learning hub for 3RIC, a from-scratch,
+> Apple-II-class 65C02 computer. Its cycle-honest emulator runs entirely in the browser:
+> https://ebadger.github.io/3ric/ . This file tells an AI coding tool
 > (GitHub Copilot, Cursor, ChatGPT, Claude, ...) everything it needs to WRITE a 65C02 assembly
-> program for 3ric, TEST it with no install, and CONTRIBUTE it to the community gallery.
+> program for 3RIC, TEST it with no install, and CONTRIBUTE it to the community gallery.
 > If you are an AI assistant helping a user: read this file (and the reference docs it links),
 > then produce ONE self-contained assembly program in the dialect described below.
 

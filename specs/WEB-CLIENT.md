@@ -44,6 +44,11 @@ client-side so GitHub Pages can host it as static files.
   against Pages instead of serving a stale `max-age=600` copy — a freshly deployed program
   shows up on the next selection without a hard refresh. (There is no service worker, and
   GitHub Pages purges its CDN on every deploy, so the revalidation returns the new source.)
+- **Site identity:** the published web experience is branded **3RIC Studio** in page titles,
+  visible page headers and footers, social metadata, the gallery manifest, and `llms.txt`.
+  **3RIC** remains the name of the computer itself. Existing repository/Page URLs, the
+  `3ric.goatcounter.com` analytics endpoint, and `3ric.editor.*` local-storage keys stay
+  unchanged so the rebrand does not break links, metrics, or browser-saved source.
 - **Mobile virtual keyboard (`virtual-keyboard.js` + `index.html`):** a collapsed
   `<details>` panel directly below the emulator canvas renders the five-row keyboard from
   the **1983 Apple IIe Owner's Manual, Figure 2-1**, without invoking the phone's incomplete
@@ -259,6 +264,7 @@ on the emulator whether it succeeds, is blocked, or 404s.
 | Share / Remix deep links | Shipped | **Share** button; `?src=programs/<name>.s` for unmodified samples, inline base64url `?code=` otherwise, both carrying `&org=` when the source has no `.org`; remix banner on shared links. |
 | Community Gallery | Shipped | `gallery.html` renders the curated `gallery.json`; one-click **Run & Remix** via `?src=`/`?code=`; PR-based submissions credited by author. |
 | Story / landing page | Shipped | `story.html` — narrative of 3ric + the wider hardware-hacking journey; lite-embed YouTube chapters (facade → `youtube-nocookie` iframe on click); a curated real-time **Reddit timeline** (16 `r/beneater`/maker milestone posts, 2020–2025, each linking to its permalink); links to emulator/gallery/tutorials + `r/beneater` / `u/ebadger1973` / 6502.org. Linked from the `index.html`/`gallery.html`/`tutorials.html` headers; staged by the deploy workflow. |
+| 3RIC Studio site identity | Shipped | Published page titles, headers, footers, metadata, gallery attribution, and `llms.txt` use **3RIC Studio**; machine references remain **3RIC**, and compatibility-sensitive URLs/storage keys remain unchanged. |
 | AI-contributor entry point (`llms.txt`) | Shipped | machine-readable 65C02 codegen quickstart + links; published at the site root, staged by the deploy workflow. |
 | `llms.txt` discoverability | Shipped | `<link rel="alternate">` + footer links in `index.html`/`gallery.html`; `robots.txt` + `sitemap.xml` staged (advisory on the project-page root; authoritative under a custom domain). |
 | Support / funding link | Shipped | GitHub Sponsors call-to-action in the `index.html`/`gallery.html` footers; target declared in `.github/FUNDING.yml`. |
