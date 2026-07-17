@@ -26,6 +26,7 @@
 #include <emscripten/bind.h>
 #include <emscripten/val.h>
 
+#include <array>
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
@@ -138,7 +139,11 @@ public:
 
     // --- lifecycle ---------------------------------------------------------
 
-    void reset() { _vm->Reset(); }
+    void reset()
+    {
+        _vm->Reset();
+        _breakpointHit = false;
+    }
 
     // --- loaders -----------------------------------------------------------
 
@@ -237,9 +242,15 @@ public:
     // Execute up to maxSteps instructions. Kept for headless tools and Max speed.
     int run(int maxSteps)
     {
+        _breakpointHit = false;
         int cycles = 0;
         for (int i = 0; i < maxSteps; i++)
         {
+            if (breakpointAtPC())
+            {
+                _breakpointHit = true;
+                break;
+            }
             cycles += stepOnce();
         }
         return cycles;
@@ -249,15 +260,55 @@ public:
     // The browser carries the final instruction's overshoot into its next budget.
     int runCycles(int cycleBudget)
     {
+        _breakpointHit = false;
         if (cycleBudget <= 0) return 0;
 
         int cycles = 0;
         do
         {
+            if (breakpointAtPC())
+            {
+                _breakpointHit = true;
+                break;
+            }
             cycles += stepOnce();
         } while (cycles < cycleBudget);
         return cycles;
     }
+
+    // Execute exactly one instruction even if the current PC has a breakpoint.
+    int step()
+    {
+        _breakpointHit = false;
+        return stepOnce();
+    }
+
+    bool addBreakpoint(int addr)
+    {
+        if (addr < 0 || addr > 0xFFFF) return false;
+        _breakpoints[(size_t)addr] = 1;
+        return true;
+    }
+
+    bool removeBreakpoint(int addr)
+    {
+        if (addr < 0 || addr > 0xFFFF) return false;
+        _breakpoints[(size_t)addr] = 0;
+        return true;
+    }
+
+    void clearBreakpoints()
+    {
+        _breakpoints.fill(0);
+        _breakpointHit = false;
+    }
+
+    bool hasBreakpoint(int addr)
+    {
+        return addr >= 0 && addr <= 0xFFFF && _breakpoints[(size_t)addr] != 0;
+    }
+
+    bool breakpointHit() { return _breakpointHit; }
 
     bool waiting()
     {
@@ -323,7 +374,11 @@ public:
     void writeBus(int addr, int value) { _vm->WriteData((uint16_t)(addr & 0xFFFF), (uint8_t)(value & 0xFF)); }
 
     // Set the program counter (e.g. to launch a freshly loaded program).
-    void setPC(int addr) { _vm->GetCPU()->PC = (uint16_t)(addr & 0xFFFF); }
+    void setPC(int addr)
+    {
+        _vm->GetCPU()->PC = (uint16_t)(addr & 0xFFFF);
+        _breakpointHit = false;
+    }
 
     // --- serial log (optional) --------------------------------------------
 
@@ -400,6 +455,13 @@ public:
     }
 
 private:
+    bool breakpointAtPC()
+    {
+        CPU* cpu = _vm->GetCPU();
+        if (cpu->waitForInterrupt || cpu->stopped) return false;
+        return _breakpoints[(size_t)cpu->PC] != 0;
+    }
+
     int stepOnce()
     {
         const uint8_t cycles = _vm->Step();
@@ -559,6 +621,8 @@ private:
 
     uint64_t _cycles        = 0;
     uint64_t _lastDiskCycle = 0;
+    std::array<uint8_t, 0x10000> _breakpoints = {};
+    bool _breakpointHit = false;
 
     SDCard _sd;     // bit-banged SPI micro-SD card (sparse-backed image)
 };
@@ -578,6 +642,12 @@ EMSCRIPTEN_BINDINGS(badger6502)
         .function("diskPresent",  &WebVM::diskPresent)
         .function("run",          &WebVM::run)
         .function("runCycles",    &WebVM::runCycles)
+        .function("step",         &WebVM::step)
+        .function("addBreakpoint", &WebVM::addBreakpoint)
+        .function("removeBreakpoint", &WebVM::removeBreakpoint)
+        .function("clearBreakpoints", &WebVM::clearBreakpoints)
+        .function("hasBreakpoint", &WebVM::hasBreakpoint)
+        .function("breakpointHit", &WebVM::breakpointHit)
         .function("waiting",      &WebVM::waiting)
         .function("irqAsserted",  &WebVM::irqAsserted)
         .function("enableAudio",  &WebVM::enableAudio)

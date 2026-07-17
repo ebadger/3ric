@@ -34,6 +34,9 @@ page, ROM entry points). These are
 **Assembler dialect:** `$hex` / `%bin` / decimal / char literals; labels; directives
 `.org`/`*=`, `.byte`, `.word`, `.res`, `.asciiz`; full 65C02 ISA + addressing modes;
 zero-page forcing; branch resolution. A source's own origin directive is authoritative.
+`assemble()` returns `listing` records for every emitted source statement. Each record
+contains its start PC, emitted bytes, one-based source line, and `instruction`/`data` kind;
+the browser debugger uses only instruction records as source-breakpoint targets.
 
 **Validation channels** (a program declares which it uses): serial (`drainOutput()`), text
 screen (decode `$0400`, 40×24 interleaved), graphics (`renderFrame()` RGBA), CPU/memory
@@ -56,8 +59,10 @@ screen (decode `$0400`, 40×24 interleaved), graphics (`renderFrame()` RGBA), CP
 
 ## Data flow
 
-`.s source → asm6502.assemble() → bytes + symbols → harness loads into RAM at --org → run →
-capture serial/text/gfx/regs → checks PASS/FAIL → optional .PRG (+ manifest)`.
+`.s source → asm6502.assemble() → bytes + symbols + source listing metadata → harness loads
+into RAM at --org → run → capture serial/text/gfx/regs → checks PASS/FAIL → optional .PRG
+(+ manifest)`. The browser additionally maps listing instruction PCs back to source rows for
+breakpoints and current-PC highlighting.
 
 ## Dependencies
 
@@ -71,6 +76,7 @@ capture serial/text/gfx/regs → checks PASS/FAIL → optional .PRG (+ manifest)
 | Item | Status | Notes |
 |------|--------|-------|
 | `asm6502` assembler + encoding tests | Shipped | dual-use; `asm6502.test.mjs`. |
+| Source listing metadata | Shipped | Each emitted record reports PC, bytes, source line, and instruction/data kind for browser debugging; covered by `asm6502.test.mjs`. |
 | `harness` + `run6502` validation loop | Shipped | serial/text/gfx/register checks + `.PRG`. |
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |

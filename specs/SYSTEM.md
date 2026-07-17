@@ -84,5 +84,6 @@ them headlessly on the same WASM core. The "why" lives in `docs/MISSION.md`.
 | Micro-SD FAT32 + ROM DOS shell | Shipped |
 | Slot-4 dual-AY Mockingboard | Shipped |
 | WebAssembly browser build + in-browser assembler | Shipped |
+| Browser source debugger + ROM debug correlation | Shipped |
 | DOS 3.3 / Applesoft-dependent disks | Not supported (this clone's BASIC is generic MS-BASIC, not Applesoft) |
 | Hardware (KiCad/PCB/GAL) | In progress (documented in the build series) |
