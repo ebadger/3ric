@@ -27,8 +27,13 @@ assert.match(
 );
 assert.match(
   inlineScript,
-  /function activateDefaultSound\(event\) \{\s+if \(soundButton\.contains\(event\.target\)\) return;\s+disarmDefaultSoundActivation\(\);\s+void activateSound\(\);\s+\}/,
-  "the first non-toggle interaction must activate default sound",
+  /if \(!event \|\| event\.isTrusted !== true\) return false;\s+if \(event\.type === "keydown" && event\.key === "Escape"\) return false;/,
+  "synthetic and non-activating key events must not consume default activation",
+);
+assert.match(
+  inlineScript,
+  /async function activateDefaultSound\(event\) \{\s+if \(soundButton\.contains\(event\.target\) \|\| !isDefaultSoundActivation\(event\)\) return;\s+if \(await activateSound\(\)\) disarmDefaultSoundActivation\(\);\s+\}/,
+  "default activation must disarm only after sound starts",
 );
 assert.match(
   inlineScript,
@@ -54,8 +59,13 @@ assert.match(
 );
 assert.match(
   inlineScript,
-  /if \(soundRequested\) \{\s+soundRequested = false;\s+disarmDefaultSoundActivation\(\);\s+syncAudioForSpeed\(\);/,
+  /if \(soundRequested\) \{\s+soundRequested = false;\s+audioError = null;\s+disarmDefaultSoundActivation\(\);\s+syncAudioForSpeed\(\);/,
   "the sound control must opt out before or after activation",
+);
+assert.match(
+  inlineScript,
+  /if \(audioError\) \{[\s\S]*?soundButton\.textContent = soundRequested \? "Sound Waiting" : "Retry Sound";[\s\S]*?return;\s+\}/,
+  "audio errors must survive unrelated button refreshes and remain retryable",
 );
 
 class FakeElement {
@@ -70,7 +80,7 @@ class FakeElement {
 
   addEventListener(type, listener) {
     const listeners = this.listeners.get(type) || [];
-    listeners.push(listener);
+    if (!listeners.includes(listener)) listeners.push(listener);
     this.listeners.set(type, listeners);
   }
 
@@ -79,9 +89,16 @@ class FakeElement {
     this.listeners.set(type, listeners.filter((candidate) => candidate !== listener));
   }
 
-  async dispatch(type, target = this) {
+  async dispatch(type, target = this, overrides = {}) {
+    const event = {
+      isTrusted: true,
+      key: "",
+      target,
+      type,
+      ...overrides,
+    };
     const results = [...(this.listeners.get(type) || [])]
-      .map((listener) => listener({ type, target }));
+      .map((listener) => listener(event));
     await Promise.all(results.filter((result) => result instanceof Promise));
   }
 
@@ -119,8 +136,12 @@ class FakeDocument extends FakeElement {
   }
 }
 
-function mountPage() {
+function mountPage(options = {}) {
   const document = new FakeDocument();
+  let deferredResume = null;
+  let deferredResumeUsed = false;
+  let moduleFailures = options.moduleFailures || 0;
+  let resumeFailures = options.resumeFailures || 0;
   const metrics = {
     connections: 0,
     contexts: 0,
@@ -132,10 +153,15 @@ function mountPage() {
   class FakeAudioContext {
     constructor() {
       metrics.contexts++;
+      this.state = "suspended";
       this.audioWorklet = {
         addModule: async (url) => {
           assert.equal(url.href, "https://example.test/audio-worklet.js");
           metrics.moduleLoads++;
+          if (moduleFailures > 0) {
+            moduleFailures--;
+            throw new Error("worklet load failed");
+          }
         },
       };
       this.destination = {};
@@ -144,9 +170,24 @@ function mountPage() {
 
     async resume() {
       metrics.resumes++;
+      if (options.deferResume && !deferredResumeUsed) {
+        deferredResumeUsed = true;
+        await new Promise((resolve, reject) => {
+          deferredResume = (error) => error ? reject(error) : resolve();
+        });
+      }
+      if (resumeFailures > 0) {
+        resumeFailures--;
+        const error = new Error("user activation required");
+        error.name = "NotAllowedError";
+        throw error;
+      }
+      this.state = "running";
     }
 
-    async close() {}
+    async close() {
+      this.state = "closed";
+    }
   }
 
   class FakeAudioWorkletNode {
@@ -168,19 +209,31 @@ function mountPage() {
     "BadgerGamepads",
     "createBadgerVM",
     "AudioWorkletNode",
+    "console",
     inlineScript,
   );
   executePage(
-    { AudioContext: FakeAudioContext },
+    {
+      AudioContext: FakeAudioContext,
+      navigator: { userActivation: { isActive: true } },
+    },
     document,
     { search: "" },
     { EmulationClock: class {} },
     { GamepadManager: class {} },
     () => new Promise(() => {}),
     FakeAudioWorkletNode,
+    { error() {} },
   );
 
-  return { document, metrics };
+  return {
+    document,
+    metrics,
+    settleResume(error = null) {
+      assert(deferredResume, "deferred resume must be pending");
+      deferredResume(error);
+    },
+  };
 }
 
 async function main() {
@@ -216,6 +269,19 @@ async function main() {
   assert.equal(activatedButton.getAttribute("aria-pressed"), "true");
   assert.equal(activatedButton.textContent, "Disable Sound");
 
+  const ignored = mountPage();
+  const ignoredScreen = ignored.document.getElementById("screen");
+  await ignored.document.dispatch("keydown", ignoredScreen, { key: "Escape" });
+  await ignored.document.dispatch("keydown", ignoredScreen, {
+    isTrusted: false,
+    key: "A",
+  });
+  assert.equal(ignored.metrics.contexts, 0);
+  assert.equal(ignored.document.listenerCount("click"), 1);
+  assert.equal(ignored.document.listenerCount("keydown"), 1);
+  await ignored.document.dispatch("click", ignoredScreen);
+  assert.equal(ignored.metrics.contexts, 1);
+
   await activatedButton.dispatch("click");
   assert.equal(activatedButton.getAttribute("aria-pressed"), "false");
   assert.equal(activatedButton.textContent, "Enable Sound");
@@ -233,6 +299,54 @@ async function main() {
   await new Promise(setImmediate);
   assert.equal(keyboardActivated.metrics.contexts, 1);
   assert.equal(keyboardActivated.metrics.nodes, 1);
+
+  const blocked = mountPage({ resumeFailures: 1 });
+  const blockedButton = blocked.document.getElementById("sound");
+  const blockedScreen = blocked.document.getElementById("screen");
+  await blocked.document.dispatch("click", blockedScreen);
+  assert.equal(blockedButton.getAttribute("aria-pressed"), "true");
+  assert.equal(blockedButton.textContent, "Sound Waiting");
+  assert.equal(blocked.document.listenerCount("click"), 1);
+  await blocked.document.dispatch("click", blockedScreen);
+  assert.equal(blocked.metrics.contexts, 2);
+  assert.equal(blocked.metrics.nodes, 1);
+  assert.equal(blockedButton.textContent, "Disable Sound");
+  assert.equal(blocked.document.listenerCount("click"), 0);
+
+  const cancelled = mountPage({ deferResume: true });
+  const cancelledButton = cancelled.document.getElementById("sound");
+  const cancelledActivation = cancelled.document.dispatch(
+    "click",
+    cancelled.document.getElementById("screen"),
+  );
+  await cancelledButton.dispatch("click");
+  const cancelledError = new Error("user activation required");
+  cancelledError.name = "NotAllowedError";
+  cancelled.settleResume(cancelledError);
+  await cancelledActivation;
+  assert.equal(cancelledButton.getAttribute("aria-pressed"), "false");
+  assert.equal(cancelledButton.textContent, "Enable Sound");
+  assert.equal(cancelled.document.listenerCount("click"), 0);
+  assert.doesNotMatch(cancelledButton.title, /retry/i);
+
+  const failed = mountPage({ moduleFailures: 1 });
+  const failedButton = failed.document.getElementById("sound");
+  await failed.document.dispatch(
+    "click",
+    failed.document.getElementById("screen"),
+  );
+  assert.equal(failedButton.getAttribute("aria-pressed"), "false");
+  assert.equal(failedButton.textContent, "Retry Sound");
+  assert.match(failedButton.title, /worklet load failed/);
+  await failedButton.dispatch("click");
+  assert.equal(failed.metrics.contexts, 2);
+  assert.equal(failed.metrics.nodes, 1);
+  assert.equal(failedButton.getAttribute("aria-pressed"), "true");
+  assert.equal(failedButton.textContent, "Disable Sound");
+  assert.equal(
+    failed.document.getElementById("status").textContent,
+    "loading wasm\u2026",
+  );
 
   console.log("PASS: browser sound defaults on and unlocks on first interaction");
 }

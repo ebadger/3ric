@@ -146,7 +146,9 @@ client-side so GitHub Pages can host it as static files.
   `AudioContext`, the first pointer or keyboard interaction activates it; the sound control
   can opt out before activation or disable/re-enable audio afterward. The bridge drains the
   VM's combined stream: `$C030` is centered mono and the two AYs retain their left/right
-  placement.
+  placement. Synthetic and non-activating events do not consume the pending activation;
+  autoplay rejection remains armed for the next interaction, while initialization failures
+  stay visible on the sound control and can be retried explicitly.
   `audio-worklet.js` consumes transferable Float32 chunks from the bridge without requiring
   `SharedArrayBuffer` or cross-origin isolation. It prebuffers a short bounded lead before
   playback, renders without per-sample allocation, and discards only the oldest queued frames

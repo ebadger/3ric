@@ -394,6 +394,7 @@
     let soundRequested = true;
     let audioGenerating = false;
     let audioActivation = null;
+    let audioError = null;
     let debuggerController = null;
     const inputQueue = [];
 
@@ -522,7 +523,15 @@
       if (soundButton.disabled) {
         soundButton.setAttribute("aria-pressed", "false");
         soundButton.textContent = "Sound Unavailable";
-        soundButton.title = "Web Audio is not supported";
+        soundButton.title = audioError || "Web Audio is not supported";
+        return;
+      }
+      if (audioError) {
+        soundButton.setAttribute("aria-pressed", soundRequested ? "true" : "false");
+        soundButton.textContent = soundRequested ? "Sound Waiting" : "Retry Sound";
+        soundButton.title = soundRequested
+          ? `Sound will retry on the next interaction: ${audioError}`
+          : `Retry system-speaker and Mockingboard audio: ${audioError}`;
         return;
       }
       soundButton.setAttribute("aria-pressed", soundRequested ? "true" : "false");
@@ -555,30 +564,57 @@
       const shouldGenerate = soundRequested && speedMul === 1 && audioNode !== null;
       if (!setAudioGeneration(shouldGenerate)) {
         soundRequested = false;
+        audioError = "Unsupported audio sample rate";
         setAudioGeneration(false);
+        disarmDefaultSoundActivation();
         statusEl.textContent = "sound unavailable: unsupported sample rate";
       }
       updateSoundButton();
     }
 
+    function audioActivationTimeout() {
+      const error = new Error("Browser did not allow sound to start");
+      error.name = "NotAllowedError";
+      return error;
+    }
+
+    async function resumeAudioContext() {
+      let timeout = null;
+      try {
+        await Promise.race([
+          audioContext.resume(),
+          new Promise((_, reject) => {
+            timeout = setTimeout(() => reject(audioActivationTimeout()), 1000);
+          }),
+        ]);
+      } finally {
+        if (timeout !== null) clearTimeout(timeout);
+      }
+      if (audioContext.state !== "running") throw audioActivationTimeout();
+    }
+
     async function startSound() {
-      if (!soundRequested) return;
+      if (!soundRequested) return false;
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (!AudioContextClass) {
         soundRequested = false;
+        audioError = "Web Audio is not supported";
         soundButton.disabled = true;
+        disarmDefaultSoundActivation();
         updateSoundButton();
         statusEl.textContent = "sound unavailable: Web Audio is not supported";
-        return;
+        return false;
       }
 
+      audioError = null;
+      updateSoundButton();
       try {
         if (!audioContext) {
           audioContext = new AudioContextClass({ latencyHint: "interactive" });
           if (!audioContext.audioWorklet) {
             throw new Error("AudioWorklet is not supported");
           }
-          await audioContext.resume();
+          await resumeAudioContext();
           await audioContext.audioWorklet.addModule(
             new URL("audio-worklet.js", document.baseURI));
           audioNode = new AudioWorkletNode(audioContext, "badger-audio", {
@@ -588,11 +624,21 @@
           });
           audioNode.connect(audioContext.destination);
         } else {
-          await audioContext.resume();
+          await resumeAudioContext();
         }
         syncAudioForSpeed();
+        if (statusEl.textContent.startsWith("sound unavailable:")) {
+          statusEl.textContent = vm ? "running" : "loading wasm\u2026";
+        }
+        return soundRequested && audioNode !== null && audioContext.state === "running";
       } catch (error) {
-        soundRequested = false;
+        const activationCancelled = !soundRequested;
+        const retryOnNextInteraction =
+          !activationCancelled && error && error.name === "NotAllowedError";
+        soundRequested = retryOnNextInteraction;
+        audioError = activationCancelled
+          ? null
+          : (error && error.message ? error.message : String(error));
         setAudioGeneration(false);
         if (audioContext) {
           try {
@@ -603,22 +649,25 @@
           audioContext = null;
           audioNode = null;
         }
-        soundButton.setAttribute("aria-pressed", "false");
-        soundButton.textContent = "Sound Unavailable";
-        soundButton.title = "Browser audio could not be started";
-        statusEl.textContent = "sound unavailable: " + error.message;
-        console.error(error);
+        if (retryOnNextInteraction) armDefaultSoundActivation();
+        else disarmDefaultSoundActivation();
+        updateSoundButton();
+        if (!activationCancelled) {
+          statusEl.textContent = "sound unavailable: " + audioError;
+          console.error(error);
+        }
+        return false;
       }
     }
 
     async function activateSound() {
-      if (!soundRequested) return;
+      if (!soundRequested) return false;
       if (!audioActivation) {
         audioActivation = startSound().finally(() => {
           audioActivation = null;
         });
       }
-      await audioActivation;
+      return await audioActivation;
     }
 
     function disarmDefaultSoundActivation() {
@@ -626,10 +675,16 @@
       document.removeEventListener("keydown", activateDefaultSound, true);
     }
 
-    function activateDefaultSound(event) {
-      if (soundButton.contains(event.target)) return;
-      disarmDefaultSoundActivation();
-      void activateSound();
+    function isDefaultSoundActivation(event) {
+      if (!event || event.isTrusted !== true) return false;
+      if (event.type === "keydown" && event.key === "Escape") return false;
+      const userActivation = window.navigator && window.navigator.userActivation;
+      return !userActivation || userActivation.isActive;
+    }
+
+    async function activateDefaultSound(event) {
+      if (soundButton.contains(event.target) || !isDefaultSoundActivation(event)) return;
+      if (await activateSound()) disarmDefaultSoundActivation();
     }
 
     function armDefaultSoundActivation() {
@@ -640,6 +695,7 @@
     async function toggleSound() {
       if (soundRequested) {
         soundRequested = false;
+        audioError = null;
         disarmDefaultSoundActivation();
         syncAudioForSpeed();
         return;
@@ -647,6 +703,7 @@
 
       disarmDefaultSoundActivation();
       soundRequested = true;
+      audioError = null;
       updateSoundButton();
       await activateSound();
     }
