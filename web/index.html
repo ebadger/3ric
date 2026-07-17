@@ -227,8 +227,8 @@
         <option value="8">8&times; (12.6&nbsp;MHz)</option>
         <option value="max">Max</option>
       </select></span>
-    <button id="sound" type="button" aria-pressed="false"
-      title="Enable the system speaker and slot-4 Mockingboard at native 1x speed">Enable Sound</button>
+    <button id="sound" type="button" aria-pressed="true"
+      title="Disable system-speaker and Mockingboard audio">Disable Sound</button>
     <span class="regs" id="regs">PC:---- A:-- X:-- Y:-- SP:-- P:--</span>
     <span class="regs" id="mode">mode:---</span>
     <span class="hint" id="gamepads">gamepads: detecting&hellip;</span>
@@ -336,8 +336,9 @@
     <code>?prg=programs/hello.prg&amp;org=0800</code>).
     &ldquo;Speed&rdquo; sets the CPU clock (native 1&times; &asymp; 1.57&nbsp;MHz &mdash; the 25.175&nbsp;MHz VGA
     dot clock &divide;&nbsp;16; &ldquo;Max&rdquo; runs as fast as the frame allows).
-    &ldquo;Enable Sound&rdquo; starts browser audio at native 1&times; speed; other speeds pause and flush audio
-    while the emulated sound hardware continues to run.
+    Sound is enabled by default and starts on the first pointer or keyboard interaction;
+    &ldquo;Disable Sound&rdquo; opts out. Other speeds pause and flush audio while the emulated sound
+    hardware continues to run.
     The <strong>Assembler</strong> panel assembles 65C02 source in your browser (the same assembler the
     project uses on the command line) and runs it just like &ldquo;Load&nbsp;.PRG&rdquo; &mdash; pick a sample,
     edit it, <code>Assemble&nbsp;&amp;&nbsp;Run</code> (or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>), and download the
@@ -390,8 +391,11 @@
     let demoDisk = null;
     let audioContext = null;
     let audioNode = null;
-    let soundRequested = false;
+    let soundRequested = true;
     let audioGenerating = false;
+    let audioActivation = null;
+    let audioConnected = false;
+    let audioError = null;
     let debuggerController = null;
     const inputQueue = [];
 
@@ -516,7 +520,46 @@
       if (audioNode) audioNode.port.postMessage({ type: "clear" });
     }
 
+    function clearSoundStatus() {
+      if (statusEl.textContent.startsWith("sound unavailable:") ||
+          statusEl.textContent.startsWith("sound disable warning:")) {
+        statusEl.textContent = vm ? "running" : "loading wasm\u2026";
+      }
+    }
+
+    function setAudioConnection(enabled) {
+      if (!audioNode || enabled === audioConnected) return;
+      if (enabled) audioNode.connect(audioContext.destination);
+      else audioNode.disconnect();
+      audioConnected = enabled;
+    }
+
+    async function suspendAudioContext() {
+      setAudioConnection(false);
+      if (!audioContext || audioContext.state !== "running") return;
+      try {
+        await audioContext.suspend();
+      } catch (error) {
+        statusEl.textContent = "sound disable warning: " + error.message;
+        console.error(error);
+      }
+    }
+
     function updateSoundButton() {
+      if (soundButton.disabled) {
+        soundButton.setAttribute("aria-pressed", "false");
+        soundButton.textContent = "Sound Unavailable";
+        soundButton.title = audioError || "Web Audio is not supported";
+        return;
+      }
+      if (audioError) {
+        soundButton.setAttribute("aria-pressed", soundRequested ? "true" : "false");
+        soundButton.textContent = soundRequested ? "Sound Waiting" : "Retry Sound";
+        soundButton.title = soundRequested
+          ? `Sound will retry on the next interaction: ${audioError}`
+          : `Retry system-speaker and Mockingboard audio: ${audioError}`;
+        return;
+      }
       soundButton.setAttribute("aria-pressed", soundRequested ? "true" : "false");
       if (!soundRequested) {
         soundButton.textContent = "Enable Sound";
@@ -544,36 +587,65 @@
     }
 
     function syncAudioForSpeed() {
-      const shouldGenerate = soundRequested && speedMul === 1;
+      const shouldGenerate = soundRequested && speedMul === 1 && audioNode !== null;
+      if (!shouldGenerate) setAudioConnection(false);
       if (!setAudioGeneration(shouldGenerate)) {
         soundRequested = false;
+        audioError = "Unsupported audio sample rate";
         setAudioGeneration(false);
+        setAudioConnection(false);
+        disarmDefaultSoundActivation();
         statusEl.textContent = "sound unavailable: unsupported sample rate";
+      } else if (shouldGenerate) {
+        setAudioConnection(true);
       }
       updateSoundButton();
     }
 
-    async function toggleSound() {
-      if (soundRequested) {
-        soundRequested = false;
-        syncAudioForSpeed();
-        return;
-      }
+    function audioActivationTimeout() {
+      const error = new Error("Browser did not allow sound to start");
+      error.name = "NotAllowedError";
+      return error;
+    }
 
+    async function resumeAudioContext() {
+      let timeout = null;
+      try {
+        await Promise.race([
+          audioContext.resume(),
+          new Promise((_, reject) => {
+            timeout = setTimeout(() => reject(audioActivationTimeout()), 1000);
+          }),
+        ]);
+      } finally {
+        if (timeout !== null) clearTimeout(timeout);
+      }
+      if (audioContext.state !== "running") throw audioActivationTimeout();
+    }
+
+    async function startSound() {
+      if (!soundRequested) return false;
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (!AudioContextClass) {
+        soundRequested = false;
+        audioError = "Web Audio is not supported";
         soundButton.disabled = true;
-        soundButton.textContent = "Sound Unavailable";
+        disarmDefaultSoundActivation();
+        updateSoundButton();
         statusEl.textContent = "sound unavailable: Web Audio is not supported";
-        return;
+        return false;
       }
 
+      audioError = null;
+      clearSoundStatus();
+      updateSoundButton();
       try {
         if (!audioContext) {
           audioContext = new AudioContextClass({ latencyHint: "interactive" });
           if (!audioContext.audioWorklet) {
             throw new Error("AudioWorklet is not supported");
           }
+          await resumeAudioContext();
           await audioContext.audioWorklet.addModule(
             new URL("audio-worklet.js", document.baseURI));
           audioNode = new AudioWorkletNode(audioContext, "badger-audio", {
@@ -581,13 +653,23 @@
             numberOfOutputs: 1,
             outputChannelCount: [2],
           });
-          audioNode.connect(audioContext.destination);
+        } else {
+          await resumeAudioContext();
         }
-        await audioContext.resume();
-        soundRequested = true;
         syncAudioForSpeed();
+        if (!soundRequested) {
+          await suspendAudioContext();
+          return false;
+        }
+        return soundRequested && audioNode !== null && audioContext.state === "running";
       } catch (error) {
-        soundRequested = false;
+        const activationCancelled = !soundRequested;
+        const retryOnNextInteraction =
+          !activationCancelled && error && error.name === "NotAllowedError";
+        soundRequested = retryOnNextInteraction;
+        audioError = activationCancelled
+          ? null
+          : (error && error.message ? error.message : String(error));
         setAudioGeneration(false);
         if (audioContext) {
           try {
@@ -597,12 +679,71 @@
           }
           audioContext = null;
           audioNode = null;
+          audioConnected = false;
         }
-        soundButton.textContent = "Sound Unavailable";
-        statusEl.textContent = "sound unavailable: " + error.message;
-        console.error(error);
+        if (retryOnNextInteraction) armDefaultSoundActivation();
+        else disarmDefaultSoundActivation();
+        updateSoundButton();
+        if (!activationCancelled) {
+          statusEl.textContent = "sound unavailable: " + audioError;
+          console.error(error);
+        }
+        return false;
       }
     }
+
+    async function activateSound() {
+      if (!soundRequested) return false;
+      if (!audioActivation) {
+        audioActivation = startSound().finally(() => {
+          audioActivation = null;
+        });
+      }
+      return await audioActivation;
+    }
+
+    function disarmDefaultSoundActivation() {
+      document.removeEventListener("click", activateDefaultSound, true);
+      document.removeEventListener("keydown", activateDefaultSound, true);
+    }
+
+    function isDefaultSoundActivation(event) {
+      if (!event || event.isTrusted !== true) return false;
+      if (event.type === "keydown" && event.key === "Escape") return false;
+      const userActivation = window.navigator && window.navigator.userActivation;
+      return !userActivation || userActivation.isActive;
+    }
+
+    async function activateDefaultSound(event) {
+      if (soundButton.contains(event.target) || !isDefaultSoundActivation(event)) return;
+      if (await activateSound()) disarmDefaultSoundActivation();
+    }
+
+    function armDefaultSoundActivation() {
+      document.addEventListener("click", activateDefaultSound, true);
+      document.addEventListener("keydown", activateDefaultSound, true);
+    }
+
+    async function toggleSound() {
+      if (soundRequested) {
+        soundRequested = false;
+        audioError = null;
+        disarmDefaultSoundActivation();
+        syncAudioForSpeed();
+        await suspendAudioContext();
+        return;
+      }
+
+      disarmDefaultSoundActivation();
+      soundRequested = true;
+      audioError = null;
+      updateSoundButton();
+      await activateSound();
+    }
+
+    soundButton.addEventListener("click", toggleSound);
+    updateSoundButton();
+    armDefaultSoundActivation();
 
     function frame(timestamp) {
       pollGamepads();
@@ -1316,6 +1457,7 @@
       await loadRom();
       statusEl.textContent = "running";
       canvas.focus();
+      if (audioContext && !audioActivation && soundRequested) syncAudioForSpeed();
 
       BadgerVirtualKeyboard.mount(
         document.getElementById("virtual-keyboard-keys"),
@@ -1346,9 +1488,6 @@
         await loadRom();
         canvas.focus();
       });
-
-      soundButton.addEventListener("click", toggleSound);
-      updateSoundButton();
 
       // Mount the micro-SD card and drop into the ROM's DOS shell. "EC5CG" is
       // the monitor's Go command pointed at $EC5C (the `dos` routine), which
