@@ -106,6 +106,18 @@ bool VM::IRQAsserted() const
 	return _acia->IRQAsserted() || _mockingboard->IRQAsserted();
 }
 
+bool VM::WillExecuteCurrentInstruction() const
+{
+	if (_cpu->stopped || _nmiPending)
+		return false;
+
+	const bool irq = IRQAsserted();
+	if (irq && !_cpu->flags.bits.I)
+		return false;
+
+	return !_cpu->waitForInterrupt || irq;
+}
+
 void VM::UpdateVIA1NMI()
 {
 	const bool asserted = _via1->IRQAsserted();
@@ -473,6 +485,56 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 	}
 }
 
+MemoryReadMapping VM::GetMemoryReadMapping(uint16_t address) const
+{
+	if (address >= MM_BASIC_START && address <= MM_BASIC_END && _basicbank)
+	{
+		return MemoryReadMapping::BasicROM;
+	}
+
+	if (address >= MM_ROM_START && address <= MM_ROM_END && _bank_read)
+	{
+		if (address < 0xE000)
+		{
+			return _bank_page1
+				? MemoryReadMapping::LanguageCardBank1
+				: MemoryReadMapping::LanguageCardBank2;
+		}
+		return MemoryReadMapping::LanguageCardHigh;
+	}
+
+	return MemoryReadMapping::Primary;
+}
+
+uint8_t VM::PeekData(uint16_t address) const
+{
+	switch (GetMemoryReadMapping(address))
+	{
+	case MemoryReadMapping::BasicROM:
+		return _basic[address - MM_BASIC_START];
+	case MemoryReadMapping::LanguageCardBank1:
+		return _bank1_d000[address - 0xD000];
+	case MemoryReadMapping::LanguageCardBank2:
+		return _bank2_d000[address - 0xD000];
+	case MemoryReadMapping::LanguageCardHigh:
+		return _bank_e000[address - 0xE000];
+	default:
+		break;
+	}
+
+	return _data[address];
+}
+
+bool VM::IsROMVisible(uint16_t address) const
+{
+	const MemoryReadMapping mapping = GetMemoryReadMapping(address);
+	return (address >= MM_BASIC_START && address <= MM_BASIC_END
+			&& mapping == MemoryReadMapping::BasicROM)
+		|| (address >= MM_DISKROM_START && address <= MM_DISKROM_END)
+		|| (address >= MM_ROM_START && address <= MM_ROM_END
+			&& mapping == MemoryReadMapping::Primary);
+}
+
 uint8_t VM::ReadData(uint16_t address)
 {
 	uint8_t result = 0;
@@ -542,39 +604,11 @@ uint8_t VM::ReadData(uint16_t address)
 	}
 	else if (address >= MM_ROM_START && address <= MM_ROM_END)
 	{
-		if (_bank_read) // read RAM
-		{
-			if (address >= 0xD000 && address < 0xE000)
-			{
-				if (_bank_page1)
-				{
-					return _bank1_d000[address - 0xD000];
-				}
-				else
-				{
-					return _bank2_d000[address - 0xD000];
-				}
-			}
-			else if (address >= 0xE000 && address <= 0xFFFF)
-			{
-				return _bank_e000[address - 0xE000];
-			}
-		}
-		else
-		{
-			return _data[address];
-		}
+		return PeekData(address);
 	}
 	else if (address >= MM_BASIC_START && address <= MM_BASIC_END)
 	{
-		if (_basicbank)
-		{
-			return _basic[address - MM_BASIC_START];
-		}
-		else
-		{
-			return _data[address];
-		}
+		return PeekData(address);
 	}
 	else
 	{

@@ -13,7 +13,25 @@
       line: record.line,
       kind: record.kind,
       source: sourceLines[record.line - 1] || "",
+      mapping: null,
     }));
+  }
+
+  function bindSourceMappings(rows, mappingForAddress) {
+    for (const row of rows) row.mapping = mappingForAddress(row.address);
+    return rows;
+  }
+
+  function isSourceRowActive(row, mapping) {
+    return Boolean(row) && row.mapping != null && row.mapping === mapping;
+  }
+
+  function stepOverTarget(address, opcode) {
+    return opcode === 0x20 ? (address + 3) & 0xFFFF : null;
+  }
+
+  function lookupRomLocation(debugMap, address, romVisible) {
+    return debugMap && romVisible ? debugMap.lookup(address) : null;
   }
 
   function parsePairs(text) {
@@ -64,7 +82,11 @@
       if (tag === "file") {
         files.set(decimal(fields.id), fields.name);
       } else if (tag === "seg") {
-        segments.set(decimal(fields.id), { start: hexadecimal(fields.start) });
+        segments.set(decimal(fields.id), {
+          start: hexadecimal(fields.start),
+          size: hexadecimal(fields.size) || 0,
+          romBacked: fields.type === "ro" && Boolean(fields.oname),
+        });
       } else if (tag === "span") {
         spans.set(decimal(fields.id), {
           segment: decimal(fields.seg),
@@ -90,6 +112,15 @@
       }
     }
 
+    const romAddresses = new Uint8Array(0x10000);
+    for (const segment of segments.values()) {
+      if (!segment.romBacked || segment.start == null || segment.size <= 0) continue;
+      const end = Math.min(segment.start + segment.size, 0x10000);
+      for (let address = Math.max(segment.start, 0); address < end; address++) {
+        romAddresses[address] = 1;
+      }
+    }
+
     const locations = new Array(0x10000);
     for (const line of lines.values()) {
       const file = files.get(line.file) || null;
@@ -97,12 +128,12 @@
       for (const spanId of line.spans) {
         const span = spans.get(spanId);
         const segment = span && segments.get(span.segment);
-        if (!span || !segment || segment.start == null) continue;
+        if (!span || !segment || !segment.romBacked || segment.start == null) continue;
         const start = segment.start + span.start;
         const location = { file, line: line.line };
         for (let offset = 0; offset < span.size; offset++) {
           const address = start + offset;
-          if (address < 0 || address > 0xFFFF) continue;
+          if (address < 0 || address > 0xFFFF || !romAddresses[address]) continue;
           const current = locations[address];
           if (!current || priority > current.priority) {
             locations[address] = { ...location, priority };
@@ -113,7 +144,8 @@
 
     const symbols = new Array(0x10000);
     for (const raw of rawSymbols) {
-      if (raw.address == null || raw.address < 0 || raw.address > 0xFFFF) continue;
+      if (raw.address == null || raw.address < 0 || raw.address > 0xFFFF
+          || !romAddresses[raw.address]) continue;
       const definition = raw.def == null ? null : lines.get(raw.def);
       const symbol = {
         address: raw.address,
@@ -127,7 +159,8 @@
     }
 
     function lookup(address) {
-      if (!Number.isInteger(address) || address < 0 || address > 0xFFFF) return null;
+      if (!Number.isInteger(address) || address < 0 || address > 0xFFFF
+          || !romAddresses[address]) return null;
       const location = locations[address];
       const symbol = symbols[address];
       return {
@@ -144,5 +177,12 @@
     return { lookup };
   }
 
-  return { buildSourceListing, parseCa65Debug };
+  return {
+    bindSourceMappings,
+    buildSourceListing,
+    isSourceRowActive,
+    lookupRomLocation,
+    parseCa65Debug,
+    stepOverTarget,
+  };
 });

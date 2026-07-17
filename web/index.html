@@ -772,13 +772,14 @@
 
       const manualBreakpoints = new Set();
       const sourceBreakpointLines = new Set();
-      const sourceBreakpoints = new Set();
+      const sourceBreakpoints = new Map();
       let rows = [];
       let rowElements = new Map();
       let paused = false;
       let suspended = false;
       let temporaryBreakpoint = null;
       let currentAddress = -1;
+      let currentMapping = -1;
       let memoryDirty = true;
       let romDebug = null;
       let romDebugLoading = null;
@@ -791,14 +792,15 @@
       function rebuildSourceBreakpoints() {
         sourceBreakpoints.clear();
         for (const row of rows) {
-          if (row.kind === "instruction" && sourceBreakpointLines.has(row.line)) {
-            sourceBreakpoints.add(row.address);
+          if (row.kind === "instruction" && row.mapping != null &&
+              sourceBreakpointLines.has(row.line)) {
+            sourceBreakpoints.set(row.address, row.mapping);
           }
         }
       }
 
       function allBreakpointAddresses() {
-        return new Set([...manualBreakpoints, ...sourceBreakpoints]);
+        return new Set([...manualBreakpoints, ...sourceBreakpoints.keys()]);
       }
 
       function renderBreakpointSummary() {
@@ -822,8 +824,14 @@
         vm.clearBreakpoints();
         rebuildSourceBreakpoints();
         if (!suspended) {
-          for (const address of allBreakpointAddresses()) vm.addBreakpoint(address);
-          if (temporaryBreakpoint != null) vm.addBreakpoint(temporaryBreakpoint);
+          for (const address of manualBreakpoints) vm.addBreakpoint(address);
+          for (const [address, mapping] of sourceBreakpoints) {
+            vm.addMappedBreakpoint(address, mapping);
+          }
+          if (temporaryBreakpoint != null) {
+            vm.addMappedBreakpoint(
+              temporaryBreakpoint.address, temporaryBreakpoint.mapping);
+          }
         }
         refreshBreakpointRows();
         renderBreakpointSummary();
@@ -932,7 +940,8 @@
       }
 
       function formatRomLocation(address) {
-        const info = romDebug && romDebug.lookup(address);
+        const info = BadgerDebugger.lookupRomLocation(
+          romDebug, address, vm.romVisible(address));
         if (!info) return `$${hex(address, 4)} (outside assembled source)`;
         const parts = [`$${hex(address, 4)}`];
         if (info.symbol) parts.push(info.symbol.name);
@@ -945,12 +954,14 @@
 
       function refresh(force = false) {
         const address = vm.pc() & 0xFFFF;
-        if (force || address !== currentAddress) {
+        const mapping = vm.memoryMapping(address);
+        if (force || address !== currentAddress || mapping !== currentMapping) {
           const previous = rowElements.get(currentAddress);
           if (previous) previous.element.classList.remove("current");
           currentAddress = address;
+          currentMapping = mapping;
           const current = rowElements.get(address);
-          if (current) {
+          if (current && BadgerDebugger.isSourceRowActive(current.row, mapping)) {
             current.element.classList.add("current");
             locationEl.textContent =
               `$${hex(address, 4)}  assembled source line ${current.row.line}: ${current.row.source.trim()}`;
@@ -997,14 +1008,16 @@
       overBtn.addEventListener("click", () => {
         removeTemporaryBreakpoint();
         const address = vm.pc() & 0xFFFF;
-        if (vm.peek(address) !== 0x20) {
+        const returnAddress = BadgerDebugger.stepOverTarget(
+          address, vm.peekMapped(address));
+        if (returnAddress == null) {
           vm.step();
           setPaused(true, "step");
           return;
         }
-        const returnAddress = (address + 3) & 0xFFFF;
+        const returnMapping = vm.memoryMapping(returnAddress);
         vm.step();
-        temporaryBreakpoint = returnAddress;
+        temporaryBreakpoint = { address: returnAddress, mapping: returnMapping };
         syncBreakpoints();
         setPaused(false, `step over to $${hex(returnAddress, 4)}`);
       });
@@ -1053,13 +1066,20 @@
         isPaused: () => paused,
         onBreakpoint() {
           const address = vm.pc() & 0xFFFF;
-          if (temporaryBreakpoint === address) removeTemporaryBreakpoint();
+          if (temporaryBreakpoint != null &&
+              temporaryBreakpoint.address === address &&
+              temporaryBreakpoint.mapping === vm.memoryMapping(address)) {
+            removeTemporaryBreakpoint();
+          }
           detailsEl.open = true;
           setPaused(true, `breakpoint $${hex(address, 4)}`);
         },
         onMachineReset() {
           temporaryBreakpoint = null;
-          if (!suspended) syncBreakpoints();
+          if (!suspended) {
+            BadgerDebugger.bindSourceMappings(rows, () => null);
+            syncBreakpoints();
+          }
           setPaused(false, "running");
         },
         beginProgramLoad() {
@@ -1069,6 +1089,8 @@
           setPaused(false, "loading");
         },
         endProgramLoad() {
+          BadgerDebugger.bindSourceMappings(
+            rows, (address) => vm.memoryMapping(address));
           suspended = false;
           syncBreakpoints();
           setPaused(false, "running");

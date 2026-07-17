@@ -134,6 +134,16 @@ enum
 	MM_ROM_END			= 0xFFFF
 };
 
+enum class MemoryReadMapping : uint8_t
+{
+	Primary = 0,
+	BasicROM,
+	LanguageCardBank1,
+	LanguageCardBank2,
+	LanguageCardHigh,
+	Count
+};
+
 struct	CPU;
 class	ACIA;
 class	VIA;
@@ -151,6 +161,7 @@ public:
 	uint8_t Step();
 	void TickDevices(uint32_t cycles);
 	bool IRQAsserted() const;
+	bool WillExecuteCurrentInstruction() const;
 	void SignalVIA1Pin(VIA::Pins pin);
 	bool SetGamepadState(uint8_t controller, uint16_t pressedButtons);
 	CPU* GetCPU();
@@ -198,6 +209,9 @@ public:
 	uint8_t * GetData();
 	uint8_t * GetRomDisk();
 	uint8_t * GetBasicRom();
+	MemoryReadMapping GetMemoryReadMapping(uint16_t address) const;
+	uint8_t PeekData(uint16_t address) const;
+	bool IsROMVisible(uint16_t address) const;
 
 private:
 	void Init();

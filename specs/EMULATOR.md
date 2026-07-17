@@ -70,7 +70,16 @@ bridge uses this to clock the SD card and advance the drive).
   the shared level-sensitive IRQ line before the instruction and ticks the onboard VIA plus
   both Mockingboard VIA/AY pairs for every returned CPU cycle, then advances the VM-owned
   PCM sample clock. Presentation hosts may then advance host-owned keyboard/disk plumbing.
-  The blocking `VM::Run()` is not used by the web build.
+  `VM::WillExecuteCurrentInstruction()` reports whether the next step will execute the
+  opcode at the current PC rather than tick a dormant `WAI`/`STP` or service NMI/IRQ; the
+  web debugger uses that boundary without changing execution. The blocking `VM::Run()` is
+  not used by the web build.
+- `VM::GetMemoryReadMapping()` identifies the backing store currently selected at an address
+  (primary 64K image, BASIC ROM, language-card bank 1/2, or shared language-card high RAM).
+  `VM::PeekData()` follows that mapping without invoking memory-mapped device reads or
+  soft-switch side effects. `VM::IsROMVisible()` reports whether an address currently
+  resolves to the BASIC ROM, Disk II boot ROM, or upper ROM; debugger hosts use these
+  queries for bank-correct breakpoints, opcode inspection, highlighting, and source labels.
 - `reset()` loads PC from `$FFFC/$FFFD`. ROM load recipe (mirrored by every host): write the
   first `0x10000` bytes of `badger6502.bin` into `GetData()`, `seedBasicRom()` (copy
   `$9000..$BFFF`), `loadFont()`, then `reset()`.
@@ -140,8 +149,8 @@ left/right AY) + framebuffer + serial + register state → host (native window o
 
 | Item | Status | Notes |
 |------|--------|-------|
-| 65C02 CPU + full ISA/addressing | Shipped | Covered by `Badger6502VMTest` (MSTest). |
-| Memory map + soft switches | Shipped | `vm.h` `MM_*`; the shared contract. |
+| 65C02 CPU + full ISA/addressing | Shipped | Covered by `Badger6502VMTest` (MSTest); instruction readiness is exposed for exact host debugger stops. |
+| Memory map + soft switches | Shipped | `vm.h` `MM_*`; the shared contract, including stable read-mapping identity, side-effect-free mapped inspection, and ROM-visibility queries. |
 | Text / lo-res / hi-res video | Shipped | `badgervmpal`; color/fringe logic shared with hosts. |
 | Keyboard + ACIA serial | Shipped | `$C000`/`$C010`; `PS2Keyboard`, `acia`. |
 | VIA1 + bit-banged SPI micro-SD | Shipped | `via` + `MockMicroSD`. |
