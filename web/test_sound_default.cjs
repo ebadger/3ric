@@ -67,6 +67,15 @@ assert.match(
   /if \(audioError\) \{[\s\S]*?soundButton\.textContent = soundRequested \? "Sound Waiting" : "Retry Sound";[\s\S]*?return;\s+\}/,
   "audio errors must survive unrelated button refreshes and remain retryable",
 );
+const startSoundSource = inlineScript.slice(
+  inlineScript.indexOf("async function startSound()"),
+  inlineScript.indexOf("async function activateSound()"),
+);
+assert(
+  startSoundSource.indexOf("clearSoundStatus();") <
+    startSoundSource.indexOf("syncAudioForSpeed();"),
+  "stale sound errors must clear before initialization so new failures remain visible",
+);
 
 class FakeElement {
   constructor(id) {
@@ -145,9 +154,12 @@ function mountPage(options = {}) {
   const metrics = {
     connections: 0,
     contexts: 0,
+    disconnections: 0,
     moduleLoads: 0,
     nodes: 0,
+    rendererActive: false,
     resumes: 0,
+    suspends: 0,
   };
 
   class FakeAudioContext {
@@ -188,6 +200,11 @@ function mountPage(options = {}) {
     async close() {
       this.state = "closed";
     }
+
+    async suspend() {
+      metrics.suspends++;
+      this.state = "suspended";
+    }
   }
 
   class FakeAudioWorkletNode {
@@ -198,6 +215,12 @@ function mountPage(options = {}) {
 
     connect() {
       metrics.connections++;
+      metrics.rendererActive = true;
+    }
+
+    disconnect() {
+      metrics.disconnections++;
+      metrics.rendererActive = false;
     }
   }
 
@@ -260,9 +283,12 @@ async function main() {
   assert.deepEqual(activated.metrics, {
     connections: 1,
     contexts: 1,
+    disconnections: 0,
     moduleLoads: 1,
     nodes: 1,
+    rendererActive: true,
     resumes: 1,
+    suspends: 0,
   });
   assert.equal(activated.document.listenerCount("click"), 0);
   assert.equal(activated.document.listenerCount("keydown"), 0);
@@ -285,8 +311,13 @@ async function main() {
   await activatedButton.dispatch("click");
   assert.equal(activatedButton.getAttribute("aria-pressed"), "false");
   assert.equal(activatedButton.textContent, "Enable Sound");
+  assert.equal(activated.metrics.disconnections, 1);
+  assert.equal(activated.metrics.rendererActive, false);
+  assert.equal(activated.metrics.suspends, 1);
   await activatedButton.dispatch("click");
   assert.equal(activated.metrics.contexts, 1, "re-enabling must reuse the audio context");
+  assert.equal(activated.metrics.connections, 2);
+  assert.equal(activated.metrics.rendererActive, true);
   assert.equal(activated.metrics.resumes, 2);
   assert.equal(activatedButton.getAttribute("aria-pressed"), "true");
   assert.equal(activatedButton.textContent, "Disable Sound");
@@ -312,6 +343,22 @@ async function main() {
   assert.equal(blocked.metrics.nodes, 1);
   assert.equal(blockedButton.textContent, "Disable Sound");
   assert.equal(blocked.document.listenerCount("click"), 0);
+
+  const cancelledStart = mountPage({ deferResume: true });
+  const cancelledStartButton = cancelledStart.document.getElementById("sound");
+  const cancelledStartActivation = cancelledStart.document.dispatch(
+    "click",
+    cancelledStart.document.getElementById("screen"),
+  );
+  await cancelledStartButton.dispatch("click");
+  cancelledStart.settleResume();
+  await cancelledStartActivation;
+  assert.equal(cancelledStart.metrics.nodes, 1);
+  assert.equal(cancelledStart.metrics.connections, 0);
+  assert.equal(cancelledStart.metrics.rendererActive, false);
+  assert.equal(cancelledStart.metrics.suspends, 1);
+  assert.equal(cancelledStartButton.getAttribute("aria-pressed"), "false");
+  assert.equal(cancelledStartButton.textContent, "Enable Sound");
 
   const cancelled = mountPage({ deferResume: true });
   const cancelledButton = cancelled.document.getElementById("sound");

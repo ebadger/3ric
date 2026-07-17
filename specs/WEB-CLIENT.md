@@ -148,13 +148,15 @@ client-side so GitHub Pages can host it as static files.
   VM's combined stream: `$C030` is centered mono and the two AYs retain their left/right
   placement. Synthetic and non-activating events do not consume the pending activation;
   autoplay rejection remains armed for the next interaction, while initialization failures
-  stay visible on the sound control and can be retried explicitly.
+  stay visible on the sound control and can be retried explicitly. Disabling sound disconnects
+  the AudioWorklet renderer and suspends its `AudioContext`; re-enabling resumes and reconnects
+  them.
   `audio-worklet.js` consumes transferable Float32 chunks from the bridge without requiring
   `SharedArrayBuffer` or cross-origin isolation. It prebuffers a short bounded lead before
   playback, renders without per-sample allocation, and discards only the oldest queued frames
   if a stalled producer exceeds the latency bound. Sound is generated only at 1x speed;
-  changing speed mutes and flushes PCM while the speaker latch and emulated VIA/AY state
-  continue to advance.
+  changing speed disconnects the renderer and flushes PCM while the speaker latch and emulated
+  VIA/AY state continue to advance.
 - Gamepad state is sampled once per rendered frame, independently of CPU speed. Disconnecting
   a pad releases every button immediately; reconnecting fills the first free player slot.
   The shared VM, not JavaScript, performs the SNES latch/clock protocol and active-low VIA

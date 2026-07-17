@@ -394,6 +394,7 @@
     let soundRequested = true;
     let audioGenerating = false;
     let audioActivation = null;
+    let audioConnected = false;
     let audioError = null;
     let debuggerController = null;
     const inputQueue = [];
@@ -519,6 +520,31 @@
       if (audioNode) audioNode.port.postMessage({ type: "clear" });
     }
 
+    function clearSoundStatus() {
+      if (statusEl.textContent.startsWith("sound unavailable:") ||
+          statusEl.textContent.startsWith("sound disable warning:")) {
+        statusEl.textContent = vm ? "running" : "loading wasm\u2026";
+      }
+    }
+
+    function setAudioConnection(enabled) {
+      if (!audioNode || enabled === audioConnected) return;
+      if (enabled) audioNode.connect(audioContext.destination);
+      else audioNode.disconnect();
+      audioConnected = enabled;
+    }
+
+    async function suspendAudioContext() {
+      setAudioConnection(false);
+      if (!audioContext || audioContext.state !== "running") return;
+      try {
+        await audioContext.suspend();
+      } catch (error) {
+        statusEl.textContent = "sound disable warning: " + error.message;
+        console.error(error);
+      }
+    }
+
     function updateSoundButton() {
       if (soundButton.disabled) {
         soundButton.setAttribute("aria-pressed", "false");
@@ -562,12 +588,16 @@
 
     function syncAudioForSpeed() {
       const shouldGenerate = soundRequested && speedMul === 1 && audioNode !== null;
+      if (!shouldGenerate) setAudioConnection(false);
       if (!setAudioGeneration(shouldGenerate)) {
         soundRequested = false;
         audioError = "Unsupported audio sample rate";
         setAudioGeneration(false);
+        setAudioConnection(false);
         disarmDefaultSoundActivation();
         statusEl.textContent = "sound unavailable: unsupported sample rate";
+      } else if (shouldGenerate) {
+        setAudioConnection(true);
       }
       updateSoundButton();
     }
@@ -607,6 +637,7 @@
       }
 
       audioError = null;
+      clearSoundStatus();
       updateSoundButton();
       try {
         if (!audioContext) {
@@ -622,13 +653,13 @@
             numberOfOutputs: 1,
             outputChannelCount: [2],
           });
-          audioNode.connect(audioContext.destination);
         } else {
           await resumeAudioContext();
         }
         syncAudioForSpeed();
-        if (statusEl.textContent.startsWith("sound unavailable:")) {
-          statusEl.textContent = vm ? "running" : "loading wasm\u2026";
+        if (!soundRequested) {
+          await suspendAudioContext();
+          return false;
         }
         return soundRequested && audioNode !== null && audioContext.state === "running";
       } catch (error) {
@@ -648,6 +679,7 @@
           }
           audioContext = null;
           audioNode = null;
+          audioConnected = false;
         }
         if (retryOnNextInteraction) armDefaultSoundActivation();
         else disarmDefaultSoundActivation();
@@ -698,6 +730,7 @@
         audioError = null;
         disarmDefaultSoundActivation();
         syncAudioForSpeed();
+        await suspendAudioContext();
         return;
       }
 
