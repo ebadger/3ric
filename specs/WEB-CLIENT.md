@@ -27,7 +27,8 @@ client-side so GitHub Pages can host it as static files.
 - **Bridge API (embind, `web_bridge.cpp`):** `loadData(addr, bytes)`, `seedBasicRom()`,
   `loadFont(bytes)`, `loadSD(bytes)`, `insertDisk(drive, bytes)`, `reset()`, `run(maxSteps)`,
   `runCycles(cycleBudget)`, `step()`, instruction-address breakpoint add/remove/clear/query
-  methods, `setPC`, `poke/peek`, `keyDown(code)`, `drainOutput()` (serial),
+  methods, `setPC`, raw `poke/peek`, bank-aware side-effect-free `peekMapped`, `romVisible`,
+  `keyDown(code)`, `drainOutput()` (serial),
   `setGamepadState(index, pressedMask)`,
   `enableAudio(sampleRate)`, `disableAudio()`, `drainAudio()` (interleaved Float32 stereo PCM:
   centered system speaker summed with hard-panned Mockingboard AY channels),
@@ -80,14 +81,17 @@ client-side so GitHub Pages can host it as static files.
   breakpoints. The debugger can pause/continue, step one instruction, step over an absolute
   `JSR`, add an arbitrary hexadecimal PC breakpoint, inspect raw memory without triggering
   device side effects, and display the live register set already exposed by the bridge.
+  Step-over decodes the opcode through the VM's current BASIC/language-card read mapping,
+  without invoking a bus read.
   Breakpoint checks stay inside `WebVM`'s native instruction loop so normal-speed and Max
   execution do not cross the JS/WASM boundary once per instruction. The checked-in ca65
   `badger6502.dbg` is staged as a lazy-loaded data asset; while execution is outside the
   assembled image, `debugger.js` correlates a PC in a read-only, ROM-binary-backed ca65
-  segment to an exact symbol and/or source filename/line when that metadata exists. RAM,
-  zero-page, and device-address equates are not treated as ROM locations. The ROM source
-  text is not shipped in this repository, so the browser identifies its listing coordinate
-  rather than displaying the original ROM source line.
+  segment to an exact symbol and/or source filename/line only while the VM reports that ROM
+  visible at the current address. RAM, zero-page, banked RAM, and device-address equates are
+  not treated as ROM locations. The ROM source text is not shipped in this repository, so
+  the browser identifies its listing coordinate rather than displaying the original ROM
+  source line.
 - **SD image:** `make_sd_sparse.py` streams `emulator/Data/sd.zip` (2 GB, mostly-zero FAT32)
   into `data/sd.sparse` (~11.5 MB `SDSP` container), fetched lazily.
 - **Gallery (`gallery.html` + `gallery.json`):** a lightweight, WASM-free showcase page that
@@ -196,9 +200,9 @@ client-side so GitHub Pages can host it as static files.
   A masked IRQ that releases `WAI` makes the held PC breakpoint-eligible before its
   instruction executes; pending NMI and unmasked IRQ service takes precedence over a
   breakpoint on the interrupted PC. Step-over enters an absolute `JSR` once, then runs to its
-  three-byte fall-through address using a temporary breakpoint; every other opcode behaves
-  as step-into. Resetting or loading a program clears transient stop state but does not
-  silently discard user breakpoints.
+  three-byte fall-through address using a temporary breakpoint; opcode recognition follows
+  the current bank mapping. Every other opcode behaves as step-into. Resetting or loading a
+  program clears transient stop state but does not silently discard user breakpoints.
 - Assets are relative so the site works under `/<repo>/` on Pages; the mandatory first-load
   payload is ~1.26 MB, with `disk.woz`/`sd.sparse` fetched only on demand.
 - **Share / Remix loop.** The editor's **Share** button copies a self-contained deep link

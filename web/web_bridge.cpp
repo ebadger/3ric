@@ -366,6 +366,11 @@ public:
 
     void poke(int addr, int value) { _vm->GetData()[addr & 0xFFFF] = (uint8_t)(value & 0xFF); }
     int  peek(int addr)            { return _vm->GetData()[addr & 0xFFFF]; }
+    int  peekMapped(int addr)      { return _vm->PeekData((uint16_t)(addr & 0xFFFF)); }
+    bool romVisible(int addr)
+    {
+        return addr >= 0 && addr <= 0xFFFF && _vm->IsROMVisible((uint16_t)addr);
+    }
 
     // Bus-level access that runs through the full memory map (soft switches,
     // ACIA/VIA, Disk II, language-card banking). Use this to drive
@@ -657,6 +662,8 @@ EMSCRIPTEN_BINDINGS(badger6502)
         .function("setGamepadState", &WebVM::setGamepadState)
         .function("poke",         &WebVM::poke)
         .function("peek",         &WebVM::peek)
+        .function("peekMapped",   &WebVM::peekMapped)
+        .function("romVisible",   &WebVM::romVisible)
         .function("readBus",      &WebVM::readBus)
         .function("writeBus",     &WebVM::writeBus)
         .function("setPC",        &WebVM::setPC)

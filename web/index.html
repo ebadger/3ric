@@ -932,7 +932,8 @@
       }
 
       function formatRomLocation(address) {
-        const info = romDebug && romDebug.lookup(address);
+        const info = BadgerDebugger.lookupRomLocation(
+          romDebug, address, vm.romVisible(address));
         if (!info) return `$${hex(address, 4)} (outside assembled source)`;
         const parts = [`$${hex(address, 4)}`];
         if (info.symbol) parts.push(info.symbol.name);
@@ -997,12 +998,13 @@
       overBtn.addEventListener("click", () => {
         removeTemporaryBreakpoint();
         const address = vm.pc() & 0xFFFF;
-        if (vm.peek(address) !== 0x20) {
+        const returnAddress = BadgerDebugger.stepOverTarget(
+          address, vm.peekMapped(address));
+        if (returnAddress == null) {
           vm.step();
           setPaused(true, "step");
           return;
         }
-        const returnAddress = (address + 3) & 0xFFFF;
         vm.step();
         temporaryBreakpoint = returnAddress;
         syncBreakpoints();

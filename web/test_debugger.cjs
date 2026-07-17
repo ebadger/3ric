@@ -1,7 +1,12 @@
 const fs = require("fs");
 const path = require("path");
 const createBadgerVM = require("./badger6502.js");
-const { buildSourceListing, parseCa65Debug } = require("./debugger.js");
+const {
+  buildSourceListing,
+  lookupRomLocation,
+  parseCa65Debug,
+  stepOverTarget,
+} = require("./debugger.js");
 
 let failures = 0;
 function check(name, condition, detail = "") {
@@ -44,6 +49,42 @@ function check(name, condition, detail = "") {
 
   const Module = await createBadgerVM();
   const vm = new Module.WebVM();
+
+  vm.poke(0x9000, 0x20);
+  vm.seedBasicRom();
+  vm.poke(0x9000, 0xEA);
+  vm.writeBus(0xC006, 0);
+  check("mapped peek sees BASIC ROM opcode",
+    vm.peek(0x9000) === 0xEA && vm.peekMapped(0x9000) === 0x20);
+  check("step-over recognizes BASIC ROM JSR",
+    stepOverTarget(0x9000, vm.peekMapped(0x9000)) === 0x9003);
+  check("ROM correlation follows visible BASIC bank",
+    vm.romVisible(0x9000) && lookupRomLocation(romDebug, 0x9000, vm.romVisible(0x9000)));
+
+  vm.writeBus(0xC007, 0);
+  check("mapped peek sees BASIC RAM opcode",
+    vm.peekMapped(0x9000) === 0xEA && !vm.romVisible(0x9000));
+  check("ROM correlation hides banked BASIC RAM",
+    lookupRomLocation(romDebug, 0x9000, vm.romVisible(0x9000)) === null);
+
+  vm.poke(0xD000, 0xEA);
+  vm.writeBus(0xC083, 0);
+  vm.writeBus(0xC083, 0);
+  vm.writeBus(0xD000, 0x20);
+  check("mapped peek sees language-card RAM opcode",
+    vm.peek(0xD000) === 0xEA && vm.peekMapped(0xD000) === 0x20);
+  check("step-over recognizes language-card RAM JSR",
+    stepOverTarget(0xD000, vm.peekMapped(0xD000)) === 0xD003);
+  check("ROM correlation hides language-card RAM",
+    !vm.romVisible(0xD000)
+      && lookupRomLocation(romDebug, 0xD000, vm.romVisible(0xD000)) === null);
+
+  vm.writeBus(0xC082, 0);
+  check("mapped peek restores upper ROM opcode",
+    vm.peekMapped(0xD000) === 0xEA && vm.romVisible(0xD000));
+  check("ROM correlation follows visible upper ROM",
+    lookupRomLocation(romDebug, 0xD000, vm.romVisible(0xD000)) !== null);
+
   vm.loadData(assembled.org, assembled.bytes);
   vm.poke(0xFFFC, 0x00);
   vm.poke(0xFFFD, 0x08);

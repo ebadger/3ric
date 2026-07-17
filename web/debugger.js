@@ -16,6 +16,14 @@
     }));
   }
 
+  function stepOverTarget(address, opcode) {
+    return opcode === 0x20 ? (address + 3) & 0xFFFF : null;
+  }
+
+  function lookupRomLocation(debugMap, address, romVisible) {
+    return debugMap && romVisible ? debugMap.lookup(address) : null;
+  }
+
   function parsePairs(text) {
     const pairs = Object.create(null);
     const pattern = /([A-Za-z][A-Za-z0-9_]*)=("(?:[^"\\]|\\.)*"|[^,]*)/g;
@@ -159,5 +167,5 @@
     return { lookup };
   }
 
-  return { buildSourceListing, parseCa65Debug };
+  return { buildSourceListing, lookupRomLocation, parseCa65Debug, stepOverTarget };
 });

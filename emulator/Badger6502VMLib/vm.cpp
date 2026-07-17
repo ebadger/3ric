@@ -485,6 +485,34 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 	}
 }
 
+uint8_t VM::PeekData(uint16_t address) const
+{
+	if (address >= MM_BASIC_START && address <= MM_BASIC_END)
+	{
+		return _basicbank ? _basic[address - MM_BASIC_START] : _data[address];
+	}
+
+	if (address >= MM_ROM_START && address <= MM_ROM_END && _bank_read)
+	{
+		if (address < 0xE000)
+		{
+			return _bank_page1
+				? _bank1_d000[address - 0xD000]
+				: _bank2_d000[address - 0xD000];
+		}
+		return _bank_e000[address - 0xE000];
+	}
+
+	return _data[address];
+}
+
+bool VM::IsROMVisible(uint16_t address) const
+{
+	return (address >= MM_BASIC_START && address <= MM_BASIC_END && _basicbank)
+		|| (address >= MM_DISKROM_START && address <= MM_DISKROM_END)
+		|| (address >= MM_ROM_START && address <= MM_ROM_END && !_bank_read);
+}
+
 uint8_t VM::ReadData(uint16_t address)
 {
 	uint8_t result = 0;
@@ -554,39 +582,11 @@ uint8_t VM::ReadData(uint16_t address)
 	}
 	else if (address >= MM_ROM_START && address <= MM_ROM_END)
 	{
-		if (_bank_read) // read RAM
-		{
-			if (address >= 0xD000 && address < 0xE000)
-			{
-				if (_bank_page1)
-				{
-					return _bank1_d000[address - 0xD000];
-				}
-				else
-				{
-					return _bank2_d000[address - 0xD000];
-				}
-			}
-			else if (address >= 0xE000 && address <= 0xFFFF)
-			{
-				return _bank_e000[address - 0xE000];
-			}
-		}
-		else
-		{
-			return _data[address];
-		}
+		return PeekData(address);
 	}
 	else if (address >= MM_BASIC_START && address <= MM_BASIC_END)
 	{
-		if (_basicbank)
-		{
-			return _basic[address - MM_BASIC_START];
-		}
-		else
-		{
-			return _data[address];
-		}
+		return PeekData(address);
 	}
 	else
 	{

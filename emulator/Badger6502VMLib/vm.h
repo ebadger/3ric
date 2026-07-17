@@ -199,6 +199,8 @@ public:
 	uint8_t * GetData();
 	uint8_t * GetRomDisk();
 	uint8_t * GetBasicRom();
+	uint8_t PeekData(uint16_t address) const;
+	bool IsROMVisible(uint16_t address) const;
 
 private:
 	void Init();

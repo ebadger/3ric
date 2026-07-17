@@ -74,6 +74,10 @@ bridge uses this to clock the SD card and advance the drive).
   opcode at the current PC rather than tick a dormant `WAI`/`STP` or service NMI/IRQ; the
   web debugger uses that boundary without changing execution. The blocking `VM::Run()` is
   not used by the web build.
+- `VM::PeekData()` mirrors the currently selected BASIC and language-card read banks without
+  invoking memory-mapped device reads or soft-switch side effects. `VM::IsROMVisible()`
+  reports whether an address currently resolves to the BASIC ROM, Disk II boot ROM, or
+  upper ROM; debugger hosts use both for bank-correct opcode inspection and source labels.
 - `reset()` loads PC from `$FFFC/$FFFD`. ROM load recipe (mirrored by every host): write the
   first `0x10000` bytes of `badger6502.bin` into `GetData()`, `seedBasicRom()` (copy
   `$9000..$BFFF`), `loadFont()`, then `reset()`.
@@ -144,7 +148,7 @@ left/right AY) + framebuffer + serial + register state → host (native window o
 | Item | Status | Notes |
 |------|--------|-------|
 | 65C02 CPU + full ISA/addressing | Shipped | Covered by `Badger6502VMTest` (MSTest); instruction readiness is exposed for exact host debugger stops. |
-| Memory map + soft switches | Shipped | `vm.h` `MM_*`; the shared contract. |
+| Memory map + soft switches | Shipped | `vm.h` `MM_*`; the shared contract, including side-effect-free mapped inspection and ROM-visibility queries. |
 | Text / lo-res / hi-res video | Shipped | `badgervmpal`; color/fringe logic shared with hosts. |
 | Keyboard + ACIA serial | Shipped | `$C000`/`$C010`; `PS2Keyboard`, `acia`. |
 | VIA1 + bit-banged SPI micro-SD | Shipped | `via` + `MockMicroSD`. |
