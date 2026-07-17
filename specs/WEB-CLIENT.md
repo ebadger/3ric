@@ -27,8 +27,9 @@ client-side so GitHub Pages can host it as static files.
 - **Bridge API (embind, `web_bridge.cpp`):** `loadData(addr, bytes)`, `seedBasicRom()`,
   `loadFont(bytes)`, `loadSD(bytes)`, `insertDisk(drive, bytes)`, `reset()`, `run(maxSteps)`,
   `runCycles(cycleBudget)`, `step()`, instruction-address breakpoint add/remove/clear/query
-  methods, `setPC`, raw `poke/peek`, bank-aware side-effect-free `peekMapped`, `romVisible`,
-  `keyDown(code)`, `drainOutput()` (serial),
+  methods plus mapping-qualified breakpoint insertion, `setPC`, raw `poke/peek`, bank-aware
+  side-effect-free `peekMapped`, `memoryMapping`, `romVisible`, `keyDown(code)`,
+  `drainOutput()` (serial),
   `setGamepadState(index, pressedMask)`,
   `enableAudio(sampleRate)`, `disableAudio()`, `drainAudio()` (interleaved Float32 stereo PCM:
   centered system speaker summed with hard-panned Mockingboard AY channels),
@@ -82,7 +83,10 @@ client-side so GitHub Pages can host it as static files.
   `JSR`, add an arbitrary hexadecimal PC breakpoint, inspect raw memory without triggering
   device side effects, and display the live register set already exposed by the bridge.
   Step-over decodes the opcode through the VM's current BASIC/language-card read mapping,
-  without invoking a bus read.
+  without invoking a bus read. Source rows capture the primary-image mapping selected after
+  program load; their breakpoints and current-row highlighting apply only while that same
+  backing store is visible. Temporary step-over return breakpoints likewise retain the
+  caller's mapping, while manually entered address breakpoints remain unconditional.
   Breakpoint checks stay inside `WebVM`'s native instruction loop so normal-speed and Max
   execution do not cross the JS/WASM boundary once per instruction. The checked-in ca65
   `badger6502.dbg` is staged as a lazy-loaded data asset; while execution is outside the
@@ -201,8 +205,12 @@ client-side so GitHub Pages can host it as static files.
   instruction executes; pending NMI and unmasked IRQ service takes precedence over a
   breakpoint on the interrupted PC. Step-over enters an absolute `JSR` once, then runs to its
   three-byte fall-through address using a temporary breakpoint; opcode recognition follows
-  the current bank mapping. Every other opcode behaves as step-into. Resetting or loading a
-  program clears transient stop state but does not silently discard user breakpoints.
+  the current bank mapping, and the temporary stop cannot trigger in an aliased bank. Every
+  other opcode behaves as step-into. Source breakpoints cannot trigger against BASIC ROM or
+  language-card RAM aliased over the assembled image. Resetting or loading a program clears
+  transient stop state but does not silently discard user breakpoints. A reset that re-seeds
+  the primary image unbinds source-line stops from the replaced bytes while retaining the
+  selected lines; loading the next assembled program binds those selections again.
 - Assets are relative so the site works under `/<repo>/` on Pages; the mandatory first-load
   payload is ~1.26 MB, with `disk.woz`/`sd.sparse` fetched only on demand.
 - **Share / Remix loop.** The editor's **Share** button copies a self-contained deep link
@@ -255,10 +263,12 @@ virtual-keyboard button→shared input queue→strobe-clear frame→keyDown()→
 Boot Disk/Mount SD →
 insertDisk()/loadSD() → C600G / EC5CG`.
 
-Debugger: `asm6502 listing metadata → source/address rows → user breakpoint set → WebVM
-instruction-readiness check → cooperative pause before executable PC → registers + raw peek
-memory + source row highlight`; outside the assembled image, `badger6502.dbg → debugger.js
-ROM-backed ca65-segment filter → ROM symbol/file:line`.
+Debugger: `asm6502 listing metadata → source/address rows + loaded read-mapping identity →
+user source breakpoint set → WebVM instruction-readiness + mapping check → cooperative pause
+before matching executable PC → registers + raw peek memory + mapping-qualified source row
+highlight`; manual PC breakpoints bypass the mapping qualifier. Outside the assembled image,
+`badger6502.dbg → debugger.js ROM-backed ca65-segment + current-ROM-visibility filter → ROM
+symbol/file:line`.
 
 Gallery: `gallery.html → fetch gallery.json → render cards → click Run & Remix →
 index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
@@ -295,7 +305,7 @@ on the emulator whether it succeeds, is blocked, or 404s.
 | USB/Bluetooth gamepads | Shipped | Two stable player slots through the standard Gamepad API and shared SNES/VIA peripheral; covered by browser-mapping, serial-protocol, and ROM-table tests. |
 | Disk II WOZ boot + micro-SD DOS shell | Shipped | **Boot Disk** / **Mount SD** buttons. |
 | In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; ~11 samples; `?src=`. Sample sources fetched with `cache:"no-cache"` (revalidate) so a new deploy isn't masked by the browser cache. |
-| Source debugger | Shipped | Browser-assembled source listing with instruction breakpoints, pause/continue, step into/over, register and raw-memory inspection, plus lazy ca65 ROM symbol/file:line correlation; covered by `test_debugger.cjs`. |
+| Source debugger | Shipped | Browser-assembled source listing with bank-qualified instruction breakpoints/highlighting, pause/continue, bank-aware step into/over, register and raw-memory inspection, plus lazy ca65 ROM symbol/file:line correlation; covered by `test_debugger.cjs`. |
 | Program downloads (.PRG / .woz) | Shipped | **Download .PRG** (raw bytes) + **Download .woz** (bootable WOZ2 via `wozgen.mjs`, a port of `dsk2woz2`, with a multi-track boot loader); verified by `web/test_woz_download.cjs`. |
 | Share / Remix deep links | Shipped | **Share** button; `?src=programs/<name>.s` for unmodified samples, inline base64url `?code=` otherwise, both carrying `&org=` when the source has no `.org`; remix banner on shared links. |
 | Community Gallery | Shipped | `gallery.html` renders the curated `gallery.json`; one-click **Run & Remix** via `?src=`/`?code=`; PR-based submissions credited by author. |

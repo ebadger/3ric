@@ -485,11 +485,11 @@ void VM::DoSoftSwitches(uint16_t address, bool write)
 	}
 }
 
-uint8_t VM::PeekData(uint16_t address) const
+MemoryReadMapping VM::GetMemoryReadMapping(uint16_t address) const
 {
-	if (address >= MM_BASIC_START && address <= MM_BASIC_END)
+	if (address >= MM_BASIC_START && address <= MM_BASIC_END && _basicbank)
 	{
-		return _basicbank ? _basic[address - MM_BASIC_START] : _data[address];
+		return MemoryReadMapping::BasicROM;
 	}
 
 	if (address >= MM_ROM_START && address <= MM_ROM_END && _bank_read)
@@ -497,10 +497,29 @@ uint8_t VM::PeekData(uint16_t address) const
 		if (address < 0xE000)
 		{
 			return _bank_page1
-				? _bank1_d000[address - 0xD000]
-				: _bank2_d000[address - 0xD000];
+				? MemoryReadMapping::LanguageCardBank1
+				: MemoryReadMapping::LanguageCardBank2;
 		}
+		return MemoryReadMapping::LanguageCardHigh;
+	}
+
+	return MemoryReadMapping::Primary;
+}
+
+uint8_t VM::PeekData(uint16_t address) const
+{
+	switch (GetMemoryReadMapping(address))
+	{
+	case MemoryReadMapping::BasicROM:
+		return _basic[address - MM_BASIC_START];
+	case MemoryReadMapping::LanguageCardBank1:
+		return _bank1_d000[address - 0xD000];
+	case MemoryReadMapping::LanguageCardBank2:
+		return _bank2_d000[address - 0xD000];
+	case MemoryReadMapping::LanguageCardHigh:
 		return _bank_e000[address - 0xE000];
+	default:
+		break;
 	}
 
 	return _data[address];
@@ -508,9 +527,12 @@ uint8_t VM::PeekData(uint16_t address) const
 
 bool VM::IsROMVisible(uint16_t address) const
 {
-	return (address >= MM_BASIC_START && address <= MM_BASIC_END && _basicbank)
+	const MemoryReadMapping mapping = GetMemoryReadMapping(address);
+	return (address >= MM_BASIC_START && address <= MM_BASIC_END
+			&& mapping == MemoryReadMapping::BasicROM)
 		|| (address >= MM_DISKROM_START && address <= MM_DISKROM_END)
-		|| (address >= MM_ROM_START && address <= MM_ROM_END && !_bank_read);
+		|| (address >= MM_ROM_START && address <= MM_ROM_END
+			&& mapping == MemoryReadMapping::Primary);
 }
 
 uint8_t VM::ReadData(uint16_t address)

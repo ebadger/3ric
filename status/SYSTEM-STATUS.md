@@ -89,9 +89,10 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   `asm6502.mjs` and runs it like `BRUN`; ships ~11 sample programs; deep-linkable via `?src=`.
   Exports the assembled program as a raw **.PRG** or a bootable **.woz** disk image
   (`wozgen.mjs`, a JS port of `dsk2woz2` with a multi-track boot loader) that boots via `C600G`.
-- **Browser debugger:** source-correlated instruction breakpoints for assembled programs,
-  pause/continue, step into/over, live registers, raw-memory inspection, arbitrary PC
-  breakpoints, and lazy ROM symbol/source-file:line correlation from `badger6502.dbg`.
+- **Browser debugger:** bank-qualified, source-correlated instruction breakpoints and
+  highlighting for assembled programs, pause/continue, bank-aware step into/over, live
+  registers, raw-memory inspection, unconditional arbitrary-PC breakpoints, and lazy ROM
+  symbol/source-file:line correlation from `badger6502.dbg`.
 - **Disk gap:** DOS 3.3 / Quick-DOS and games that chain through an Applesoft auto-run
   greeting don't run — this clone's `$E000` BASIC is generic Microsoft BASIC, not Applesoft.
   Self-booting machine-code disks work.

@@ -13,7 +13,17 @@
       line: record.line,
       kind: record.kind,
       source: sourceLines[record.line - 1] || "",
+      mapping: null,
     }));
+  }
+
+  function bindSourceMappings(rows, mappingForAddress) {
+    for (const row of rows) row.mapping = mappingForAddress(row.address);
+    return rows;
+  }
+
+  function isSourceRowActive(row, mapping) {
+    return Boolean(row) && row.mapping != null && row.mapping === mapping;
   }
 
   function stepOverTarget(address, opcode) {
@@ -167,5 +177,12 @@
     return { lookup };
   }
 
-  return { buildSourceListing, lookupRomLocation, parseCa65Debug, stepOverTarget };
+  return {
+    bindSourceMappings,
+    buildSourceListing,
+    isSourceRowActive,
+    lookupRomLocation,
+    parseCa65Debug,
+    stepOverTarget,
+  };
 });

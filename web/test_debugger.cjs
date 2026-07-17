@@ -2,7 +2,9 @@ const fs = require("fs");
 const path = require("path");
 const createBadgerVM = require("./badger6502.js");
 const {
+  bindSourceMappings,
   buildSourceListing,
+  isSourceRowActive,
   lookupRomLocation,
   parseCa65Debug,
   stepOverTarget,
@@ -32,6 +34,8 @@ function check(name, condition, detail = "") {
     listing[1].address === 0x0802 && listing[1].line === 3 && listing[1].source.includes("jsr sub"));
   check("source listing marks executable rows",
     listing.every((row) => row.kind === "instruction"));
+  check("source listing starts unbound",
+    listing.every((row) => row.mapping === null));
 
   const debugText = fs.readFileSync(
     path.join(__dirname, "..", "emulator", "Data", "badger6502.dbg"), "utf8");
@@ -49,6 +53,12 @@ function check(name, condition, detail = "") {
 
   const Module = await createBadgerVM();
   const vm = new Module.WebVM();
+  bindSourceMappings(listing, (address) => vm.memoryMapping(address));
+  check("source listing binds loaded memory mapping",
+    isSourceRowActive(listing[0], vm.memoryMapping(listing[0].address)));
+  bindSourceMappings(listing, () => null);
+  check("source listing unbinds when its image is replaced",
+    !isSourceRowActive(listing[0], vm.memoryMapping(listing[0].address)));
 
   vm.poke(0x9000, 0x20);
   vm.seedBasicRom();
@@ -62,10 +72,37 @@ function check(name, condition, detail = "") {
     vm.romVisible(0x9000) && lookupRomLocation(romDebug, 0x9000, vm.romVisible(0x9000)));
 
   vm.writeBus(0xC007, 0);
+  const basicProgramMapping = vm.memoryMapping(0x9000);
   check("mapped peek sees BASIC RAM opcode",
     vm.peekMapped(0x9000) === 0xEA && !vm.romVisible(0x9000));
   check("ROM correlation hides banked BASIC RAM",
     lookupRomLocation(romDebug, 0x9000, vm.romVisible(0x9000)) === null);
+
+  vm.clearBreakpoints();
+  check("rejects invalid mapped breakpoint",
+    !vm.addMappedBreakpoint(0x9000, -1));
+  check("adds mapping-qualified breakpoint",
+    vm.addMappedBreakpoint(0x9000, basicProgramMapping));
+  vm.writeBus(0xC006, 0);
+  vm.setPC(0x9000);
+  const aliasedBasicCycles = vm.run(1);
+  check("source breakpoint ignores aliased BASIC ROM",
+    aliasedBasicCycles > 0 && !vm.breakpointHit());
+  check("source highlighting ignores aliased BASIC ROM",
+    !isSourceRowActive({ mapping: basicProgramMapping }, vm.memoryMapping(0x9000)));
+  vm.addBreakpoint(0x9000);
+  vm.setPC(0x9000);
+  const manualBasicCycles = vm.run(1);
+  check("manual breakpoint remains unconditional over source qualifier",
+    manualBasicCycles === 0 && vm.breakpointHit());
+  vm.removeBreakpoint(0x9000);
+  vm.addMappedBreakpoint(0x9000, basicProgramMapping);
+  vm.writeBus(0xC007, 0);
+  vm.setPC(0x9000);
+  const primaryBasicCycles = vm.run(1);
+  check("source breakpoint returns with BASIC RAM",
+    primaryBasicCycles === 0 && vm.breakpointHit());
+  vm.clearBreakpoints();
 
   vm.poke(0xD000, 0xEA);
   vm.writeBus(0xC083, 0);
@@ -80,10 +117,24 @@ function check(name, condition, detail = "") {
       && lookupRomLocation(romDebug, 0xD000, vm.romVisible(0xD000)) === null);
 
   vm.writeBus(0xC082, 0);
+  const upperProgramMapping = vm.memoryMapping(0xD000);
   check("mapped peek restores upper ROM opcode",
     vm.peekMapped(0xD000) === 0xEA && vm.romVisible(0xD000));
   check("ROM correlation follows visible upper ROM",
     lookupRomLocation(romDebug, 0xD000, vm.romVisible(0xD000)) !== null);
+
+  vm.addMappedBreakpoint(0xD000, upperProgramMapping);
+  vm.writeBus(0xC080, 0);
+  vm.setPC(0xD000);
+  const aliasedUpperCycles = vm.run(1);
+  check("source breakpoint ignores aliased language-card RAM",
+    aliasedUpperCycles > 0 && !vm.breakpointHit());
+  vm.writeBus(0xC082, 0);
+  vm.setPC(0xD000);
+  const primaryUpperCycles = vm.run(1);
+  check("source breakpoint returns with upper image",
+    primaryUpperCycles === 0 && vm.breakpointHit());
+  vm.clearBreakpoints();
 
   vm.loadData(assembled.org, assembled.bytes);
   vm.poke(0xFFFC, 0x00);

@@ -286,7 +286,19 @@ public:
     bool addBreakpoint(int addr)
     {
         if (addr < 0 || addr > 0xFFFF) return false;
-        _breakpoints[(size_t)addr] = 1;
+        _breakpoints[(size_t)addr] |= BREAKPOINT_UNCONDITIONAL;
+        return true;
+    }
+
+    bool addMappedBreakpoint(int addr, int mapping)
+    {
+        if (addr < 0 || addr > 0xFFFF
+            || mapping < 0 || mapping >= (int)MemoryReadMapping::Count)
+        {
+            return false;
+        }
+        _breakpoints[(size_t)addr] |=
+            (uint8_t)(1u << ((unsigned int)mapping + 1u));
         return true;
     }
 
@@ -367,6 +379,11 @@ public:
     void poke(int addr, int value) { _vm->GetData()[addr & 0xFFFF] = (uint8_t)(value & 0xFF); }
     int  peek(int addr)            { return _vm->GetData()[addr & 0xFFFF]; }
     int  peekMapped(int addr)      { return _vm->PeekData((uint16_t)(addr & 0xFFFF)); }
+    int  memoryMapping(int addr)
+    {
+        if (addr < 0 || addr > 0xFFFF) return -1;
+        return (int)_vm->GetMemoryReadMapping((uint16_t)addr);
+    }
     bool romVisible(int addr)
     {
         return addr >= 0 && addr <= 0xFFFF && _vm->IsROMVisible((uint16_t)addr);
@@ -463,8 +480,13 @@ private:
     bool breakpointAtPC()
     {
         CPU* cpu = _vm->GetCPU();
-        if (_breakpoints[(size_t)cpu->PC] == 0) return false;
-        return _vm->WillExecuteCurrentInstruction();
+        const uint8_t configured = _breakpoints[(size_t)cpu->PC];
+        if (configured == 0 || !_vm->WillExecuteCurrentInstruction()) return false;
+        if (configured & BREAKPOINT_UNCONDITIONAL) return true;
+
+        const unsigned int mapping =
+            (unsigned int)_vm->GetMemoryReadMapping(cpu->PC);
+        return (configured & (uint8_t)(1u << (mapping + 1u))) != 0;
     }
 
     int stepOnce()
@@ -626,6 +648,7 @@ private:
 
     uint64_t _cycles        = 0;
     uint64_t _lastDiskCycle = 0;
+    static constexpr uint8_t BREAKPOINT_UNCONDITIONAL = 0x01;
     std::array<uint8_t, 0x10000> _breakpoints = {};
     bool _breakpointHit = false;
 
@@ -649,6 +672,7 @@ EMSCRIPTEN_BINDINGS(badger6502)
         .function("runCycles",    &WebVM::runCycles)
         .function("step",         &WebVM::step)
         .function("addBreakpoint", &WebVM::addBreakpoint)
+        .function("addMappedBreakpoint", &WebVM::addMappedBreakpoint)
         .function("removeBreakpoint", &WebVM::removeBreakpoint)
         .function("clearBreakpoints", &WebVM::clearBreakpoints)
         .function("hasBreakpoint", &WebVM::hasBreakpoint)
@@ -663,6 +687,7 @@ EMSCRIPTEN_BINDINGS(badger6502)
         .function("poke",         &WebVM::poke)
         .function("peek",         &WebVM::peek)
         .function("peekMapped",   &WebVM::peekMapped)
+        .function("memoryMapping", &WebVM::memoryMapping)
         .function("romVisible",   &WebVM::romVisible)
         .function("readBus",      &WebVM::readBus)
         .function("writeBus",     &WebVM::writeBus)
