@@ -38,6 +38,9 @@ function check(name, condition, detail = "") {
   check("ROM debug resolves COUT source coordinate",
     cout && cout.symbol && cout.symbol.file === "apple2rom.s" && cout.symbol.line === 1058,
     JSON.stringify(cout));
+  check("ROM debug excludes RAM symbols", romDebug.lookup(0x0800) === null);
+  check("ROM debug excludes zero-page source", romDebug.lookup(0x0036) === null);
+  check("ROM debug excludes device equates", romDebug.lookup(0xC100) === null);
 
   const Module = await createBadgerVM();
   const vm = new Module.WebVM();
@@ -75,8 +78,12 @@ function check(name, condition, detail = "") {
   check("clear removes all breakpoints",
     !vm.hasBreakpoint(0x0802) && !vm.hasBreakpoint(0x0808) && !vm.breakpointHit());
 
+  vm.reset();
   vm.poke(0x0900, 0xCB); // WAI
-  vm.poke(0x0901, 0xEA); // NOP after the interrupt wakes the CPU
+  vm.poke(0x0901, 0xEE); // INC $2001 after the interrupt wakes the CPU
+  vm.poke(0x0902, 0x01);
+  vm.poke(0x0903, 0x20);
+  vm.poke(0x2001, 0);
   vm.setPC(0x0900);
   vm.step();
   vm.addBreakpoint(0x0901);
@@ -84,6 +91,19 @@ function check(name, condition, detail = "") {
   check("dormant WAI PC does not retrigger breakpoint",
     waitCycles >= 20 && vm.waiting() && vm.pc() === 0x0901 && !vm.breakpointHit(),
     `cycles=${waitCycles} pc=${vm.pc().toString(16)}`);
+
+  vm.writeBus(0xC40E, 0xC0); // Enable Mockingboard VIA Timer 1 IRQ.
+  vm.writeBus(0xC404, 1);
+  vm.writeBus(0xC405, 0);
+  const wakeCycles = vm.runCycles(20);
+  check("masked IRQ wakes WAI into breakpoint before instruction",
+    wakeCycles < 20 && vm.waiting() && vm.breakpointHit()
+      && vm.pc() === 0x0901 && vm.peek(0x2001) === 0,
+    `cycles=${wakeCycles} pc=${vm.pc().toString(16)} value=${vm.peek(0x2001)}`);
+
+  vm.step();
+  check("step executes instruction after masked-IRQ breakpoint",
+    !vm.waiting() && !vm.breakpointHit() && vm.pc() === 0x0904 && vm.peek(0x2001) === 1);
 
   vm.delete();
   console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILED`);

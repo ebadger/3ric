@@ -70,7 +70,10 @@ bridge uses this to clock the SD card and advance the drive).
   the shared level-sensitive IRQ line before the instruction and ticks the onboard VIA plus
   both Mockingboard VIA/AY pairs for every returned CPU cycle, then advances the VM-owned
   PCM sample clock. Presentation hosts may then advance host-owned keyboard/disk plumbing.
-  The blocking `VM::Run()` is not used by the web build.
+  `VM::WillExecuteCurrentInstruction()` reports whether the next step will execute the
+  opcode at the current PC rather than tick a dormant `WAI`/`STP` or service NMI/IRQ; the
+  web debugger uses that boundary without changing execution. The blocking `VM::Run()` is
+  not used by the web build.
 - `reset()` loads PC from `$FFFC/$FFFD`. ROM load recipe (mirrored by every host): write the
   first `0x10000` bytes of `badger6502.bin` into `GetData()`, `seedBasicRom()` (copy
   `$9000..$BFFF`), `loadFont()`, then `reset()`.
@@ -140,7 +143,7 @@ left/right AY) + framebuffer + serial + register state → host (native window o
 
 | Item | Status | Notes |
 |------|--------|-------|
-| 65C02 CPU + full ISA/addressing | Shipped | Covered by `Badger6502VMTest` (MSTest). |
+| 65C02 CPU + full ISA/addressing | Shipped | Covered by `Badger6502VMTest` (MSTest); instruction readiness is exposed for exact host debugger stops. |
 | Memory map + soft switches | Shipped | `vm.h` `MM_*`; the shared contract. |
 | Text / lo-res / hi-res video | Shipped | `badgervmpal`; color/fringe logic shared with hosts. |
 | Keyboard + ACIA serial | Shipped | `$C000`/`$C010`; `PS2Keyboard`, `acia`. |

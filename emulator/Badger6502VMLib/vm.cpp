@@ -106,6 +106,18 @@ bool VM::IRQAsserted() const
 	return _acia->IRQAsserted() || _mockingboard->IRQAsserted();
 }
 
+bool VM::WillExecuteCurrentInstruction() const
+{
+	if (_cpu->stopped || _nmiPending)
+		return false;
+
+	const bool irq = IRQAsserted();
+	if (irq && !_cpu->flags.bits.I)
+		return false;
+
+	return !_cpu->waitForInterrupt || irq;
+}
+
 void VM::UpdateVIA1NMI()
 {
 	const bool asserted = _via1->IRQAsserted();

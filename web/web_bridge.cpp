@@ -458,8 +458,8 @@ private:
     bool breakpointAtPC()
     {
         CPU* cpu = _vm->GetCPU();
-        if (cpu->waitForInterrupt || cpu->stopped) return false;
-        return _breakpoints[(size_t)cpu->PC] != 0;
+        if (_breakpoints[(size_t)cpu->PC] == 0) return false;
+        return _vm->WillExecuteCurrentInstruction();
     }
 
     int stepOnce()

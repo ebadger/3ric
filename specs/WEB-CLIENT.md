@@ -83,10 +83,11 @@ client-side so GitHub Pages can host it as static files.
   Breakpoint checks stay inside `WebVM`'s native instruction loop so normal-speed and Max
   execution do not cross the JS/WASM boundary once per instruction. The checked-in ca65
   `badger6502.dbg` is staged as a lazy-loaded data asset; while execution is outside the
-  assembled image, `debugger.js` correlates a ROM PC to an exact symbol and/or source
-  filename/line when that metadata exists. The ROM source text is not shipped in this
-  repository, so the browser identifies its listing coordinate rather than displaying the
-  original ROM source line.
+  assembled image, `debugger.js` correlates a PC in a read-only, ROM-binary-backed ca65
+  segment to an exact symbol and/or source filename/line when that metadata exists. RAM,
+  zero-page, and device-address equates are not treated as ROM locations. The ROM source
+  text is not shipped in this repository, so the browser identifies its listing coordinate
+  rather than displaying the original ROM source line.
 - **SD image:** `make_sd_sparse.py` streams `emulator/Data/sd.zip` (2 GB, mostly-zero FAT32)
   into `data/sd.sparse` (~11.5 MB `SDSP` container), fetched lazily.
 - **Gallery (`gallery.html` + `gallery.json`):** a lightweight, WASM-free showcase page that
@@ -192,7 +193,9 @@ client-side so GitHub Pages can host it as static files.
   breakpoint. Continue first steps past a breakpoint at the current PC so it cannot
   immediately retrigger. A PC held dormant by `WAI`/`STP` is not breakpoint-eligible until
   the CPU can execute there, so continuing a waiting machine cannot loop on the same stop.
-  Step-over enters an absolute `JSR` once, then runs to its
+  A masked IRQ that releases `WAI` makes the held PC breakpoint-eligible before its
+  instruction executes; pending NMI and unmasked IRQ service takes precedence over a
+  breakpoint on the interrupted PC. Step-over enters an absolute `JSR` once, then runs to its
   three-byte fall-through address using a temporary breakpoint; every other opcode behaves
   as step-into. Resetting or loading a program clears transient stop state but does not
   silently discard user breakpoints.
@@ -249,9 +252,9 @@ Boot Disk/Mount SD →
 insertDisk()/loadSD() → C600G / EC5CG`.
 
 Debugger: `asm6502 listing metadata → source/address rows → user breakpoint set → WebVM
-instruction-loop check → cooperative pause before PC → registers + raw peek memory + source
-row highlight`; outside the assembled image, `badger6502.dbg → debugger.js ca65 parser →
-ROM symbol/file:line`.
+instruction-readiness check → cooperative pause before executable PC → registers + raw peek
+memory + source row highlight`; outside the assembled image, `badger6502.dbg → debugger.js
+ROM-backed ca65-segment filter → ROM symbol/file:line`.
 
 Gallery: `gallery.html → fetch gallery.json → render cards → click Run & Remix →
 index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.

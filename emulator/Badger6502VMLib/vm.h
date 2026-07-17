@@ -151,6 +151,7 @@ public:
 	uint8_t Step();
 	void TickDevices(uint32_t cycles);
 	bool IRQAsserted() const;
+	bool WillExecuteCurrentInstruction() const;
 	void SignalVIA1Pin(VIA::Pins pin);
 	bool SetGamepadState(uint8_t controller, uint16_t pressedButtons);
 	CPU* GetCPU();
