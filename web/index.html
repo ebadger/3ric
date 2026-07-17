@@ -227,8 +227,8 @@
         <option value="8">8&times; (12.6&nbsp;MHz)</option>
         <option value="max">Max</option>
       </select></span>
-    <button id="sound" type="button" aria-pressed="false"
-      title="Enable the system speaker and slot-4 Mockingboard at native 1x speed">Enable Sound</button>
+    <button id="sound" type="button" aria-pressed="true"
+      title="Disable system-speaker and Mockingboard audio">Disable Sound</button>
     <span class="regs" id="regs">PC:---- A:-- X:-- Y:-- SP:-- P:--</span>
     <span class="regs" id="mode">mode:---</span>
     <span class="hint" id="gamepads">gamepads: detecting&hellip;</span>
@@ -336,8 +336,9 @@
     <code>?prg=programs/hello.prg&amp;org=0800</code>).
     &ldquo;Speed&rdquo; sets the CPU clock (native 1&times; &asymp; 1.57&nbsp;MHz &mdash; the 25.175&nbsp;MHz VGA
     dot clock &divide;&nbsp;16; &ldquo;Max&rdquo; runs as fast as the frame allows).
-    &ldquo;Enable Sound&rdquo; starts browser audio at native 1&times; speed; other speeds pause and flush audio
-    while the emulated sound hardware continues to run.
+    Sound is enabled by default and starts on the first pointer or keyboard interaction;
+    &ldquo;Disable Sound&rdquo; opts out. Other speeds pause and flush audio while the emulated sound
+    hardware continues to run.
     The <strong>Assembler</strong> panel assembles 65C02 source in your browser (the same assembler the
     project uses on the command line) and runs it just like &ldquo;Load&nbsp;.PRG&rdquo; &mdash; pick a sample,
     edit it, <code>Assemble&nbsp;&amp;&nbsp;Run</code> (or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>), and download the
@@ -390,8 +391,9 @@
     let demoDisk = null;
     let audioContext = null;
     let audioNode = null;
-    let soundRequested = false;
+    let soundRequested = true;
     let audioGenerating = false;
+    let audioActivation = null;
     let debuggerController = null;
     const inputQueue = [];
 
@@ -517,6 +519,12 @@
     }
 
     function updateSoundButton() {
+      if (soundButton.disabled) {
+        soundButton.setAttribute("aria-pressed", "false");
+        soundButton.textContent = "Sound Unavailable";
+        soundButton.title = "Web Audio is not supported";
+        return;
+      }
       soundButton.setAttribute("aria-pressed", soundRequested ? "true" : "false");
       if (!soundRequested) {
         soundButton.textContent = "Enable Sound";
@@ -544,7 +552,7 @@
     }
 
     function syncAudioForSpeed() {
-      const shouldGenerate = soundRequested && speedMul === 1;
+      const shouldGenerate = soundRequested && speedMul === 1 && audioNode !== null;
       if (!setAudioGeneration(shouldGenerate)) {
         soundRequested = false;
         setAudioGeneration(false);
@@ -553,17 +561,13 @@
       updateSoundButton();
     }
 
-    async function toggleSound() {
-      if (soundRequested) {
-        soundRequested = false;
-        syncAudioForSpeed();
-        return;
-      }
-
+    async function startSound() {
+      if (!soundRequested) return;
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (!AudioContextClass) {
+        soundRequested = false;
         soundButton.disabled = true;
-        soundButton.textContent = "Sound Unavailable";
+        updateSoundButton();
         statusEl.textContent = "sound unavailable: Web Audio is not supported";
         return;
       }
@@ -574,6 +578,7 @@
           if (!audioContext.audioWorklet) {
             throw new Error("AudioWorklet is not supported");
           }
+          await audioContext.resume();
           await audioContext.audioWorklet.addModule(
             new URL("audio-worklet.js", document.baseURI));
           audioNode = new AudioWorkletNode(audioContext, "badger-audio", {
@@ -582,9 +587,9 @@
             outputChannelCount: [2],
           });
           audioNode.connect(audioContext.destination);
+        } else {
+          await audioContext.resume();
         }
-        await audioContext.resume();
-        soundRequested = true;
         syncAudioForSpeed();
       } catch (error) {
         soundRequested = false;
@@ -598,11 +603,57 @@
           audioContext = null;
           audioNode = null;
         }
+        soundButton.setAttribute("aria-pressed", "false");
         soundButton.textContent = "Sound Unavailable";
+        soundButton.title = "Browser audio could not be started";
         statusEl.textContent = "sound unavailable: " + error.message;
         console.error(error);
       }
     }
+
+    async function activateSound() {
+      if (!soundRequested) return;
+      if (!audioActivation) {
+        audioActivation = startSound().finally(() => {
+          audioActivation = null;
+        });
+      }
+      await audioActivation;
+    }
+
+    function disarmDefaultSoundActivation() {
+      document.removeEventListener("click", activateDefaultSound, true);
+      document.removeEventListener("keydown", activateDefaultSound, true);
+    }
+
+    function activateDefaultSound(event) {
+      if (soundButton.contains(event.target)) return;
+      disarmDefaultSoundActivation();
+      void activateSound();
+    }
+
+    function armDefaultSoundActivation() {
+      document.addEventListener("click", activateDefaultSound, true);
+      document.addEventListener("keydown", activateDefaultSound, true);
+    }
+
+    async function toggleSound() {
+      if (soundRequested) {
+        soundRequested = false;
+        disarmDefaultSoundActivation();
+        syncAudioForSpeed();
+        return;
+      }
+
+      disarmDefaultSoundActivation();
+      soundRequested = true;
+      updateSoundButton();
+      await activateSound();
+    }
+
+    soundButton.addEventListener("click", toggleSound);
+    updateSoundButton();
+    armDefaultSoundActivation();
 
     function frame(timestamp) {
       pollGamepads();
@@ -1294,6 +1345,7 @@
       await loadRom();
       statusEl.textContent = "running";
       canvas.focus();
+      if (audioContext && !audioActivation && soundRequested) syncAudioForSpeed();
 
       BadgerVirtualKeyboard.mount(
         document.getElementById("virtual-keyboard-keys"),
@@ -1324,9 +1376,6 @@
         await loadRom();
         canvas.focus();
       });
-
-      soundButton.addEventListener("click", toggleSound);
-      updateSoundButton();
 
       // Mount the micro-SD card and drop into the ROM's DOS shell. "EC5CG" is
       // the monitor's Go command pointed at $EC5C (the `dos` routine), which

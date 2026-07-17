@@ -36,9 +36,10 @@ identically. Browser-only presentation code stays in the bridge and JavaScript.
   2× / 4× / 8× / Max, with a per-frame wall-clock cap so the page stays responsive.
 - **3RIC audio**: the mono `$C030` system speaker is centered and mixed with two
   AY-3-8910s at `$C400/$C480`, clocked directly from 1.5734375 MHz PHI2 and
-  hard-panned stereo. **Enable Sound** creates the browser audio context after a
-  user gesture. Audio plays at 1× and pauses at other speed settings while the
-  emulated latch and chips continue to advance.
+  hard-panned stereo. Sound is enabled by default; the first pointer or keyboard
+  interaction creates the browser audio context, and **Disable Sound** opts out.
+  Audio plays at 1× and pauses at other speed settings while the emulated latch
+  and chips continue to advance.
 - **In-browser assembler** (**Assemble & Run**): edit 65C02 source in the page,
   assemble it client-side with the very same assembler the CLI uses
   (`codegen/tools/asm6502.mjs`), run the resulting image like **Load .PRG**, and
@@ -122,9 +123,9 @@ the DOS shell — it runs the monitor command `EC5CG` (Go to `$EC5C`, the `dos`
 routine) which mounts the FAT32 image and prints a `>` prompt, then auto-runs
 `DIR`. Type `CAT`, `CD <dir>`, `BRUN <file>`, etc. to load games and programs
 from the card. The **Speed** selector sets the CPU clock (0.5×–8× or Max).
-Press **Enable Sound** to start the system-speaker and stereo Mockingboard mix.
-Browser autoplay rules require this click; sound is intentionally generated only
-at native 1×.
+The system-speaker and stereo Mockingboard mix is enabled by default. Browser
+autoplay rules delay it until the first pointer or keyboard interaction; press
+**Disable Sound** to opt out. Sound is intentionally generated only at native 1×.
 
 > Port 8011 is used because 8000 is taken on this machine.
 
@@ -229,6 +230,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web\test_keyboard.cjs    # monitor echoes typed commands
 & $node web\test_screen_text.cjs # decode the text screen to ASCII
 & $node web\test_emulation_clock.cjs # 1x timing at 60/120/144 Hz displays
+& $node web\test_sound_default.cjs # default-on UI + first-gesture activation
 & $node web\test_audio_pacing.cjs # real WASM PCM rate at 60/144 Hz displays
 & $node web\test_audio_worklet.cjs # prebuffer + bounded PCM queue
 & $node web\test_mockingboard.cjs # mirrors, stereo PCM, 3RIC clock, timer IRQ

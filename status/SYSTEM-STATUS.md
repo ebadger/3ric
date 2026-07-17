@@ -44,6 +44,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_virtual_keyboard.cjs    # touch layout covers symbols/modifiers/key codes
 & $node web/test_screen_text.cjs         # decode the 40x24 text screen to ASCII
 & $node web/test_emulation_clock.cjs     # 1x timing at 60/120/144 Hz displays
+& $node web/test_sound_default.cjs       # default-on UI + first-gesture activation
 & $node web/test_audio_pacing.cjs        # real WASM PCM rate at 60/144 Hz displays
 & $node web/test_audio_worklet.cjs       # prebuffer + bounded PCM queue
 & $node web/test_mockingboard.cjs        # slot-4 mirrors, stereo PCM, 3RIC clock, VIA IRQ

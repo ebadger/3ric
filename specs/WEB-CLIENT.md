@@ -35,7 +35,7 @@ client-side so GitHub Pages can host it as static files.
 - **Compat shims (`web_compat.h`):** map MSVC-isms (`OutputDebugString`, `sprintf_s`,
   `fopen_s`, `_ASSERT`, …) onto Emscripten so `WozLib`/`MockMicroSD` compile unchanged.
 - **UI (`index.html`):** `requestAnimationFrame` driver, physical/virtual keyboard and gamepad
-  input, disk/SD/clock/sound controls (one opt-in control for both system-speaker and
+  input, disk/SD/clock/sound controls (one on-by-default control for both system-speaker and
   Mockingboard output), and the in-browser **Assembler** panel (imports
   `assemble()` from the staged
   `asm6502.mjs`). Honors optional `window.ASSET_BASE` / `?assets=` for CDN/R2 offload and
@@ -142,9 +142,11 @@ client-side so GitHub Pages can host it as static files.
   displays. A wall-clock execution cap keeps the tab responsive; **Max** remains unthrottled
   within that cap. Timing debt is reset after a machine reset, speed change, or hidden-tab
   transition rather than replaying a stale wall-clock interval.
-- Sound is opt-in because browsers require a user gesture to start `AudioContext`. The
-  bridge drains the VM's combined stream: `$C030` is centered mono and the two AYs retain
-  their left/right placement.
+- Sound is requested by default. Because browsers require a user gesture to start
+  `AudioContext`, the first pointer or keyboard interaction activates it; the sound control
+  can opt out before activation or disable/re-enable audio afterward. The bridge drains the
+  VM's combined stream: `$C030` is centered mono and the two AYs retain their left/right
+  placement.
   `audio-worklet.js` consumes transferable Float32 chunks from the bridge without requiring
   `SharedArrayBuffer` or cross-origin isolation. It prebuffers a short bounded lead before
   playback, renders without per-sample allocation, and discards only the oldest queued frames
@@ -299,7 +301,7 @@ on the emulator whether it succeeds, is blocked, or 404s.
 | Support / funding link | Shipped | GitHub Sponsors call-to-action in the `index.html`/`gallery.html` footers; target declared in `.github/FUNDING.yml`. |
 | Adjustable CPU clock | Shipped | frontend-only pacing; native **1× ≈ 1.57 MHz** (25.175 MHz VGA dot clock ÷ 16) default. |
 | `$C030` system speaker audio | Shipped | Centered mono output shares the VM PCM clock and browser sound control with the Mockingboard; covered by `test_system_speaker.cjs`. |
-| Slot-4 Mockingboard audio | Shipped | User-gesture AudioWorklet sink for the combined speaker/dual-AY stereo PCM; sound enabled only at 1x. |
+| Slot-4 Mockingboard audio | Shipped | User-gesture AudioWorklet sink for the combined speaker/dual-AY stereo PCM; defaults enabled, unlocks on the first pointer/keyboard interaction, and generates sound only at 1x. |
 | Headless smoke tests | Shipped | `web/test_*.cjs` (boot/render/input/audio/screen/sd/disk). |
 | GitHub Pages CI deploy | Shipped | on push to `main` touching emulator/web/codegen sources. |
 | Usage analytics (GoatCounter) | Shipped | Cookieless, privacy-first hit counter on all staged pages (`index`/`gallery`/`tutorials`/`story`); async `//gc.zgo.at/count.js` → `3ric.goatcounter.com`; no cookies/PII, no server, no CSP change. Owner dashboard `https://3ric.goatcounter.com` (register the `3ric` code once to claim it). |
