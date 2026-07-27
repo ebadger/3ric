@@ -109,6 +109,15 @@
       "src": "programs/hello.s",
       "description": "A tiny greeting printed via COUT ($FDED), then BRK back to the monitor — the perfect starting point for your first 3RIC program.",
       "tags": ["demo", "serial", "starter"]
+    },
+    {
+      "title": "Bouncing Ball",
+      "author": "scottybe",
+      "authorUrl": "https://github.com/scottybe",
+      "mode": "Serial",
+      "src": "programs/bouncing-ball.s",
+      "description": "Like the Amiga demo but not an illusion - just a bouncing (and rotating) ball rendered in 3D. Best at max speed!",
+      "tags": ["demo", "hi-res", "animation"]
     }
   ]
 }
