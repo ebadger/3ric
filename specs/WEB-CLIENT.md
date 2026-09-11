@@ -104,6 +104,13 @@ client-side so GitHub Pages can host it as static files.
   auto-runs it. Manifest entries carry `title`, `author`/`authorUrl`, `mode`, `description`,
   `tags`, and a run target (a `src` program path or inline `code`, plus optional `org`). Both
   files are committed (not generated), so the deploy workflow stages them into `_site/`.
+- **Matrix Rain sample:** the gallery and the editor's Hi-res sample group both expose
+  `programs/matrix.s`, sourced from `codegen/programs/matrix.s` and staged by the existing
+  `build.ps1` wildcard. Its gallery link opens `index.html?src=programs/matrix.s` and
+  auto-runs the same editable 6502 source; Share and the existing `.PRG`/`.woz` downloads
+  work without a separate loader. The catalog describes Space to pause/resume and Q/Esc
+  to quit. The emulator's ordinary keyboard, CPU, and video paths implement the effect;
+  there is no JavaScript animation overlay.
 - **Story / landing page (`story.html`):** a committed, WASM-free narrative page that tells
   the story of 3ric and the wider hardware-hacking journey (the Atari-1200XL / learning-journey
   origin, the Lode-Runner goal that drove the push toward Apple II *compatibility* — 3ric is an
@@ -310,11 +317,12 @@ on the emulator whether it succeeds, is blocked, or 404s.
 | Mobile virtual keyboard | Shipped | Exact 1983 Apple IIe Figure 2-1 key order/widths below the canvas, minus Reset and both Apple keys; full emulator character set, one-shot Shift/Control, the same strobe-aware `$C000` queue as physical input, and viewport-fitting rows without phone-width horizontal scrolling. |
 | USB/Bluetooth gamepads | Shipped | Two stable player slots through the standard Gamepad API and shared SNES/VIA peripheral; covered by browser-mapping, serial-protocol, and ROM-table tests. |
 | Disk II WOZ boot + micro-SD DOS shell | Shipped | **Boot Disk** / **Mount SD** buttons. |
-| In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; ~11 samples; `?src=`. Sample sources fetched with `cache:"no-cache"` (revalidate) so a new deploy isn't masked by the browser cache. |
+| In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; built-in games, demos, and tutorials; `?src=`. Sample sources fetched with `cache:"no-cache"` (revalidate) so a new deploy isn't masked by the browser cache. |
 | Source debugger | Shipped | Browser-assembled source listing with bank-qualified instruction breakpoints/highlighting, pause/continue, bank-aware step into/over, register and raw-memory inspection, plus lazy ca65 ROM symbol/file:line correlation; covered by `test_debugger.cjs`. |
 | Program downloads (.PRG / .woz) | Shipped | **Download .PRG** (raw bytes) + **Download .woz** (bootable WOZ2 via `wozgen.mjs`, a port of `dsk2woz2`, with a multi-track boot loader); verified by `web/test_woz_download.cjs`. |
 | Share / Remix deep links | Shipped | **Share** button; `?src=programs/<name>.s` for unmodified samples, inline base64url `?code=` otherwise, both carrying `&org=` when the source has no `.org`; remix banner on shared links. |
 | Community Gallery | Shipped | `gallery.html` renders the curated `gallery.json`; one-click **Run & Remix** via `?src=`/`?code=`; PR-based submissions credited by author. |
+| Matrix Rain sample | Shipped | Gallery and Hi-res sample entry for `programs/matrix.s`; source staging, auto-running editor deep links, and exports use the existing pipeline. The Pages build runs `codegen/tools/matrix.test.mjs` against the staged source and real WASM renderer. |
 | Story / landing page | Shipped | `story.html` — narrative of 3ric + the wider hardware-hacking journey; lite-embed YouTube chapters (facade → `youtube-nocookie` iframe on click); a curated real-time **Reddit timeline** (16 `r/beneater`/maker milestone posts, 2020–2025, each linking to its permalink); links to emulator/gallery/tutorials + `r/beneater` / `u/ebadger1973` / 6502.org. Linked from the `index.html`/`gallery.html`/`tutorials.html` headers; staged by the deploy workflow. |
 | 3RIC Studio site identity | Shipped | Published page titles, headers, footers, metadata, gallery attribution, and `llms.txt` use **3RIC Studio**; machine references remain **3RIC**, and compatibility-sensitive URLs/storage keys remain unchanged. |
 | AI-contributor entry point (`llms.txt`) | Shipped | machine-readable 65C02 codegen quickstart + links; published at the site root, staged by the deploy workflow. |

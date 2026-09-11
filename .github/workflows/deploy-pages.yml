@@ -22,6 +22,7 @@ on:
       - 'emulator/AICodeGen/**'
       - 'codegen/tools/asm6502.mjs'
       - 'codegen/tools/wozgen.mjs'
+      - 'codegen/tools/matrix.test.mjs'
       - 'codegen/programs/**'
       - '.github/workflows/deploy-pages.yml'
   # Allow manual runs from the Actions tab.
@@ -75,6 +76,7 @@ jobs:
           node web/test_debugger.cjs
           node web/test_keyboard.cjs
           node web/test_boot.cjs
+          node codegen/tools/matrix.test.mjs
 
       # Stage only what the page needs (not the C++/test sources) as the site root.
       - name: Stage site
