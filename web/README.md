@@ -141,6 +141,48 @@ buttons, either bumper or trigger maps to L/R, and the D-pad or left stick contr
 directions (0.5 deadzone). Games read the normal ROM `PTRIG` and `GAMEPAD1/2`
 interface; JavaScript does not bypass the VIA or ROM scan.
 
+## 3RIC Groovebox
+
+Open **3RIC Groovebox** in the Gallery or the assembler's **Music** sample group.
+It plays an original 16-step demo through both Mockingboard AY chips: bass, lead, and
+arpeggio on the left; kick, snare, and hi-hat on the right. The sequencer, editor,
+envelopes, and controller handling are all 65C02 code in
+`codegen/programs/groovebox.s`, using the actual VIA/AY register protocol.
+
+Keep the emulator at **native 1x**, and click the canvas or press a keyboard key once
+to activate browser audio. A gamepad press alone may expose the controller but does
+not satisfy the browser's audio-activation requirement. Use the controller assigned
+to **P1**. The on-screen controls use **SNES** button names:
+
+| Action | SNES pad | Keyboard |
+|--------|----------|----------|
+| Select voice / step | D-pad or left stick | Arrows or WASD |
+| Enable / disable step | A (east face button) | Space |
+| Raise / lower note | B / Y (south / west) | `+` / `-` (`=` also raises) |
+| Mute / unmute voice | X (north) | M |
+| Cycle Pluck / Soft / Long envelope | Select / Back | I |
+| Stop / restart from step 1 | Start | Return |
+| Decrease / increase tempo | L / R (bumper or trigger) | `[` / `]` |
+| Silence and return to monitor | -- | Q |
+
+The D-pad repeats after a short hold; other pad actions need a fresh press.
+The inverse cell is the editor cursor, the moving `>` is the playback position,
+and the rightmost digit shows each voice's current volume. Muted tracks show `M`.
+Disabled steps retain their notes. Note edits enable a step and clamp to two octaves;
+the hat instead edits noise period `N01`-`N24`. While stopped, enabled and unmuted
+note/step/envelope edits audition the selected voice.
+
+The snare and hat share the right chip's single noise generator, so a hat's noise
+period also affects an overlapping snare. Timing comes from Mockingboard Timer 1,
+not browser animation frames. **Edits live only in emulated RAM:** reloading the
+program restores the demo, and Share / Download export the source program, not a
+live recording of edited steps. Edit `demo_steps` in the source to share a new
+starting pattern. **Download .PRG** can run on 3RIC hardware with
+`BRUN GROOVEBOX.PRG 0800`.
+
+After `web/build.ps1`, run `node codegen/tools/groovebox.test.mjs` from the repository
+root for the focused sequencer, controller, timing, and real-PCM checks.
+
 ## In-browser assembler (Assemble & Run)
 
 The page includes an **Assembler** panel that assembles 65C02 source entirely in
@@ -148,8 +190,8 @@ the browser and runs it in the emulator — no CLI, no server round-trip:
 
 1. **Pick a sample** — hi-res games (STAR SWARM, ROCK STORM, JUNGLE QUEST),
    lo-res games (SNAKE, Conway's Life), text-mode games (Block Drop, Paddles,
-   Brick Buster, 2048, Minefield), or Hello (serial) — or type your own source
-   into the editor.
+   Brick Buster, 2048, Minefield), 3RIC Groovebox (music), or Hello (serial) — or type
+   your own source into the editor.
 2. **Assemble & Run** (button or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>) assembles the
    source and loads the image exactly like **Load .PRG** (`BRUN` on hardware).
    Assembler errors show as `line N: …` and are non-fatal.

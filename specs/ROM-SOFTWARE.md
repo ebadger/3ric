@@ -38,6 +38,38 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   `.s` files (`codegen/programs/hello.s`, `emulator/AICodeGen/<name>/<name>.s`); assembled
   `.prg` images are git-ignored (regenerated). Run on hardware/SD via `BRUN NAME.PRG <org>`,
   or in the browser via **Load .PRG** / **Assemble & Run**.
+- **3RIC Groovebox:** `codegen/programs/groovebox.s` is a standalone `$0800` 65C02
+  music app, not a browser synthesizer. Its 40x24 text interface edits a looping 16-step
+  pattern for six voices: bass, lead, and arpeggio on the left AY; kick, snare, and hi-hat
+  on the right AY. It starts playing an original demo at 120 BPM.
+  - **Sound:** all synthesis uses the existing slot-4 `$C400/$C480` VIA/AY interface,
+    with tone periods calculated for 3RIC's 1.5734375 MHz clock. Each voice has independent
+    step enables, pitches, mute, and a Pluck/Soft/Long software-envelope preset. Kick has
+    a descending pitch sweep; snare mixes tone and noise; hi-hat uses noise. The right
+    chip's noise generator is physically shared: a hat's noise-period setting also
+    colors a simultaneously sounding snare. No independent noise generators are faked.
+  - **Timing:** left-VIA Timer 1 free-runs at approximately 240 Hz. With IRQ masked,
+    `WAI` wakes on its IRQ and the program acknowledges the timer directly; it does not
+    replace the ROM IRQ/NMI vectors or disturb the onboard VIA's gamepad wiring. A
+    fractional accumulator schedules sixteenth notes at 60-180 BPM in 5-BPM increments,
+    independently of drawing and host display refresh. Envelopes and controller
+    debouncing use the same hardware timebase. Detail-field redraws defer to the next
+    input scan when a six-voice trigger uses the current tick's budget.
+  - **Controls:** the first SNES pad uses D-pad to select a voice/step, A to toggle the
+    step, B/Y to raise/lower its note, X to mute the voice, Select to cycle its envelope,
+    Start to stop/restart from step 1, and L/R to decrease/increase BPM. Navigation
+    repeats after a hold delay; other pad actions require a fresh press, including after
+    startup. Opposing D-pad directions cancel. Keyboard equivalents are arrows/WASD,
+    Space, `+`/`-`, M, I, Return, and `[`/`]`; Q silences the chips and returns to the
+    monitor. Gamepad input goes through `PTRIG` and the ROM's `GAMEPAD1` table.
+  - **Editing:** disabling a step retains its pitch. Note editing enables the selected
+    step and clamps to a two-octave range; the hat instead selects noise periods 1-24.
+    Enabled, unmuted edits can be auditioned while stopped. Mute and stop silence voices
+    immediately. The selected cell, playback position, voice activity, BPM, note/noise
+    period, and envelope remain visible. Edits are RAM-only; reloading restores the demo.
+  The raw image ends below its `$6000-$61FF` workspace and uses text page 1, leaving
+  the memory map, ROM, core, bridge, and GAL contracts unchanged. Browser sound still
+  requires native 1x speed and an initial pointer/keyboard gesture.
 - **Jungle Quest — The Sunstone Run:** `emulator/AICodeGen/jungle/jungle.s` is an original
   mixed-hi-res action platformer loaded at `$0800`. Its six flip-screens form one authored
   expedition rather than interchangeable obstacle rooms:
@@ -97,6 +129,11 @@ hazard/item collision → lives/time/glyph/score state → BG restore + sprite r
 page and mixed-mode HUD`; a screen-edge transition loads the next descriptor, while death
 reloads the same descriptor at its checkpoint.
 
+For Groovebox:
+`keyboard or SNES/VIA/ROM scan -> sequencer edits -> Timer 1 IRQ/WAI tick -> step and
+software-envelope state -> real VIA/AY register writes -> shared VM stereo PCM -> host
+audio`; the program separately writes its editor and playhead into text video RAM.
+
 ## Dependencies
 
 - **Upstream:** the assembler/build (cc65/ca65 for the ROM; `CODEGEN.md` for programs).
@@ -112,6 +149,7 @@ reloads the same descriptor at its checkpoint.
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
+| 3RIC Groovebox | Shipped | Six-voice, 16-step Mockingboard sequencer; gamepad/keyboard editing and timer-driven stereo sound. `codegen/tools/groovebox.test.mjs` covers real stereo PCM, all controls, fractional tempo, clean exit, and a dense-step/input deadline below 6,556 cycles. |
 | ROCK STORM vector game | Shipped / cycle-guarded | Opening-wave live frame is 133,262 cycles against a 175,000-cycle limit; both distributed `.prg` copies are generated from `rocks.s`. |
 | SNES gamepad input | Shipped | ROM fills `GAMEPAD1/2` on a `$C070` touch; the shared emulator peripheral follows the same VIA serial protocol, and the browser maps two standard USB/Bluetooth controllers into it. |
 | Jungle Quest — The Sunstone Run | Shipped | Six-screen `$0800` mixed-hi-res platformer; focused suite includes a complete successful expedition. |

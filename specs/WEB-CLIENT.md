@@ -104,6 +104,14 @@ client-side so GitHub Pages can host it as static files.
   auto-runs it. Manifest entries carry `title`, `author`/`authorUrl`, `mode`, `description`,
   `tags`, and a run target (a `src` program path or inline `code`, plus optional `org`). Both
   files are committed (not generated), so the deploy workflow stages them into `_site/`.
+- **Groovebox sample:** the gallery and assembler sample picker expose **3RIC Groovebox**
+  through `?src=programs/groovebox.s`. `build.ps1` stages its canonical
+  `codegen/programs/groovebox.s` through the existing sample-source glob. The sequencer,
+  text UI, controller handling, and synthesis execute on the 65C02; the browser uses
+  only the existing SNES input and Mockingboard audio paths. Its controls are documented
+  in `ROM-SOFTWARE.md` and `web/README.md`, including SNES-versus-standard-controller
+  button positions, native-1x audio, the initial sound-activation gesture, and RAM-only
+  edits. No additional JavaScript audio engine or host-side sequencer is introduced.
 - **Story / landing page (`story.html`):** a committed, WASM-free narrative page that tells
   the story of 3ric and the wider hardware-hacking journey (the Atari-1200XL / learning-journey
   origin, the Lode-Runner goal that drove the push toward Apple II *compatibility* — 3ric is an
@@ -315,6 +323,7 @@ on the emulator whether it succeeds, is blocked, or 404s.
 | Program downloads (.PRG / .woz) | Shipped | **Download .PRG** (raw bytes) + **Download .woz** (bootable WOZ2 via `wozgen.mjs`, a port of `dsk2woz2`, with a multi-track boot loader); verified by `web/test_woz_download.cjs`. |
 | Share / Remix deep links | Shipped | **Share** button; `?src=programs/<name>.s` for unmodified samples, inline base64url `?code=` otherwise, both carrying `&org=` when the source has no `.org`; remix banner on shared links. |
 | Community Gallery | Shipped | `gallery.html` renders the curated `gallery.json`; one-click **Run & Remix** via `?src=`/`?code=`; PR-based submissions credited by author. |
+| 3RIC Groovebox sample | Shipped | Gallery and Music sample-picker entry for the guest-side Mockingboard sequencer; canonical source staged automatically, with focused guest/hardware checks in the Pages build. |
 | Story / landing page | Shipped | `story.html` — narrative of 3ric + the wider hardware-hacking journey; lite-embed YouTube chapters (facade → `youtube-nocookie` iframe on click); a curated real-time **Reddit timeline** (16 `r/beneater`/maker milestone posts, 2020–2025, each linking to its permalink); links to emulator/gallery/tutorials + `r/beneater` / `u/ebadger1973` / 6502.org. Linked from the `index.html`/`gallery.html`/`tutorials.html` headers; staged by the deploy workflow. |
 | 3RIC Studio site identity | Shipped | Published page titles, headers, footers, metadata, gallery attribution, and `llms.txt` use **3RIC Studio**; machine references remain **3RIC**, and compatibility-sensitive URLs/storage keys remain unchanged. |
 | AI-contributor entry point (`llms.txt`) | Shipped | machine-readable 65C02 codegen quickstart + links; published at the site root, staged by the deploy workflow. |
