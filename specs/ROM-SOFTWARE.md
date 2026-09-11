@@ -70,6 +70,23 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   The raw image ends below its `$6000-$61FF` workspace and uses text page 1, leaving
   the memory map, ROM, core, bridge, and GAL contracts unchanged. Browser sound still
   requires native 1x speed and an initial pointer/keyboard gesture.
+- **Matrix Rain:** `codegen/programs/matrix.s` is a self-running `$0800` hi-res demo:
+  - **Presentation:** 40 independent streams of original 3x5 letter/digit glyphs fall
+    through 32 character rows. White heads leave green trails whose last two characters
+    fade with spatial dithering before being erased. The screen starts populated, without
+    a title screen, HUD, or audio.
+  - **Motion:** a nonzero 16-bit LFSR chooses glyphs, initial positions, lengths of 8-23
+    characters, per-column movement periods of 2-5 animation ticks, and restart gaps of
+    4-19 ticks. A stream's entire tail leaves the bottom before that column restarts.
+    Incremental cell updates and a short CPU delay pace the demo for native 1x speed;
+    selecting a faster emulator clock intentionally speeds it up.
+  - **Controls:** Space pauses/resumes both motion and glyph changes; Q or Esc restores
+    page-1 text mode, clears the screen, and returns to the ROM monitor with `BRK`.
+  - **Memory and portability:** the image ends below `$2000`; hi-res page 1 occupies
+    `$2000-$3FFF`, glyph history `$6000-$64FF`, and scanline tables `$6500-$66BF`.
+    Off-screen cells are clipped, never wrapped. All animation, keyboard handling, and
+    artifact-color selection execute on the CPU using existing machine contracts, with
+    no browser-specific drawing or emulator changes.
 - **Jungle Quest — The Sunstone Run:** `emulator/AICodeGen/jungle/jungle.s` is an original
   mixed-hi-res action platformer loaded at `$0800`. Its six flip-screens form one authored
   expedition rather than interchangeable obstacle rooms:
@@ -123,6 +140,12 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
 `badger6502.bin → mapped $D000–$FFFF + banks; reset → monitor → (Disk II C600G | DOS EC5CG |
 BRUN) → user program runs → COUT/screen/serial output`.
 
+For Matrix Rain:
+`gallery/sample source → assembler → $0800 program → $C000/$C010 pause/quit input +
+LFSR/column timers → glyph history and clipped hi-res cell writes → existing native/WASM
+artifact-color renderer → display`; quitting selects text mode and executes ROM `HOME`
+then `BRK`.
+
 For Jungle Quest:
 `keyboard event or SNES poll → movement/jump/duck latches → 8.8 physics → terrain/platform/
 hazard/item collision → lives/time/glyph/score state → BG restore + sprite redraw → hi-res
@@ -150,6 +173,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | 3RIC Groovebox | Shipped | Six-voice, 16-step Mockingboard sequencer; gamepad/keyboard editing and timer-driven stereo sound. `codegen/tools/groovebox.test.mjs` covers real stereo PCM, all controls, fractional tempo, clean exit, and a dense-step/input deadline below 6,556 cycles. |
+| Matrix Rain | Shipped | `codegen/programs/matrix.s`; 1,079-byte `$0800` hi-res demo with staggered green trails, white heads, pause/quit controls, and focused rendering, timing, memory-boundary, and monitor-exit coverage in `codegen/tools/matrix.test.mjs`. |
 | ROCK STORM vector game | Shipped / cycle-guarded | Opening-wave live frame is 133,262 cycles against a 175,000-cycle limit; both distributed `.prg` copies are generated from `rocks.s`. |
 | SNES gamepad input | Shipped | ROM fills `GAMEPAD1/2` on a `$C070` touch; the shared emulator peripheral follows the same VIA serial protocol, and the browser maps two standard USB/Bluetooth controllers into it. |
 | Jungle Quest — The Sunstone Run | Shipped | Six-screen `$0800` mixed-hi-res platformer; focused suite includes a complete successful expedition. |

@@ -188,10 +188,11 @@ root for the focused sequencer, controller, timing, and real-PCM checks.
 The page includes an **Assembler** panel that assembles 65C02 source entirely in
 the browser and runs it in the emulator — no CLI, no server round-trip:
 
-1. **Pick a sample** — hi-res games (STAR SWARM, ROCK STORM, JUNGLE QUEST),
+1. **Pick a sample** — hi-res games/demos (STAR SWARM, ROCK STORM, JUNGLE QUEST, Matrix Rain),
    lo-res games (SNAKE, Conway's Life), text-mode games (Block Drop, Paddles,
    Brick Buster, 2048, Minefield), 3RIC Groovebox (music), or Hello (serial) — or type
    your own source into the editor.
+
 2. **Assemble & Run** (button or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>) assembles the
    source and loads the image exactly like **Load .PRG** (`BRUN` on hardware).
    Assembler errors show as `line N: …` and are non-fatal.
@@ -200,6 +201,12 @@ the browser and runs it in the emulator — no CLI, no server round-trip:
 4. Expand **Debugger** to click instruction rows as breakpoints, pause/continue,
    step into or over an absolute `JSR`, add a breakpoint by address, and inspect
    128 bytes of memory from any hexadecimal address.
+
+**Matrix Rain** is a full-screen falling-character demo written entirely in 6502
+assembly. Open [`?src=programs/matrix.s`](https://ebadger.github.io/3ric/?src=programs/matrix.s)
+at native **1x** speed; **Space** pauses/resumes and **Q** or **Esc** returns to the
+monitor. Its source lives in `codegen/programs/matrix.s` and is also featured in the
+Community Gallery.
 
 Implementation notes:
 

@@ -21,6 +21,15 @@
       "tags": ["demo", "text", "kansasfest", "greeting"]
     },
     {
+      "title": "Matrix Rain",
+      "author": "3RIC Studio",
+      "authorUrl": "https://github.com/ebadger/3ric",
+      "mode": "Hi-res",
+      "src": "programs/matrix.s",
+      "description": "Falling green code with bright heads and fading trails, drawn entirely by the 6502. Runs at native 1x speed; SPACE pauses/resumes, Q or Esc quits.",
+      "tags": ["demo", "hi-res", "matrix", "animation"]
+    },
+    {
       "title": "Swarm",
       "author": "3RIC Studio",
       "authorUrl": "https://github.com/ebadger/3ric",
