@@ -22,6 +22,7 @@ on:
       - 'emulator/AICodeGen/**'
       - 'codegen/tools/asm6502.mjs'
       - 'codegen/tools/wozgen.mjs'
+      - 'codegen/tools/groovebox.test.mjs'
       - 'codegen/tools/matrix.test.mjs'
       - 'codegen/programs/**'
       - '.github/workflows/deploy-pages.yml'
@@ -72,6 +73,7 @@ jobs:
           node web/test_audio_pacing.cjs
           node web/test_mockingboard.cjs
           node web/test_gamepad.cjs
+          node codegen/tools/groovebox.test.mjs
           node web/test_virtual_keyboard.cjs
           node web/test_debugger.cjs
           node web/test_keyboard.cjs

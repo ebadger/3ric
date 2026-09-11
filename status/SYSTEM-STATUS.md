@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-07-16 — ebadger (via Copilot)_
+_Last updated: 2026-09-11 — ebadger (via Copilot)_
 
 ---
 
@@ -50,6 +50,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_mockingboard.cjs        # slot-4 mirrors, stereo PCM, 3RIC clock, VIA IRQ
 & $node web/test_system_speaker.cjs     # $C030 read/write toggles + mixed speaker/AY PCM
 & $node web/test_gamepad.cjs             # browser mapping, VIA serial pads, ROM tables
+& $node codegen\tools\groovebox.test.mjs  # sequencer, real AY audio, gamepad editing, timing
 & $node web/test_debugger.cjs            # breakpoints, stepping, source map, ROM debug lookup
 & $node web/test_sd.cjs                  # mount SD + DIR lists the FAT32 root
 & $node web/test_disk.cjs                # boot a WOZ floppy via C600G into a hi-res title
@@ -94,6 +95,10 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   highlighting for assembled programs, pause/continue, bank-aware step into/over, live
   registers, raw-memory inspection, unconditional arbitrary-PC breakpoints, and lazy ROM
   symbol/source-file:line correlation from `badger6502.dbg`.
+- **3RIC Groovebox:** the Gallery and Music sample group launch a six-voice, 16-step
+  Mockingboard sequencer with gamepad/keyboard editing, 60-180 BPM, and three envelope
+  presets. The 65C02 drives both AY chips through their real VIAs. Use native 1x and
+  click/press a key once for browser audio; edits are RAM-only until encoded in source.
 - **Disk gap:** DOS 3.3 / Quick-DOS and games that chain through an Applesoft auto-run
   greeting don't run — this clone's `$E000` BASIC is generic Microsoft BASIC, not Applesoft.
   Self-booting machine-code disks work.

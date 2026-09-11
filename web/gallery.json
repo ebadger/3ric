@@ -3,6 +3,15 @@
   "_readme": "Community Gallery manifest for 3RIC Studio. Each entry becomes a card on gallery.html with a one-click 'Run & Remix' link into the in-browser editor. To feature your own program: add its .s source under codegen/programs/ (build.ps1 stages every codegen/programs/*.s into web/programs/) and append an entry below, then open a pull request. Fields: title (required), author, authorUrl, mode (Hi-res|Lo-res|Text|Serial), description, tags[]; and a run target of either src ('programs/<name>.s') or an inline code (URL-safe base64 for ?code=), plus an optional org (hex load address, only when the source has no .org directive).",
   "entries": [
     {
+      "title": "3RIC Groovebox",
+      "author": "3RIC Studio",
+      "authorUrl": "https://github.com/ebadger/3ric",
+      "mode": "Text",
+      "src": "programs/groovebox.s",
+      "description": "Six-voice, 16-step stereo groovebox on the real Mockingboard interface. Make beats with a gamepad or keyboard; click once for sound and use native 1x speed.",
+      "tags": ["music", "mockingboard", "gamepad", "creative"]
+    },
+    {
       "title": "Hello, KansasFest 2026",
       "author": "3RIC Studio",
       "authorUrl": "https://github.com/ebadger/3ric",
