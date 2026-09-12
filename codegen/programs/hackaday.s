@@ -68,10 +68,6 @@ glyphline    = $1C
 glyphbits    = $1D
 paint        = $1E
 repeatrow    = $1F
-px           = $20
-py           = $21
-endx         = $22
-endy         = $23
 linedx       = $40
 linedy       = $41
 stepx        = $42
@@ -96,6 +92,11 @@ logobit      = $54
 lastkey      = $55
 linecol      = $56
 linemask     = $57
+; $20-$23 belong to the ROM text window and must survive until HOME on exit.
+px           = $58
+py           = $59
+endx         = $5A
+endy         = $5B
 
 start:
         sei

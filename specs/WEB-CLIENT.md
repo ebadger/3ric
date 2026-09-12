@@ -138,11 +138,11 @@ client-side so GitHub Pages can host it as static files.
   the landing page discoverable. The deploy workflow stages the page and preview.
   Known built-in `?src=` links also select their matching sample option so the editor's
   selection and downloaded filenames identify the program that actually loaded.
-  **Known review issue (deferred):** source/export links ending in `#ide` are followed by
-  canvas autofocus during asynchronous startup. On phone layouts this moves the viewport
-  back toward the emulator instead of leaving the source editor focused. Initial `#ide`
-  navigation must eventually focus/scroll the editor after loading, without changing
-  ordinary Run-link behavior. The owner chose to defer this fix and stop before a PR.
+  Initial links ending in `#ide` focus the source textarea and scroll the editor into
+  view after asynchronous editor initialization (including shared-source assembly/run)
+  finishes. This final focus overrides startup's canvas autofocus. Ordinary Run links
+  retain canvas focus, and later user-initiated Assemble & Run actions still focus the
+  canvas even if the original URL contains `#ide`.
 - **Story / landing page (`story.html`):** a committed, WASM-free narrative page that tells
   the story of 3ric and the wider hardware-hacking journey (the Atari-1200XL / learning-journey
   origin, the Lode-Runner goal that drove the push toward Apple II *compatibility* — 3ric is an
@@ -359,7 +359,7 @@ on the emulator whether it succeeds, is blocked, or 404s.
 | Share / Remix deep links | Shipped | **Share** button; `?src=programs/<name>.s` for unmodified samples, inline base64url `?code=` otherwise, both carrying `&org=` when the source has no `.org`; remix banner on shared links. |
 | Community Gallery | Shipped | `gallery.html` renders the curated `gallery.json`; one-click **Run & Remix** via `?src=`/`?code=`; PR-based submissions credited by author. |
 | 3RIC Groovebox sample | Shipped | Gallery and Music sample-picker entry for the guest-side Mockingboard sequencer; canonical source staged automatically, with focused guest/hardware checks in the Pages build. |
-| Hackaday showcase | Unpublished / review paused | Landing page, real framebuffer still, gallery/editor entry, and exports implemented. The owner deferred the `#ide` autofocus issue and the guest program's monitor-exit blocker; no PR opened. Regenerate the still with `node codegen/tools/hackaday.test.mjs --write-preview` after building/staging the source. |
+| Hackaday showcase | Implemented | Landing page, real framebuffer still, gallery/editor entry, and exports. Initial `#ide` links focus/reveal the editor after loading; ordinary Run links and subsequent Assemble & Run actions retain canvas focus. Regenerate the still with `node codegen/tools/hackaday.test.mjs --write-preview` after building/staging the source. |
 | Matrix Rain sample | Shipped | Gallery and Hi-res sample entry for `programs/matrix.s`; source staging, auto-running editor deep links, and exports use the existing pipeline. The Pages build runs `codegen/tools/matrix.test.mjs` against the staged source and real WASM renderer. |
 | Story / landing page | Shipped | `story.html` — narrative of 3ric + the wider hardware-hacking journey; lite-embed YouTube chapters (facade → `youtube-nocookie` iframe on click); a curated real-time **Reddit timeline** (16 `r/beneater`/maker milestone posts, 2020–2025, each linking to its permalink); links to emulator/gallery/tutorials + `r/beneater` / `u/ebadger1973` / 6502.org. Linked from the `index.html`/`gallery.html`/`tutorials.html` headers; staged by the deploy workflow. |
 | 3RIC Studio site identity | Shipped | Published page titles, headers, footers, metadata, gallery attribution, and `llms.txt` use **3RIC Studio**; machine references remain **3RIC**, and compatibility-sensitive URLs/storage keys remain unchanged. |

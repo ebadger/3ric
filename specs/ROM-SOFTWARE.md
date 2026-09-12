@@ -94,12 +94,11 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   All pixels, musical register writes, sequencing, and input handling execute on the
   65C02 through existing contracts. No ROM, VM, memory-map, platform-ref, or hardware-decoder changes
   are required. A hardware-compatible binary is not a claim of a physical-board test.
-  **Known review blocker (deferred):** the current `px`/`py`/`endx`/`endy` variables
-  reuse `$20-$23`, which the ROM owns as `WNDLFT`/`WNDWDTH`/`WNDTOP`/`WNDBTM`.
-  Q/Esc reaches the serial monitor but calls `HOME` with corrupted window bounds, leaving
-  the visible monitor unusable. Relocate those variables or preserve/restore the window
-  before `HOME`; exit coverage must also verify the visible prompt and a subsequent
-  monitor command. The owner chose to leave this unfixed and stop before opening a PR.
+  The ROM's text-window bounds at `$20-$23` (`WNDLFT`/`WNDWDTH`/`WNDTOP`/`WNDBTM`)
+  remain untouched throughout the demo. Drawing coordinates use `$58-$5B` instead.
+  Q/Esc must restore a usable visible monitor after every scene, not merely produce a
+  serial BRK dump; exit coverage includes the on-screen prompt and a subsequent memory
+  examination command.
 - **Matrix Rain:** `codegen/programs/matrix.s` is a self-running `$0800` hi-res demo:
   - **Presentation:** 40 independent streams of original 3x5 letter/digit glyphs fall
     through 32 character rows. White heads leave green trails whose last two characters
@@ -208,7 +207,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | 3RIC Groovebox | Shipped | Six-voice, 16-step Mockingboard sequencer; gamepad/keyboard editing and timer-driven stereo sound. `codegen/tools/groovebox.test.mjs` covers real stereo PCM, all controls, fractional tempo, clean exit, and a dense-step/input deadline below 6,556 cycles. |
-| Built from Bits | Unpublished / review blocked | 3,460-byte four-scene showcase. Rendering, 63,000-cycle cadence, audio, controls, and WOZ boot are covered; existing exit coverage detects only the serial BRK dump and misses the documented ROM window corruption. Fix deferred by the owner. |
+| Built from Bits | Implemented | 3,460-byte four-scene showcase with rendering, 63,000-cycle cadence, audio, controls, and WOZ boot coverage. ROM window bounds are preserved; Q/Esc from every scene must leave a visible prompt that can execute and display a subsequent monitor command. |
 | Matrix Rain | Shipped | `codegen/programs/matrix.s`; 1,079-byte `$0800` hi-res demo with staggered green trails, white heads, pause/quit controls, and focused rendering, timing, memory-boundary, and monitor-exit coverage in `codegen/tools/matrix.test.mjs`. |
 | ROCK STORM vector game | Shipped / cycle-guarded | Opening-wave live frame is 133,262 cycles against a 175,000-cycle limit; both distributed `.prg` copies are generated from `rocks.s`. |
 | SNES gamepad input | Shipped | ROM fills `GAMEPAD1/2` on a `$C070` touch; the shared emulator peripheral follows the same VIA serial protocol, and the browser maps two standard USB/Bluetooth controllers into it. |

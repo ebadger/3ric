@@ -89,12 +89,9 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   assembler. Use 1x and click the emulator for sound; 1-4 selects scenes, Space pauses,
   M mutes, and Q/Esc exits. The `.PRG` and bootable `.woz` target 3RIC's VIA/sound hardware,
   not an unmodified Apple II; no physical-board test is claimed.
-  **Unpublished branch preview:** the owner stopped before opening a PR and deferred two
-  confirmed review findings. Q/Esc corrupts the ROM's visible text window because the
-  demo reuses `$20-$23` for coordinates; use the emulator's **Reset** to recover.
-  Source/export `#ide` links also finish with canvas focus on phones, so scroll to the
-  editor manually. Details and acceptance criteria are in `ROM-SOFTWARE.md` and
-  `WEB-CLIENT.md`; neither issue has been fixed.
+  Q/Esc preserves the ROM text window and returns to a usable visible monitor.
+  Source/export links ending in `#ide` focus and reveal the editor after loading,
+  including on phones; ordinary Run links retain emulator focus.
 - **Emulator:** boots the unmodified 512 KB ROM to the monitor; text/lo-res/hi-res color
   video; keyboard; two serial SNES pads; ACIA serial; Disk II WOZ boot; micro-SD FAT32 DOS
   shell; `$C030` system speaker centered into the slot-4 dual-AY Mockingboard stereo stream

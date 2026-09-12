@@ -1570,7 +1570,12 @@
 
       // Wire the in-browser assembler / editor (samples, Assemble & Run,
       // download, localStorage autosave, and the ?src= deep link).
-      wireEditor();
+      wireEditor().then(() => {
+        if (location.hash === "#ide") {
+          document.getElementById("src").focus({ preventScroll: true });
+          document.getElementById("ide").scrollIntoView({ block: "start" });
+        }
+      });
 
       // Deep-link loader: ?prg=<url>&org=<hex> loads and runs a raw .PRG the way
       // BRUN would. The URL is relative to this page (e.g. programs/hello.prg)

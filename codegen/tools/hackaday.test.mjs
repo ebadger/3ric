@@ -31,6 +31,7 @@ const originalACR = vm.readBus(S.VIA_ACR);
 const originalIER = vm.readBus(S.VIA_IER);
 const memory = (addr, count) =>
   Buffer.from(Array.from({ length: count }, (_, i) => vm.peek(addr + i)));
+const originalWindow = memory(0x20, 4);
 const hires = () => memory(0x2000, 0x2000);
 const animationState = () => [
   S.SCENE, S.PAUSED, S.MUTED, S.TICK, S.PHASE, S.AGE_LO, S.AGE_HI, S.SCOREPOS,
@@ -63,6 +64,7 @@ function frame() {
   assert.equal(vm.pc(), S.MAIN, "a frame starts at the live loop");
   vm.step();
   const cycles = 6 + runTo(S.MAIN);
+  assert.deepEqual(memory(0x20, 4), originalWindow, "drawing must preserve the ROM text window");
   const samples = vm.drainAudio();
   if (pcm) pcm.push(Float32Array.from(samples));
   return cycles;
@@ -87,6 +89,33 @@ function readAY(base, reg) {
   vm.writeBus(base, 4);
   vm.writeBus(base + 3, 0xff);
   return value;
+}
+
+function assertUsableMonitor(session) {
+  const target = session.vm;
+  const assertPrompt = () => {
+    assert.equal(target.peek(0x24), 1, "cursor is immediately after the monitor prompt");
+    // The ROM's blinking cursor is $60 (backtick) in text RAM.
+    assert.match(session.textScreen()[target.peek(0x25)], /^\*`?$/, "the monitor prompt is visibly usable");
+  };
+  target.runCycles(100_000);
+  assert.deepEqual(
+    Buffer.from(Array.from({ length: 4 }, (_, i) => target.peek(0x20 + i))),
+    originalWindow,
+    "exit preserves the ROM window bounds",
+  );
+  assertPrompt();
+  assert.ok(!session.textScreen().join("\n").includes("SCENE"), "HOME clears the old demo HUD");
+  target.drainOutput();
+  for (const ch of "0800.0803\r") {
+    assert.equal(target.peek(S.KBD) & 0x80, 0, "monitor consumes the previous key");
+    target.keyDown(ch.charCodeAt(0));
+    target.runCycles(80_000);
+  }
+  const expected = `0800- ${Array.from(bytes.subarray(0, 4), b => b.toString(16).toUpperCase().padStart(2, "0")).join(" ")}`;
+  assert.ok(target.drainOutput().includes(expected), "monitor executes a memory examination command");
+  assert.ok(session.textScreen().some(row => row.includes(expected)), "the command result is visible on screen");
+  assertPrompt();
 }
 
 // PNG is only a lossless container around renderFrame(), not a second renderer.
@@ -124,6 +153,7 @@ assert.equal(vm.mixed(), 1);
 assert.equal(vm.gfxPage(), 0);
 assert.equal(vm.readBus(S.VIA_ACR), originalACR & ~0x20);
 assert.equal(vm.readBus(S.VIA_IER), originalIER & ~0x20);
+assert.deepEqual(memory(0x20, 4), originalWindow, "startup preserves the ROM text window");
 assert.match(s.textScreen()[20], /01 SIGNAL/);
 for (let y = 0; y < 192; y++) {
   assert.equal(vm.peek(S.ROWL + y) | (vm.peek(S.ROWH + y) << 8), haddr(y));
@@ -292,20 +322,29 @@ key("Z");
 assert.equal(vm.peek(S.SCENE), 3, "unknown input is consumed without changing scenes");
 console.log("PASS actual stereo PCM, AY readback, mute, pause, scene controls, and keyboard acknowledgement");
 
-vm.keyDown(0x1b);
-const exit = s.run({ org: S.MAIN, maxCycles: 1_000_000 });
-assert.equal(exit.halt, "brk-monitor");
-assert.equal(vm.textMode(), 1);
-assert.equal(vm.mixed(), 0);
-assert.equal(vm.gfxPage(), 0);
-assert.equal(vm.readBus(S.VIA_ACR), originalACR);
-assert.equal(vm.readBus(S.VIA_IER), originalIER);
-for (const base of [0xc400, 0xc480]) {
-  for (let reg = 8; reg <= 10; reg++) assert.equal(readAY(base, reg), 0);
+for (let scene = 0; scene < 4; scene++) {
+  for (const exitKey of [0x1b, "Q".charCodeAt(0)]) {
+    key(String(scene + 1));
+    for (let i = 0; i < 3; i++) frame();
+    vm.keyDown(exitKey);
+    const exit = s.run({ org: S.MAIN, maxCycles: 1_000_000 });
+    assert.equal(exit.halt, "brk-monitor");
+    assert.equal(vm.textMode(), 1);
+    assert.equal(vm.mixed(), 0);
+    assert.equal(vm.gfxPage(), 0);
+    assert.equal(vm.readBus(S.VIA_ACR), originalACR);
+    assert.equal(vm.readBus(S.VIA_IER), originalIER);
+    for (const base of [0xc400, 0xc480]) {
+      for (let reg = 8; reg <= 10; reg++) assert.equal(readAY(base, reg), 0);
+    }
+    assertUsableMonitor(s);
+    vm.setPC(S.START);
+    runTo(S.MAIN);
+  }
 }
 vm.disableAudio();
 vm.delete();
-console.log("PASS Escape returns to the real ROM monitor with restored VIA configuration and silent AYs");
+console.log("PASS Q/Esc from all four scenes: visible prompt, subsequent commands, restored VIA, silent AYs");
 
 const diskSession = await boot();
 const diskVM = diskSession.vm;
@@ -325,6 +364,7 @@ diskVM.clearBreakpoints();
 diskVM.keyDown("Q".charCodeAt(0));
 const diskExit = diskSession.run({ org: S.MAIN, maxCycles: 1_000_000 });
 assert.equal(diskExit.halt, "brk-monitor", "Q also exits a disk-booted demo");
+assertUsableMonitor(diskSession);
 diskVM.delete();
 console.log("PASS hardware-path WOZ boot and Q exit");
 

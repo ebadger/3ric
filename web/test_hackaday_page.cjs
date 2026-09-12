@@ -2,6 +2,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { runInNewContext } = require("node:vm");
 
 const html = fs.readFileSync(path.join(__dirname, "hackaday.html"), "utf8");
 const pageUrl = "https://ebadger.github.io/3ric/hackaday.html";
@@ -209,3 +210,38 @@ assert.doesNotMatch(css, /@import|@keyframes|\b(?:animation|transition)\s*:|\bur
   "the landing page must stay still and use no external styles, fonts, or decorative images");
 
 console.log("PASS: Hackaday page metadata, real-demo links, framebuffer still, controls, hardware caveats, and relative assets");
+
+async function testInitialEditorFocus() {
+  const index = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
+  const start = index.indexOf("wireEditor().then(");
+  const end = index.indexOf("// Deep-link loader:", start);
+  assert(start !== -1 && end > start, "initial editor focus must be wired after editor initialization");
+  const bootstrap = index.slice(start, end);
+  for (const hash of ["#ide", "", "#screen"]) {
+    const actions = [];
+    let initialized;
+    const ready = new Promise(resolve => { initialized = resolve; });
+    const done = runInNewContext(bootstrap, {
+      location: { hash },
+      wireEditor: () => ready,
+      document: {
+        getElementById(id) {
+          return {
+            focus(options) { actions.push(`${id}:focus:${options.preventScroll}`); },
+            scrollIntoView(options) { actions.push(`${id}:scroll:${options.block}`); },
+          };
+        },
+      },
+    });
+    assert.deepEqual(actions, [], "focus must wait for asynchronous source loading and auto-run");
+    initialized();
+    await done;
+    assert.deepEqual(actions, hash === "#ide" ? ["src:focus:true", "ide:scroll:start"] : [],
+      "only editor-targeted navigation overrides the canvas focus");
+  }
+  console.log("PASS: editor-targeted links focus and reveal source after initialization; Run links keep canvas focus");
+}
+testInitialEditorFocus().catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});
