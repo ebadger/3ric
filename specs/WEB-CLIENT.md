@@ -126,9 +126,11 @@ client-side so GitHub Pages can host it as static files.
   loader rather than a second emulator or an iframe-specific bridge. A clearly labeled
   still at `media/hackaday-preview.png` is captured from the actual WASM framebuffer.
   The page explains the 65C02, hardware-generated VGA/artifact color, shared RAM timing,
-  GAL decode, and modern I/O; links to schematics, assembly, the build series, and the
+  74-series address decode, and modern I/O; links to schematics, assembly, the build series, and the
   existing `.PRG` / `.woz` export controls; and distinguishes emulator-demonstrated
-  features from in-progress physical hardware. It makes no claim of Hackaday endorsement.
+  features from physical-board measurements. The final build uses 74-series logic rather
+  than the intermediate 22V10 design; the showcase does not promote the historical GAL
+  files as current hardware. It makes no claim of Hackaday endorsement.
   It documents all four scenes and keyboard controls, browser sound's first-gesture/1x
   requirement, and the option to pause the demo. Static preview content never animates
   or auto-starts sound. The normal editor and gallery expose the same source. All local

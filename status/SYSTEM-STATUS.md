@@ -116,5 +116,7 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   counter (`//gc.zgo.at/count.js` → `https://3ric.goatcounter.com/count`); no cookies, no PII,
   no server, and the site is unaffected if it is blocked. Totals live on the owner dashboard at
   <https://3ric.goatcounter.com> — **register the `3ric` code there once to claim the stats.**
-- **Hardware:** schematics, PCB, and 22V10 GAL logic are in progress and tracked through the
-  YouTube build series; the emulator is the reference implementation of the target machine.
+- **Hardware:** the final build uses 74-series logic chips for address decoding.
+  `22v10/` contains intermediate GAL experiments retained as history, not final-build
+  components. The physical build is documented in the YouTube series; the emulator
+  models the same machine.

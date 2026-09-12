@@ -68,7 +68,7 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     immediately. The selected cell, playback position, voice activity, BPM, note/noise
     period, and envelope remain visible. Edits are RAM-only; reloading restores the demo.
   The raw image ends below its `$6000-$61FF` workspace and uses text page 1, leaving
-  the memory map, ROM, core, bridge, and GAL contracts unchanged. Browser sound still
+  the memory map, ROM, core, bridge, and hardware-decoder contracts unchanged. Browser sound still
   requires native 1x speed and an initial pointer/keyboard gesture.
 - **Built from Bits (Hackaday showcase):** `codegen/programs/hackaday.s` is an original,
   self-running `$0800` 65C02 showreel, not a browser animation or a prerecorded video.
@@ -92,7 +92,7 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     `$2000`; graphics use page 1 (`$2000-$3FFF`) and the normal text/lo-res page
     (`$0400-$07FF`); lookup tables and working data live in `$6000-$67FF`.
   All pixels, musical register writes, sequencing, and input handling execute on the
-  65C02 through existing contracts. No ROM, VM, memory-map, platform-ref, or GAL changes
+  65C02 through existing contracts. No ROM, VM, memory-map, platform-ref, or hardware-decoder changes
   are required. A hardware-compatible binary is not a claim of a physical-board test.
 - **Matrix Rain:** `codegen/programs/matrix.s` is a self-running `$0800` hi-res demo:
   - **Presentation:** 40 independent streams of original 3x5 letter/digit glyphs fall

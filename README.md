@@ -41,7 +41,7 @@ WebAssembly. Click the canvas and start typing at the monitor `*` prompt. Then:
 ## What is 3ric?
 
 3ric is a personal *learn-by-building* project: an 8-bit computer designed at the chip level
-— KiCad schematics, a custom PCB, and 22V10 GAL address-decode logic — paired with a C++
+— KiCad schematics, a custom PCB, and 74-series address-decode logic — paired with a C++
 emulator of the exact same machine. The emulator compiles to WebAssembly, so the **same VM
 core** that models the real hardware also boots the unmodified 512 KB ROM in any browser.
 The whole journey is documented in a [YouTube build series][youtube].
@@ -105,7 +105,7 @@ flowchart TD
     WASM["Emscripten bridge → WebAssembly"]
     BROWSER["Browser client (index.html)<br/>→ GitHub Pages"]
     CODEGEN["Codegen<br/>(asm6502 + headless harness)"]
-    HW["Hardware<br/>(KiCad · 22V10 GAL · logisim)"]
+    HW["Hardware<br/>(KiCad · 74-series logic · logisim)"]
 
     ROM --> VM
     VM --> NATIVE
@@ -115,7 +115,7 @@ flowchart TD
 ```
 
 The **memory map is a shared contract**: `emulator/Badger6502VMLib/vm.h` is mirrored by the
-22V10 GAL decode, the web bridge, and the codegen platform reference. The architecture and
+hardware decode schematic, the web bridge, and the codegen platform reference. The architecture and
 each layer are documented in [`specs/`](specs/) — start with
 [`specs/SYSTEM.md`](specs/SYSTEM.md).
 
@@ -129,7 +129,8 @@ each layer are documented in [`specs/`](specs/) — start with
 | [`specs/`](specs/) | Layer specifications (the source of truth — specs before code) |
 | [`status/`](status/) | How to build/run/verify; current state and known gaps |
 | [`docs/`](docs/) | Mission, workflow rules & learnings, roles |
-| [`kicad/`](kicad/), [`22v10/`](22v10/), [`logisim/`](logisim/), [`diylayout/`](diylayout/), [`schematic_pdf/`](schematic_pdf/) | Hardware: schematics, PCB, GAL address decode, digital-logic models |
+| [`kicad/`](kicad/), [`logisim/`](logisim/), [`diylayout/`](diylayout/), [`schematic_pdf/`](schematic_pdf/) | Hardware: schematics, PCB, 74-series address decode, digital-logic models |
+| [`22v10/`](22v10/) | Historical intermediate GAL experiments; replaced by 74-series logic in the final build |
 | [`romgen/`](romgen/), [`scripts/`](scripts/), [`test/`](test/) | ROM assembly tooling, dev/CI scripts, tests |
 
 ## Known gaps
@@ -137,8 +138,6 @@ each layer are documented in [`specs/`](specs/) — start with
 - **DOS 3.3 / Applesoft disks don't run.** This clone's `$E000` BASIC is generic Microsoft
   BASIC, not Applesoft, so games that chain through an Applesoft auto-run greeting won't
   boot. Self-booting machine-code disks work.
-- **Hardware is in progress** — schematics, PCB, and the 22V10 GAL logic are being built and
-  documented in the video series; the emulator is the reference implementation.
 
 ## Contributing
 

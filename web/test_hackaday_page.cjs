@@ -132,12 +132,14 @@ assert.match(bodyText, /virtual keyboard/);
 assert.match(bodyText, /hardware design generates VGA with custom logic/);
 assert.match(bodyText, /artifact color in logic circuits/);
 assert.match(bodyText, /CPU and video hardware share RAM.*take turns on the bus/);
-assert.match(bodyText, /22V10 GAL address-decode logic/);
+assert.match(bodyText, /final build uses 74-series logic chips to decode addresses/);
+assert.doesNotMatch(html, /\b(?:22v10|GAL)\b/i,
+  "the showcase must describe the final logic-chip build, not intermediate GAL experiments");
 assert.match(bodyText, /same C\+\+ VM core.*native emulator.*WebAssembly/);
 assert.match(bodyText, /512 KB ROM/);
 assert.match(bodyText, /not a claim of blanket Apple II compatibility/);
 assert.match(bodyText, /demonstrate emulator behavior, not a fresh bench measurement/);
-assert.match(bodyText, /hardware designs, PCB, and GAL logic are still evolving/);
+assert.match(bodyText, /targets the final 3RIC hardware design/);
 assert.match(bodyText, /no physical-board testing is claimed for this demo/);
 assert.match(bodyText, /slot-4 dual-AY Mockingboard/);
 assert.match(bodyText, /visuals do not require an audio expansion on hardware/);
@@ -159,7 +161,6 @@ const expectedLinks = [
   "tutorials.html",
   "https://github.com/ebadger/3ric",
   "https://github.com/ebadger/3ric/tree/main/kicad",
-  "https://github.com/ebadger/3ric/tree/main/22v10",
   "https://github.com/ebadger/3ric/tree/main/schematic_pdf",
   "https://github.com/ebadger/3ric/blob/main/codegen/programs/hackaday.s",
   "https://www.youtube.com/playlist?list=PLbYLt1iawSBLK4w46Kn7cxxuoeVt7Zepq",
