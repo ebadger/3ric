@@ -70,6 +70,30 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   The raw image ends below its `$6000-$61FF` workspace and uses text page 1, leaving
   the memory map, ROM, core, bridge, and GAL contracts unchanged. Browser sound still
   requires native 1x speed and an initial pointer/keyboard gesture.
+- **Built from Bits (Hackaday showcase):** `codegen/programs/hackaday.s` is an original,
+  self-running `$0800` 65C02 showreel, not a browser animation or a prerecorded video.
+  - **Four scenes:** a hi-res 3RIC title and moving starfield; a 16-color lo-res plasma;
+    a software-rasterized rotating wireframe cube; and a six-channel musical sequencer
+    display. The bottom four text rows explain the active hardware technique and controls.
+    Scene changes are automatic, with a complete loop of approximately one minute at 1x.
+  - **Sound:** an original looping composition programs the two slot-4 AY chips through
+    their 6522 ports at `$C400` / `$C480`. Six pitch/level indicators reflect the values
+    sent to the chips, not fabricated audio measurements. Music is optional on physical
+    machines without the sound expansion; video timing never depends on its presence.
+  - **Controls:** 1-4 selects a scene; N/Right advances and Left goes back; Space freezes
+    animation and the score and silences sound; M toggles music without freezing the demo.
+    Q/Esc silences both AYs, restores page-1 text mode, and returns to the monitor with
+    `BRK`. These are ordinary `$C000` / `$C010` keyboard inputs, including the browser's
+    existing virtual keyboard.
+  - **Timing and memory:** the onboard VIA at `$C200` reserves Timer 2 for a polled
+    approximately 25 Hz cadence. Its Timer-2 interrupt is disabled without disabling
+    unrelated VIA interrupts; previous ACR/IER settings are restored on exit. Drawing
+    must fit within a 63,000-cycle steady-state frame budget. The image ends below
+    `$2000`; graphics use page 1 (`$2000-$3FFF`) and the normal text/lo-res page
+    (`$0400-$07FF`); lookup tables and working data live in `$6000-$67FF`.
+  All pixels, musical register writes, sequencing, and input handling execute on the
+  65C02 through existing contracts. No ROM, VM, memory-map, platform-ref, or GAL changes
+  are required. A hardware-compatible binary is not a claim of a physical-board test.
 - **Matrix Rain:** `codegen/programs/matrix.s` is a self-running `$0800` hi-res demo:
   - **Presentation:** 40 independent streams of original 3x5 letter/digit glyphs fall
     through 32 character rows. White heads leave green trails whose last two characters
@@ -146,6 +170,11 @@ LFSR/column timers → glyph history and clipped hi-res cell writes → existing
 artifact-color renderer → display`; quitting selects text mode and executes ROM `HOME`
 then `BRK`.
 
+For Built from Bits:
+`Hackaday landing page / gallery / sample -> existing browser assembler or BRUN -> $0800
+program -> keyboard + polled VIA Timer 2 -> scene/score state -> text/lo-res/hi-res RAM
+and slot-4 VIA/AY writes -> shared native/WASM video and audio outputs`.
+
 For Jungle Quest:
 `keyboard event or SNES poll → movement/jump/duck latches → 8.8 physics → terrain/platform/
 hazard/item collision → lives/time/glyph/score state → BG restore + sprite redraw → hi-res
@@ -173,6 +202,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | 3RIC Groovebox | Shipped | Six-voice, 16-step Mockingboard sequencer; gamepad/keyboard editing and timer-driven stereo sound. `codegen/tools/groovebox.test.mjs` covers real stereo PCM, all controls, fractional tempo, clean exit, and a dense-step/input deadline below 6,556 cycles. |
+| Built from Bits | Shipped | `codegen/programs/hackaday.s`; 3,460-byte four-scene graphics/music showcase. `codegen/tools/hackaday.test.mjs` covers every frame of the attract loop within 63,000 cycles, real rendering/stereo PCM, AY register readback, controls, memory boundaries, monitor exit, and exported WOZ boot through the ROM. |
 | Matrix Rain | Shipped | `codegen/programs/matrix.s`; 1,079-byte `$0800` hi-res demo with staggered green trails, white heads, pause/quit controls, and focused rendering, timing, memory-boundary, and monitor-exit coverage in `codegen/tools/matrix.test.mjs`. |
 | ROCK STORM vector game | Shipped / cycle-guarded | Opening-wave live frame is 133,262 cycles against a 175,000-cycle limit; both distributed `.prg` copies are generated from `rocks.s`. |
 | SNES gamepad input | Shipped | ROM fills `GAMEPAD1/2` on a `$C070` touch; the shared emulator peripheral follows the same VIA serial protocol, and the browser maps two standard USB/Bluetooth controllers into it. |

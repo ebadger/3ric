@@ -209,6 +209,7 @@
   <header>
     <h1>3RIC&nbsp;Studio&nbsp;&mdash;&nbsp;65C02&nbsp;Emulator&nbsp;&amp;&nbsp;Editor</h1>
     <a class="nav" href="story.html" title="The story of 3RIC + the build series">&#9654;&nbsp;Story</a>
+    <a class="nav" href="hackaday.html" title="Built from Bits: a real 65C02 graphics and music showcase">&#9654;&nbsp;Built from Bits</a>
     <a class="nav" href="tutorials.html" title="Learn 65C02 game programming step by step">&#9654;&nbsp;Tutorials</a>
     <a class="nav" href="gallery.html" title="Browse the community program gallery">&#9654;&nbsp;Gallery</a>
     <button id="reset">Reset</button>
@@ -261,6 +262,9 @@
           </optgroup>
           <optgroup label="Music">
             <option value="groovebox">3RIC GROOVEBOX</option>
+          </optgroup>
+          <optgroup label="Showcase">
+            <option value="hackaday">Built from Bits (Hackaday demo)</option>
           </optgroup>
           <optgroup label="Hi-res">
             <option value="swarm">STAR SWARM</option>
@@ -1427,7 +1431,12 @@
           if (!resp.ok) throw new Error(`${resp.status}`);
           srcEl.value = await resp.text();
           const m = /^programs\/([\w-]+)\.s$/.exec(srcUrl);
-          if (m) loadedRef = { name: m[1], text: srcEl.value };
+          if (m) {
+            loadedRef = { name: m[1], text: srcEl.value };
+            if ([...sampleEl.options].some(option => option.value === m[1])) {
+              sampleEl.value = m[1];
+            }
+          }
           const srcOrg = params0.get("org");
           if (srcOrg && !hasOrg(srcEl.value)) addrEl.value = srcOrg;
           showRemix();

@@ -19,6 +19,14 @@
 
 ## ▶ Try it now — no install, no account
 
+**[Built from Bits: the Hackaday showcase](https://ebadger.github.io/3ric/hackaday.html)**
+is a one-minute tour of the machine: a hi-res starfield, 16-color plasma, a rotating
+wireframe, and an original six-voice stereo chiptune, all running as real 65C02 code.
+[Run and remix the demo](https://ebadger.github.io/3ric/index.html?src=programs/hackaday.s)
+at **1x**, then click the emulator for sound. Use **1-4** for scenes, **Space** to pause,
+**M** to mute, and **Q/Esc** to return to the monitor. Source and `.PRG` / `.woz`
+exports are available in the editor; the program targets 3RIC, not an unmodified Apple II.
+
 **<https://ebadger.github.io/3ric/>** runs the *entire machine* client-side via
 WebAssembly. Click the canvas and start typing at the monitor `*` prompt. Then:
 

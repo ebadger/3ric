@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Built from Bits — 3RIC Studio</title>
+  <meta name="application-name" content="3RIC Studio" />
+  <meta name="description" content="Meet 3RIC, an original 65C02 computer built from scratch. Run and remix a real assembly graphics-and-music demo, then explore the schematics and build story." />
+  <link rel="canonical" href="https://ebadger.github.io/3ric/hackaday.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="3RIC Studio" />
+  <meta property="og:title" content="Built from Bits — A 65C02 computer from scratch" />
+  <meta property="og:description" content="Custom video logic. A real 65C02 program. An entire computer to explore in your browser. Run Built from Bits, inspect its assembly, and follow the 3RIC hardware build." />
+  <meta property="og:url" content="https://ebadger.github.io/3ric/hackaday.html" />
+  <meta property="og:image" content="https://ebadger.github.io/3ric/media/hackaday-preview.png" />
+  <meta property="og:image:width" content="320" />
+  <meta property="og:image:height" content="384" />
+  <meta property="og:image:alt" content="A still from the Built from Bits demo captured from the actual 3RIC emulator framebuffer." />
+  <!-- Privacy-first, cookieless analytics; the page works identically if blocked. -->
+  <script data-goatcounter="https://3ric.goatcounter.com/count"
+          async src="//gc.zgo.at/count.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0e0c;
+      --panel: #121913;
+      --ink: #f2efdf;
+      --muted: #bac2b6;
+      --green: #70f696;
+      --copper: #e6a67a;
+      --amber: #ffcc66;
+      --rule: #3b493f;
+      --mono: "Cascadia Code", Consolas, ui-monospace, monospace;
+      --gutter: clamp(1.125rem, 4vw, 3rem);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-padding-top: 2rem; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 1rem;
+      line-height: 1.65;
+    }
+    a {
+      color: var(--green);
+      text-decoration-thickness: .08em;
+      text-underline-offset: .2em;
+    }
+    a:hover { color: var(--amber); }
+    :focus-visible { outline: 3px solid var(--amber); outline-offset: 5px; }
+    p { margin: 0 0 1rem; }
+    h1, h2, h3 { text-wrap: balance; }
+    h2 {
+      margin: 0;
+      font-size: clamp(2rem, 4vw, 3.1rem);
+      font-weight: 650;
+      letter-spacing: -.045em;
+      line-height: 1.12;
+    }
+    h3 { margin: 0 0 .65rem; font-size: 1.3rem; line-height: 1.25; font-weight: 650; }
+    code, kbd { font-family: var(--mono); }
+    code { color: var(--green); font-size: .88em; overflow-wrap: anywhere; }
+    .wrap { width: min(76rem, calc(100% - 2 * var(--gutter))); margin-inline: auto; }
+    .eyebrow {
+      margin: 0 0 1.25rem;
+      color: var(--copper);
+      font-family: var(--mono);
+      font-size: .7rem;
+      font-weight: 600;
+      letter-spacing: .13em;
+      line-height: 1.6;
+      text-transform: uppercase;
+    }
+    .skip-link {
+      position: absolute;
+      top: 1rem;
+      left: var(--gutter);
+      z-index: 10;
+      padding: .7rem 1rem;
+      background: var(--ink);
+      color: var(--bg);
+      transform: translateY(-200%);
+    }
+    .skip-link:focus { transform: none; color: var(--bg); }
+    .site-header { border-bottom: 1px solid var(--rule); }
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem 2rem;
+      padding-block: 1.25rem;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: baseline;
+      gap: .65rem;
+      color: var(--ink);
+      font-family: var(--mono);
+      font-size: 1.3rem;
+      font-weight: 700;
+      letter-spacing: -.04em;
+      text-decoration: none;
+    }
+    .brand span { color: var(--green); font-size: .8rem; font-weight: 500; letter-spacing: .02em; }
+    .nav-links, .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem 1.5rem;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .nav-links a {
+      display: inline-block;
+      padding-block: .4rem;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: .75rem;
+      text-decoration: none;
+    }
+    .nav-links a:hover { color: var(--green); text-decoration: underline; }
+    .hero { padding-top: clamp(3rem, 6vw, 5.25rem); }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+      align-items: center;
+      gap: clamp(2rem, 5vw, 4.5rem);
+    }
+    h1 {
+      margin: 0 0 1.8rem;
+      font-size: clamp(3.6rem, 7.7vw, 6.4rem);
+      font-weight: 750;
+      letter-spacing: -.065em;
+      line-height: .98;
+    }
+    h1 span { display: block; }
+    h1 em { color: var(--copper); font-style: normal; }
+    .lede { max-width: 42ch; color: var(--muted); font-size: 1.15rem; line-height: 1.7; }
+    .lede strong { color: var(--ink); font-weight: 600; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1.8rem 0 1rem; }
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      min-height: 3rem;
+      padding: .75rem 1.1rem;
+      border: 1px solid #899680;
+      border-radius: 2px;
+      color: var(--ink);
+      font-size: .9rem;
+      font-weight: 650;
+      line-height: 1.4;
+      text-align: center;
+      text-decoration: none;
+    }
+    .button:hover { background: var(--panel); color: var(--amber); border-color: var(--amber); }
+    .button-primary { background: var(--green); border-color: var(--green); color: var(--bg); }
+    .button-primary:hover { background: var(--amber); color: var(--bg); }
+    .microcopy { color: var(--muted); font-size: .8rem; }
+    .instrument {
+      width: 100%;
+      max-width: 42rem;
+      justify-self: end;
+      margin: 0;
+      padding: clamp(.8rem, 2vw, 1.4rem);
+      background: var(--panel);
+      border: 1px solid var(--rule);
+      border-radius: 3px;
+      box-shadow: .6rem .6rem 0 #060907;
+    }
+    .instrument-label {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: .4rem 1rem;
+      margin-bottom: .9rem;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: .64rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .instrument-label span:last-child { color: var(--green); }
+    .screen { width: 100%; aspect-ratio: 4 / 3; background: #000; outline: 1px solid var(--rule); }
+    /* The framebuffer has non-square pixels: preserve the full image, not its storage ratio. */
+    .screen img { display: block; width: 100%; height: 100%; object-fit: fill; image-rendering: pixelated; }
+    figcaption { margin-top: 1rem; color: var(--muted); font-size: .75rem; line-height: 1.65; }
+    figcaption strong { display: block; margin-bottom: .2rem; color: var(--ink); font-weight: 600; }
+    .machine-specs {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin: 3.5rem 0 0;
+      padding-block: 1.5rem;
+      border-block: 1px solid var(--rule);
+    }
+    .machine-specs div { min-width: 0; padding-inline: 1.5rem; border-left: 1px solid var(--rule); }
+    .machine-specs div:first-child { padding-left: 0; border-left: 0; }
+    .machine-specs dt {
+      margin-bottom: .4rem;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: .65rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .machine-specs dd { margin: 0; font-family: var(--mono); font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+    .section { padding-block: clamp(3.5rem, 6vw, 5.5rem); border-bottom: 1px solid var(--rule); }
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+      align-items: end;
+      gap: 1.5rem 4rem;
+    }
+    .section-intro { max-width: 57ch; margin: 0; color: var(--muted); }
+    .scene-list {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 2rem;
+      list-style: none;
+      margin: 2.75rem 0 1.75rem;
+      padding: 0;
+    }
+    .scene-list li { padding-top: 1rem; border-top: 2px solid var(--rule); }
+    .scene-number { color: var(--copper); font-family: var(--mono); font-size: .8rem; }
+    .scene-list h3 { margin: .8rem 0 .5rem; font-size: 1.5rem; }
+    .scene-list p { margin: .75rem 0 0; color: var(--muted); font-size: .92rem; }
+    .scene-mode { color: var(--green); font-family: var(--mono); font-size: .65rem; text-transform: uppercase; letter-spacing: .04em; }
+    .execution-note { max-width: 80ch; margin: 0; color: var(--muted); font-size: .85rem; }
+    .execution-note strong { color: var(--ink); font-weight: 600; }
+    .control-layout, .remix-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+      gap: 2.5rem 5rem;
+    }
+    .control-copy h2 { margin-bottom: 1.5rem; }
+    .control-copy p { color: var(--muted); }
+    .control-copy strong { color: var(--ink); font-weight: 600; }
+    .audio-note { margin-top: 1.75rem; padding-left: 1.25rem; border-left: 2px solid var(--green); }
+    .audio-note h3 { font-size: 1rem; }
+    .audio-note p { margin: 0; font-size: .92rem; }
+    .controls { margin: 0; border-top: 1px solid var(--rule); }
+    .controls > div {
+      display: grid;
+      grid-template-columns: minmax(7.5rem, .55fr) minmax(0, 1fr);
+      align-items: start;
+      gap: 1rem;
+      padding-block: 1.1rem;
+      border-bottom: 1px solid var(--rule);
+    }
+    .controls dt { display: flex; align-items: baseline; flex-wrap: wrap; gap: .3rem; }
+    .controls dd { margin: 0; color: var(--muted); font-size: .9rem; }
+    kbd {
+      display: inline-block;
+      padding: .12rem .4rem;
+      border: 1px solid #71806e;
+      border-bottom-width: 2px;
+      border-radius: 3px;
+      color: var(--ink);
+      font-size: .77rem;
+      line-height: 1.5;
+    }
+    .bench-notes {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0 4rem;
+      margin-top: 2.5rem;
+    }
+    .bench-note { padding-block: 1.75rem; border-top: 1px solid var(--rule); }
+    .bench-note .eyebrow { margin-bottom: .8rem; font-size: .65rem; }
+    .bench-note p:last-child { max-width: 58ch; margin: 0; color: var(--muted); font-size: .95rem; }
+    .io-note { margin: .5rem 0 0; color: var(--muted); font-size: .85rem; }
+    .state-note { margin-top: 2rem; padding: 1.5rem; border-left: 3px solid var(--amber); background: var(--panel); }
+    .state-note h3 { color: var(--amber); font-size: 1.05rem; }
+    .state-note p { max-width: 95ch; margin: 0; color: var(--muted); font-size: .92rem; }
+    .remix-grid { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: start; margin-top: 2.5rem; }
+    .remix-steps { margin: 0; padding-left: 1.6rem; }
+    .remix-steps li { padding: 0 0 1.6rem .6rem; }
+    .remix-steps li::marker { color: var(--copper); font-family: var(--mono); }
+    .remix-steps p { max-width: 56ch; margin: 0; color: var(--muted); font-size: .95rem; }
+    .target-note { padding: 1.6rem; border: 1px solid var(--rule); background: var(--panel); }
+    .target-note .eyebrow { margin-bottom: 1rem; }
+    .target-note p { color: var(--muted); font-size: .9rem; }
+    .target-note strong { color: var(--ink); font-weight: 600; }
+    .target-note p:last-child { margin: 0; }
+    pre { margin: 1.2rem 0; padding: .9rem; background: var(--bg); overflow-x: auto; font-family: var(--mono); line-height: 1.5; }
+    pre code { font-size: .8rem; overflow-wrap: normal; }
+    .resource-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0 4rem;
+      list-style: none;
+      margin: 2.5rem 0 0;
+      padding: 0;
+    }
+    .resource-list li { border-top: 1px solid var(--rule); }
+    .resource-list a { display: block; padding-block: 1.3rem; text-decoration: none; }
+    .resource-title { display: flex; justify-content: space-between; gap: 1rem; color: var(--ink); font-size: 1.05rem; font-weight: 600; }
+    .resource-title span { color: var(--copper); }
+    .resource-detail { display: block; margin-top: .3rem; color: var(--muted); font-size: .85rem; }
+    .resource-list a:hover .resource-title { color: var(--green); text-decoration: underline; }
+    .closing { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.5rem 3rem; padding-block: 3rem; }
+    .closing p { margin: 0; font-size: clamp(1.4rem, 2.8vw, 2rem); font-weight: 600; letter-spacing: -.03em; }
+    .site-footer { padding-block: 2rem 2.5rem; border-top: 1px solid var(--rule); }
+    .footer-row { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem 2rem; }
+    .footer-row p { margin: 0; font-family: var(--mono); font-size: .8rem; }
+    .footer-links a { display: inline-block; padding-block: .3rem; font-size: .8rem; }
+    .footer-note { max-width: 75ch; margin: 1.2rem 0 0; color: var(--muted); font-size: .75rem; }
+
+    @media (max-width: 1100px) {
+      .scene-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .control-layout, .remix-grid { column-gap: 2.5rem; }
+      .machine-specs div { padding-inline: 1rem; }
+    }
+    @media (max-width: 900px) {
+      .hero-grid { grid-template-columns: minmax(0, 1fr); }
+      .hero-copy { max-width: 42rem; }
+      .instrument { justify-self: start; }
+      .section-head { grid-template-columns: minmax(0, 1fr); }
+      .section-intro { max-width: 65ch; }
+      .control-layout, .remix-grid { grid-template-columns: minmax(0, 1fr); }
+      .bench-notes, .resource-list { column-gap: 2rem; }
+    }
+    @media (max-width: 600px) {
+      .header-row { gap: .65rem; }
+      .nav-links { gap: .25rem 1.25rem; }
+      .hero-actions .button { flex: 1 1 100%; }
+      .machine-specs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem 1rem; }
+      .machine-specs div { padding-inline: 0; border-left: 0; }
+      .machine-specs dd { font-size: .95rem; }
+      .scene-list, .bench-notes, .resource-list { grid-template-columns: minmax(0, 1fr); }
+      .scene-list { gap: 1.75rem; }
+      .scene-list p { max-width: 48ch; }
+      .state-note, .target-note { padding: 1.2rem; }
+      .closing .button { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap header-row">
+      <a class="brand" href="index.html" aria-label="3RIC Studio home">3RIC <span>Studio</span></a>
+      <nav aria-label="Main navigation">
+        <ul class="nav-links">
+          <li><a href="#machine">The machine</a></li>
+          <li><a href="story.html">Build story</a></li>
+          <li><a href="https://github.com/ebadger/3ric">Source <span aria-hidden="true">↗</span></a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="wrap" tabindex="-1">
+    <section class="hero" aria-labelledby="page-title">
+      <div class="hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">3RIC / A computer from the chips up</p>
+          <h1 id="page-title"><span>Built from</span> <em>Bits.</em></h1>
+          <p class="lede">
+            Build a whole computer to understand it. <strong>3RIC is an original
+            Apple-II-class 65C02 machine</strong>, with its own ROM, custom video logic,
+            and a browser emulator that puts the whole thing in your hands.
+          </p>
+          <p class="lede">
+            Start with a one-minute graphics-and-music demo.
+            Stay to find out how every bit works.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="index.html?src=programs/hackaday.s">Run the demo <span aria-hidden="true">→</span></a>
+            <a class="button" href="index.html?src=programs/hackaday.s#ide">Read &amp; remix source</a>
+          </div>
+          <p class="microcopy">Opens the emulator + editor. No install. No account.<br />Use 1x speed; click the emulator for sound.</p>
+        </div>
+        <figure class="instrument">
+          <div class="instrument-label" aria-hidden="true">
+            <span>Framebuffer / still capture</span>
+            <span>3RIC · $0800</span>
+          </div>
+          <div class="screen">
+            <img src="media/hackaday-preview.png" width="320" height="384" fetchpriority="high"
+                 alt="A still of the Built from Bits demo captured from the actual 3RIC emulator framebuffer." />
+          </div>
+          <figcaption>
+            <strong>Still from the actual emulator — not a live demo or video.</strong>
+            320 × 384 framebuffer, displayed at 4:3 to match the machine’s non-square pixels.
+            Use “Run the demo” to see it in motion.
+          </figcaption>
+        </figure>
+      </div>
+      <dl class="machine-specs" aria-label="3RIC target machine specifications">
+        <div><dt>Processor</dt><dd>65C02</dd></div>
+        <div><dt>Native clock</dt><dd>1.5734375 MHz</dd></div>
+        <div><dt>System ROM</dt><dd>512 KB</dd></div>
+        <div><dt>Video hardware</dt><dd>Logic, not a GPU</dd></div>
+      </dl>
+    </section>
+
+    <section id="demo" class="section" aria-labelledby="demo-title">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">01 / The demo</p>
+          <h2 id="demo-title">One minute.<br />Four views of the machine.</h2>
+        </div>
+        <p class="section-intro">
+          <strong>Built from Bits</strong> is an original 65C02 program: an approximately
+          one-minute autoplay loop at native 1x speed. Let the four scenes play through,
+          or take over with the keyboard.
+        </p>
+      </div>
+      <ol class="scene-list">
+        <li>
+          <span class="scene-number" aria-hidden="true">01</span>
+          <h3>Signal</h3>
+          <span class="scene-mode">Hi-res / first light</span>
+          <p>A hi-res 3RIC logo and a moving starfield. The opening signal comes from the machine’s own graphics memory.</p>
+        </li>
+        <li>
+          <span class="scene-number" aria-hidden="true">02</span>
+          <h3>Color</h3>
+          <span class="scene-mode">Lo-res / 16 colors</span>
+          <p>A 16-color lo-res plasma fills a 40 × 40 mixed graphics area, with four explanatory text rows beneath it.</p>
+        </li>
+        <li>
+          <span class="scene-number" aria-hidden="true">03</span>
+          <h3>Wireframe</h3>
+          <span class="scene-mode">Hi-res / CPU rasterized</span>
+          <p>A rotating wireframe cube, rasterized by the CPU. Every line is drawn by the 65C02, not a GPU.</p>
+        </li>
+        <li>
+          <span class="scene-number" aria-hidden="true">04</span>
+          <h3>Stereo</h3>
+          <span class="scene-mode">Two AY chips / six channels</span>
+          <p>An original six-channel chiptune sequencer. Pitch and level bars reflect the actual values sent to two AY chips.</p>
+        </li>
+      </ol>
+      <p class="execution-note">
+        <strong>The 65C02 generates the visuals, sequences the music, and handles input.</strong>
+        The browser hosts the emulator; there is no JavaScript animation overlay standing in for the program.
+      </p>
+    </section>
+
+    <section id="controls" class="section" aria-labelledby="controls-title">
+      <div class="control-layout">
+        <div class="control-copy">
+          <p class="eyebrow">02 / Take the controls</p>
+          <h2 id="controls-title">First, let it run.<br />Then interrupt it.</h2>
+          <p>
+            The launch link loads the assembly into the existing editor and automatically
+            assembles and runs it. Click the emulator screen to give it keyboard focus.
+            You can change scenes, pause, or drop back to the monitor at any time.
+          </p>
+          <aside class="audio-note" aria-labelledby="audio-title">
+            <h3 id="audio-title">Open. Click. Listen.</h3>
+            <p>
+              Browser audio needs a <strong>first user gesture inside the emulator</strong>.
+              Click the emulator screen, or use its <strong>Sound</strong> control if needed.
+              Keep the speed at <strong>1x</strong> for music; the score is tuned to
+              the native 1.5734375 MHz clock. On touch devices, use the emulator’s
+              <strong>virtual keyboard</strong> for the same controls.
+            </p>
+          </aside>
+        </div>
+        <dl class="controls" aria-label="Built from Bits keyboard controls">
+          <div><dt><kbd>1</kbd>–<kbd>4</kbd></dt><dd>Choose a scene directly.</dd></div>
+          <div><dt><kbd>N</kbd> / <kbd>Right</kbd></dt><dd>Next scene.</dd></div>
+          <div><dt><kbd>Left</kbd></dt><dd>Previous scene.</dd></div>
+          <div><dt><kbd>Space</kbd></dt><dd>Pause or resume. Pausing freezes the score and animation and silences sound.</dd></div>
+          <div><dt><kbd>M</kbd></dt><dd>Music on/off.</dd></div>
+          <div><dt><kbd>Q</kbd> / <kbd>Esc</kbd></dt><dd>Quit to the ROM monitor.</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <section id="machine" class="section" aria-labelledby="machine-title">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">03 / Under the display</p>
+          <h2 id="machine-title">The pixels are the result.<br />The computer is the project.</h2>
+        </div>
+        <p class="section-intro">
+          3RIC began with a question: how do 8-bit computers actually work?
+          The answer became a from-scratch machine, from chip-level schematics
+          and address decoding to a ROM and a cycle-honest emulator.
+          <a href="story.html">Follow the journey from the breadboard.</a>
+        </p>
+      </div>
+      <div class="bench-notes">
+        <article class="bench-note">
+          <p class="eyebrow">Video / custom logic</p>
+          <h3>Color without a GPU.</h3>
+          <p>
+            The hardware design generates VGA with custom logic. It reproduces
+            NTSC-style artifact color in logic circuits, bringing the Apple II’s
+            clever color behavior to a VGA display. The emulator models that behavior.
+          </p>
+        </article>
+        <article class="bench-note">
+          <p class="eyebrow">Memory / shared timing</p>
+          <h3>One RAM. Two jobs.</h3>
+          <p>
+            The CPU and video hardware share RAM. They have to take turns on the bus:
+            CPU reads and writes, then video fetches. Getting the timing right is
+            what lets the processor change a picture while the display reads it.
+          </p>
+        </article>
+        <article class="bench-note">
+          <p class="eyebrow">Address bus / 22V10 GAL</p>
+          <h3>Give every address a home.</h3>
+          <p>
+            22V10 GAL address-decode logic selects the memory or I/O device that
+            responds to an address. These are the connections behind a program’s
+            loads and stores, not hidden services in a modern graphics stack.
+          </p>
+        </article>
+        <article class="bench-note">
+          <p class="eyebrow">C++ / WebAssembly</p>
+          <h3>Same VM. A different front door.</h3>
+          <p>
+            The same C++ VM core powers the native emulator and compiles to
+            WebAssembly for the browser. It boots 3RIC’s real 512 KB ROM.
+            No install or account, and no second browser-only imitation of the machine.
+          </p>
+        </article>
+      </div>
+      <p class="io-note">
+        Beyond this demo, the wider machine supports keyboard and serial I/O, SNES pads,
+        micro-SD, and Disk II. This program is a graphics-and-music tour, not a test of
+        every peripheral. 3RIC is an original Apple-II-class computer with its own ROM,
+        not a claim of blanket Apple II compatibility.
+      </p>
+      <aside class="state-note" aria-labelledby="state-title">
+        <h3 id="state-title">Current state: emulator evidence, hardware in progress.</h3>
+        <p>
+          The preview and browser demo demonstrate emulator behavior, not a fresh bench
+          measurement. The hardware designs, PCB, and GAL logic are still evolving.
+          This program targets the 3RIC hardware design; no physical-board testing is
+          claimed for this demo. The build series documents the physical machine’s journey.
+        </p>
+      </aside>
+    </section>
+
+    <section id="remix" class="section" aria-labelledby="remix-title">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">04 / Make it yours</p>
+          <h2 id="remix-title">Read it. Change it.<br />Run it again.</h2>
+        </div>
+        <p class="section-intro">
+          This is not a recording you can only watch. Open the assembly that makes it
+          happen, change a value, and let the same machine execute your version.
+          The tools are already in the browser.
+        </p>
+      </div>
+      <div class="remix-grid">
+        <ol class="remix-steps">
+          <li>
+            <h3>Open the actual source.</h3>
+            <p>
+              <a href="index.html?src=programs/hackaday.s#ide">Load Built from Bits in the editor.</a>
+              The shared source is <code>programs/hackaday.s</code>, loaded at its
+              declared origin, <code>$0800</code>.
+              <a href="https://github.com/ebadger/3ric/blob/main/codegen/programs/hackaday.s">Read the assembly on GitHub.</a>
+            </p>
+          </li>
+          <li>
+            <h3>Make one change. See what happens.</h3>
+            <p>
+              Edit the source and select <strong>Assemble &amp; Run</strong>.
+              Use the debugger to set an instruction breakpoint, step the CPU,
+              and inspect registers or memory. The demo’s Space key pauses its score
+              and animation; the debugger lets you stop at an instruction.
+            </p>
+          </li>
+          <li>
+            <h3>Take the bytes with you.</h3>
+            <p>
+              In that same editor, use <strong>Download .PRG</strong> for the raw program
+              or <strong>Download .woz</strong> for a bootable disk image.
+              These are editor exports, not separate prebuilt downloads.
+              <a href="index.html?src=programs/hackaday.s#ide">Open the editor to export your version.</a>
+            </p>
+          </li>
+        </ol>
+        <aside class="target-note" aria-labelledby="target-title">
+          <p class="eyebrow">Target / 3RIC hardware</p>
+          <h3 id="target-title">Real code. Specific hardware.</h3>
+          <p>
+            <strong>Music needs a slot-4 dual-AY Mockingboard.</strong>
+            The visuals do not require an audio expansion on hardware.
+          </p>
+          <p>
+            This is a <strong>3RIC-specific program, not an unmodified Apple II program</strong>.
+            It uses the onboard VIA Timer2 at <code>$C200</code> and a tune calibrated
+            to 3RIC’s clock. A .woz export changes the container, not those requirements.
+          </p>
+          <p>
+            For 3RIC, save the raw .PRG as <code>HACKADAY.PRG</code> on your SD card,
+            then load it at <code>$0800</code> from the ROM DOS shell:
+          </p>
+          <pre><code>BRUN HACKADAY.PRG 0800</code></pre>
+          <p>Hardware compatibility is the target, not a claim of physical-board testing.</p>
+        </aside>
+      </div>
+    </section>
+
+    <section id="build" class="section" aria-labelledby="build-title">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">05 / Follow the wires</p>
+          <h2 id="build-title">The schematics are<br />part of the story.</h2>
+        </div>
+        <p class="section-intro">
+          In a sentence: 3RIC is a from-scratch, Apple-II-class 65C02 computer with
+          custom VGA logic, its own 512 KB ROM, and a C++ emulator shared by native
+          and WebAssembly hosts — built to learn, and documented along the way.
+        </p>
+      </div>
+      <ul class="resource-list">
+        <li>
+          <a href="https://github.com/ebadger/3ric/tree/main/schematic_pdf">
+            <span class="resource-title">Read the schematic PDFs <span aria-hidden="true">↗</span></span>
+            <span class="resource-detail">The circuit, sheet by sheet. / schematic_pdf</span>
+          </a>
+        </li>
+        <li>
+          <a href="https://www.youtube.com/playlist?list=PLbYLt1iawSBLK4w46Kn7cxxuoeVt7Zepq">
+            <span class="resource-title">Watch the build series <span aria-hidden="true">↗</span></span>
+            <span class="resource-detail">Design decisions, experiments, and the physical build on YouTube.</span>
+          </a>
+        </li>
+        <li>
+          <a href="https://github.com/ebadger/3ric/tree/main/kicad">
+            <span class="resource-title">Explore the KiCad designs <span aria-hidden="true">↗</span></span>
+            <span class="resource-detail">Schematics and PCB design files. / kicad</span>
+          </a>
+        </li>
+        <li>
+          <a href="story.html">
+            <span class="resource-title">Read the full project story <span aria-hidden="true">→</span></span>
+            <span class="resource-detail">From an Atari childhood to breadboards, video logic, and a computer.</span>
+          </a>
+        </li>
+        <li>
+          <a href="https://github.com/ebadger/3ric/tree/main/22v10">
+            <span class="resource-title">Inspect the GAL decode <span aria-hidden="true">↗</span></span>
+            <span class="resource-detail">The programmable logic behind the address map. / 22v10</span>
+          </a>
+        </li>
+        <li>
+          <a href="https://github.com/ebadger/3ric">
+            <span class="resource-title">Browse the repository <span aria-hidden="true">↗</span></span>
+            <span class="resource-detail">Source, specifications, and the rest of the machine. / ebadger/3ric</span>
+          </a>
+        </li>
+      </ul>
+    </section>
+
+    <div class="closing">
+      <p>A whole machine. One browser tab.</p>
+      <a class="button button-primary" href="index.html?src=programs/hackaday.s">Run Built from Bits <span aria-hidden="true">→</span></a>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="footer-row">
+        <p>3RIC Studio / Built to learn.</p>
+        <nav aria-label="More from 3RIC Studio">
+          <ul class="footer-links">
+            <li><a href="gallery.html">Program gallery</a></li>
+            <li><a href="tutorials.html">65C02 tutorials</a></li>
+            <li><a href="story.html">Build story</a></li>
+            <li><a href="index.html">Emulator &amp; editor</a></li>
+          </ul>
+        </nav>
+      </div>
+      <p class="footer-note">
+        A project overview for curious builders and Hackaday readers.
+        3RIC is an independent project, not affiliated with or endorsed by Hackaday.
+        This page is static; nothing plays until you open the emulator.
+      </p>
+    </div>
+  </footer>
+</body>
+</html>

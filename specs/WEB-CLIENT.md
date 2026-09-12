@@ -119,6 +119,23 @@ client-side so GitHub Pages can host it as static files.
   work without a separate loader. The catalog describes Space to pause/resume and Q/Esc
   to quit. The emulator's ordinary keyboard, CPU, and video paths implement the effect;
   there is no JavaScript animation overlay.
+- **Hackaday showcase (`hackaday.html` + `programs/hackaday.s`):** a lightweight,
+  responsive, WASM-free landing page presents **Built from Bits**, an original four-scene
+  65C02 graphics/music demo. Its primary link opens
+  `index.html?src=programs/hackaday.s`, using the existing editable, auto-running source
+  loader rather than a second emulator or an iframe-specific bridge. A clearly labeled
+  still at `media/hackaday-preview.png` is captured from the actual WASM framebuffer.
+  The page explains the 65C02, hardware-generated VGA/artifact color, shared RAM timing,
+  GAL decode, and modern I/O; links to schematics, assembly, the build series, and the
+  existing `.PRG` / `.woz` export controls; and distinguishes emulator-demonstrated
+  features from in-progress physical hardware. It makes no claim of Hackaday endorsement.
+  It documents all four scenes and keyboard controls, browser sound's first-gesture/1x
+  requirement, and the option to pause the demo. Static preview content never animates
+  or auto-starts sound. The normal editor and gallery expose the same source. All local
+  links/assets remain relative for project Pages, and navigation plus the sitemap make
+  the landing page discoverable. The deploy workflow stages the page and preview.
+  Known built-in `?src=` links also select their matching sample option so the editor's
+  selection and downloaded filenames identify the program that actually loaded.
 - **Story / landing page (`story.html`):** a committed, WASM-free narrative page that tells
   the story of 3ric and the wider hardware-hacking journey (the Atari-1200XL / learning-journey
   origin, the Lode-Runner goal that drove the push toward Apple II *compatibility* — 3ric is an
@@ -264,7 +281,7 @@ client-side so GitHub Pages can host it as static files.
   and turns a visitor into a contributor. The page builds card text with `textContent` only:
   the manifest is repo-reviewed, but no entry field is ever injected as HTML.
 - **Usage analytics are privacy-first and cookieless.** Every staged HTML page
-  (`index.html`, `gallery.html`, `tutorials.html`, `story.html`) loads one async GoatCounter
+  (`index.html`, `gallery.html`, `tutorials.html`, `story.html`, `hackaday.html`) loads one async GoatCounter
   snippet in `<head>` — `data-goatcounter="https://3ric.goatcounter.com/count"`, script
   `//gc.zgo.at/count.js`. It sets no cookies, stores no personal data, and needs no server: a
   page hit is a fire-and-forget beacon and nothing else. Totals live on the owner-only
@@ -294,6 +311,10 @@ symbol/file:line`.
 Gallery: `gallery.html → fetch gallery.json → render cards → click Run & Remix →
 index.html?src=programs/<name>.s → Share/Remix loader assembles + runs`.
 
+Hackaday: `hackaday.html -> labeled framebuffer still and hardware explanation -> Run
+Built from Bits -> existing source loader -> real 65C02 program -> shared VM graphics/
+audio`; source, Share, and `.PRG` / `.woz` downloads remain in the existing editor.
+
 Analytics: `any page load → async GoatCounter beacon (//gc.zgo.at/count.js) →
 POST https://3ric.goatcounter.com/count`. Fire-and-forget; no cookies, no PII, and no effect
 on the emulator whether it succeeds, is blocked, or 404s.
@@ -307,8 +328,8 @@ on the emulator whether it succeeds, is blocked, or 404s.
   P5 boot PROM contract (`ROM-SOFTWARE.md`) and the Disk II phase-stepping model (`EMULATOR.md`).
 - **Downstream:** GitHub Pages deploy (`.github/workflows/deploy-pages.yml`) — its **Stage
   site** step stages `gamepad.js` + `virtual-keyboard.js` + `gallery.html` + `gallery.json`
-  + `story.html` + `llms.txt` + `robots.txt` + `sitemap.xml` (alongside `index.html` and
-  `programs/`) into `_site/`; the public users of the demo, and AI coding tools that fetch
+  + `story.html` + `hackaday.html` + `media/` + `llms.txt` + `robots.txt` + `sitemap.xml`
+  (alongside `index.html` and `programs/`) into `_site/`; the public users of the demo, and AI coding tools that fetch
   `llms.txt`.
 - **External (analytics):** GoatCounter — the `//gc.zgo.at/count.js` script and the
   `https://3ric.goatcounter.com/count` endpoint. A privacy-friendly, third-party hit counter
@@ -331,6 +352,7 @@ on the emulator whether it succeeds, is blocked, or 404s.
 | Share / Remix deep links | Shipped | **Share** button; `?src=programs/<name>.s` for unmodified samples, inline base64url `?code=` otherwise, both carrying `&org=` when the source has no `.org`; remix banner on shared links. |
 | Community Gallery | Shipped | `gallery.html` renders the curated `gallery.json`; one-click **Run & Remix** via `?src=`/`?code=`; PR-based submissions credited by author. |
 | 3RIC Groovebox sample | Shipped | Gallery and Music sample-picker entry for the guest-side Mockingboard sequencer; canonical source staged automatically, with focused guest/hardware checks in the Pages build. |
+| Hackaday showcase | Shipped | `hackaday.html`, a real framebuffer still, and Built from Bits gallery/editor entry. Responsive static page, hardware explanations, input/audio guidance, and existing source/download pipeline; page and program contract suites run in the Pages build. Regenerate the still with `node codegen/tools/hackaday.test.mjs --write-preview` after building/staging the source. |
 | Matrix Rain sample | Shipped | Gallery and Hi-res sample entry for `programs/matrix.s`; source staging, auto-running editor deep links, and exports use the existing pipeline. The Pages build runs `codegen/tools/matrix.test.mjs` against the staged source and real WASM renderer. |
 | Story / landing page | Shipped | `story.html` — narrative of 3ric + the wider hardware-hacking journey; lite-embed YouTube chapters (facade → `youtube-nocookie` iframe on click); a curated real-time **Reddit timeline** (16 `r/beneater`/maker milestone posts, 2020–2025, each linking to its permalink); links to emulator/gallery/tutorials + `r/beneater` / `u/ebadger1973` / 6502.org. Linked from the `index.html`/`gallery.html`/`tutorials.html` headers; staged by the deploy workflow. |
 | 3RIC Studio site identity | Shipped | Published page titles, headers, footers, metadata, gallery attribution, and `llms.txt` use **3RIC Studio**; machine references remain **3RIC**, and compatibility-sensitive URLs/storage keys remain unchanged. |
@@ -342,4 +364,4 @@ on the emulator whether it succeeds, is blocked, or 404s.
 | Slot-4 Mockingboard audio | Shipped | User-gesture AudioWorklet sink for the combined speaker/dual-AY stereo PCM; defaults enabled, unlocks on the first pointer/keyboard interaction, and generates sound only at 1x. |
 | Headless smoke tests | Shipped | `web/test_*.cjs` (boot/render/input/audio/screen/sd/disk). |
 | GitHub Pages CI deploy | Shipped | on push to `main` touching emulator/web/codegen sources. |
-| Usage analytics (GoatCounter) | Shipped | Cookieless, privacy-first hit counter on all staged pages (`index`/`gallery`/`tutorials`/`story`); async `//gc.zgo.at/count.js` → `3ric.goatcounter.com`; no cookies/PII, no server, no CSP change. Owner dashboard `https://3ric.goatcounter.com` (register the `3ric` code once to claim it). |
+| Usage analytics (GoatCounter) | Shipped | Cookieless, privacy-first hit counter on all staged pages (`index`/`gallery`/`tutorials`/`story`/`hackaday`); async `//gc.zgo.at/count.js` → `3ric.goatcounter.com`; no cookies/PII, no server, no CSP change. Owner dashboard `https://3ric.goatcounter.com` (register the `3ric` code once to claim it). |
