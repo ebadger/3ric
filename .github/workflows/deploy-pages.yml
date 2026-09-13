@@ -24,6 +24,7 @@ on:
       - 'codegen/tools/wozgen.mjs'
       - 'codegen/tools/groovebox.test.mjs'
       - 'codegen/tools/matrix.test.mjs'
+      - 'codegen/tools/hackaday.test.mjs'
       - 'codegen/programs/**'
       - '.github/workflows/deploy-pages.yml'
   # Allow manual runs from the Actions tab.
@@ -79,6 +80,8 @@ jobs:
           node web/test_keyboard.cjs
           node web/test_boot.cjs
           node codegen/tools/matrix.test.mjs
+          node codegen/tools/hackaday.test.mjs
+          node web/test_hackaday_page.cjs
 
       # Stage only what the page needs (not the C++/test sources) as the site root.
       - name: Stage site
@@ -86,6 +89,8 @@ jobs:
           mkdir -p _site
           cp web/index.html web/emulation-clock.js web/audio-worklet.js web/gamepad.js web/virtual-keyboard.js web/debugger.js web/gallery.html web/tutorials.html web/story.html web/gallery.json web/llms.txt web/robots.txt web/sitemap.xml web/badger6502.js web/badger6502.wasm _site/
           cp web/asm6502.mjs web/wozgen.mjs _site/
+          cp web/hackaday.html _site/
+          cp -r web/media _site/media
           cp -r web/data _site/data
           cp -r web/programs _site/programs
           ls -la _site _site/data _site/programs

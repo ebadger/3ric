@@ -8,7 +8,7 @@
 ## Mission
 
 **3ric is a from-scratch Apple-II-class 65C02 personal computer, built to learn — by
-designing a real 8-bit machine at the chip level (schematics, 22V10 GAL logic, a 512 KB
+designing a real 8-bit machine at the chip level (schematics, 74-series logic, a 512 KB
 ROM, and a cycle-honest emulator) and documenting the journey in a YouTube build series.**
 
 The zero-install browser emulator (<https://ebadger.github.io/3ric/>) exists so the machine

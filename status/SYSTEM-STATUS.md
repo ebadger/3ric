@@ -38,6 +38,8 @@ Node at `C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe` (not on `PATH`)
 ```powershell
 $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node codegen/tools/asm6502.test.mjs   # assembler encoding tests (no WASM build needed)
+& $node codegen/tools/hackaday.test.mjs # Built from Bits scenes, music, timing, controls, WOZ boot
+& $node web/test_hackaday_page.cjs      # showcase page, source links, and committed preview
 & $node web/test_boot.cjs                # ROM boots, sane PC, video RAM written
 & $node web/test_render.cjs              # framebuffer has lit pixels
 & $node web/test_keyboard.cjs            # monitor echoes typed commands
@@ -81,6 +83,15 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 
 ## Current state / known gaps
 
+- **Built from Bits:** `hackaday.html` introduces a one-minute, four-scene 65C02 showcase:
+  hi-res starfield, 16-color plasma, rotating wireframe, and original six-channel stereo
+  music. The landing page launches the editable `programs/hackaday.s` through the existing
+  assembler. Use 1x and click the emulator for sound; 1-4 selects scenes, Space pauses,
+  M mutes, and Q/Esc exits. The `.PRG` and bootable `.woz` target 3RIC's VIA/sound hardware,
+  not an unmodified Apple II; no physical-board test is claimed.
+  Q/Esc preserves the ROM text window and returns to a usable visible monitor.
+  Source/export links ending in `#ide` focus and reveal the editor after loading,
+  including on phones; ordinary Run links retain emulator focus.
 - **Emulator:** boots the unmodified 512 KB ROM to the monitor; text/lo-res/hi-res color
   video; keyboard; two serial SNES pads; ACIA serial; Disk II WOZ boot; micro-SD FAT32 DOS
   shell; `$C030` system speaker centered into the slot-4 dual-AY Mockingboard stereo stream
@@ -108,5 +119,7 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   counter (`//gc.zgo.at/count.js` → `https://3ric.goatcounter.com/count`); no cookies, no PII,
   no server, and the site is unaffected if it is blocked. Totals live on the owner dashboard at
   <https://3ric.goatcounter.com> — **register the `3ric` code there once to claim the stats.**
-- **Hardware:** schematics, PCB, and 22V10 GAL logic are in progress and tracked through the
-  YouTube build series; the emulator is the reference implementation of the target machine.
+- **Hardware:** the final build uses 74-series logic chips for address decoding.
+  `22v10/` contains intermediate GAL experiments retained as history, not final-build
+  components. The physical build is documented in the YouTube series; the emulator
+  models the same machine.

@@ -28,7 +28,7 @@ the target hardware** — the emulator is correct when it behaves like the real 
 | `Console`, `Badger6502Emulator`(+Package) | Win32 console and WinUI hosts. |
 | `WozFileTestApp`, `dsk2woz2`, `picodisk` | WOZ tooling / disk conversion / Pico target. |
 
-**Memory map — the cross-layer contract** (`vm.h`, `MM_*`; mirrored by the 22V10 GAL, the
+**Memory map — the cross-layer contract** (`vm.h`, `MM_*`; mirrored by the 74-series hardware decoder, the
 web bridge, and `codegen/platform-ref.*`):
 
 ```

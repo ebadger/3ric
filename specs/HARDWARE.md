@@ -1,10 +1,10 @@
 # 3ric — Hardware Spec (HARDWARE.md)
 
-> The physical machine 3ric is: KiCad schematics + PCB, the 22V10 GAL programmable logic
-> that does address decoding and color generation, and digital-logic models. The emulator
-> (`EMULATOR.md`) is the executable reference for this hardware; the two must agree —
-> especially on the memory map. Much of this layer is in progress and documented in the
-> YouTube build series.
+> The physical machine 3ric is: KiCad schematics + PCB, 74-series logic chips for address
+> decoding, custom video logic, and digital-logic models. The final build does not use a
+> 22V10; the GAL designs were an intermediate step, retained as project history. The
+> emulator (`EMULATOR.md`) is the executable reference for this hardware; the two must
+> agree, especially on the memory map. The build is documented in the YouTube series.
 
 ---
 
@@ -22,13 +22,13 @@ emulator.
 | KiCad project | `kicad/3ric/`, `kicad/libraries/` | Schematics + PCB layout + symbol/footprint libraries. |
 | Schematic PDF | `schematic_pdf/3ric.pdf`, `diylayout/3RIC.pdf` | Human-readable schematic snapshots. |
 | DIY layout | `diylayout/3RIC.diy` | DIYLC board-layout artwork. |
-| 22V10 GAL logic | `22v10/3ricDecoder.PLD`, `22v10/EB6502 DECODER.PLD`, `22v10/A2COLOR.PLD`, `22v10/3ricDecoder.si` | Address decode + Apple-II color; the **decoder mirrors the `MM_*` memory map**. |
+| Historical 22V10 experiments | `22v10/3ricDecoder.PLD`, `22v10/EB6502 DECODER.PLD`, `22v10/A2COLOR.PLD`, `22v10/3ricDecoder.si` | Intermediate address-decode/color designs, not components of the final build. |
 | Logisim models | `logisim/address_decode.circ`, `logisim/apple2color.circ` | Digital-logic simulations of the decode + color circuits. |
 | Memory-map check | `test/memory_map_test/memory_map_test.sln` | Validates address-map decoding. |
 
-**The load-bearing contract:** the 22V10 address decoder (`3ricDecoder.PLD` /
-`EB6502 DECODER.PLD`) and the color GAL (`A2COLOR.PLD`) must decode exactly the regions in
-the emulator's `MM_*` map (`emulator/Badger6502VMLib/vm.h`) — RAM, BASIC ROM, the `$C0xx`
+**The load-bearing contract:** the final 74-series address-decoding circuitry in the
+schematics must select exactly the regions in the emulator's `MM_*` map
+(`emulator/Badger6502VMLib/vm.h`) — RAM, BASIC ROM, the `$C0xx`
 device/soft-switch page (keyboard, system speaker `$C030`, ACIA `$C1xx`, VIA1 `$C2xx`,
 ROM disk `$C3xx`, Mockingboard `$C4xx`, Disk II PROM `$C6xx`), RAM2, and ROM
 `$D000–$FFFF`.
@@ -36,16 +36,17 @@ ROM disk `$C3xx`, Mockingboard `$C4xx`, Disk II PROM `$C6xx`), RAM2, and ROM
 ## Behaviour / Rules
 
 - **Hardware and emulator are one contract.** A change to address decoding, soft switches,
-  or the device map on either side is a cross-layer event: update the GAL/schematic *and*
+  or the device map on either side is a cross-layer event: update the schematic *and*
   the emulator `MM_*` map *and* regenerate `codegen/platform/platform-ref.*` — ideally in
   one commit, or with an explicit tracked gap if the physical build lags.
+- The legacy PLD files document intermediate experiments, not the final decoder contract.
 - Prefer changes you can explain on camera and that keep the emulator as the faithful
   reference (see `docs/MISSION.md`).
 
 ## Data flow
 
-`CPU address/data bus → 22V10 decoder → chip selects (RAM / ROM / BASIC / $C0xx devices) →
-device responds; video circuit + A2COLOR GAL → composite/color output`. The emulator models
+`CPU address/data bus → 74-series address decoder → chip selects (RAM / ROM / BASIC /
+$C0xx devices) → device responds; custom video logic → VGA/artifact-color output`. The emulator models
 this same routing in `VM::DoSoftSwitches` and the device handlers.
 
 ### System speaker
@@ -90,11 +91,11 @@ this same routing in `VM::DoSoftSwitches` and the device handlers.
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Schematics (KiCad) | In progress | `kicad/3ric/`; snapshots in `schematic_pdf/`, `diylayout/`. |
-| 22V10 address-decode GAL | In progress | `3ricDecoder.PLD` / `EB6502 DECODER.PLD`; mirrors `MM_*`. |
-| Apple-II color GAL | In progress | `A2COLOR.PLD` + `logisim/apple2color.circ`. |
+| Schematics (KiCad) | Present | `kicad/3ric/`; snapshots in `schematic_pdf/`, `diylayout/`. |
+| 74-series address decoding | Final build | Replaced the intermediate 22V10 implementation; the schematic is the hardware-side memory-map contract. |
+| 22V10 address/color experiments | Historical | `22v10/` is retained to document intermediate designs; no 22V10 is used in the final build. |
 | Address-map validation | Present | `test/memory_map_test`. |
 | `$C030` system speaker | Shipped (schematic + emulator) | Address-decoded toggle latch drives `Y_SPEAKER`; the emulator exposes its centered mono signal in the combined PCM stream. |
 | Dual SNES controller interface | Shipped (schematic + emulator) | Shared PB6/PB7 latch/clock and active-low PB5/PB4 data; browser controllers exercise the same serial contract. |
 | Slot-4 dual-AY Mockingboard | Shipped | `$C400/$C480`, direct PHI2 clock, dual IRQ, hard stereo; shared emulator and browser implementation matches the schematic. |
-| PCB fabrication / bring-up | Tracked in build series | Emulator is the reference until hardware is verified. |
+| PCB fabrication / bring-up | Documented in build series | A browser demo demonstrates emulator behavior, not a new physical-board test. |
