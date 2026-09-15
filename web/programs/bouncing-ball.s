@@ -1,7 +1,9 @@
 ; Amiga-style Boing Ball: checkerboard sphere, gravity bounce, 3D room grid.
-; Bounding-box clear for speed. Double-buffered hi-res. Press any key → BRK.
+; Original community demo by scottybe. Live 3D, optimized for the 65C02.
+; Cached room, incremental polygon fill, double-buffered hi-res. Any key → BRK.
 ;
 ; Paste into https://ebadger.github.io/3ric/ and Assemble & Run.
+; Hardware: raw .PRG at $0800; workspace $6000-$8FFF, below BASIC ROM.
 
         .org $0800
 
@@ -15,83 +17,114 @@ KBDSTRB = $C010
 
 ROWL    = $6000
 ROWH    = $6100
+MULXC   = $6200             ; current-angle products for coordinates -40..40
 
 ptr     = $06
 faceptr = $08
 edgeptr = $0A
+bgptr   = $0C
+copydst = $0E
 
-x0      = $6200
-y0      = $6201
-x1      = $6202
-y1      = $6203
-dx      = $6204
-dy      = $6205
-sxs     = $6206
-sys     = $6207
-err     = $6208
-errh    = $6209
-e2      = $620A
-e2h     = $620B
-cx      = $620C
-cy      = $620D
-col     = $620E
-bitn    = $620F
+x0      = $50
+y0      = $51
+x1      = $52
+y1      = $53
+dx      = $54
+dy      = $55
+sxs     = $56
+sys     = $57
+err     = $58
+cx      = $5C
+cy      = $5D
+col     = $5E
+bitn    = $5F
 
-angx    = $6210
-angy    = $6211
-ix      = $6212
-tmp0    = $6213
-tmp1    = $6214
-tmp2    = $6215
-tmp3    = $6216
-tmp4    = $6217
-tmp5    = $6218
-sgn     = $6219
-mulA    = $621A
-mulB    = $621B
-resL    = $621C
-resH    = $621D
-xp      = $621E
-yp      = $621F
-zp      = $6220
-e1x     = $6221
-e1y     = $6222
-e2x     = $6223
-e2y     = $6224
-nz      = $6225
-nzhi    = $6226
-fi      = $6227
-ecnt    = $6228
-drawpg  = $6229
-pgoff   = $622A
-ymin    = $622B
-ymax    = $622C
-ycur    = $622D
-xl      = $622E
-xr      = $622F
-nvrt    = $6230
-edgi    = $6231
-bposx   = $6232             ; ball centre X
-bposy   = $6233             ; ball centre Y
-bvelx   = $6234             ; signed X velocity
-bvely   = $6235             ; signed Y velocity ( + = down)
-oby1    = $6236             ; page1 clear ymin
-oby1m   = $6237             ; page1 clear ymax
-oby2    = $6238             ; page2 clear ymin
-oby2m   = $6239
-bbymin  = $623A             ; current frame bbox Y
-bbymax  = $623B
-gi      = $623C             ; grid loop index
-ink     = $623D             ; 0=black (clear bits), 1=white (set bits)
+angx    = $60
+angy    = $61
+tmp0    = $63
+tmp1    = $64
+tmp2    = $65
+tmp3    = $66
+tmp4    = $67
+tmp5    = $68
+sgn     = $69
+mulA    = $6A
+mulB    = $6B
+resL    = $6C
+resH    = $6D
+xp      = $6E
+zp      = $70
+e1x     = $71
+e1y     = $72
+e2x     = $73
+e2y     = $74
+nz      = $75
+nzhi    = $76
+fi      = $77
+ecnt    = $78
+drawpg  = $79
+pgoff   = $7A
+ymin    = $7B
+ymax    = $7C
+ycur    = $7D
+xl      = $7E
+xr      = $7F
+nvrt    = $80
+edgi    = $81
+bposx   = $82               ; ball centre X
+bposy   = $83               ; ball centre Y
+bvelx   = $84               ; signed X velocity
+bvely   = $85               ; signed Y velocity ( + = down)
+oby1    = $86               ; page1 restore ymin
+oby1m   = $87               ; page1 restore ymax
+oby2    = $88               ; page2 restore ymin
+oby2m   = $89
+bbymin  = $8A               ; current frame bbox Y
+bbymax  = $8B
+gi      = $8C               ; grid loop index
+ink     = $8D               ; 0=black (clear bits), 1=white (set bits)
+obx1    = $8E               ; page1 restore byte columns
+obx1m   = $8F
+obx2    = $90
+obx2m   = $91
+edgedx  = $92
+edgedy  = $93
+edgerem = $95
+edgecur = $96
+lastcol = $97
+spanmask = $98
+pixelmask = $99
+fillmode = $9A
+edgeflip = $9B
+edgefrac = $9C
+edgewhole = $9D
+topvert = $9E
+walkx   = $A0               ; left edge; right edge uses the same fields +8
+walkend = $A1
+walkdy  = $A2
+walkfrac = $A3
+walkwhole = $A4
+walkerr = $A5
+walkflip = $A6
+walkvert = $A7
 
 fvis    = $6300             ; 128 face flags
 RX      = $6380             ; 114 verts
 RY      = $63F2
-RZ      = $6464
 PX      = $64D6
 PY      = $6548
 FSX     = $6600             ; fill poly screen X[4]
 FSY     = $6604             ; fill poly screen Y[4]
+SPANL   = $6700             ; inclusive polygon intersections by scanline
+SPANR   = $6800
+QSLO    = $6900             ; floor(n*n/4), n=0..255
+QSHI    = $6A00
+XCOL    = $6B00             ; x / 7, x=0..255
+XBIT    = $6C00             ; x % 7
+MULXS   = $6D00
+MULYC   = $6E00
+MULYS   = $6F00
+ROOM    = $7000             ; immutable 8 KB copy of the initial hi-res page
 
 NVERT0  = 114
 NFACE0  = 128
@@ -114,19 +147,14 @@ start:  lda TXTCLR
         lda LOWSCR
         lda HIRESW
         jsr build_rows
+        jsr build_tables
         stz drawpg
         stz pgoff
-        jsr clear_hgr
+        jsr clear_page1
         lda #1
         sta ink
         jsr drawgrid
-        lda #$20
-        sta pgoff
-        jsr clear_hgr
-        lda #1
-        sta ink
-        jsr drawgrid
-        stz pgoff
+        jsr cache_grid
         lda LOWSCR
         jsr flip_show
         stz angx
@@ -140,18 +168,15 @@ start:  lda TXTCLR
         sta bvelx
         lda #UPVEL0
         sta bvely
-        stz oby1
-        stz oby2
-        lda #YMAX0-1
-        sta oby1m
-        sta oby2m
+        lda #YMAX0
+        sta oby1
+        sta oby2
+        stz oby1m
+        stz oby2m
 
 mainlp: lda FULLSCR
         jsr moveball
         jsr clear_bbox
-        lda #1
-        sta ink
-        jsr drawgrid            ; redraw room after erase band
         jsr xform
         jsr calcvis
         jsr fillsolid
@@ -293,15 +318,25 @@ dg_fh:  stx gi
         bne dg_fh
         rts
 
-; Clear only scanlines [oby..obym] on the hidden draw page (big speedup).
+; Each hidden page has its own old ball rectangle. Restore the cached room.
 clear_bbox:
         lda drawpg
         bne cb_p2
+        lda obx1
+        dec a
+        sta col
+        lda obx1m
+        sta lastcol
         lda oby1
         sta ycur
         lda oby1m
         bra cb_go
-cb_p2:  lda oby2
+cb_p2:  lda obx2
+        dec a
+        sta col
+        lda obx2m
+        sta lastcol
+        lda oby2
         sta ycur
         lda oby2m
 cb_go:  sta tmp5                ; ymax to clear
@@ -315,15 +350,21 @@ cb_row: cmp #YMAX0
         tay
         lda ROWL,y
         sta ptr
+        sta bgptr
+        lda ROWH,y
+        clc
+        adc #$50
+        sta bgptr+1
         lda ROWH,y
         clc
         adc pgoff
         sta ptr+1
-        lda #0
-        ldy #39
-cb_z:   sta (ptr),y
+        ldy lastcol
+cb_z:   lda (bgptr),y
+        sta (ptr),y
         dey
-        bpl cb_z
+        cpy col
+        bne cb_z
 cb_nx:  lda ycur
         cmp tmp5
         bcs cb_dn
@@ -331,21 +372,31 @@ cb_nx:  lda ycur
         bra cb_lp
 cb_dn:  rts
 
-; Remember this frame's Y band for the next clear of this page.
+; Radius 40 bounds every rotated vertex; byte edges include the complete mesh.
 save_bbox:
-        lda bbymin
+        lda bposx
         sec
-        sbc #4                  ; pad for motion blur/trails
-        bcs sb_lo
-        lda #0
-sb_lo:  tax
-        lda bbymax
+        sbc #40
+        tax
+        lda XCOL,x
+        sta tmp0
+        lda bposx
         clc
-        adc #4
-        cmp #YMAX0
-        bcc sb_h2
-        lda #YMAX0-1
-sb_h2:  ldy drawpg
+        adc #40
+        tax
+        lda XCOL,x
+        ldy drawpg
+        bne sb_x2
+        sta obx1m
+        lda tmp0
+        sta obx1
+        bra sb_y
+sb_x2:  sta obx2m
+        lda tmp0
+        sta obx2
+sb_y:   ldx bbymin
+        lda bbymax
+        ldy drawpg
         bne sb_p2
         stx oby1
         sta oby1m
@@ -368,73 +419,33 @@ fs_p1:  lda LOWSCR
         sta pgoff
         rts
 
-xform:  ldx #0
+xform:  jsr build_rotations
+        ldx #0
         lda #$FF
         sta bbymin
         stz bbymax
-xf_lp:  stx ix
-        lda VERTX,x
-        sta tmp0
-        lda VERTY,x
-        sta tmp1
-        lda VERTZ,x
-        sta tmp2
-        ldy angy
-        lda tmp0
-        ldx COSTBL,y
-        jsr smul128
+xf_lp:  ldy VERTX,x
+        lda MULYC,y
         sta tmp3
-        ldy angy
-        lda tmp2
-        ldx SINTBL,y
-        jsr smul128
+        lda MULYS,y
         sta tmp4
+        ldy VERTZ,x
         sec
         lda tmp3
-        sbc tmp4
+        sbc MULYS,y
         sta xp
-        ldy angy
-        lda tmp0
-        ldx SINTBL,y
-        jsr smul128
-        sta tmp3
-        ldy angy
-        lda tmp2
-        ldx COSTBL,y
-        jsr smul128
+        lda MULYC,y
         clc
-        adc tmp3
+        adc tmp4
         sta zp
-        lda tmp1
-        sta yp
-        ldy angx
-        lda yp
-        ldx COSTBL,y
-        jsr smul128
+        ldy VERTY,x
+        lda MULXC,y
         sta tmp3
-        ldy angx
-        lda zp
-        ldx SINTBL,y
-        jsr smul128
-        sta tmp4
-        ldx ix
+        ldy zp
         sec
         lda tmp3
-        sbc tmp4
+        sbc MULXS,y
         sta RY,x
-        ldy angx
-        lda yp
-        ldx SINTBL,y
-        jsr smul128
-        sta tmp3
-        ldy angx
-        lda zp
-        ldx COSTBL,y
-        jsr smul128
-        clc
-        adc tmp3
-        ldx ix
-        sta RZ,x
         lda xp
         sta RX,x
         ; PX = bposx + xp (xp signed), saturate to 0..255
@@ -488,36 +499,59 @@ xf_nx:  inx
         jmp xf_lp
 xf_dn:  rts
 
-smul128:
-        stx mulB
-        sta mulA
-        stz sgn
-        lda mulA
-        bpl sm1
-        eor #$FF
-        clc
-        adc #1
-        sta mulA
-        lda #1
+; Rebuild four small tables from the live angles, not from prerecorded frames.
+; Repeated addition computes exact products before the same /128 truncation.
+build_rotations:
+        ldy angx
+        lda COSTBL,y
+        ldx #>MULXC
+        jsr rotation_table
+        ldy angx
+        lda SINTBL,y
+        ldx #>MULXS
+        jsr rotation_table
+        ldy angy
+        lda COSTBL,y
+        ldx #>MULYC
+        jsr rotation_table
+        ldy angy
+        lda SINTBL,y
+        ldx #>MULYS
+rotation_table:
+        stz bgptr
+        stx bgptr+1
         sta sgn
-sm1:    lda mulB
-        bpl sm2
+        cmp #0
+        bpl rt_positive
         eor #$FF
         clc
         adc #1
+rt_positive:
         sta mulB
-        lda sgn
-        eor #1
-        sta sgn
-sm2:    stz resL
+        stz resL
         stz resH
-        lda mulA
-        ldx #8
-smlp:   asl resL
-        rol resH
+        ldx #0                  ; negative coordinate (0, -1, ... -40)
+        ldy #0                  ; positive coordinate (0, 1, ... 40)
+rt_loop:
+        lda resL
         asl a
-        bcc smnx
-        tay
+        lda resH
+        rol a
+        bit sgn
+        bpl rt_store
+        eor #$FF
+        clc
+        adc #1
+rt_store:
+        sta (bgptr),y
+        eor #$FF
+        clc
+        adc #1
+        phy
+        phx
+        ply
+        sta (bgptr),y
+        ply
         clc
         lda resL
         adc mulB
@@ -525,22 +559,11 @@ smlp:   asl resL
         lda resH
         adc #0
         sta resH
-        tya
-smnx:   dex
-        bne smlp
-        lda resH
-        ldx #7
-sms:    lsr a
-        ror resL
         dex
-        bne sms
-        lda resL
-        ldx sgn
-        beq smdn
-        eor #$FF
-        clc
-        adc #1
-smdn:   rts
+        iny
+        cpy #41
+        bne rt_loop
+        rts
 
 ; Quads stored as 4 verts; facing from first 3 (16-bit cross Z)
 calcvis:
@@ -583,6 +606,38 @@ cv_lp:  stx fi
         sbc tmp4
         sta e2y
         lda e1x
+        beq cv_pzero
+        lda e2y
+        beq cv_pzero
+        lda e1y
+        beq cv_qzero
+        lda e2x
+        beq cv_qzero
+        lda e1x
+        eor e2y
+        sta tmp0
+        lda e1y
+        eor e2x
+        eor tmp0
+        bpl cv_products
+        lda tmp0                ; opposite product signs decide the cross sign
+        bmi cv_hidden
+        bra cv_visible
+cv_pzero:
+        lda e1y
+        beq cv_hidden
+        lda e2x
+        beq cv_hidden
+        eor e1y
+        bmi cv_visible
+        bra cv_hidden
+cv_qzero:
+        lda e1x
+        eor e2y
+        bmi cv_hidden
+        bra cv_visible
+cv_products:
+        lda e1x
         ldx e2y
         jsr smul16
         lda resL
@@ -599,14 +654,18 @@ cv_lp:  stx fi
         lda nzhi
         sbc resH
         sta nzhi
-        ldx fi
-        stz fvis,x
         lda nzhi
-        bmi cv_nx
+        bmi cv_hidden
         ora nz
-        beq cv_nx
+        beq cv_hidden
+cv_visible:
+        ldx fi
         lda #1
         sta fvis,x
+        bra cv_nx
+cv_hidden:
+        ldx fi
+        stz fvis,x
 cv_nx:  clc
         lda faceptr
         adc #4                 ; quad stride
@@ -621,47 +680,9 @@ cv_nx:  clc
         jmp cv_lp
 cv_dn:  rts
 
-smul16: stx mulB
-        sta mulA
-        stz sgn
-        lda mulA
-        bpl sh1
-        eor #$FF
-        clc
-        adc #1
-        sta mulA
-        lda #1
-        sta sgn
-sh1:    lda mulB
-        bpl sh2
-        eor #$FF
-        clc
-        adc #1
-        sta mulB
-        lda sgn
-        eor #1
-        sta sgn
-sh2:    stz resL
-        stz resH
-        lda mulA
-        ldx #8
-shlp:   asl resL
-        rol resH
-        asl a
-        bcc shnx
-        tay
-        clc
-        lda resL
-        adc mulB
-        sta resL
-        lda resH
-        adc #0
-        sta resH
-        tya
-shnx:   dex
-        bne shlp
-        ldx sgn
-        beq shdn
+smul16: jsr magnitude_product
+        bit sgn
+        bpl shdn
         lda resL
         eor #$FF
         clc
@@ -672,6 +693,54 @@ shnx:   dex
         adc #0
         sta resH
 shdn:   rts
+
+; |A * X| = Q(|A|+|X|) - Q(abs(|A|-|X|)), Q(n)=floor(n*n/4).
+; Apply the product's sign only after subtracting the unsigned magnitudes.
+magnitude_product:
+        stx mulB
+        sta mulA
+        eor mulB
+        sta sgn
+        lda mulA
+        bpl mp_a
+        eor #$FF
+        clc
+        adc #1
+        sta mulA
+mp_a:   lda mulB
+        bpl mp_b
+        eor #$FF
+        clc
+        adc #1
+        sta mulB
+mp_b:   clc
+        lda mulA
+        adc mulB
+        tax
+        lda QSLO,x
+        sta resL
+        lda QSHI,x
+        bcc mp_sum
+        lda #$40                ; the only 9-bit sum is 128+128
+mp_sum:
+        sta resH
+        sec
+        lda mulA
+        sbc mulB
+        bcs mp_diff
+        eor #$FF
+        clc
+        adc #1
+mp_diff:
+        tax
+        sec
+        lda resL
+        sbc QSLO,x
+        sta resL
+        lda resH
+        sbc QSHI,x
+        sta resH
+        rts
 
 ; Opaque checkerboard: visible faces filled white or black (not see-through).
 fillsolid:
@@ -773,9 +842,12 @@ lp_tri: lda #3
         sta nvrt
         rts
 
-; Convex scanline fill of FSX/FSY[0..nvrt)
+; Advance both polygon edges with each painted row, without a span-table pass.
+; Quantization can make a thin quad non-monotone. Repainting it through the
+; general min/max path is exact: any spans already painted are a subset.
 fillpoly:
         ldx #0
+        stz topvert
         lda FSY,x
         sta ymin
         sta ymax
@@ -784,6 +856,7 @@ fp_mm:  lda FSY,x
         cmp ymin
         bcs fp_yhi
         sta ymin
+        stx topvert
 fp_yhi: cmp ymax
         bcc fp_ynx
         sta ymax
@@ -792,6 +865,10 @@ fp_ynx: inx
         bcc fp_mm
         ; clamp scan range to screen
         lda ymin
+        cmp ymax
+        bne fp_has_height
+        rts
+fp_has_height:
         cmp #YMAX0
         bcc fp_ycl
         rts                     ; fully offscreen
@@ -800,19 +877,48 @@ fp_ycl: lda ymax
         bcc fp_yr
         lda #YMAX0-1
         sta ymax
-fp_yr:  lda ymin
-        sta ycur
-fp_row: lda ycur
-        cmp ymax
-        beq fp_last
-        bcc fp_ok
-        rts
-fp_last:
-fp_ok:  lda #$FF
-        sta xl
-        stz xr
+fp_yr:  stz fillmode
+        lda topvert
+        sta walkvert
+        sta walkvert+8
         ldx #0
-fp_ed:  stx edgi
+        jsr next_edge
+        bcs fp_general
+        ldx #8
+        jsr next_edge
+        bcs fp_general
+        lda ymin
+        sta ycur
+fp_live_row:
+        lda walkx+8
+        eor walkflip+8
+        sta xr
+        lda walkx
+        eor walkflip
+        tax
+        cmp xr
+        bcc fp_live_ordered
+        beq fp_live_ordered
+        ldx xr
+        sta xr
+fp_live_ordered:
+        ldy ycur
+        jmp fp_address
+fp_general:
+        lda #1
+        sta fillmode
+        lda ymin
+        tax
+fp_init:
+        lda #$FF
+        sta SPANL,x
+        stz SPANR,x
+        inx
+        cpx ymax
+        bcc fp_init
+        beq fp_init
+        stz edgi
+fp_ed:  ldx edgi
         txa
         clc
         adc #1
@@ -831,7 +937,9 @@ fp_e2:  tay                     ; Y = next vert
         ; skip horizontal
         lda y0
         cmp y1
-        beq fp_en
+        bne fp_nonflat
+        jmp fp_en
+fp_nonflat:
         ; order so y0 < y1
         bcc fp_ord
         ; swap endpoints
@@ -843,123 +951,293 @@ fp_e2:  tay                     ; Y = next vert
         ldx x1
         stx x0
         sta x1
-fp_ord: ; if ycur < y0 or ycur > y1 skip (inclusive ends)
-        lda ycur
-        cmp y0
-        bcc fp_en
-        cmp y1
-        beq fp_int
-        bcc fp_int
-        bra fp_en
-fp_int: ; x = x0 + (ycur-y0)*(x1-x0)/(y1-y0)
-        sec
-        lda ycur
-        sbc y0
-        sta tmp0                ; dy0
+fp_ord:
         sec
         lda y1
         sbc y0
-        sta tmp1                ; dy
+        sta edgedy
         sec
         lda x1
         sbc x0
-        sta tmp2                ; dx signed
-        lda tmp0
-        ldx tmp2
-        jsr smul16              ; dy0 * dx → res
-        lda tmp1
-        jsr div16u              ; res / dy → A
+        bcs fp_positive
+        eor #$FF
         clc
-        adc x0
-        ; update xl/xr
-        cmp xl
-        bcs fp_xr
-        sta xl
-fp_xr:  cmp xr
-        bcc fp_en
-        sta xr
-fp_en:  ldx edgi
+        adc #1
+        sta edgedx
+        lda #$FF
+        bra fp_direction
+fp_positive:
+        sta edgedx
+        lda #0
+fp_direction:
+        sta edgeflip
+        lda x0
+        eor edgeflip
+        sta edgecur
+        ldx #0
+        lda edgedx
+fp_quotient:
+        cmp edgedy
+        bcc fp_fraction
+        sbc edgedy
         inx
-        cpx nvrt
-        beq fp_hl
+        bra fp_quotient
+fp_fraction:
+        sta edgefrac
+        stx edgewhole
+        stz edgerem
+        ldy y0
+fp_slow_row:
+        lda edgecur
+        eor edgeflip
+        cmp SPANL,y
+        bcs fp_xr
+        sta SPANL,y
+fp_xr:  cmp SPANR,y
+        bcc fp_step
+        sta SPANR,y
+fp_step:
+        cpy y1
+        beq fp_en
+        clc
+        lda edgerem
+        adc edgefrac
+        cmp edgedy
+        bcc fp_slow_remainder
+        sbc edgedy
+fp_slow_remainder:
+        sta edgerem
+        lda edgecur
+        adc edgewhole
+        sta edgecur
+        iny
+        bra fp_slow_row
+fp_en:  inc edgi
+        lda edgi
+        cmp nvrt
+        beq fp_rows
         jmp fp_ed
-fp_hl:  lda xl
-        cmp #$FF
-        beq fp_ny               ; no hits
-        cmp xr
-        beq fp_one
-        bcc fp_hline
-        ; xl > xr shouldn't happen often
-        ldx xl
-        lda xr
-        sta xl
-        stx xr
-fp_hline:
-        jsr hline
+fp_rows:
+        lda ymin
+        sta ycur
+fp_row: ldy ycur
+        ldx SPANL,y
+        cpx #$FF
+        bne fp_span
+        jmp fp_ny
+fp_span:
+        txa
+        cmp SPANR,y
+        bcc fp_ordered
+        beq fp_ordered
+        sta xr
+        ldx SPANR,y
+        bra fp_address
+fp_ordered:
+        lda SPANR,y
+        sta xr
+fp_address:
+        lda ROWL,y
+        sta ptr
+        lda ROWH,y
+        clc
+        adc pgoff
+        sta ptr+1
+        lda XLEFTMASK,x
+        sta spanmask
+        lda XCOL,x
+        sta col
+        ldx xr
+        lda XRIGHTMASK,x
+        sta tmp4
+        lda XCOL,x
+        sta lastcol
+        ldy col
+        cpy lastcol
+        bne fp_multi
+        lda tmp4
+        and spanmask
+        sta spanmask
+        lda ink
+        beq fp_one_black
+        lda spanmask
+        ora (ptr),y
+        sta (ptr),y
+        jmp fp_ny
+fp_one_black:
+        lda spanmask
+        eor #$FF
+        and (ptr),y
+        sta (ptr),y
         bra fp_ny
-fp_one: lda xl
-        sta cx
-        lda ycur
-        sta cy
-        jsr seedcol
-        jsr plotcur
-fp_ny:  inc ycur
+fp_multi:
+        lda ink
+        beq fp_black
+        lda spanmask
+        ora (ptr),y
+        sta (ptr),y
+        iny
+fp_white_loop:
+        cpy lastcol
+        beq fp_white_end
+        lda (ptr),y
+        ora #$7F
+        sta (ptr),y
+        iny
+        bra fp_white_loop
+fp_white_end:
+        lda tmp4
+        ora (ptr),y
+        sta (ptr),y
+        bra fp_ny
+fp_black:
+        lda spanmask
+        eor #$FF
+        and (ptr),y
+        sta (ptr),y
+        iny
+fp_black_loop:
+        cpy lastcol
+        beq fp_black_end
+        lda (ptr),y
+        and #$80
+        sta (ptr),y
+        iny
+        bra fp_black_loop
+fp_black_end:
+        lda tmp4
+        eor #$FF
+        and (ptr),y
+        sta (ptr),y
+fp_ny:  lda fillmode
+        beq fp_live_next
+        inc ycur
         lda ycur
         cmp ymax
-        beq fp_bot
-        bcc fp_more
+        bcc fp_repeat
+        beq fp_repeat
         rts
-fp_bot: jmp fp_row              ; include ymax
-fp_more:jmp fp_row
+fp_repeat:
+        jmp fp_row
 
-; resL:resH / A(unsigned) → A quotient (signed num / unsigned den)
-div16u: sta tmp3
-        lda resH
-        bpl d6pos
-        ; negate
-        lda resL
+fp_live_next:
+        lda ycur
+        cmp ymax
+        bcc fp_update
+        rts
+fp_update:
+        cmp walkend
+        bne fp_left_step
+        ldx #0
+        jsr next_edge
+        bcc fp_left_step
+        jmp fp_general
+fp_left_step:
+        clc
+        lda walkerr
+        adc walkfrac
+        cmp walkdy
+        bcc fp_left_remainder
+        sbc walkdy
+fp_left_remainder:
+        sta walkerr
+        lda walkx
+        adc walkwhole
+        sta walkx
+        lda ycur
+        cmp walkend+8
+        bne fp_right_step
+        ldx #8
+        jsr next_edge
+        bcc fp_right_step
+        jmp fp_general
+fp_right_step:
+        clc
+        lda walkerr+8
+        adc walkfrac+8
+        cmp walkdy+8
+        bcc fp_right_remainder
+        sbc walkdy+8
+fp_right_remainder:
+        sta walkerr+8
+        lda walkx+8
+        adc walkwhole+8
+        sta walkx+8
+        inc ycur
+        jmp fp_live_row
+
+; X=0 walks forward through the vertices; X=8 walks backward.
+; Carry set requests the general filler for an interior flat/upward edge.
+next_edge:
+        ldy walkvert,x
+        lda FSX,y
+        sta x0
+        lda FSY,y
+        sta y0
+        cpx #0
+        beq ne_forward
+        dey
+        bpl ne_vertex
+        ldy nvrt
+        dey
+        bra ne_vertex
+ne_forward:
+        iny
+        cpy nvrt
+        bcc ne_vertex
+        ldy #0
+ne_vertex:
+        sty walkvert,x
+        lda FSY,y
+        sta walkend,x
+        cmp y0
+        bcc ne_general
+        bne ne_slope
+        cmp ymin
+        beq next_edge
+ne_general:
+        sec
+        rts
+ne_slope:
+        sec
+        sbc y0
+        sta walkdy,x
+        stz walkflip,x
+        lda FSX,y
+        sec
+        sbc x0
+        bcs ne_magnitude
         eor #$FF
         clc
         adc #1
-        sta resL
-        lda resH
-        eor #$FF
-        adc #0
-        sta resH
-        lda #1
-        sta sgn
-        bra d6go
-d6pos:  stz sgn
-d6go:   stz tmp4                ; quot
-        lda tmp3
-        beq d6z
-d6lp:   lda resH
-        bne d6sub
-        lda resL
-        cmp tmp3
-        bcc d6dn
-d6sub:  sec
-        lda resL
-        sbc tmp3
-        sta resL
-        lda resH
-        sbc #0
-        sta resH
-        inc tmp4
-        bne d6lp
-        ; overflow cap
-d6dn:   lda tmp4
-        ldx sgn
-        beq d6z
-        eor #$FF
+        ldy #$FF
+        sty walkflip,x
+ne_magnitude:
+        ldy #0
+ne_divide:
+        cmp walkdy,x
+        bcc ne_fraction
+        sbc walkdy,x
+        iny
+        bra ne_divide
+ne_fraction:
+        sta walkfrac,x
+        tya
+        sta walkwhole,x
+        stz walkerr,x
+        lda x0
+        eor walkflip,x
+        sta walkx,x
         clc
-        adc #1
-d6z:    rts
+        rts
 
-; Horizontal span xl..xr at ycur (clipped to hi-res byte cols)
+; Mask the two boundary bytes, then fill whole seven-pixel bytes.
+; Preserve bit 7 (artifact-color phase), even for a full-byte black span.
 hline:  lda ycur
         cmp #YMAX0
-        bcs hl_dn
+        bcc hl_valid
+        rts
+hl_valid:
         lda xl
         cmp xr
         bcc hl_go
@@ -968,28 +1246,80 @@ hline:  lda ycur
         lda xr
         sta xl
         stx xr
-hl_go:  lda xl
-        sta cx
-        lda ycur
-        sta cy
-        jsr seedcol
-hl_lp:  lda col
-        cmp #40
-        bcs hl_dn
-        jsr plotcur
-        lda cx
-        cmp xr
-        bcs hl_dn
-        inc cx
-        ldx bitn
-        inx
-        cpx #7
-        bne hl_bit
-        inc col
-        ldx #0
-hl_bit: stx bitn
-        bra hl_lp
-hl_dn:  rts
+hl_go:  ldy ycur
+        lda ROWL,y
+        sta ptr
+        lda ROWH,y
+        clc
+        adc pgoff
+        sta ptr+1
+        ldx xl
+        lda XCOL,x
+        sta col
+        lda XLEFTMASK,x
+        sta spanmask
+        ldx xr
+        lda XCOL,x
+        sta lastcol
+        lda XRIGHTMASK,x
+        sta tmp4
+        ldy col
+        cpy lastcol
+        bne hl_multi
+        and spanmask
+        sta spanmask
+        lda ink
+        beq hl_one_black
+        lda spanmask
+        ora (ptr),y
+        sta (ptr),y
+        rts
+hl_one_black:
+        lda spanmask
+        eor #$FF
+        and (ptr),y
+        sta (ptr),y
+        rts
+hl_multi:
+        lda ink
+        beq hl_black
+        lda spanmask
+        ora (ptr),y
+        sta (ptr),y
+        iny
+hl_white_loop:
+        cpy lastcol
+        beq hl_white_end
+        lda (ptr),y
+        ora #$7F
+        sta (ptr),y
+        iny
+        bra hl_white_loop
+hl_white_end:
+        lda tmp4
+        ora (ptr),y
+        sta (ptr),y
+        rts
+hl_black:
+        lda spanmask
+        eor #$FF
+        and (ptr),y
+        sta (ptr),y
+        iny
+hl_black_loop:
+        cpy lastcol
+        beq hl_black_end
+        lda (ptr),y
+        and #$80
+        sta (ptr),y
+        iny
+        bra hl_black_loop
+hl_black_end:
+        lda tmp4
+        eor #$FF
+        and (ptr),y
+        sta (ptr),y
+        rts
 
 drawmesh:
         lda #<EDGES
@@ -1039,7 +1369,17 @@ dc_nx:  clc
         jmp dc_lp
 dc_dn:  rts
 
-line:   sec
+line:   lda y0
+        cmp y1
+        bne line_sloped
+        sta ycur
+        lda x0
+        sta xl
+        lda x1
+        sta xr
+        jmp hline
+line_sloped:
+        sec
         lda x1
         sbc x0
         bcs lxpos
@@ -1067,107 +1407,27 @@ lydo:   sec
 lypos:  sta dy
         lda #1
         sta sys
-linit:  sec
-        lda dx
-        sbc dy
-        sta err
-        lda #0
-        sbc #0
-        sta errh
-        lda x0
+linit:  lda x0
         sta cx
         lda y0
         sta cy
         jsr seedcol
-lloop:  lda cx
-        cmp x1
-        bne lplot
-        lda cy
-        cmp y1
-        bne lplot
-        jsr plotcur
-        rts
-lplot:  jsr plotcur
-        lda err
-        asl a
-        sta e2
-        lda errh
-        rol a
-        sta e2h
-        clc
-        lda e2
-        adc dy
-        sta tmp0
-        lda e2h
-        adc #0
-        bmi lychk
-        bne lxstep
-        lda tmp0
-        beq lychk
-lxstep: sec
-        lda err
-        sbc dy
-        sta err
-        lda errh
-        sbc #0
-        sta errh
-        lda sxs
-        bmi lxneg
-        inc cx
-        ldx bitn
-        inx
-        cpx #7
-        bne lxok
-        inc col
-        ldx #0
-lxok:   stx bitn
-        bra lychk
-lxneg:  dec cx
-        ldx bitn
-        bne lxn2
-        dec col
-        ldx #7
-lxn2:   dex
-        stx bitn
-lychk:  sec
-        lda e2
-        sbc dx
-        lda e2h
-        sbc #0
-        bmi ly_do
-        jmp lloop
-ly_do:  clc
-        lda err
-        adc dx
-        sta err
-        lda errh
-        adc #0
-        sta errh
-        lda sys
-        bmi lyneg
-        inc cy
-        jmp lloop
-lyneg:  dec cy
-        jmp lloop
+        tax
+        lda BITMASK,x
+        sta pixelmask
+        lda dx
+        cmp dy
+        bcs line_xmajor
+        jmp line_ymajor
 
-seedcol:
-        lda cx
-        stz col
-sclp:   cmp #7
-        bcc scdn
-        sbc #7
-        inc col
-        bra sclp
-scdn:   sta bitn
-        rts
-
-plotcur:
-        lda cy
-        cmp #YMAX0
-        bcs pcsk
-        lda col
-        cmp #40
-        bcs pcsk
+; A major-axis error in 0..major-1 replaces the doubled signed 16-bit error.
+; Starting at floor(major/2) preserves the original strict Bresenham ties.
+; Grid and mesh lines are white; opaque black faces use hline, not line.
+line_xmajor:
+        lsr a
+        sta err
+        ldx dx
+line_xrow:
         ldy cy
         lda ROWL,y
         sta ptr
@@ -1175,20 +1435,168 @@ plotcur:
         clc
         adc pgoff
         sta ptr+1
-        ldx bitn
-        cpx #7
-        bcs pcsk
-        lda BITMASK,x
+line_xloop:
         ldy col
-        ldx ink
-        beq pc_blk
+        lda pixelmask
         ora (ptr),y
         sta (ptr),y
+        cpx #0
+        bne line_xnext
         rts
-pc_blk: eor #$FF
-        and (ptr),y
+line_xnext:
+        dex
+        lda sxs
+        bmi line_xnegative
+        asl pixelmask
+        bpl line_xerror
+        inc col
+        lda #1
+        sta pixelmask
+        bra line_xerror
+line_xnegative:
+        lsr pixelmask
+        bne line_xerror
+        dec col
+        lda #$40
+        sta pixelmask
+line_xerror:
+        sec
+        lda err
+        sbc dy
+        sta err
+        bcs line_xloop
+        clc
+        adc dx
+        sta err
+        clc
+        lda cy
+        adc sys
+        sta cy
+        bra line_xrow
+
+line_ymajor:
+        lda dy
+        lsr a
+        sta err
+        ldx dy
+line_yrow:
+        ldy cy
+        lda ROWL,y
+        sta ptr
+        lda ROWH,y
+        clc
+        adc pgoff
+        sta ptr+1
+        ldy col
+        lda pixelmask
+        ora (ptr),y
         sta (ptr),y
-pcsk:   rts
+        cpx #0
+        bne line_ynext
+        rts
+line_ynext:
+        dex
+        sec
+        lda err
+        sbc dx
+        sta err
+        bcs line_ystep
+        clc
+        adc dy
+        sta err
+        lda sxs
+        bmi line_ynegative
+        asl pixelmask
+        bpl line_ystep
+        inc col
+        lda #1
+        sta pixelmask
+        bra line_ystep
+line_ynegative:
+        lsr pixelmask
+        bne line_ystep
+        dec col
+        lda #$40
+        sta pixelmask
+line_ystep:
+        clc
+        lda cy
+        adc sys
+        sta cy
+        bra line_yrow
+
+seedcol:
+        ldx cx
+        lda XCOL,x
+        sta col
+        lda XBIT,x
+        sta bitn
+        rts
+
+build_tables:
+        stz resL
+        stz resH
+        stz col
+        stz bitn
+        ldx #0
+bt_lp:  lda col
+        sta XCOL,x
+        lda bitn
+        sta XBIT,x
+        tay
+        lda LEFTMASK,y
+        sta XLEFTMASK,x
+        lda RIGHTMASK,y
+        sta XRIGHTMASK,x
+        inc bitn
+        lda bitn
+        cmp #7
+        bne bt_square
+        stz bitn
+        inc col
+bt_square:
+        lda resL
+        sta QSLO,x
+        lda resH
+        sta QSHI,x
+        txa
+        lsr a
+        adc #0                  ; Q(n+1)-Q(n) = ceil(n/2)
+        clc
+        adc resL
+        sta resL
+        lda resH
+        adc #0
+        sta resH
+        inx
+        bne bt_lp
+        rts
+
+; Copy the room into page 2 and the cache, including hi-res memory holes.
+cache_grid:
+        stz ptr
+        stz bgptr
+        stz copydst
+        lda #$20
+        sta ptr+1
+        lda #>ROOM
+        sta bgptr+1
+        lda #$40
+        sta copydst+1
+        ldx #$20
+        ldy #0
+cg_byte:
+        lda (ptr),y
+        sta (bgptr),y
+        sta (copydst),y
+        iny
+        bne cg_byte
+        inc ptr+1
+        inc bgptr+1
+        inc copydst+1
+        dex
+        bne cg_byte
+        rts
 
 build_rows:
         ldx #0
@@ -1237,9 +1645,7 @@ brdn:   lda tmp0
         bne br_lp
         rts
 
-clear_hgr:
-        lda pgoff
-        bne clear_p2
+clear_page1:
         ldx #0
         lda #0
 ch1:    sta $2000,x
@@ -1277,45 +1683,6 @@ ch1:    sta $2000,x
         inx
         bne ch1
         rts
-clear_p2:
-        ldx #0
-        lda #0
-ch2:    sta $4000,x
-        sta $4100,x
-        sta $4200,x
-        sta $4300,x
-        sta $4400,x
-        sta $4500,x
-        sta $4600,x
-        sta $4700,x
-        sta $4800,x
-        sta $4900,x
-        sta $4A00,x
-        sta $4B00,x
-        sta $4C00,x
-        sta $4D00,x
-        sta $4E00,x
-        sta $4F00,x
-        sta $5000,x
-        sta $5100,x
-        sta $5200,x
-        sta $5300,x
-        sta $5400,x
-        sta $5500,x
-        sta $5600,x
-        sta $5700,x
-        sta $5800,x
-        sta $5900,x
-        sta $5A00,x
-        sta $5B00,x
-        sta $5C00,x
-        sta $5D00,x
-        sta $5E00,x
-        sta $5F00,x
-        inx
-        bne ch2
-        rts
-
 ; Room grid geometry (5% side margins in drawable 0..255 space)
 VGRIDX: .byte $0E,$1E,$2E,$3E,$4E,$5F,$6F,$7F,$8F,$9F,$B0,$C0,$D0,$E0,$F1
 HGRIDY: .byte $00,$10,$20,$31,$41,$52,$62,$73,$83,$94,$A4,$B5
@@ -1326,6 +1693,10 @@ FLXR:   .byte $F5,$F9
 
 BITMASK:
         .byte $01,$02,$04,$08,$10,$20,$40
+LEFTMASK:
+        .byte $7F,$7E,$7C,$78,$70,$60,$40
+RIGHTMASK:
+        .byte $01,$03,$07,$0F,$1F,$3F,$7F
 
 VERTX:
         .byte $00,$00,$0F,$0E,$0B,$06,$00,$FA,$F5,$F2,$F1,$F2,$F5,$FA,$00,$06
@@ -1462,3 +1833,9 @@ COSTBL:
         .byte $00,$F4,$E7,$DB,$CF,$C4,$B9,$AF,$A6,$9E,$96,$90,$8B,$86,$83,$82
         .byte $81,$82,$83,$86,$8B,$90,$96,$9E,$A6,$AF,$B9,$C4,$CF,$DB,$E7,$F4
         .byte $00,$0C,$19,$25,$31,$3C,$47,$51,$5A,$62,$6A,$70,$75,$7A,$7D,$7E
+
+        .res <(-*)             ; page-align the hot indexed masks
+XLEFTMASK:
+        .res 256
+XRIGHTMASK:
+        .res 256

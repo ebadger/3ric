@@ -141,9 +141,9 @@
       "title": "Bouncing Ball",
       "author": "scottybe",
       "authorUrl": "https://github.com/scottybe",
-      "mode": "Serial",
+      "mode": "Hi-res",
       "src": "programs/bouncing-ball.s",
-      "description": "Like the Amiga demo but not an illusion - just a bouncing (and rotating) ball rendered in 3D. Best at max speed!",
+      "description": "Like the Amiga demo but not an illusion - a bouncing, rotating checkerboard ball rendered live in 3D on the 65C02. Optimized for about 10x fewer CPU cycles at native speed. Any key exits.",
       "tags": ["demo", "hi-res", "animation"]
     }
   ]
