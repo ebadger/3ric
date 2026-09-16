@@ -217,6 +217,44 @@ runHook(S.INIT_BRK, "init hit");
   ok(vm.peek(S.SHOTS + S.B_ACT) === 0, "the torpedo is consumed");
 }
 
+console.log("H2) glancing shot and live fire-and-fly");
+runHook(S.INIT_BRK, "init glance");
+{
+  pokeShip(S.SHIP0, { x: 40, y: 80, act: 1, inv: 30 });
+  pokeShip(S.SHIP1, { x: 80, y: 80, act: 1, inv: 0 });
+  vm.poke(S.P1SC, 0);
+  vm.poke(S.P2SC, 0);
+  vm.poke(S.GSTATE, S.GS_PLAY);
+  vm.poke(S.SHOTS + S.B_ACT, 1);
+  vm.poke(S.SHOTS + S.B_XL, 80);
+  vm.poke(S.SHOTS + S.B_XH, 0);
+  vm.poke(S.SHOTS + S.B_YL, 86);
+  vm.poke(S.SHOTS + S.B_OWN, 0);
+  vm.poke(S.SHOTS + S.B_LIFE, 10);
+  runHook(S.HIT_BRK, "glancing hit");
+  ok(vm.peek(S.SHIP1 + S.O_ACT) === 0, "a shot 6px off the centre still kills");
+  ok(vm.peek(S.P1SC) === 1, "glancing hit scores");
+}
+
+runHook(S.INIT_BRK, "init fly");
+{
+  pokeShip(S.SHIP0, { x: 40, y: 80, ang: 0, act: 1, inv: 0, dead: 0 });
+  pokeShip(S.SHIP1, { x: 80, y: 80, ang: 16, act: 1, inv: 0, dead: 0 });
+  vm.poke(S.SHIP0 + S.O_COOL, 0);
+  vm.poke(S.P1SC, 0);
+  vm.poke(S.P2SC, 0);
+  vm.poke(S.GSTATE, S.GS_PLAY);
+  for (let i = 0; i < 4; i++) vm.poke(S.SHOTS + i * 16 + S.B_ACT, 0);
+  runHook(S.FIRE_BRK, "live fire");
+  let killed = false;
+  for (let i = 0; i < 20; i++) {
+    runHook(S.STEP_BRK, `fly ${i}`);
+    if (vm.peek(S.SHIP1 + S.O_ACT) === 0) { killed = true; break; }
+  }
+  ok(killed, "a heading-0 torpedo destroys a ship 40px ahead");
+  ok(vm.peek(S.P1SC) === 1, "live fire-and-fly awards a point");
+}
+
 console.log("I) dual SNES pads");
 runHook(S.INIT_BRK, "init pads");
 {

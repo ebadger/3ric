@@ -181,7 +181,9 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     working RAM at `$6200`, and ship/shot structs at `$6300`.
   - **Gravity:** each live ship is pulled toward the sun at (140, 80) with a 32-entry
     magnitude table indexed by Manhattan distance. Near-sun Chebyshev range 6 is fatal;
-    the opponent scores if the match is underway. Shots that strike a ship or the sun die.
+    the opponent scores if the match is underway. Ships spawn off the sun's row so the
+    opening volley is not eaten by the well. Torpedoes use a Chebyshev box that covers the
+    wedge silhouette (radius 10) plus shot step, and die on a ship or the sun.
   - **Controls:** SNES pad 1 and pad 2 both go through `PTRIG` + `GAMEPAD1`/`GAMEPAD2`.
     D-pad left/right rotate, Up/B thrust, A/Y fire, Select hyperspace, Start starts or
     rematches. Opposing D-pad directions cancel. Keyboard P1 is A/D or arrows to rotate,

@@ -67,15 +67,15 @@ NANG0    = 32
 SUNX     = 140
 SUNY     = 80
 SUNHIT   = 6
-SHIPHIT  = 5
-SHOTHIT  = 4
+SHIPHIT  = 10
+SHOTHIT  = 10
 MAXV0    = 4
 HOLD0    = 4
 FIRECD0  = 10
-SHOTLIFE = 40
+SHOTLIFE = 72
 WINSC    = 5
 DEADWAIT = 40
-INV0     = 30
+INV0     = 24
 NSHOT    = 4
 BSIZE    = 16
 
@@ -1049,18 +1049,6 @@ tf_use:
         lda shipi
         ldy #b_own
         sta (objptr),y
-        ldy #o_xl
-        lda (save0),y
-        ldy #b_xl
-        sta (objptr),y
-        ldy #o_xh
-        lda (save0),y
-        ldy #b_xh
-        sta (objptr),y
-        ldy #o_yl
-        lda (save0),y
-        ldy #b_yl
-        sta (objptr),y
         ldy #o_ang
         lda (save0),y
         tax
@@ -1069,6 +1057,34 @@ tf_use:
         sta (objptr),y
         lda SHOTDY,x
         ldy #b_dy
+        sta (objptr),y
+        lda SHNX,x
+        sta tmpa
+        lda SHNY,x
+        sta tmpb
+        lda #0
+        sta tmpc
+        lda tmpa
+        bpl tf_xp
+        lda #$FF
+        sta tmpc
+tf_xp:
+        clc
+        ldy #o_xl
+        lda (save0),y
+        adc tmpa
+        ldy #b_xl
+        sta (objptr),y
+        ldy #o_xh
+        lda (save0),y
+        adc tmpc
+        ldy #b_xh
+        sta (objptr),y
+        clc
+        ldy #o_yl
+        lda (save0),y
+        adc tmpb
+        ldy #b_yl
         sta (objptr),y
         lda save0
         sta objptr
@@ -1237,10 +1253,10 @@ spawn_one:
         sta (objptr),y
         lda shipi
         bne so_p2
-        lda #40
+        lda #52
         ldy #o_xl
         sta (objptr),y
-        lda #80
+        lda #44
         ldy #o_yl
         sta (objptr),y
         lda #0
@@ -1248,10 +1264,10 @@ spawn_one:
         sta (objptr),y
         rts
 so_p2:
-        lda #240
+        lda #228
         ldy #o_xl
         sta (objptr),y
-        lda #80
+        lda #116
         ldy #o_yl
         sta (objptr),y
         lda #16
