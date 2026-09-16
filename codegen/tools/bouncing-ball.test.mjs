@@ -25,6 +25,7 @@ const vz = imageData("VERTZ", 114).map(signed);
 const sin = imageData("SINTBL", 64).map(signed);
 const cos = imageData("COSTBL", 64).map(signed);
 const faces = imageData("FACET", 512);
+const edges = imageData("EDGES", 960);
 
 assert.equal(org, 0x0800);
 assert.ok(org + bytes.length <= 0x2000, "the entire raw image stays below hi-res page 1");
@@ -35,6 +36,8 @@ assert.equal(S.ROOM + 0x2000, 0x9000, "the cache ends before BASIC ROM");
 assert.equal(S.NVERT0, 114);
 assert.equal(S.NFACE0, 128);
 assert.equal(S.NEDGE0, 240);
+assert.ok(S.XMINB0 >= 40 && S.XMAXB0 + 40 <= 255);
+assert.ok(S.YMINB0 >= 40 && S.YMAXB0 + 40 < 192);
 assert.equal(baseline.frames.length, 128);
 assert.equal(baseline.sourceCommit, "fc4d46e6b8ba9d83ab09cc7d2e1c175772594ea1");
 const gallery = JSON.parse(readFileSync(join(ROOT, "web", "gallery.json"), "utf8"));
@@ -167,6 +170,32 @@ console.log(`PASS 128 pixel-identical frames, bounces, page flips, and memory bo
   `${(originalTotal / optimizedTotal).toFixed(2)}x mean / ${worstRatio.toFixed(2)}x minimum, ` +
   `${Math.round(optimizedTotal / 128)} mean / ${worstFrame} worst cycles`);
 
+// All legal centers include both 12- and 13-byte rectangles, including column 0.
+const restoreRows = [0, 7, 63, 64, 127, 191];
+for (const page of [0, 1]) {
+  for (let x = S.XMINB0; x <= S.XMAXB0; x++) {
+    const lo = Math.floor((x - 40) / 7), hi = Math.floor((x + 40) / 7);
+    const min = restoreRows[(x - S.XMINB0) % restoreRows.length], max = Math.min(min + 2, 191);
+    assert.ok([12, 13].includes(hi - lo + 1));
+    const expected = Buffer.alloc(0x2000, 0xaa), other = Buffer.alloc(0x2000, 0x55);
+    vm.loadData(0x2000 + page * 0x2000, expected);
+    vm.loadData(0x2000 + (1 - page) * 0x2000, other);
+    vm.poke(S.BPOSX, x);
+    vm.poke(S.BBYMIN, min);
+    vm.poke(S.BBYMAX, max);
+    vm.poke(S.DRAWPG, page);
+    vm.poke(S.PGOFF, page * 0x20);
+    call(S.SAVE_BBOX);
+    call(S.CLEAR_BBOX);
+    for (let row = min; row <= max; row++) {
+      for (let col = lo; col <= hi; col++) expected[haddr(row) + col] = room[haddr(row) + col];
+    }
+    assert.deepEqual(video(page), expected, `exact restore at center ${x}, page ${page}`);
+    assert.deepEqual(video(1 - page), other, "restore never changes the other page");
+  }
+}
+console.log("PASS every restore width/alignment, row-bank transitions, and both page boundaries");
+
 // Exhaust all signed-byte products, including -128 * -128 (quarter-square index 256).
 for (let a = -128; a <= 127; a++) {
   for (let b = -128; b <= 127; b++) {
@@ -210,6 +239,25 @@ for (let ax = 0; ax < 64; ax++) {
   }
 }
 console.log("PASS all 4,096 independent angle pairs and exact face-visibility signs");
+
+for (const centerX of [S.XMINB0, S.XMAXB0]) {
+  for (const centerY of [S.YMINB0, S.YMAXB0]) {
+    vm.poke(S.BPOSX, centerX);
+    vm.poke(S.BPOSY, centerY);
+    for (let angle = 0; angle < 64; angle++) {
+      const ax = angle, ay = (angle + 12) % 64;
+      const expected = geometry(ax, ay, centerX, centerY);
+      vm.poke(S.ANGX, ax);
+      vm.poke(S.ANGY, ay);
+      call(S.XFORM);
+      assert.deepEqual(readBytes(S.PX, 114), Buffer.from(expected.px));
+      assert.deepEqual(readBytes(S.PY, 114), Buffer.from(expected.py));
+      assert.ok(expected.rx.every(v => centerX + v >= 0 && centerX + v <= 255));
+      assert.ok(expected.ry.every(v => centerY - v >= 0 && centerY - v < 192));
+    }
+  }
+}
+console.log("PASS unclipped projection at all four extreme ball positions");
 
 function setPixel(page, x, y, ink = 1) {
   const offset = haddr(y) + Math.floor(x / 7), mask = 1 << (x % 7);
@@ -309,6 +357,44 @@ for (const [i, polygon] of polygons.entries()) {
 }
 assert.deepEqual(readBytes(S.ROOM, 0x2000), room);
 console.log("PASS opaque polygons, inclusive edges, thin-quad fallback, clipping bounds, and both inks");
+
+function checkerInk(face) {
+  if (face < 16) return (face & 1) ^ 1;
+  if (face >= 112) return (face - 112) & 1;
+  const cell = face - 16;
+  return ((cell >> 4) + (cell & 15)) & 1;
+}
+
+for (let i = 0; i < 512; i++) {
+  const ax = i % 64, ay = (Math.floor(i / 64) * 7 + ax * 11) % 64;
+  const centerX = i % 4 < 2 ? S.XMINB0 : S.XMAXB0;
+  const centerY = i % 4 & 1 ? S.YMINB0 : S.YMAXB0;
+  const page = (i >> 2) & 1, pose = geometry(ax, ay, centerX, centerY);
+  const expected = Buffer.from(Array.from({ length: 0x2000 }, (_, n) => (n * 37 + i * 19) & 255));
+  vm.loadData(0x2000 + page * 0x2000, expected);
+  for (const [name, value] of Object.entries({
+    ANGX: ax, ANGY: ay, BPOSX: centerX, BPOSY: centerY, PGOFF: page * 0x20,
+  })) vm.poke(S[name], value);
+  call(S.XFORM);
+  call(S.CALCVIS);
+  call(S.FILLSOLID);
+  vm.poke(S.INK, 1);
+  call(S.DRAWMESH);
+  for (let face = 0; face < 128; face++) {
+    if (!pose.visible[face]) continue;
+    const ids = faces.slice(face * 4, face * 4 + 4);
+    if (ids[2] === ids[3]) ids.pop();
+    referenceFill(expected, ids.map(v => [pose.px[v], pose.py[v]]), checkerInk(face));
+  }
+  for (let edge = 0; edge < edges.length; edge += 4) {
+    const [a, b, fa, fb] = edges.slice(edge, edge + 4);
+    if (pose.visible[fa] || pose.visible[fb]) {
+      referenceLine(expected, pose.px[a], pose.py[a], pose.px[b], pose.py[b]);
+    }
+  }
+  assert.deepEqual(video(page), expected, `complete independent raster at angles ${ax},${ay}, case ${i}`);
+}
+console.log("PASS 512 independent complete rasters, extreme centers, and arbitrary background/phase bits");
 
 start();
 const restarted = frame();

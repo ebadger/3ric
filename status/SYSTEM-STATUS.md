@@ -85,8 +85,9 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 ## Current state / known gaps
 
 - **Bouncing Ball:** scottybe's community demo still computes the same checkerboard
-  sphere, room, and bounces on the 65C02, now averaging 478,646 rather than 4,814,984
-  cycles per frame (10.06x faster). The gallery source is `web/programs/bouncing-ball.s`;
+  sphere, room, and bounces on the 65C02, now averaging 419,704 rather than 4,814,984
+  cycles per frame (11.47x faster; 14% faster than the first optimized version). The
+  gallery source is `web/programs/bouncing-ball.s`;
   its raw `.PRG` loads at `$0800` (`BRUN BOUNCE.PRG 0800`), and the ordinary `.woz`
   export boots via `$C600`. Both hi-res pages and a `$7000-$8FFF` room cache fit below
   BASIC ROM. The Pages build guards the original pixels/motion and the cycle budget.

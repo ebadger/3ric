@@ -94,7 +94,7 @@ edgecur = $96
 lastcol = $97
 spanmask = $98
 pixelmask = $99
-fillmode = $9A
+rasterend = $9A
 edgeflip = $9B
 edgefrac = $9C
 edgewhole = $9D
@@ -360,11 +360,47 @@ cb_row: cmp #YMAX0
         adc pgoff
         sta ptr+1
         ldy lastcol
+        ; An 81-pixel restore rectangle spans exactly 12 or 13 hi-res bytes.
 cb_z:   lda (bgptr),y
         sta (ptr),y
         dey
+        lda (bgptr),y
+        sta (ptr),y
+        dey
+        lda (bgptr),y
+        sta (ptr),y
+        dey
+        lda (bgptr),y
+        sta (ptr),y
+        dey
+        lda (bgptr),y
+        sta (ptr),y
+        dey
+        lda (bgptr),y
+        sta (ptr),y
+        dey
+        lda (bgptr),y
+        sta (ptr),y
+        dey
+        lda (bgptr),y
+        sta (ptr),y
+        dey
+        lda (bgptr),y
+        sta (ptr),y
+        dey
+        lda (bgptr),y
+        sta (ptr),y
+        dey
+        lda (bgptr),y
+        sta (ptr),y
+        dey
+        lda (bgptr),y
+        sta (ptr),y
+        dey
         cpy col
-        bne cb_z
+        beq cb_nx
+        lda (bgptr),y
+        sta (ptr),y
 cb_nx:  lda ycur
         cmp tmp5
         bcs cb_dn
@@ -448,44 +484,14 @@ xf_lp:  ldy VERTX,x
         sta RY,x
         lda xp
         sta RX,x
-        ; PX = bposx + xp (xp signed), saturate to 0..255
-        lda xp
-        bmi px_neg
+        ; The radius-40 mesh and bounce limits keep every projection on-screen.
         clc
         adc bposx
-        bcc px_st
-        lda #$FF
-        bra px_st
-px_neg: clc
-        adc bposx
-        bcs px_st               ; C=1 → no underflow
-        lda #0
-px_st:  sta PX,x
-        ; PY = bposy - RY (RY signed). Do NOT use BCC after SBC —
-        ; a negative RY causes borrow even when the result is valid.
-        lda RY,x
-        bmi py_neg
+        sta PX,x
+        sec
         lda bposy
-        cmp RY,x
-        bcs py_sub
-        lda #0
-        bra py_st
-py_sub: sec
         sbc RY,x
-        bra py_clip
-py_neg: eor #$FF                ; PY = bposy + |RY|
-        clc
-        adc #1
-        clc
-        adc bposy
-        bcc py_clip
-        lda #YMAX0-1
-        bra py_st
-py_clip:
-        cmp #YMAX0
-        bcc py_st
-        lda #YMAX0-1
-py_st:  sta PY,x
+        sta PY,x
         ; track Y bbox for partial clear
         cmp bbymin
         bcs xf_yb
@@ -495,8 +501,7 @@ xf_yb:  cmp bbymax
         sta bbymax
 xf_nx:  inx
         cpx #NVERT0
-        beq xf_dn
-        jmp xf_lp
+        bne xf_lp
 xf_dn:  rts
 
 ; Rebuild four small tables from the live angles, not from prerecorded frames.
@@ -639,25 +644,30 @@ cv_qzero:
 cv_products:
         lda e1x
         ldx e2y
-        jsr smul16
+        jsr magnitude_product
         lda resL
         sta nz
         lda resH
         sta nzhi
         lda e1y
         ldx e2x
-        jsr smul16
-        sec
+        jsr magnitude_product
+        ; Equal-sign products need only their magnitude ordering, not negation.
+        lda nzhi
+        cmp resH
+        bcc cv_smaller
+        bne cv_larger
         lda nz
-        sbc resL
-        sta nz
-        lda nzhi
-        sbc resH
-        sta nzhi
-        lda nzhi
-        bmi cv_hidden
-        ora nz
+        cmp resL
+        bcc cv_smaller
         beq cv_hidden
+cv_larger:
+        bit tmp0
+        bmi cv_hidden
+        bra cv_visible
+cv_smaller:
+        bit tmp0
+        bpl cv_hidden
 cv_visible:
         ldx fi
         lda #1
@@ -761,14 +771,13 @@ ff_nx:  clc
         lda faceptr
         adc #4
         sta faceptr
-        lda faceptr+1
-        adc #0
-        sta faceptr+1
+        bcc ff_advance
+        inc faceptr+1
+ff_advance:
         ldx fi
         inx
         cpx #NFACE0
-        beq ff_dn
-        jmp ff_lp
+        bne ff_lp
 ff_dn:  rts
 
 ; A = face index → A=1 if solid checker cell, A=0 if open
@@ -777,18 +786,13 @@ chksolid:
         bcc ck_s
         cmp #112
         bcs ck_n
-        sec
-        sbc #16
         sta tmp0
-        and #15
-        sta tmp1
-        lda tmp0
         lsr a
         lsr a
         lsr a
         lsr a
-        clc
-        adc tmp1
+        eor tmp0
+        eor #1
         and #1
         rts
 ck_s:   and #1
@@ -877,8 +881,7 @@ fp_ycl: lda ymax
         bcc fp_yr
         lda #YMAX0-1
         sta ymax
-fp_yr:  stz fillmode
-        lda topvert
+fp_yr:  lda topvert
         sta walkvert
         sta walkvert+8
         ldx #0
@@ -889,6 +892,7 @@ fp_yr:  stz fillmode
         bcs fp_general
         lda ymin
         sta ycur
+        jsr fp_setend
 fp_live_row:
         lda walkx+8
         eor walkflip+8
@@ -905,8 +909,6 @@ fp_live_ordered:
         ldy ycur
         jmp fp_address
 fp_general:
-        lda #1
-        sta fillmode
         lda ymin
         tax
 fp_init:
@@ -1023,19 +1025,18 @@ fp_rows:
 fp_row: ldy ycur
         ldx SPANL,y
         cpx #$FF
-        bne fp_span
-        jmp fp_ny
-fp_span:
-        txa
-        cmp SPANR,y
-        bcc fp_ordered
-        beq fp_ordered
-        sta xr
-        ldx SPANR,y
-        bra fp_address
-fp_ordered:
+        beq fp_general_next
+        stx xl
         lda SPANR,y
         sta xr
+        jsr hline
+fp_general_next:
+        inc ycur
+        lda ycur
+        cmp ymax
+        bcc fp_row
+        beq fp_row
+        rts
 fp_address:
         lda ROWL,y
         sta ptr
@@ -1045,32 +1046,27 @@ fp_address:
         sta ptr+1
         lda XLEFTMASK,x
         sta spanmask
-        lda XCOL,x
-        sta col
+        ldy XCOL,x
         ldx xr
-        lda XRIGHTMASK,x
-        sta tmp4
         lda XCOL,x
         sta lastcol
-        ldy col
         cpy lastcol
         bne fp_multi
-        lda tmp4
+        lda XRIGHTMASK,x
         and spanmask
-        sta spanmask
-        lda ink
+        ldx ink
         beq fp_one_black
-        lda spanmask
         ora (ptr),y
         sta (ptr),y
         jmp fp_ny
 fp_one_black:
-        lda spanmask
         eor #$FF
         and (ptr),y
         sta (ptr),y
         bra fp_ny
 fp_multi:
+        lda XRIGHTMASK,x
+        sta tmp4
         lda ink
         beq fp_black
         lda spanmask
@@ -1109,29 +1105,31 @@ fp_black_end:
         eor #$FF
         and (ptr),y
         sta (ptr),y
-fp_ny:  lda fillmode
-        beq fp_live_next
-        inc ycur
-        lda ycur
-        cmp ymax
-        bcc fp_repeat
-        beq fp_repeat
-        rts
-fp_repeat:
-        jmp fp_row
-
+fp_ny:
 fp_live_next:
         lda ycur
+        cmp rasterend
+        bne fp_left_step
         cmp ymax
         bcc fp_update
         rts
 fp_update:
         cmp walkend
-        bne fp_left_step
+        bne fp_check_right
         ldx #0
         jsr next_edge
-        bcc fp_left_step
+        bcc fp_check_right
         jmp fp_general
+fp_check_right:
+        lda ycur
+        cmp walkend+8
+        bne fp_new_segment
+        ldx #8
+        jsr next_edge
+        bcc fp_new_segment
+        jmp fp_general
+fp_new_segment:
+        jsr fp_setend
 fp_left_step:
         clc
         lda walkerr
@@ -1144,13 +1142,6 @@ fp_left_remainder:
         lda walkx
         adc walkwhole
         sta walkx
-        lda ycur
-        cmp walkend+8
-        bne fp_right_step
-        ldx #8
-        jsr next_edge
-        bcc fp_right_step
-        jmp fp_general
 fp_right_step:
         clc
         lda walkerr+8
@@ -1165,6 +1156,20 @@ fp_right_remainder:
         sta walkx+8
         inc ycur
         jmp fp_live_row
+
+; The two walkers cannot change edges before this shared segment endpoint.
+fp_setend:
+        lda walkend
+        cmp walkend+8
+        bcc fp_first_end
+        lda walkend+8
+fp_first_end:
+        cmp ymax
+        bcc fp_store_end
+        lda ymax
+fp_store_end:
+        sta rasterend
+        rts
 
 ; X=0 walks forward through the vertices; X=8 walks backward.
 ; Carry set requests the general filler for an interior flat/upward edge.
@@ -1254,33 +1259,29 @@ hl_go:  ldy ycur
         adc pgoff
         sta ptr+1
         ldx xl
-        lda XCOL,x
-        sta col
         lda XLEFTMASK,x
         sta spanmask
+        ldy XCOL,x
         ldx xr
         lda XCOL,x
         sta lastcol
-        lda XRIGHTMASK,x
-        sta tmp4
-        ldy col
         cpy lastcol
         bne hl_multi
+        lda XRIGHTMASK,x
         and spanmask
-        sta spanmask
-        lda ink
+        ldx ink
         beq hl_one_black
-        lda spanmask
         ora (ptr),y
         sta (ptr),y
         rts
 hl_one_black:
-        lda spanmask
         eor #$FF
         and (ptr),y
         sta (ptr),y
         rts
 hl_multi:
+        lda XRIGHTMASK,x
+        sta tmp4
         lda ink
         beq hl_black
         lda spanmask
@@ -1328,45 +1329,40 @@ drawmesh:
         sta edgeptr+1
         lda #NEDGE0
         sta ecnt
-dc_lp:  ldy #0
+dc_lp:  ldy #2
         lda (edgeptr),y
-        sta tmp0
-        iny
-        lda (edgeptr),y
-        sta tmp1
-        iny
-        lda (edgeptr),y
-        sta tmp3
-        iny
-        lda (edgeptr),y
-        sta tmp2
-        ldy tmp3
-        lda fvis,y
+        tax
+        lda fvis,x
         bne dc_go
-        ldy tmp2
-        lda fvis,y
+        iny
+        lda (edgeptr),y
+        tax
+        lda fvis,x
         beq dc_nx
-dc_go:  ldy tmp0
-        lda PX,y
+dc_go:  ldy #0
+        lda (edgeptr),y
+        tax
+        lda PX,x
         sta x0
-        lda PY,y
+        lda PY,x
         sta y0
-        ldy tmp1
-        lda PX,y
+        iny
+        lda (edgeptr),y
+        tax
+        lda PX,x
         sta x1
-        lda PY,y
+        lda PY,x
         sta y1
         jsr line
 dc_nx:  clc
         lda edgeptr
         adc #4
         sta edgeptr
-        lda edgeptr+1
-        adc #0
-        sta edgeptr+1
+        bcc dc_advance
+        inc edgeptr+1
+dc_advance:
         dec ecnt
-        beq dc_dn
-        jmp dc_lp
+        bne dc_lp
 dc_dn:  rts
 
 line:   lda y0
@@ -1407,14 +1403,15 @@ lydo:   sec
 lypos:  sta dy
         lda #1
         sta sys
-linit:  lda x0
-        sta cx
-        lda y0
-        sta cy
-        jsr seedcol
+linit:  ldx x0
+        lda XCOL,x
+        sta col
+        lda XBIT,x
         tax
         lda BITMASK,x
         sta pixelmask
+        lda y0
+        sta cy
         lda dx
         cmp dy
         bcs line_xmajor
@@ -1427,6 +1424,8 @@ line_xmajor:
         lsr a
         sta err
         ldx dx
+        lda sxs
+        bmi line_xleft_row
 line_xrow:
         ldy cy
         lda ROWL,y
@@ -1435,8 +1434,8 @@ line_xrow:
         clc
         adc pgoff
         sta ptr+1
-line_xloop:
         ldy col
+line_xloop:
         lda pixelmask
         ora (ptr),y
         sta (ptr),y
@@ -1445,19 +1444,11 @@ line_xloop:
         rts
 line_xnext:
         dex
-        lda sxs
-        bmi line_xnegative
         asl pixelmask
         bpl line_xerror
-        inc col
+        iny
+        sty col
         lda #1
-        sta pixelmask
-        bra line_xerror
-line_xnegative:
-        lsr pixelmask
-        bne line_xerror
-        dec col
-        lda #$40
         sta pixelmask
 line_xerror:
         sec
@@ -1473,13 +1464,7 @@ line_xerror:
         adc sys
         sta cy
         bra line_xrow
-
-line_ymajor:
-        lda dy
-        lsr a
-        sta err
-        ldx dy
-line_yrow:
+line_xleft_row:
         ldy cy
         lda ROWL,y
         sta ptr
@@ -1488,42 +1473,121 @@ line_yrow:
         adc pgoff
         sta ptr+1
         ldy col
+line_xleft_loop:
         lda pixelmask
         ora (ptr),y
         sta (ptr),y
         cpx #0
+        bne line_xleft_next
+        rts
+line_xleft_next:
+        dex
+        lsr pixelmask
+        bne line_xleft_error
+        dey
+        sty col
+        lda #$40
+        sta pixelmask
+line_xleft_error:
+        sec
+        lda err
+        sbc dy
+        sta err
+        bcs line_xleft_loop
+        clc
+        adc dx
+        sta err
+        clc
+        lda cy
+        adc sys
+        sta cy
+        bra line_xleft_row
+
+line_ymajor:
+        lda dy
+        lsr a
+        sta err
+        ldx cy
+        ldy col
+        lda sys
+        bmi line_yup_row
+line_yrow:
+        lda ROWL,x
+        sta ptr
+        lda ROWH,x
+        clc
+        adc pgoff
+        sta ptr+1
+        lda pixelmask
+        ora (ptr),y
+        sta (ptr),y
+        cpx y1
         bne line_ynext
         rts
 line_ynext:
-        dex
+        inx
         sec
         lda err
         sbc dx
         sta err
-        bcs line_ystep
+        bcs line_yrow
         clc
         adc dy
         sta err
         lda sxs
         bmi line_ynegative
         asl pixelmask
-        bpl line_ystep
-        inc col
+        bpl line_yrow
+        iny
         lda #1
         sta pixelmask
-        bra line_ystep
+        bra line_yrow
 line_ynegative:
         lsr pixelmask
-        bne line_ystep
-        dec col
+        bne line_yrow
+        dey
         lda #$40
         sta pixelmask
-line_ystep:
-        clc
-        lda cy
-        adc sys
-        sta cy
         bra line_yrow
+
+line_yup_row:
+        lda ROWL,x
+        sta ptr
+        lda ROWH,x
+        clc
+        adc pgoff
+        sta ptr+1
+        lda pixelmask
+        ora (ptr),y
+        sta (ptr),y
+        cpx y1
+        bne line_yup_next
+        rts
+line_yup_next:
+        dex
+        sec
+        lda err
+        sbc dx
+        sta err
+        bcs line_yup_row
+        clc
+        adc dy
+        sta err
+        lda sxs
+        bmi line_yup_negative
+        asl pixelmask
+        bpl line_yup_row
+        iny
+        lda #1
+        sta pixelmask
+        bra line_yup_row
+line_yup_negative:
+        lsr pixelmask
+        bne line_yup_row
+        dey
+        lda #$40
+        sta pixelmask
+        bra line_yup_row
 
 seedcol:
         ldx cx
