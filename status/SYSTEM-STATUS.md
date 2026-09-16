@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-09-11 — ebadger (via Copilot)_
+_Last updated: 2026-09-15 — ebadger (via Copilot)_
 
 ---
 
@@ -38,6 +38,7 @@ Node at `C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe` (not on `PATH`)
 ```powershell
 $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node codegen/tools/asm6502.test.mjs   # assembler encoding tests (no WASM build needed)
+& $node codegen\tools\bouncing-ball.test.mjs # original pixels, 10x cycles, live 3D math, WOZ boot
 & $node codegen/tools/hackaday.test.mjs # Built from Bits scenes, music, timing, controls, WOZ boot
 & $node web/test_hackaday_page.cjs      # showcase page, source links, and committed preview
 & $node web/test_boot.cjs                # ROM boots, sane PC, video RAM written
@@ -83,6 +84,15 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 
 ## Current state / known gaps
 
+- **Bouncing Ball:** scottybe's community demo still computes the same checkerboard
+  sphere, room, and bounces on the 65C02, now averaging 419,704 rather than 4,814,984
+  cycles per frame (11.47x faster; 14% faster than the first optimized version). The
+  gallery source is `web/programs/bouncing-ball.s`;
+  its raw `.PRG` loads at `$0800` (`BRUN BOUNCE.PRG 0800`), and the ordinary `.woz`
+  export boots via `$C600`. Both hi-res pages and a `$7000-$8FFF` room cache fit below
+  BASIC ROM. The Pages build guards the original pixels/motion and the cycle budget.
+  Any key retains the original `BRK` exit. Timing is emulator-measured, not a
+  physical-board benchmark.
 - **Built from Bits:** `hackaday.html` introduces a one-minute, four-scene 65C02 showcase:
   hi-res starfield, 16-color plasma, rotating wireframe, and original six-channel stereo
   music. The landing page launches the editable `programs/hackaday.s` through the existing

@@ -22,6 +22,8 @@ on:
       - 'emulator/AICodeGen/**'
       - 'codegen/tools/asm6502.mjs'
       - 'codegen/tools/wozgen.mjs'
+      - 'codegen/tools/bouncing-ball.test.mjs'
+      - 'codegen/tools/fixtures/bouncing-ball-baseline.json'
       - 'codegen/tools/groovebox.test.mjs'
       - 'codegen/tools/matrix.test.mjs'
       - 'codegen/tools/hackaday.test.mjs'
@@ -79,6 +81,7 @@ jobs:
           node web/test_debugger.cjs
           node web/test_keyboard.cjs
           node web/test_boot.cjs
+          node codegen/tools/bouncing-ball.test.mjs
           node codegen/tools/matrix.test.mjs
           node codegen/tools/hackaday.test.mjs
           node web/test_hackaday_page.cjs

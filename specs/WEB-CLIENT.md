@@ -104,6 +104,13 @@ client-side so GitHub Pages can host it as static files.
   auto-runs it. Manifest entries carry `title`, `author`/`authorUrl`, `mode`, `description`,
   `tags`, and a run target (a `src` program path or inline `code`, plus optional `org`). Both
   files are committed (not generated), so the deploy workflow stages them into `_site/`.
+- **Bouncing Ball gallery entry:** `programs/bouncing-ball.s` remains the committed
+  community source credited to scottybe. Its card identifies hi-res graphics and the
+  hardware-oriented 65C02 optimization rather than recommending Max emulator speed.
+  The existing editable-source loader and `.PRG`/`.woz` exports run the same program;
+  animation and rendering remain entirely inside the 65C02 (see `ROM-SOFTWARE.md`).
+  The existing Pages build runs its cycle/pixel and hardware-boot regressions before
+  staging the site; changes to the test or its original-frame fixture trigger that build.
 - **Groovebox sample:** the gallery and assembler sample picker expose **3RIC Groovebox**
   through `?src=programs/groovebox.s`. `build.ps1` stages its canonical
   `codegen/programs/groovebox.s` through the existing sample-source glob. The sequencer,
@@ -358,6 +365,7 @@ on the emulator whether it succeeds, is blocked, or 404s.
 | Program downloads (.PRG / .woz) | Shipped | **Download .PRG** (raw bytes) + **Download .woz** (bootable WOZ2 via `wozgen.mjs`, a port of `dsk2woz2`, with a multi-track boot loader); verified by `web/test_woz_download.cjs`. |
 | Share / Remix deep links | Shipped | **Share** button; `?src=programs/<name>.s` for unmodified samples, inline base64url `?code=` otherwise, both carrying `&org=` when the source has no `.org`; remix banner on shared links. |
 | Community Gallery | Shipped | `gallery.html` renders the curated `gallery.json`; one-click **Run & Remix** via `?src=`/`?code=`; PR-based submissions credited by author. |
+| Bouncing Ball gallery entry | Implemented | scottybe's committed `programs/bouncing-ball.s`; native-speed description, unchanged loader/exports, and `codegen/tools/bouncing-ball.test.mjs` in the Pages build. |
 | 3RIC Groovebox sample | Shipped | Gallery and Music sample-picker entry for the guest-side Mockingboard sequencer; canonical source staged automatically, with focused guest/hardware checks in the Pages build. |
 | Hackaday showcase | Implemented | Landing page, real framebuffer still, gallery/editor entry, and exports. Initial `#ide` links focus/reveal the editor after loading; ordinary Run links and subsequent Assemble & Run actions retain canvas focus. Regenerate the still with `node codegen/tools/hackaday.test.mjs --write-preview` after building/staging the source. |
 | Matrix Rain sample | Shipped | Gallery and Hi-res sample entry for `programs/matrix.s`; source staging, auto-running editor deep links, and exports use the existing pipeline. The Pages build runs `codegen/tools/matrix.test.mjs` against the staged source and real WASM renderer. |

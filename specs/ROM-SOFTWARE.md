@@ -38,6 +38,34 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   `.s` files (`codegen/programs/hello.s`, `emulator/AICodeGen/<name>/<name>.s`); assembled
   `.prg` images are git-ignored (regenerated). Run on hardware/SD via `BRUN NAME.PRG <org>`,
   or in the browser via **Load .PRG** / **Assemble & Run**.
+- **Bouncing Ball (scottybe's community contribution):** the canonical source remains
+  `web/programs/bouncing-ball.s`, loaded at `$0800` by the gallery, assembler, or
+  `BRUN BOUNCE.PRG 0800`. Its 114-vertex, 128-face checkerboard sphere is transformed,
+  back-face culled, filled, and outlined on the 65C02 every frame; it is not a
+  prerecorded sprite animation.
+  - **Preserved presentation:** the perspective room grid, opaque black/white faces,
+    mesh outlines, 64-step two-axis rotation, gravity, wall/floor bounces, and alternating
+    hi-res pages retain the contribution's frame-by-frame pixels and motion. Any key
+    acknowledges `$C010` and executes `BRK`, as in the original.
+  - **Hardware performance:** cache the static room once, restore only the old ball's
+    rectangle on the hidden page, and use integer lookup arithmetic, incremental
+    polygon-edge intersections, and byte-wide spans instead of per-pixel division.
+    Over a 128-frame regression sequence, including both page initializations, mean
+    live-frame cost must be at most **one tenth** of the original mean; every individual
+    frame must be at least **nine times faster** and stay below **520,000 cycles**.
+    The baseline is PR #58's merge `fc4d46e`, averaging 4,814,984 cycles per frame.
+    Measure emulated 65C02 cycles, not host time or an increased emulator clock.
+    Further optimization must retain fully live transformation and rasterization,
+    the existing resolution/mesh detail, and the original pixels. Static arithmetic
+    tables are allowed; cached rotation poses, visibility frames, and rendered ball
+    animations are not. The user prioritizes this appearance over a second tenfold gain.
+  - **Memory and delivery:** the raw image ends below `$2000`; the two display pages
+    stay at `$2000-$5FFF`. Scratch state uses `$06-$0F` and `$50-$AF`, outside the ROM's
+    text-window and I/O vectors. Tables use `$6000-$6FFF`, and the immutable room cache occupies
+    `$7000-$8FFF`, below BASIC ROM. The standalone source builds through the existing
+    assembler and `.PRG`/bootable `.woz` exports without assets or a new loader.
+    No ROM, VM, bridge, platform-reference, or hardware-decoder contract changes are
+    required. Emulator cycle measurements are not a physical-board benchmark.
 - **3RIC Groovebox:** `codegen/programs/groovebox.s` is a standalone `$0800` 65C02
   music app, not a browser synthesizer. Its 40x24 text interface edits a looping 16-step
   pattern for six voices: bass, lead, and arpeggio on the left AY; kick, snare, and hi-hat
@@ -175,6 +203,12 @@ LFSR/column timers → glyph history and clipped hi-res cell writes → existing
 artifact-color renderer → display`; quitting selects text mode and executes ROM `HOME`
 then `BRK`.
 
+For Bouncing Ball:
+`gallery source / raw PRG / bootable WOZ -> $0800 program -> gravity + rotation ->
+cached room restore + live vertex transforms, face visibility, polygon fills, and mesh ->
+hidden hi-res page -> $C054/$C055 page flip -> existing hardware/native/WASM display`.
+Keyboard input follows the existing `$C000/$C010 -> BRK` path.
+
 For Built from Bits:
 `Hackaday landing page / gallery / sample -> existing browser assembler or BRUN -> $0800
 program -> keyboard + polled VIA Timer 2 -> scene/score state -> text/lo-res/hi-res RAM
@@ -206,6 +240,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
+| Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |
 | 3RIC Groovebox | Shipped | Six-voice, 16-step Mockingboard sequencer; gamepad/keyboard editing and timer-driven stereo sound. `codegen/tools/groovebox.test.mjs` covers real stereo PCM, all controls, fractional tempo, clean exit, and a dense-step/input deadline below 6,556 cycles. |
 | Built from Bits | Implemented | 3,460-byte four-scene showcase with rendering, 63,000-cycle cadence, audio, controls, and WOZ boot coverage. ROM window bounds are preserved; Q/Esc from every scene must leave a visible prompt that can execute and display a subsequent monitor command. |
 | Matrix Rain | Shipped | `codegen/programs/matrix.s`; 1,079-byte `$0800` hi-res demo with staggered green trails, white heads, pause/quit controls, and focused rendering, timing, memory-boundary, and monitor-exit coverage in `codegen/tools/matrix.test.mjs`. |
