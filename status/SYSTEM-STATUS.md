@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-09-15 — ebadger (via Copilot)_
+_Last updated: 2026-09-16 — ebadger (via Copilot)_
 
 ---
 
@@ -54,6 +54,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_system_speaker.cjs     # $C030 read/write toggles + mixed speaker/AY PCM
 & $node web/test_gamepad.cjs             # browser mapping, VIA serial pads, ROM tables
 & $node codegen\tools\groovebox.test.mjs  # sequencer, real AY audio, gamepad editing, timing
+& $node codegen\tools\spacewar.test.mjs   # STAR DUEL gravity, wrap, shots, collisions, pads
 & $node web/test_debugger.cjs            # breakpoints, stepping, source map, ROM debug lookup
 & $node web/test_sd.cjs                  # mount SD + DIR lists the FAT32 root
 & $node web/test_disk.cjs                # boot a WOZ floppy via C600G into a hi-res title
@@ -84,6 +85,10 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 
 ## Current state / known gaps
 
+- **STAR DUEL:** two-player mixed-hi-res gravity war at `$0800` (`emulator/AICodeGen/spacewar/`).
+  SNES pads or a split keyboard steer two ships around a central sun; first to 5 kills
+  wins. `codegen/tools/spacewar.test.mjs` covers gravity, wrap, shots, collisions, and
+  dual-pad input.
 - **Bouncing Ball:** scottybe's community demo still computes the same checkerboard
   sphere, room, and bounces on the 65C02, now averaging 419,704 rather than 4,814,984
   cycles per frame (11.47x faster; 14% faster than the first optimized version). The
