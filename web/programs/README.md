@@ -26,6 +26,18 @@ binary live in
 node codegen/tools/asm6502.mjs emulator/AICodeGen/life/life.s web/programs/life.prg --org 0x0800
 ```
 
+`spacewar.prg` is **STAR DUEL**, an original two-player mixed-hi-res gravity duel —
+two wedge ships orbit a central sun with inverse-distance pull, wrap, thrust inertia,
+and torpedoes. **P1** uses WASD/arrows plus Space to fire; **P2** uses IJKL/U; both
+SNES pads work through `PTRIG`. First to 5 kills wins; **Q** quits.
+Source, prompt, and binary live in
+[`emulator/AICodeGen/spacewar/`](../../emulator/AICodeGen/spacewar); deep-link it at
+`?prg=programs/spacewar.prg&org=0800` (native **1×** is the tuned speed):
+
+```sh
+node codegen/tools/asm6502.mjs emulator/AICodeGen/spacewar/spacewar.s web/programs/spacewar.prg --org 0x0800
+```
+
 `jungle.prg` is **JUNGLE QUEST: THE SUNSTONE RUN**, an original six-screen hi-res
 action-platformer. Recover four glyphs to open the Sun Temple, then cross its
 broken steps and claim the Sunstone. The route mixes raised platforms, two-gap

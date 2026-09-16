@@ -39,6 +39,15 @@
       "tags": ["demo", "hi-res", "matrix", "animation"]
     },
     {
+      "title": "STAR DUEL",
+      "author": "3RIC Studio",
+      "authorUrl": "https://github.com/ebadger/3ric",
+      "mode": "Hi-res",
+      "src": "programs/spacewar.s",
+      "description": "Two-player gravity war around a central sun. Rotate, thrust, and fire with two SNES pads or a split keyboard; wrap the playfield and don't fall into the well. First to 5 kills wins. Q/Esc quits.",
+      "tags": ["game", "hi-res", "two-player", "gamepad"]
+    },
+    {
       "title": "Swarm",
       "author": "3RIC Studio",
       "authorUrl": "https://github.com/ebadger/3ric",

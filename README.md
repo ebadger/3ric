@@ -59,7 +59,7 @@ The whole journey is documented in a [YouTube build series][youtube].
 - **Micro-SD storage**: a bit-banged SPI FAT32 card with a ROM DOS shell.
 - **In-browser 65C02 assembler/editor** — assemble & run, download a `.PRG`, share `?src=`
   links; ships ~11 sample programs.
-- **AI-generated 6502 games** (Snake, Life, Minesweeper, 2048, Star Swarm, and more) built
+- **AI-generated 6502 games** (STAR DUEL, Snake, Life, Minesweeper, 2048, Star Swarm, and more) built
   through the project's own codegen pipeline — see [`emulator/AICodeGen/`](emulator/AICodeGen/).
 - **Runs everywhere the same way**: one shared C++ VM core drives both the native Windows
   build and the browser (WebAssembly) build.

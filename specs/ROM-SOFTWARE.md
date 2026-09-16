@@ -172,6 +172,24 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   gap collision, duck-vs-bat behavior, item effects, checkpoint death, gate progression,
   vine release, timer states, restart input gating, and final victory. The assembled image
   must end below the hi-res page at `$2000`.
+- **STAR DUEL:** `emulator/AICodeGen/spacewar/spacewar.s` is an original two-player
+  mixed-hi-res gravity-duel loaded at `$0800`. It reuses only un-copyrightable Spacewar-style
+  conventions — two ships, a central sun, inverse-distance gravity, wrap, thrust inertia,
+  and torpedoes — with original names, silhouettes, HUD copy, and 65C02 code.
+  - **Playfield:** mixed hi-res (280×160 XOR vector ships over a persistent sun/starfield)
+    plus four text HUD rows. The image ends below `$2000`; row tables live at `$6000/$6100`,
+    working RAM at `$6200`, and ship/shot structs at `$6300`.
+  - **Gravity:** each live ship is pulled toward the sun at (140, 80) with a 32-entry
+    magnitude table indexed by Manhattan distance. Near-sun Chebyshev range 6 is fatal;
+    the opponent scores if the match is underway. Shots that strike a ship or the sun die.
+  - **Controls:** SNES pad 1 and pad 2 both go through `PTRIG` + `GAMEPAD1`/`GAMEPAD2`.
+    D-pad left/right rotate, Up/B thrust, A/Y fire, Select hyperspace, Start starts or
+    rematches. Opposing D-pad directions cancel. Keyboard P1 is A/D or arrows to rotate,
+    W/Up to thrust, S/Space to fire, H for hyperspace; P2 is J/L, I, K/U, N. Q/Esc restores
+    page-1 text and `HOME`s to the monitor with `BRK`. First player to 5 kills wins.
+  Focused headless hooks cover the row table, XOR plot, gravity sign/magnitude, wrap,
+  thrust, firing, sun/ship/shot collisions, scoring, and dual-pad input. No ROM, VM,
+  memory-map, platform-ref, or hardware-decoder changes are required.
 - **Disk & card images:** demo `.woz` (staged from `emulator/WozFileTestApp/testdata/`);
   `emulator/Data/sd.zip` → `web/data/sd.sparse` FAT32 image (`WEB-CLIENT.md`).
 
@@ -220,6 +238,11 @@ hazard/item collision → lives/time/glyph/score state → BG restore + sprite r
 page and mixed-mode HUD`; a screen-edge transition loads the next descriptor, while death
 reloads the same descriptor at its checkpoint.
 
+For STAR DUEL:
+`keyboard hold-timers or PTRIG + GAMEPAD1/GAMEPAD2 → rotate/thrust/fire/hyperspace intents
+→ 8.8 inertia + Manhattan gravity toward the sun → wrap/collisions/score → XOR erase/draw
+on hi-res page 1 + mixed-mode HUD`; Q/Esc selects text mode, `HOME`, then `BRK`.
+
 For Groovebox:
 `keyboard or SNES/VIA/ROM scan -> sequencer edits -> Timer 1 IRQ/WAI tick -> step and
 software-envelope state -> real VIA/AY register writes -> shared VM stereo PCM -> host
@@ -247,3 +270,4 @@ audio`; the program separately writes its editor and playhead into text video RA
 | ROCK STORM vector game | Shipped / cycle-guarded | Opening-wave live frame is 133,262 cycles against a 175,000-cycle limit; both distributed `.prg` copies are generated from `rocks.s`. |
 | SNES gamepad input | Shipped | ROM fills `GAMEPAD1/2` on a `$C070` touch; the shared emulator peripheral follows the same VIA serial protocol, and the browser maps two standard USB/Bluetooth controllers into it. |
 | Jungle Quest — The Sunstone Run | Shipped | Six-screen `$0800` mixed-hi-res platformer; focused suite includes a complete successful expedition. |
+| STAR DUEL | Shipped | Two-player `$0800` mixed-hi-res gravity duel; SNES pads + keyboard; `codegen/tools/spacewar.test.mjs` covers gravity, wrap, shots, collisions, and dual-pad input. |

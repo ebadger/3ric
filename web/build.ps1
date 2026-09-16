@@ -158,6 +158,7 @@ Copy-Item (Join-Path $root "codegen\tools\wozgen.mjs") (Join-Path $web "wozgen.m
 $webPrograms = Join-Path $web "programs"
 New-Item -ItemType Directory -Force -Path $webPrograms | Out-Null
 $samples = @(
+    (Join-Path $root "emulator\AICodeGen\spacewar\spacewar.s"),
     (Join-Path $root "emulator\AICodeGen\swarm\swarm.s"),
     (Join-Path $root "emulator\AICodeGen\rocks\rocks.s"),
     (Join-Path $root "emulator\AICodeGen\jungle\jungle.s"),
