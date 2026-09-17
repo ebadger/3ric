@@ -192,6 +192,48 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   Focused headless hooks cover the row table, XOR plot, gravity sign/magnitude, wrap,
   thrust, firing, sun/ship/shot collisions, scoring, and dual-pad input. No ROM, VM,
   memory-map, platform-ref, or hardware-decoder changes are required.
+- **PULSAR DUEL:** `emulator/AICodeGen/pulsar/pulsar.s` is a second, independent
+  two-player gravity duel at `$0800`, written from scratch alongside STAR DUEL rather
+  than derived from it. It shares only the un-copyrightable Spacewar-style premise — two
+  ships, one gravity well, wrap, inertia, torpedoes, hyperspace — and differs in every
+  implementation choice below.
+  - **Playfield:** a 256×160 *logical* field, so logical x is a single byte and wraps mod
+    256 for free; logical x maps to hi-res column x+12 to centre the 280-pixel line, and
+    logical y is scanline 0..159 wrapped by hand. Four text HUD rows sit underneath. All
+    working RAM and the `ROWL`/`ROWH`/`XBYTE`/`XMASK` tables are part of the image, which
+    ends below `$2000` — nothing is scribbled at `$6000`.
+  - **Gravity:** the pulsar sits at logical (128, 80), dead centre, so the vertical
+    component never needs wrap correction. Distance is the octagonal norm
+    `r ~= max(|dx|,|dy|) + min(|dx|,|dy|)/2` (about 6% error, and it guarantees
+    `|d| <= r`). A 176-entry table holds `F[r] = round(G*65536/r^3)` with `G = 160`,
+    clamped below `r = 10`; per-axis acceleration is `(|d| * F[r]) >> 8` in 8.8 via an
+    8x16 shift-add multiply, giving a true inverse-square field with no division.
+    Integration is semi-implicit Euler (velocity then position), so orbits are stable.
+    Torpedoes fall into the well on exactly the same code path, so shots curve.
+  - **Orbital opening:** both pilots spawn *in orbit*, not at rest — 48 logical pixels
+    out on opposite sides, travelling 1.64 px/frame tangentially, in the same rotational
+    sense. r = 48 keeps the whole path clear of the `y = 0/160` wrap seam; the orbit
+    precesses between r = 47 and r = 61 and never falls in unattended.
+  - **Rendering:** ships are XOR vector triangles plus an exhaust line, from per-heading
+    vertex tables at 32 headings; erasing is literally redrawing the previous
+    `(x, y, heading, thrust)`, so the starfield and pulsar survive underneath. Explosions
+    are expanding eight-point rings. Lines use signed 8-bit Bresenham with a 48-step
+    safety counter.
+  - **Controls:** both SNES pads via `PTRIG` + `GAMEPAD1`/`GAMEPAD2` — D-pad left/right
+    rotate, Up/B thrust, A/Y fire, Select hyperspace, Start begins or rematches; opposing
+    D-pad directions cancel. The keyboard latch has no key-up, so every recognised press
+    arms a hold timer that is replayed as held intent for several frames: P1 is A/D, W,
+    S, X and P2 is J/L (or arrows), I (or Up), K, M. Q/Esc restores text, `HOME`s, and
+    `BRK`s to the monitor. Hyperspace misjumps one time in eight and credits the
+    opponent. First to 5 kills wins.
+  Verified by `codegen/tools/pulsar.test.mjs`, whose headless hooks cover the row/column
+  tables, XOR plot self-inversion, line drawing, the octagonal norm across the x seam,
+  gravity sign and magnitude, 240 frames of orbit stability, turning, thrust, velocity
+  caps, both wrap axes, per-player torpedo magazines and cooldown, torpedo curvature and
+  expiry, pulsar/torpedo kills, spawn protection, respawn, match end, keyboard hold
+  timers, dual-pad input, draw/erase round-tripping, HUD contents, and the per-frame
+  cycle budget. No ROM, VM, memory-map, platform-ref, or hardware-decoder changes are
+  required.
 - **Disk & card images:** demo `.woz` (staged from `emulator/WozFileTestApp/testdata/`);
   `emulator/Data/sd.zip` → `web/data/sd.sparse` FAT32 image (`WEB-CLIENT.md`).
 
@@ -245,6 +287,13 @@ For STAR DUEL:
 → 8.8 inertia + Manhattan gravity toward the sun → wrap/collisions/score → XOR erase/draw
 on hi-res page 1 + mixed-mode HUD`; Q/Esc selects text mode, `HOME`, then `BRK`.
 
+For PULSAR DUEL:
+`keyboard hold-timers or PTRIG + GAMEPAD1/GAMEPAD2 → rotate/thrust/fire/hyperspace intents
+→ XOR erase of last frame's geometry → octagonal-norm distance + inverse-cube force table
++ 8x16 multiply → 8.8 semi-implicit Euler for ships and torpedoes → dual-axis wrap /
+collisions / score → XOR draw on hi-res page 1 + mixed-mode HUD → frame pacing`; Q/Esc
+selects text mode, `HOME`, then `BRK`.
+
 For Groovebox:
 `keyboard or SNES/VIA/ROM scan -> sequencer edits -> Timer 1 IRQ/WAI tick -> step and
 software-envelope state -> real VIA/AY register writes -> shared VM stereo PCM -> host
@@ -273,3 +322,4 @@ audio`; the program separately writes its editor and playhead into text video RA
 | SNES gamepad input | Shipped | ROM fills `GAMEPAD1/2` on a `$C070` touch; the shared emulator peripheral follows the same VIA serial protocol, and the browser maps two standard USB/Bluetooth controllers into it. |
 | Jungle Quest — The Sunstone Run | Shipped | Six-screen `$0800` mixed-hi-res platformer; focused suite includes a complete successful expedition. |
 | STAR DUEL | Shipped | Two-player `$0800` mixed-hi-res gravity duel; SNES pads + keyboard; `codegen/tools/spacewar.test.mjs` covers gravity, wrap, shots, collisions, and dual-pad input. |
+| PULSAR DUEL | Shipped | Independent two-player `$0800` mixed-hi-res orbital duel, 5,632 bytes ending `$1E00`; 256×160 logical field, octagonal-norm inverse-cube gravity, pilots spawn in a stable r=48 orbit, torpedoes curve; live frame measures ~8,600 cycles against the 26,224-cycle budget; `codegen/tools/pulsar.test.mjs` covers 66 checks including 240 frames of orbit stability and draw/erase round-tripping. |
