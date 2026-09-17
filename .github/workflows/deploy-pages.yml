@@ -27,6 +27,7 @@ on:
       - 'codegen/tools/groovebox.test.mjs'
       - 'codegen/tools/matrix.test.mjs'
       - 'codegen/tools/hackaday.test.mjs'
+      - 'codegen/tools/sunsling.test.mjs'
       - 'codegen/programs/**'
       - '.github/workflows/deploy-pages.yml'
   # Allow manual runs from the Actions tab.
@@ -84,6 +85,7 @@ jobs:
           node codegen/tools/bouncing-ball.test.mjs
           node codegen/tools/matrix.test.mjs
           node codegen/tools/hackaday.test.mjs
+          node codegen/tools/sunsling.test.mjs
           node web/test_hackaday_page.cjs
 
       # Stage only what the page needs (not the C++/test sources) as the site root.

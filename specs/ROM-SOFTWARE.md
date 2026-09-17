@@ -33,7 +33,9 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   registers on VIA1, so host-supplied controller masks flow through the unmodified ROM scan;
   a disconnected controller reports no buttons. Programs may still reject impossible states
   such as `LEFT`+`RIGHT` defensively. Addresses are exported in
-  `codegen/platform/platform-ref.*`.
+  `codegen/platform/platform-ref.*`. The ROM scan also reloads VIA1 Timer 1 and
+  Timer 2; a guest borrowing either timer must account for that reload and for
+  the ROM NMI handler acknowledging timer flags.
 - **`.PRG` programs:** assembled by the codegen toolchain (`CODEGEN.md`). Sources: tracked
   `.s` files (`codegen/programs/hello.s`, `emulator/AICodeGen/<name>/<name>.s`); assembled
   `.prg` images are git-ignored (regenerated). Run on hardware/SD via `BRUN NAME.PRG <org>`,
@@ -192,6 +194,45 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   Focused headless hooks cover the row table, XOR plot, gravity sign/magnitude, wrap,
   thrust, firing, sun/ship/shot collisions, scoring, and dual-pad input. No ROM, VM,
   memory-map, platform-ref, or hardware-decoder changes are required.
+- **SUNSLING:** `codegen/programs/sunsling.s` is a separate, original two-player
+  Spacewar-style game, not a revision or copy of STAR DUEL. It loads at `$0800`.
+  - **Flight and combat:** two distinct vector ships duel around a central sun in a
+    wrapping 256x160 arena inset within mixed hi-res video. Signed 8.8 velocities,
+    16 headings, thrust, and a softened inverse-square gravity approximation run on
+    the 65C02. Gravity bends torpedoes as well as ships. Each pilot has four torpedo
+    slots; shots inherit launch velocity, expire, and cannot hit their owner. The sun,
+    enemy torpedoes, and ship-to-ship contact are lethal. The opponent earns one point
+    per death; simultaneous deaths are resolved together, including a 5-5 draw.
+    First to five wins. Respawning includes a brief shield against enemy contact,
+    but never protection from the sun.
+  - **Controls:** each SNES pad uses Left/Right to turn, Up/B to thrust, A/Y to fire,
+    Select for a safe-perimeter hyperspace escape (eight-second cooldown), and a fresh
+    Start press to start/pause/resume/rematch. Opposing directions cancel; releasing or
+    disconnecting a controller releases its level controls.
+    Keyboard P1 uses A/D (or Left/Right) to turn, W/S (or Up/Down) for burn/coast,
+    F/Space for a short torpedo burst, and E for hyperspace. P2 uses J/L, I/K, U, O.
+    Keyboard throttle is explicitly latched on/off, not a fabricated key-up interface:
+    both pilots can keep burning while independently steering or firing. Enter starts
+    or rematches, P pauses/resumes, M mutes effects, and Q/Esc quits. Pausing freezes
+    physics, lifetimes, respawns, and cooldowns; held Start/Select never retrigger.
+  - **Presentation and timing:** an original pixel title, persistent starfield/sun,
+    XOR ship outlines, exhaust, expanding explosion particles, and four text HUD rows.
+    Brief effects toggle the real `$C030` speaker. A polled onboard VIA Timer 2 targets
+    30 Hz at native 1x; steady-state work must fit a 52,448-cycle frame, including
+    two active pilots and eight torpedoes. The ROM's SNES scan reloads both onboard
+    timers, so the frame countdown is armed immediately after that scan, allowing
+    1,280 cycles for its bounded overhead. Completion reads the counter's wrap,
+    not an IFR bit that a later ROM NMI can acknowledge. Frame periods stay within
+    200 cycles of 52,448. The timer interrupt is disabled without
+    disabling unrelated VIA interrupts. Prior ACR, Timer-2 interrupt enable, joystick
+    mode, and CPU flags are restored on exit, then text page 1, `HOME`, and `BRK`
+    return to a usable monitor. ROM text-window bytes and vectors remain untouched.
+  - **Memory and delivery:** the raw image ends below `$2000`; hi-res page 1 is
+    `$2000-$3FFF`, lookup tables `$6000-$63FF`, state `$6400-$65FF`, and scratch
+    zero page `$50-$7F`. The gallery/editor stages the canonical source with the
+    existing wildcard and exports ordinary `.PRG` and bootable `.woz` files.
+    No ROM, VM, bridge, memory-map, platform-ref, or hardware-decoder changes are
+    needed. Emulator measurements do not claim a physical-board playtest.
 - **Disk & card images:** demo `.woz` (staged from `emulator/WozFileTestApp/testdata/`);
   `emulator/Data/sd.zip` → `web/data/sd.sparse` FAT32 image (`WEB-CLIENT.md`).
 
@@ -245,6 +286,13 @@ For STAR DUEL:
 → 8.8 inertia + Manhattan gravity toward the sun → wrap/collisions/score → XOR erase/draw
 on hi-res page 1 + mixed-mode HUD`; Q/Esc selects text mode, `HOME`, then `BRK`.
 
+For SUNSLING:
+`gallery/editor or raw PRG/WOZ -> $0800 -> keyboard burn/coast and burst latches or
+PTRIG/ROM scans of both SNES pads -> timer-paced 8.8 ship/torpedo gravity and inertia
+-> toroidal collisions, simultaneous scoring, respawn/shield/cooldown state -> XOR
+hi-res vectors + text HUD + $C030 -> existing native/WASM video/audio`.
+Pause holds simulation state; quitting restores the borrowed I/O settings and monitor.
+
 For Groovebox:
 `keyboard or SNES/VIA/ROM scan -> sequencer edits -> Timer 1 IRQ/WAI tick -> step and
 software-envelope state -> real VIA/AY register writes -> shared VM stereo PCM -> host
@@ -273,3 +321,4 @@ audio`; the program separately writes its editor and playhead into text video RA
 | SNES gamepad input | Shipped | ROM fills `GAMEPAD1/2` on a `$C070` touch; the shared emulator peripheral follows the same VIA serial protocol, and the browser maps two standard USB/Bluetooth controllers into it. |
 | Jungle Quest — The Sunstone Run | Shipped | Six-screen `$0800` mixed-hi-res platformer; focused suite includes a complete successful expedition. |
 | STAR DUEL | Shipped | Two-player `$0800` mixed-hi-res gravity duel; SNES pads + keyboard; `codegen/tools/spacewar.test.mjs` covers gravity, wrap, shots, collisions, and dual-pad input. |
+| SUNSLING | Implemented | Separate original `$0800` two-player gravity duel. `codegen/tools/sunsling.test.mjs` exercises real-VM physics, both control paths, XOR rendering, simultaneous scoring, all heading pairs under full combat load, native cadence, monitor restoration, and exported WOZ boot. |

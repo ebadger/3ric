@@ -55,6 +55,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_gamepad.cjs             # browser mapping, VIA serial pads, ROM tables
 & $node codegen\tools\groovebox.test.mjs  # sequencer, real AY audio, gamepad editing, timing
 & $node codegen\tools\spacewar.test.mjs   # STAR DUEL gravity, wrap, shots, collisions, pads
+& $node codegen\tools\sunsling.test.mjs   # SUNSLING duel, dual input, timing, monitor exit, WOZ boot
 & $node web/test_debugger.cjs            # breakpoints, stepping, source map, ROM debug lookup
 & $node web/test_sd.cjs                  # mount SD + DIR lists the FAT32 root
 & $node web/test_disk.cjs                # boot a WOZ floppy via C600G into a hi-res title
@@ -85,6 +86,15 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 
 ## Current state / known gaps
 
+- **SUNSLING:** a separate original `$0800` two-player gravity duel at
+  `codegen/programs/sunsling.s`, available in the gallery and Hi-res sample picker.
+  Ships and torpedoes bend around the sun; first to five wins, with simultaneous
+  final kills producing a draw. Both SNES pads work, or use P1 A/D, W/S, F, E and
+  P2 J/L, I/K, U, O (turn, burn/coast, burst, hyperspace). Keyboard burn stays on
+  until Coast. Enter/Start launches, P/Start pauses, M mutes, Q/Esc restores the
+  monitor. Its native-1x clock accounts for the ROM's SNES scan reloading both
+  onboard timers. The existing PRG and bootable-WOZ exports need no special loader.
+  STAR DUEL is unchanged; no physical-board playtest is claimed.
 - **STAR DUEL:** two-player mixed-hi-res gravity war at `$0800` (`emulator/AICodeGen/spacewar/`).
   SNES pads or a split keyboard steer two ships around a central sun; first to 5 kills
   wins. `codegen/tools/spacewar.test.mjs` covers gravity, wrap, shots, collisions, and

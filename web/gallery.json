@@ -39,6 +39,15 @@
       "tags": ["demo", "hi-res", "matrix", "animation"]
     },
     {
+      "title": "SUNSLING",
+      "author": "3RIC Studio",
+      "authorUrl": "https://github.com/ebadger/3ric",
+      "mode": "Hi-res",
+      "src": "programs/sunsling.s",
+      "description": "An original two-player orbital duel: gravity bends ships and torpedoes around a lethal sun. Two SNES pads or keyboard: P1 A/D turn, W/S burn/coast, F fire, E jump; P2 J/L, I/K, U, O. Keyboard burn stays on until coast. Enter/Start launches, first to five wins. Native 1x; P pauses, Q/Esc quits.",
+      "tags": ["game", "hi-res", "two-player", "gravity", "gamepad"]
+    },
+    {
       "title": "STAR DUEL",
       "author": "3RIC Studio",
       "authorUrl": "https://github.com/ebadger/3ric",
