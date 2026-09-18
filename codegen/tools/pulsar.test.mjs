@@ -44,12 +44,12 @@ ok(org === 0x0800, "loads at $0800");
 ok(end <= 0x2000, "image stays below hi-res page 1 at $2000");
 
 const image = Buffer.from(bytes);
+ok(image.equals(readFileSync(EMULATOR_PRG)), "emulator PRG matches assembled source");
+ok(image.equals(readFileSync(WEB_PRG)), "web PRG matches assembled source");
 writeFileSync(EMULATOR_PRG, image);
 mkdirSync(dirname(WEB_PRG), { recursive: true });
 writeFileSync(WEB_PRG, image);
 writeFileSync(WEB_SRC, src);
-ok(image.equals(readFileSync(EMULATOR_PRG)), "emulator PRG matches assembled source");
-ok(image.equals(readFileSync(WEB_PRG)), "web PRG matches assembled source");
 
 const s = await boot();
 const vm = s.vm;

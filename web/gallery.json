@@ -62,7 +62,7 @@
       "authorUrl": "https://github.com/ebadger/3ric",
       "mode": "Hi-res",
       "src": "programs/pulsar.s",
-      "description": "Two darts trapped in the gravity well of a pulsar. You start in orbit, not at rest — thrust changes your orbit, it doesn't steer you. Torpedoes fall toward the well too, so bank them around it. Two SNES pads or a split keyboard; the playfield wraps on both axes. Hyperspace gets you out of trouble one time in eight it doesn't. First to 5 wins; Q/Esc quits.",
+      "description": "Two darts trapped in the gravity well of a pulsar. You start in orbit, not at rest — thrust changes your orbit, it doesn't steer you. Torpedoes fall toward the well too, so bank them around it. Two SNES pads or a split keyboard; the playfield wraps on both axes. Hyperspace gets you out of trouble — except one time in eight, when it doesn't. First to 5 wins; Q/Esc quits.",
       "tags": ["game", "hi-res", "two-player", "gamepad", "gravity"]
     },
     {
