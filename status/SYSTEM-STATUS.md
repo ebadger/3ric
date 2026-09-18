@@ -55,6 +55,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_gamepad.cjs             # browser mapping, VIA serial pads, ROM tables
 & $node codegen\tools\groovebox.test.mjs  # sequencer, real AY audio, gamepad editing, timing
 & $node codegen\tools\spacewar.test.mjs   # STAR DUEL gravity, wrap, shots, collisions, pads
+& $node codegen\tools\sunsling.test.mjs   # SUNSLING duel, dual input, timing, monitor exit, WOZ boot
 & $node codegen\tools\pulsar.test.mjs    # PULSAR DUEL orbits, curved torpedoes, XOR draw/erase, pads
 & $node web/test_debugger.cjs            # breakpoints, stepping, source map, ROM debug lookup
 & $node web/test_sd.cjs                  # mount SD + DIR lists the FAT32 root
@@ -86,6 +87,15 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 
 ## Current state / known gaps
 
+- **SUNSLING:** a separate original `$0800` two-player gravity duel at
+  `codegen/programs/sunsling.s`, available in the gallery and Hi-res sample picker.
+  Ships and torpedoes bend around the sun; first to five wins, with simultaneous
+  final kills producing a draw. Both SNES pads work, or use P1 A/D, W/S, F, E and
+  P2 J/L, I/K, U, O (turn, burn/coast, burst, hyperspace). Keyboard burn stays on
+  until Coast. Enter/Start launches, P/Start pauses, M mutes, Q/Esc restores the
+  monitor. Its native-1x clock accounts for the ROM's SNES scan reloading both
+  onboard timers. The existing PRG and bootable-WOZ exports need no special loader.
+  STAR DUEL is unchanged; no physical-board playtest is claimed.
 - **STAR DUEL:** two-player mixed-hi-res gravity war at `$0800` (`emulator/AICodeGen/spacewar/`).
   SNES pads or a split keyboard steer two ships around a central sun; first to 5 kills
   wins. `codegen/tools/spacewar.test.mjs` covers gravity, wrap, shots, collisions, and
@@ -94,8 +104,8 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   (`emulator/AICodeGen/pulsar/`). Both pilots start *in orbit* around a central pulsar, so
   thrust reshapes an orbit instead of steering a ship, and torpedoes fall into the well
   too and have to be banked around it. 256×160 logical field wrapping on both axes,
-  octagonal-norm distance into an inverse-cube force table, 8.8 semi-implicit Euler, XOR
-  vector ships over a persistent starfield. Two SNES pads or a split keyboard; first to 5
+  octagonal-norm inverse-square gravity via an `r^-3` force table, 8.8 semi-implicit Euler,
+  XOR vector ships over a persistent starfield. Two SNES pads or a split keyboard; first to 5
   wins. A live frame measures ~8,600 cycles against the 26,224-cycle budget.
   `codegen/tools/pulsar.test.mjs` runs 66 checks, including 240 frames of orbit stability
   and an exact draw/erase round-trip of the playfield.

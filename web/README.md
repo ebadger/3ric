@@ -141,6 +141,53 @@ buttons, either bumper or trigger maps to L/R, and the D-pad or left stick contr
 directions (0.5 deadzone). Games read the normal ROM `PTRIG` and `GAMEPAD1/2`
 interface; JavaScript does not bypass the VIA or ROM scan.
 
+## SUNSLING
+
+Pick **SUNSLING** in the Gallery or the assembler's **Hi-res** group, or open
+`index.html?src=programs/sunsling.s`. This is a separate original 65C02 game;
+STAR DUEL remains available unchanged. Run at **native 1x** and press **Enter**
+or a controller's **Start** to launch a two-player match. First to five wins;
+simultaneous final kills can produce a draw.
+
+| Action | Keyboard P1 | Keyboard P2 | Each SNES pad |
+|--------|-------------|-------------|---------------|
+| Rotate | A/D or Left/Right | J/L | Left/Right |
+| Burn / coast | W / S or Up / Down | I / K | Hold / release Up or B |
+| Fire | F or Space | U | Hold A or Y |
+| Hyperspace | E | O | Fresh Select press |
+
+**Keyboard burn stays on until Coast is pressed.** The hardware keyboard supplies
+characters, not held-key/key-up state; explicit throttle latches let both pilots
+keep accelerating while steering or firing independently. Each fire key starts
+a short burst; repeated presses extend it. Momentum persists when coasting.
+Standard USB/Bluetooth controller face-button positions map through the existing
+SNES interface: bottom=B, right=A, left=Y, top=X.
+
+P1 starts on the left in a delta ship; P2 starts on the right in a forked ship.
+The sun attracts both ships and torpedoes; thrust tangentially to swing around it.
+The arena wraps on both axes. Each pilot has four live torpedo slots, and a shot
+inherits the ship's velocity. A sun crash or enemy hit awards the opponent a point.
+Respawn shields blink briefly and block enemy contact, **not the sun**.
+Hyperspace relocates to the safe outer arena; the HUD's `H:READY`/`H:WAIT` indicates
+its eight-second recharge. `T:+` means the engine is burning.
+
+**P** or a fresh **Start** pauses/resumes. **Enter/Start** rematches after a win.
+**M** mutes effects; **Q/Esc** restores the monitor. Sound uses the actual `$C030`
+speaker and needs the browser's usual first interaction. There is no host-side
+physics or drawing.
+
+Canonical source: `codegen/programs/sunsling.s`. **Download .PRG** produces a raw
+image for `BRUN SUNSLING.PRG 0800`; **Download .woz** makes a bootable disk using
+the existing exporter. To assemble a local card image:
+
+```powershell
+node codegen\tools\asm6502.mjs codegen\programs\sunsling.s codegen\programs\sunsling.prg
+node codegen\tools\sunsling.test.mjs
+```
+
+The guest is exercised on the real WASM core, not a substitute JavaScript physics
+model; a hardware-compatible binary is not a claim of physical-board testing.
+
 ## 3RIC Groovebox
 
 Open **3RIC Groovebox** in the Gallery or the assembler's **Music** sample group.
@@ -188,7 +235,7 @@ root for the focused sequencer, controller, timing, and real-PCM checks.
 The page includes an **Assembler** panel that assembles 65C02 source entirely in
 the browser and runs it in the emulator — no CLI, no server round-trip:
 
-1. **Pick a sample** — hi-res games/demos (STAR SWARM, ROCK STORM, JUNGLE QUEST, Matrix Rain),
+1. **Pick a sample** — hi-res games/demos (SUNSLING, STAR DUEL, STAR SWARM, ROCK STORM, JUNGLE QUEST, Matrix Rain),
    lo-res games (SNAKE, Conway's Life), text-mode games (Block Drop, Paddles,
    Brick Buster, 2048, Minefield), 3RIC Groovebox (music), or Hello (serial) — or type
    your own source into the editor.

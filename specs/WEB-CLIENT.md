@@ -119,6 +119,14 @@ client-side so GitHub Pages can host it as static files.
   in `ROM-SOFTWARE.md` and `web/README.md`, including SNES-versus-standard-controller
   button positions, native-1x audio, the initial sound-activation gesture, and RAM-only
   edits. No additional JavaScript audio engine or host-side sequencer is introduced.
+- **SUNSLING sample:** the gallery and the editor's Hi-res group expose
+  `programs/sunsling.s`, a separate original two-player gravity game alongside STAR DUEL.
+  The existing `build.ps1` wildcard stages `codegen/programs/sunsling.s`; source deep
+  links, Share, and `.PRG`/bootable `.woz` downloads use the normal editor path.
+  Keyboard burn/coast latches and both SNES pads are handled by the guest program;
+  no host keyboard-state extension, JavaScript physics, or canvas overlay is added.
+  Instructions explain native 1x, both control sets, and keyboard throttle remaining
+  on until Coast is pressed. The Pages build runs the focused guest-game regression.
 - **Matrix Rain sample:** the gallery and the editor's Hi-res sample group both expose
   `programs/matrix.s`, sourced from `codegen/programs/matrix.s` and staged by the existing
   `build.ps1` wildcard. Its gallery link opens `index.html?src=programs/matrix.s` and
@@ -367,6 +375,7 @@ on the emulator whether it succeeds, is blocked, or 404s.
 | Community Gallery | Shipped | `gallery.html` renders the curated `gallery.json`; one-click **Run & Remix** via `?src=`/`?code=`; PR-based submissions credited by author. |
 | Bouncing Ball gallery entry | Implemented | scottybe's committed `programs/bouncing-ball.s`; native-speed description, unchanged loader/exports, and `codegen/tools/bouncing-ball.test.mjs` in the Pages build. |
 | 3RIC Groovebox sample | Shipped | Gallery and Music sample-picker entry for the guest-side Mockingboard sequencer; canonical source staged automatically, with focused guest/hardware checks in the Pages build. |
+| SUNSLING sample | Implemented | Separate gallery and Hi-res editor entry, canonical source staged by the existing build, normal PRG/WOZ exports, and `codegen/tools/sunsling.test.mjs` in the Pages build. |
 | Hackaday showcase | Implemented | Landing page, real framebuffer still, gallery/editor entry, and exports. Initial `#ide` links focus/reveal the editor after loading; ordinary Run links and subsequent Assemble & Run actions retain canvas focus. Regenerate the still with `node codegen/tools/hackaday.test.mjs --write-preview` after building/staging the source. |
 | Matrix Rain sample | Shipped | Gallery and Hi-res sample entry for `programs/matrix.s`; source staging, auto-running editor deep links, and exports use the existing pipeline. The Pages build runs `codegen/tools/matrix.test.mjs` against the staged source and real WASM renderer. |
 | Story / landing page | Shipped | `story.html` — narrative of 3ric + the wider hardware-hacking journey; lite-embed YouTube chapters (facade → `youtube-nocookie` iframe on click); a curated real-time **Reddit timeline** (16 `r/beneater`/maker milestone posts, 2020–2025, each linking to its permalink); links to emulator/gallery/tutorials + `r/beneater` / `u/ebadger1973` / 6502.org. Linked from the `index.html`/`gallery.html`/`tutorials.html` headers; staged by the deploy workflow. |

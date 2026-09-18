@@ -48,7 +48,7 @@ Every implementation choice differs from STAR DUEL:
   (128, 80), which makes `STARY - y` always the shortest wrapped path, so the
   vertical axis needs no wrap correction in the distance code.
 - **Gravity without division.** `F[r] = round(160·65536/r³)` is tabulated for
-  r = 0..175, clamped below r = 10 and capped at 16383. Per-axis acceleration is
+  r = 0..175, clamped below r = 10 and capped at 10486. Per-axis acceleration is
   `(|d| · F[r]) >> 8` in 8.8 fixed point, computed with a shift-add 8×16→24
   multiply. Because the octagonal norm guarantees `|d| ≤ r`, the product always
   fits 24 bits. Integrating velocity before position (semi-implicit Euler) keeps
