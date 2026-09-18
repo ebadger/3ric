@@ -336,8 +336,8 @@ hi-res vectors + text HUD + $C030 -> existing native/WASM video/audio`.
 Pause holds simulation state; quitting restores the borrowed I/O settings and monitor.
 For PULSAR DUEL:
 `keyboard hold-timers or PTRIG + GAMEPAD1/GAMEPAD2 → rotate/thrust/fire/hyperspace intents
-→ XOR erase of last frame's geometry → octagonal-norm distance + inverse-cube force table
-+ 8x16 multiply → 8.8 semi-implicit Euler for ships and torpedoes → dual-axis wrap /
+→ XOR erase of last frame's geometry → octagonal-norm inverse-square gravity via an `r^-3`
+force table + 8x16 multiply → 8.8 semi-implicit Euler for ships and torpedoes → dual-axis wrap /
 collisions / score → XOR draw on hi-res page 1 + mixed-mode HUD → frame pacing`; Q/Esc
 selects text mode, `HOME`, then `BRK`.
 

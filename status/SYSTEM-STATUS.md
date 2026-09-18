@@ -104,8 +104,8 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   (`emulator/AICodeGen/pulsar/`). Both pilots start *in orbit* around a central pulsar, so
   thrust reshapes an orbit instead of steering a ship, and torpedoes fall into the well
   too and have to be banked around it. 256×160 logical field wrapping on both axes,
-  octagonal-norm distance into an inverse-cube force table, 8.8 semi-implicit Euler, XOR
-  vector ships over a persistent starfield. Two SNES pads or a split keyboard; first to 5
+  octagonal-norm inverse-square gravity via an `r^-3` force table, 8.8 semi-implicit Euler,
+  XOR vector ships over a persistent starfield. Two SNES pads or a split keyboard; first to 5
   wins. A live frame measures ~8,600 cycles against the 26,224-cycle budget.
   `codegen/tools/pulsar.test.mjs` runs 66 checks, including 240 frames of orbit stability
   and an exact draw/erase round-trip of the playfield.

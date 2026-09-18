@@ -488,8 +488,8 @@ for (let f = 0; f < 10; f++) {
   hook(S.hk_merge, "hk_merge");
   if (pk(S.ipf) === 1) heldFrames++;
 }
-ok(heldFrames >= 2, `one keypress holds fire for ${heldFrames} frames`);
-ok(pk(S.ipf) === 0 || heldFrames < 10, "the hold eventually lapses");
+ok(heldFrames === 5, `one keypress holds fire for ${heldFrames} frames`);
+ok(pk(S.ipf) === 0, "the hold lapses");
 
 clearIntents();
 po(0xc000, 0xd1); // 'Q'
@@ -595,8 +595,8 @@ po(S.frcnt, 0);
 const BUDGET = 1_000_000;
 s.run({ org: S.hk_floop, maxCycles: BUDGET, chunk: BUDGET, idleChunks: 99 });
 const served = pk(S.frcnt);
-const perFrame = Math.round(BUDGET / Math.max(1, served));
-ok(served > 0, `the free-running loop served ${served} frames`);
+ok(served > 0 && served < 256, `the free-running loop served ${served} frames without wrapping`);
+const perFrame = served > 0 && served < 256 ? Math.round(BUDGET / served) : Infinity;
 ok(perFrame < 26_224,
    `a live frame costs ~${perFrame} cycles, inside the 26224-cycle budget`);
 po(S.fastmd, 1);
