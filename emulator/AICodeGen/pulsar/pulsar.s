@@ -76,6 +76,8 @@ KEY_UARR = $8B
 ; graphics half of mixed mode.  Both axes wrap.
 PFXOFF   = 12
 PFHIGH   = 160
+WARPYMSK = 127                  ; random hyperspace y span: 0..127
+WARPYMIN = 16                   ; keeps hyperspace y within 16..143
 STARX    = 128                  ; pulsar centre, logical
 STARY    = 80
 RSTARK   = 10                   ; ship is vaporised inside this radius
@@ -799,9 +801,9 @@ ship_warp:
         sta sxi,x
         stz sxf,x
         jsr rngnext
-        and #127
+        and #WARPYMSK
         clc
-        adc #16
+        adc #WARPYMIN
         ldx curobj
         sta syi,x
         stz syf,x

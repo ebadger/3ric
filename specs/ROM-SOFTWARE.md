@@ -247,7 +247,7 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     component never needs wrap correction. Distance is the octagonal norm
     `r ~= max(|dx|,|dy|) + min(|dx|,|dy|)/2` (about 6% error, and it guarantees
     `|d| <= r`). A 176-entry table holds `F[r] = round(G*65536/r^3)` with `G = 160`,
-    clamped below `r = 10`; per-axis acceleration is `(|d| * F[r]) >> 8` in 8.8 via an
+    clamped at 10,486 below `r = 10`; per-axis acceleration is `(|d| * F[r]) >> 8` in 8.8 via an
     8x16 shift-add multiply, giving a true inverse-square field with no division.
     Integration is semi-implicit Euler (velocity then position), so orbits are stable.
     Torpedoes fall into the well on exactly the same code path, so shots curve.

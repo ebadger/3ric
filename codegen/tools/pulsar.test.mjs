@@ -12,6 +12,7 @@ const SRC = join(HERE, "..", "..", "emulator", "AICodeGen", "pulsar", "pulsar.s"
 const EMULATOR_PRG = join(HERE, "..", "..", "emulator", "AICodeGen", "pulsar", "pulsar.prg");
 const WEB_SRC = join(HERE, "..", "..", "web", "programs", "pulsar.s");
 const WEB_PRG = join(HERE, "..", "..", "web", "programs", "pulsar.prg");
+const writeArtifacts = process.argv.includes("--write");
 
 let failures = 0;
 const ok = (cond, msg) => {
@@ -46,10 +47,12 @@ ok(end <= 0x2000, "image stays below hi-res page 1 at $2000");
 const image = Buffer.from(bytes);
 ok(image.equals(readFileSync(EMULATOR_PRG)), "emulator PRG matches assembled source");
 ok(image.equals(readFileSync(WEB_PRG)), "web PRG matches assembled source");
-writeFileSync(EMULATOR_PRG, image);
-mkdirSync(dirname(WEB_PRG), { recursive: true });
-writeFileSync(WEB_PRG, image);
-writeFileSync(WEB_SRC, src);
+if (writeArtifacts) {
+  writeFileSync(EMULATOR_PRG, image);
+  mkdirSync(dirname(WEB_PRG), { recursive: true });
+  writeFileSync(WEB_PRG, image);
+  writeFileSync(WEB_SRC, src);
+}
 
 const s = await boot();
 const vm = s.vm;
@@ -592,7 +595,7 @@ ok(pk(S.gstate) === GSPLAY, "START drops the machine into play");
 // Returning to the monitor dominates any cycle count, so instead free-run the
 // frame loop for a fixed budget and see how many frames it served.
 po(S.frcnt, 0);
-const BUDGET = 1_000_000;
+const BUDGET = 100_000;
 s.run({ org: S.hk_floop, maxCycles: BUDGET, chunk: BUDGET, idleChunks: 99 });
 const served = pk(S.frcnt);
 ok(served > 0 && served < 256, `the free-running loop served ${served} frames without wrapping`);
@@ -600,9 +603,10 @@ const perFrame = served > 0 && served < 256 ? Math.round(BUDGET / served) : Infi
 ok(perFrame < 26_224,
    `a live frame costs ~${perFrame} cycles, inside the 26224-cycle budget`);
 po(S.fastmd, 1);
+const framesBefore = pk(S.frcnt);
 for (let f = 0; f < 60; f++) hook(S.hk_frame, "hk_frame");
 ok(pk(S.quitf) === 0, "sixty live frames run without asking to quit");
-ok(pk(S.frcnt) !== 0, "the frame counter advances");
+ok(((pk(S.frcnt) - framesBefore) & 0xff) === 60, "the frame counter advances by sixty");
 
 console.log(failures === 0 ? "\nVERDICT: PASS" : `\nVERDICT: FAIL (${failures})`);
 process.exit(failures === 0 ? 0 : 1);
