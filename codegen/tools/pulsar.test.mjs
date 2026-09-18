@@ -45,13 +45,14 @@ ok(org === 0x0800, "loads at $0800");
 ok(end <= 0x2000, "image stays below hi-res page 1 at $2000");
 
 const image = Buffer.from(bytes);
-ok(image.equals(readFileSync(EMULATOR_PRG)), "emulator PRG matches assembled source");
-ok(image.equals(readFileSync(WEB_PRG)), "web PRG matches assembled source");
 if (writeArtifacts) {
   writeFileSync(EMULATOR_PRG, image);
   mkdirSync(dirname(WEB_PRG), { recursive: true });
   writeFileSync(WEB_PRG, image);
   writeFileSync(WEB_SRC, src);
+} else {
+  ok(image.equals(readFileSync(EMULATOR_PRG)), "emulator PRG matches assembled source");
+  ok(image.equals(readFileSync(WEB_PRG)), "web PRG matches assembled source");
 }
 
 const s = await boot();
@@ -596,10 +597,12 @@ ok(pk(S.gstate) === GSPLAY, "START drops the machine into play");
 // frame loop for a fixed budget and see how many frames it served.
 po(S.frcnt, 0);
 const BUDGET = 100_000;
+const MAX_EXPECTED_FRAMES = 50;
 s.run({ org: S.hk_floop, maxCycles: BUDGET, chunk: BUDGET, idleChunks: 99 });
 const served = pk(S.frcnt);
-ok(served > 0 && served < 256, `the free-running loop served ${served} frames without wrapping`);
-const perFrame = served > 0 && served < 256 ? Math.round(BUDGET / served) : Infinity;
+ok(served > 0 && served <= MAX_EXPECTED_FRAMES,
+   `the free-running loop served ${served} frames within the expected range`);
+const perFrame = served > 0 && served <= MAX_EXPECTED_FRAMES ? Math.round(BUDGET / served) : Infinity;
 ok(perFrame < 26_224,
    `a live frame costs ~${perFrame} cycles, inside the 26224-cycle budget`);
 po(S.fastmd, 1);
