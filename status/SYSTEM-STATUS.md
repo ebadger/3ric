@@ -56,6 +56,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node codegen\tools\groovebox.test.mjs  # sequencer, real AY audio, gamepad editing, timing
 & $node codegen\tools\spacewar.test.mjs   # STAR DUEL gravity, wrap, shots, collisions, pads
 & $node codegen\tools\sunsling.test.mjs   # SUNSLING duel, dual input, timing, monitor exit, WOZ boot
+& $node codegen\tools\pulsar.test.mjs    # PULSAR DUEL orbits, curved torpedoes, XOR draw/erase, pads
 & $node web/test_debugger.cjs            # breakpoints, stepping, source map, ROM debug lookup
 & $node web/test_sd.cjs                  # mount SD + DIR lists the FAT32 root
 & $node web/test_disk.cjs                # boot a WOZ floppy via C600G into a hi-res title
@@ -99,6 +100,15 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   SNES pads or a split keyboard steer two ships around a central sun; first to 5 kills
   wins. `codegen/tools/spacewar.test.mjs` covers gravity, wrap, shots, collisions, and
   dual-pad input.
+- **PULSAR DUEL:** a second, independently written two-player orbital duel at `$0800`
+  (`emulator/AICodeGen/pulsar/`). Both pilots start *in orbit* around a central pulsar, so
+  thrust reshapes an orbit instead of steering a ship, and torpedoes fall into the well
+  too and have to be banked around it. 256×160 logical field wrapping on both axes,
+  octagonal-norm distance into an inverse-cube force table, 8.8 semi-implicit Euler, XOR
+  vector ships over a persistent starfield. Two SNES pads or a split keyboard; first to 5
+  wins. A live frame measures ~8,600 cycles against the 26,224-cycle budget.
+  `codegen/tools/pulsar.test.mjs` runs 66 checks, including 240 frames of orbit stability
+  and an exact draw/erase round-trip of the playfield.
 - **Bouncing Ball:** scottybe's community demo still computes the same checkerboard
   sphere, room, and bounces on the 65C02, now averaging 419,704 rather than 4,814,984
   cycles per frame (11.47x faster; 14% faster than the first optimized version). The
