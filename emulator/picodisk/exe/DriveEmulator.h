@@ -13,7 +13,7 @@ public:
 	void Write(uint8_t address, uint8_t data);
 	void AddCycles(uint32_t cycles);
 	WozDisk* GetActiveDisk();
-
+    bool IsRunning() { return _motorRunning; }
 	static bool		_Q6;
 	static bool		_Q7;
 	static uint8_t	_statusRegister;

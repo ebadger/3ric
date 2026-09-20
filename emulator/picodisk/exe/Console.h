@@ -49,6 +49,7 @@ public:
 
 	void InputByte(uint8_t byte);	
 	bool GetOutputByte(uint8_t *b);
+	bool PeekOutputByte(uint8_t *b);
 	bool GetOutputByteLocal(uint8_t *b);
 	void PrintOut(const char *format, ...);
 	void AddCommand(Command *c);

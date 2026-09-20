@@ -134,7 +134,7 @@ namespace fontrom
                     for (int r = 0; r < 16; r++)
                     {
                         //int b = br.ReadByte();
-                        int b = fontdata[(c2 * 16) + r];
+                        int b = fontdata[(c2 * 16) + (r + 15) % 16];
 
                         if ( c >= 0 && c < 128) // inverse
                         {

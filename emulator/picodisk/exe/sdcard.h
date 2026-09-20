@@ -17,7 +17,7 @@ class SDCard
     int Mount();
     void Unmount();
     int GetSubDirectories(const char *path, vector<std::string> &vecDirectories);
-    int GetFilesInDirectory(const char * directory, vector<std::string> &vecFiles);
+    int GetFilesInDirectory(const char * directory, const char * filter, vector<std::string> &vecFiles);
     int GetEntries(const char * directory, vector<std::string> &vecEntries);
     int OpenAndRead(const char *filename, vector<uint8_t> &bytes);
     int WriteFile(const char *filename, vector<uint8_t> &bytes);

@@ -94,6 +94,22 @@ Console::ProcessLine()
 	}
 }
 
+bool
+Console::PeekOutputByte(uint8_t *byte)
+{
+	if (_vecBufOut.size() > 0)
+	{
+		*byte = _vecBufOut.front();
+		return true;
+	}
+	else
+	{
+		*byte = 0;
+	}
+	
+	return false;
+}
+
 bool 
 Console::GetOutputByte(uint8_t *byte)
 {

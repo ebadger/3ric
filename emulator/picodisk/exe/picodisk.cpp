@@ -1,5 +1,6 @@
 #include <math.h>
 #include <vector>
+#include <algorithm>
 #include <stdio.h>
 #include <pico/stdlib.h>
 #include <pico/multicore.h>
@@ -78,6 +79,9 @@ DriveEmulator *_driveEmulator = nullptr;
 SDCard *_sdCard = nullptr;
 Console *_console = nullptr;
 
+uint32_t _throttleRate = 0;
+bool _throttled = false;
+
 void init_uart(uint baudrate) {
     // Initialize UART0
     uart_init(uart0, baudrate);
@@ -85,81 +89,6 @@ void init_uart(uint baudrate) {
     // Set the TX and RX pins by using the function gpio_set_function
     gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
     gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
-}
-
-inline void 
-__not_in_flash_func(HandleCommunication)(uint32_t value, uint8_t addr, uint8_t data, bool rw)
-{
-    uint8_t b = 0;
-
-    if (rw)
-    {
-        switch(addr)
-        {
-            case 0:
-                b = 0;
-                _console->GetOutputByte(&b);
-                pio_sm_put(_pio, _sm_data, (uint32_t)b);            
-                break;
-            case 1:
-            case 2:
-            case 3:
-            case 4:
-            case 5:
-            case 6:
-            case 7:
-            case 8:
-            case 9:
-            case 10:
-            case 11:
-            case 12:
-            case 13:
-            case 14:
-            case 15:
-                pio_sm_put(_pio, _sm_data, (uint32_t)addr);            
-                break;
-        }
-    }
-    else
-    {
-/*
-        printf("%08x: %08x, addr=%x, dcs=%d, ccs=%d, rw=%d, phi2=%d\n", 
-            value2, 
-            value, 
-            addr, 
-            IS_DCS(value), 
-            IS_CCS(value), 
-            IS_RW(value), 
-            IS_PHI2(value));           
-*/ 
-        // write
-        switch(addr)
-        {
-            case 0:
-                if (data != 0)
-                {
-                    _console->InputByte(data);
-                }
-
-                break;
-            case 1:
-            case 2:
-            case 3:
-            case 4:
-            case 5:
-            case 6:
-            case 7:
-            case 8:
-            case 9:
-            case 10:
-            case 11:
-            case 12:
-            case 13:
-            case 14:
-            case 15:
-                break;
-        }
-    }
 }
 
 void init_GPIO()
@@ -231,20 +160,34 @@ void init_console()
     {
         uint8_t b;
         std::vector<std::string> vecFiles;
-        _sdCard->GetFilesInDirectory("\\", vecFiles);
 
-        for (std::string s : vecFiles)
+        if (params.size() == 2)
+        {
+            _sdCard->GetFilesInDirectory("\\", params[1].c_str(), vecFiles);
+        }
+        else
+        {
+            _sdCard->GetFilesInDirectory("\\", "*", vecFiles);
+        }
+
+        std::sort(vecFiles.begin(), vecFiles.end());
+        
+        for (const std::string &s : vecFiles)
         {
             _console->PrintOut("%s\r", s.c_str());
+        }
 
-            if(_console->HasOutput())
+        _console->PrintOut("\r");
+
+        if(_console->HasOutput())
+        {
+            while (_console->GetOutputByteLocal(&b))
             {
-                while (_console->GetOutputByteLocal(&b))
-                {
-                    printf("%c",b);
-                }
+                printf("%c",b);
             }
         }
+
+
     }));
 
     _console->AddCommand(
@@ -263,11 +206,11 @@ void init_console()
         
         if (_driveEmulator->GetActiveDisk()->InsertDisk(params[1].c_str()))
         {
-            _console->PrintOut("WOZ2 disk image loaded\r");
+            _console->PrintOut("DISK LOADED\r");
         }
         else
         {
-            _console->PrintOut("WOZ2 disk image load failed\r");
+            _console->PrintOut("LOAD FAILED\r");
         }
     }));
 
@@ -294,13 +237,23 @@ void init_console()
     }));
 
     _console->AddCommand(
-    new Command(std::string("RUN"), 
-    [&](std::vector<std::string>& params) -> void
-    {
-            _console->PrintOut("%cJ C600\r", 
-                    0x84);
-    }));
+        new Command(std::string("THROTTLE"), 
+        [&](std::vector<std::string>& params) -> void
+        {
+            uint8_t b;
+            std::vector<std::string> vecFiles;
+    
+            if (params.size() != 2)
+            {
+                _console->PrintOut("usage: throttle [rate]\r");
+                return;    
+            }
 
+            _throttleRate = std::stoul(params[1].c_str());
+    
+            _console->PrintOut("Throttle rate set to %d\r", _throttleRate);
+        }));
+    
 }
 
 
@@ -354,6 +307,7 @@ __not_in_flash_func(core1)()
     bool rw = true;
     bool phi = false;
     uint32_t lastCycle = _cycleCount;
+    bool led = false;
 
     init_PIO();
 
@@ -393,10 +347,15 @@ __not_in_flash_func(core1)()
             }
 
         	gpio_put(GPIO_READY, false);
+
+            gpio_put(GPIO_HDDLED, led);
+            led = !led;
+
             _driveEmulator->AddCycles(_cycleCount - lastCycle);
             lastCycle = _cycleCount;
             uint8_t missed = pio_sm_get_rx_fifo_level(_pio, _sm_addr);
             _cycleCount += missed;
+            
             pio_sm_clear_fifos(_pio, _sm_addr);
         	gpio_put(GPIO_READY, true);
         } 
@@ -405,8 +364,13 @@ __not_in_flash_func(core1)()
             if (IS_RW(value))
             {
                 uint8_t b = 0;
-                _console->GetOutputByte(&b);
-                pio_sm_put(_pio, _sm_data, (uint32_t)b);            
+
+                _console->PeekOutputByte(&b);
+                pio_sm_put(_pio, _sm_data, (uint32_t)b);  
+                if (b != 0)
+                {
+                    _console->GetOutputByte(&b);          
+                }
             }
             else
             {
@@ -417,11 +381,12 @@ __not_in_flash_func(core1)()
                 }
             }
         }
-        else
+        else if (_driveEmulator->IsRunning())
         {
 
-            if (_cycleCount - lastCycle >= 1000)
+            if (_cycleCount - lastCycle >= 500)
             {
+                gpio_put(GPIO_HDDLED, true);
                 gpio_put(GPIO_READY, false);
                 //gpio_put(GPIO_TIMING, true);
                 _driveEmulator->AddCycles(_cycleCount - lastCycle);
@@ -442,7 +407,27 @@ __not_in_flash_func(core1)()
 
             //_driveEmulator->AddCycles(1);
         }
+        else
+        {
+            if (_cycleCount - lastCycle >= 10000)
+            {
+                gpio_put(GPIO_HDDLED, false);
+                lastCycle = 0;
+            }
 
+            pio_sm_clear_fifos(_pio, _sm_data);
+        }
+
+
+        if (_throttleRate > 0 && _cycleCount % _throttleRate == 0)
+        {
+            if (_driveEmulator->IsRunning() == false)
+            {
+                gpio_put(GPIO_READY, false);
+                sleep_us(5);
+                gpio_put(GPIO_READY, true);
+            }
+        }
 
         //pio_sm_clear_fifos(_pio, _sm_addr);
 
@@ -497,7 +482,7 @@ int __not_in_flash_func(main)()
 
             if(_console->HasOutput())
             {
-                while (_console->GetOutputByteLocal(&b))
+                if (_console->GetOutputByteLocal(&b))
                 {
                     printf("%c",b);
                 }
@@ -509,7 +494,10 @@ int __not_in_flash_func(main)()
             if (ch != PICO_ERROR_TIMEOUT) {
                 // There is a character available to read
                 // Process the character
-                _console->InputByte((uint8_t)ch);
+                if (ch != 0)
+                {
+                    _console->InputByte((uint8_t)ch);
+                }
                 printf("%c", ch);
             }        
 

@@ -110,14 +110,14 @@ int SDCard::GetSubDirectories(
 }
 
 int SDCard::GetFilesInDirectory(
-                const char * directory, 
+                const char * directory,
+                const char * filter, 
                 vector<std::string> &vecFiles
                 )
 {
     FRESULT fr = FR_OK;
     DIR dp = {};
     FILINFO info = {};
-    const char * filter = "*";
 
     vecFiles.clear();
 
