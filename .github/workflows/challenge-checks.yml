@@ -1,0 +1,64 @@
+name: Check challenge submissions
+
+on:
+  pull_request:
+    paths:
+      - 'codegen/**'
+      - 'web/**'
+      - 'specs/**'
+      - 'emulator/Badger6502VMLib/**'
+      - 'emulator/WozLib/**'
+      - 'emulator/MockMicroSD/**'
+      - 'emulator/Data/**'
+      - '.github/workflows/challenge-checks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: challenge-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: 6.0.1
+          actions-cache-folder: emsdk-cache
+      - name: Build unchanged runtime and challenge pages
+        run: pwsh -File web/build.ps1
+      - name: Check tools and entry sources
+        run: |
+          node codegen/tools/asm6502.test.mjs
+          node codegen/tools/challenges.test.mjs
+          node codegen/tools/tts-entry.test.mjs --runtime
+          node web/test_boot.cjs
+          node web/test_mockingboard.cjs
+          python web/test_serve.py
+          node codegen/tools/check-tts.mjs --all
+      - name: Check staged publication
+        run: |
+          node codegen/tools/build-challenges.mjs
+          node web/test_challenges.mjs
+      - name: Upload entry reports and recordings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tts-v1-${{ github.sha }}
+          path: codegen/out/tts-v1/
+          if-no-files-found: ignore
+          retention-days: 30

@@ -212,6 +212,7 @@
     <a class="nav" href="hackaday.html" title="Built from Bits: a real 65C02 graphics and music showcase">&#9654;&nbsp;Built from Bits</a>
     <a class="nav" href="tutorials.html" title="Learn 65C02 game programming step by step">&#9654;&nbsp;Tutorials</a>
     <a class="nav" href="gallery.html" title="Browse the community program gallery">&#9654;&nbsp;Gallery</a>
+    <a class="nav" href="challenges.html" title="Same challenge, different models, real software">&#9654;&nbsp;Challenges</a>
     <button id="reset">Reset</button>
     <button id="bootdisk">Boot Disk</button>
     <label class="filebtn">Insert .woz&hellip;<input type="file" id="diskfile" accept=".woz" /></label>
@@ -363,6 +364,8 @@
     <a href="https://github.com/ebadger/3ric/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">CONTRIBUTING</a>.
     <br />New here? <a href="story.html">Read the story of how 3RIC was built</a>
     &mdash; the breadboard-to-PCB journey, with the YouTube build series.
+    <br />Challenge 01: <a href="challenges/tts/">Make this computer talk</a>
+    &mdash; the same TTS brief, independent model implementations, software worth keeping.
     <br />Enjoying 3RIC Studio? <a href="https://github.com/sponsors/ebadger" target="_blank" rel="noopener noreferrer">&#9749; Support the project</a>
     &mdash; sponsorship funds parts, boards, and more build videos.
   </footer>
@@ -1305,7 +1308,7 @@
         }
         if (!res.bytes.length) { setOut("assembled 0 bytes \u2014 empty source or missing .org?", "err"); return; }
         addrEl.value = hex(res.org, 4);
-        lastPrg = { bytes: res.bytes, org: res.org, name: (sampleEl.value || "program") };
+        lastPrg = { bytes: res.bytes, org: res.org, name: (loadedRef?.name || sampleEl.value || "program") };
         dlBtn.disabled = false;
         wozBtn.disabled = false;
         const nsym = Object.keys(res.symbols).length;
@@ -1436,6 +1439,9 @@
           if (m) {
             loadedRef = { name: m[1], text: srcEl.value };
             if ([...sampleEl.options].some(option => option.value === m[1])) {
+              sampleEl.value = m[1];
+            } else {
+              sampleEl.add(new Option(m[1], m[1]));
               sampleEl.value = m[1];
             }
           }

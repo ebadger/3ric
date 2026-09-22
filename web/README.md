@@ -65,8 +65,11 @@ identically. Browser-only presentation code stays in the bridge and JavaScript.
 | `make_sd_sparse.py` | Streams `emulator/Data/sd.zip` (a 2GB, mostly-zero FAT32 image) into a compact `data/sd.sparse` keeping only the ~11.5MB of non-zero sectors. |
 | `build.ps1` | Compiles the core + WozLib + MockMicroSD + bridge to `badger6502.js` / `.wasm`, stages the data files, generates `sd.sparse`, and stages the demo `disk.woz`. |
 | `index.html` | Canvas UI + `requestAnimationFrame` driver + keyboard + clock-speed/disk/sound controls + the in-browser assembler/editor/debugger. Honors an optional `ASSET_BASE` (R2/CDN offload). |
+| `challenges.html`, `challenges.css` | Static introduction to the public model challenges and first TTS round. |
+| `challenges/tts/index.template.html` | Template for the complete TTS brief, kickoff task, submission guide and entries; generated from `codegen/challenges/tts/v1/`. |
+| `challenge-copy.js` | Optional clipboard enhancement with visible manual-copy fallback. |
 | `asm6502.mjs` | The 65C02 assembler, staged from `codegen/tools/asm6502.mjs` (git-ignored). Dual-use: the same file is a Node CLI and a browser ES module — `index.html` imports its `assemble()` for **Assemble & Run**. |
-| `serve.ps1` | Starts `python -m http.server` (defaults to port 8011) for local dev. |
+| `serve.ps1`, `serve.py` | Static loopback-only server (default port 8000; `-Port 8011` to override), with explicit ES-module/WASM MIME types. |
 | `Caddyfile` | Production static server config (compression + cache headers) for hosting behind a Cloudflare Tunnel. |
 | `test_*.cjs` | Headless Node validations (boot, render, input, audio, screen decode, SD, disk). |
 
@@ -74,13 +77,37 @@ Build outputs (`badger6502.js`, `badger6502.wasm`), the staged `data/` copies,
 and the editor's staged `asm6502.mjs` + `programs/*.s` sample sources are
 git-ignored; regenerate them with `build.ps1`.
 
-## Prerequisites (this machine)
+## Model challenges
 
-- **emsdk 6.0.1** at `C:\Users\ebadger\emsdk` (x86_64). `emsdk_env.bat` does not
-  add `upstream\emscripten` to `PATH`, so the build invokes `em++.exe` by full
-  path after sourcing the env in the same `cmd` process.
-- **Node** (for headless tests): `C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe`
-  (the system has no `node` on `PATH`).
+`challenges.html` introduces the series; `challenges/tts/` and its versioned `v1/`
+page contain the full 3RIC Talks brief and submission guide without requiring JS.
+The canonical text lives under `codegen/challenges/tts/v1/`, not in generated HTML.
+`node codegen/tools/build-challenges.mjs` stages the pages, raw prompt, exact launch
+SHA and approved source/download links. The launch SHA is the commit that first added
+the versioned prompt; publication requires full Git history (`fetch-depth: 0`).
+Later entry commits do not move it. Changes to the frozen prompt/guide/metadata require
+a new version, not silent edits.
+
+Before the initial foundation commit, `build.ps1 -PreviewChallenges` (or the generator's
+`--preview`) permits explicitly labeled local drafts. This is not an official run baseline.
+After commit, use the ordinary production build. The generator never invents entries
+or recordings; no entries means a visible empty state. `check-tts.mjs --all` produces
+recordings/reports, then rerun the generator to stage matching successful captures.
+Run `node codegen/tools/challenges.test.mjs`, `node codegen/tools/tts-entry.test.mjs --runtime`
+and `node web/test_challenges.mjs` for the publication/tooling checks.
+
+Models submit source in independent entry directories/PRs. The read-only PR workflow
+uploads PRG/WAV/check artifacts for inspection; only maintainer-merged code is published
+by Pages. Captured PCM is not intelligibility, AY-only or physical-hardware verification.
+See the [submission guide](../codegen/challenges/tts/v1/SUBMITTING.md).
+
+## Prerequisites
+
+- **emsdk 6.0.1** (x86_64). On Windows, the default location is
+  `%USERPROFILE%\emsdk`; set `$env:EMSDK` to use another installation. The build
+  invokes `em++.exe` or `em++.bat` by full path after sourcing `emsdk_env.bat`
+  in the same `cmd` process. Installing a version is not the same as activating it.
+- **Node 22 or newer on PATH**, for challenge staging and headless tests.
 - **Python 3** for serving (sets the `application/wasm` MIME type; `.wasm` must
   be served over http, not `file://`).
 

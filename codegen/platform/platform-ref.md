@@ -8,18 +8,27 @@ Text/lo-res video page 1 is $0400-$07FF (page 2 $0800-$0BFF); hi-res page 1 $200
 
 | Range | Region |
 | --- | --- |
-| $0000–$8FFF | RAM (zero page, stack, program & data) |
+| $0000–$8FFF | Always-mapped RAM (36 KiB; zero page, stack, program & data) |
 | $2000–$5FFF | Hi-res video pages (page 1 $2000, page 2 $4000) |
-| $9000–$BFFF | BASIC ROM |
+| $9000–$BFFF | BASIC ROM overlay or 12 KiB RAM (select with $C006/$C007) |
 | $C000–$C0FF | Device / soft-switch page |
 | $C100–$C10F | ACIA serial port |
 | $C200–$C20F | VIA #1 (timers, I/O) |
 | $D000–$FFFF | Monitor / OS ROM |
 
+## RAM banking
+
+- $0000-$8FFF is always-mapped RAM. Access $C007 to expose another 12 KiB at $9000-$BFFF, giving 48 KiB below I/O while upper ROM remains visible; $C006 restores BASIC ROM.
+- Language-card switches $C080-$C08F select alternate 4 KiB banks at $D000-$DFFF plus shared 8 KiB at $E000-$FFFF. Read selection and write enabling are distinct; see vm.cpp for sequences.
+- Upper-ROM overlays require safe input/output, interrupt vectors/handlers and monitor return. SEI does not mask NMI. $C800-$CFFF holds system state, not free scratch.
+- Browser loadData writes backing memory directly. Banked hardware loading must be established separately; bulk-load success is not a physical BRUN test.
+
 ## Soft switches (touch to select; read or write any access)
 
 | Address | Switch | Effect |
 | --- | --- | --- |
+| $C006 | BASIC_ROM_ON | Select BASIC ROM at $9000-$BFFF |
+| $C007 | BASIC_ROM_OFF | Expose RAM at $9000-$BFFF (48 KiB lower RAM total) |
 | $C000 | KEYBOARD | Keyboard data (bit7 = key-ready strobe) |
 | $C010 | KEYBD_STROBE | Clear the keyboard strobe |
 | $C030 | SPEAKER | Toggle the system speaker (any read or write access) |
@@ -78,13 +87,13 @@ Text/lo-res video page 1 is $0400-$07FF (page 2 $0800-$0BFF); hi-res page 1 $200
 
 | Symbol | Address | Description |
 | --- | --- | --- |
-| dos | $EC5C | Enter the DOS shell (mounts the SD card, shows '>' prompt) |
-| fat32_start | $D366 | Mount the FAT32 card |
-| cmd_brun | $EE55 | BRUN: load a raw .PRG at an address and JMP to it |
-| cmd_bload | $EE4F | BLOAD: load a raw .PRG at an address (no jump) |
+| dos | $EDBC | Enter the DOS shell (mounts the SD card, shows '>' prompt) |
+| fat32_start | $D09A | Mount the FAT32 card |
+| cmd_brun | $EF5A | BRUN: load a raw .PRG at an address and JMP to it |
+| cmd_bload | $EF54 | BLOAD: load a raw .PRG at an address (no jump) |
 | cmd_bsave | $ACFD | BSAVE: write a memory range to a .PRG file |
-| cmd_fload | $EE49 | FLOAD helper |
-| fat32_file_write | $EAC8 | Low-level FAT32 file write |
+| cmd_fload | $EF4E | FLOAD helper |
+| fat32_file_write | $EBB5 | Low-level FAT32 file write |
 
 ## Conventions
 
@@ -92,4 +101,4 @@ Text/lo-res video page 1 is $0400-$07FF (page 2 $0800-$0BFF); hi-res page 1 $200
 - **Exit:** end with `BRK` to fall back to the monitor `*` prompt (the test harness's halt sentinel). `RTS` is unsafe unless you set up the stack yourself.
 - **Text:** `COUT` expects ASCII with the **high bit set** (e.g. `'A'|$80 = $C1`). `$8D` is carriage return.
 - **Serial:** `COUT` output is mirrored to the ACIA at $C100; the harness captures it. You may also write bytes straight to that port.
-- **Symbols:** 1831 ROM symbols are available in `platform-ref.json` under `symbols` for lookup.
+- **Symbols:** 1994 ROM symbols are available in `platform-ref.json` under `symbols` for lookup.

@@ -27,8 +27,14 @@ build/run the `Console` or WinUI (`Badger6502Emulator`) host.
 
 ```powershell
 pwsh web/build.ps1     # Emscripten 6.0.1 -> web/badger6502.js + .wasm, stages data/
-pwsh web/serve.ps1     # python -m http.server 8011 ; open http://localhost:8011/index.html
+pwsh web/serve.ps1 -Port 8011  # open http://localhost:8011/index.html
 ```
+
+For challenge development use Node 22+ on PATH and `pwsh web/serve.ps1 -Port 8011`
+(the server defaults to port 8000). The server pins JavaScript/WASM MIME types even
+when Windows registry mappings label `.mjs` as plain text. `web/build.ps1` stages the
+challenge pages; full Git history is required to resolve the immutable launch baseline.
+Before the first foundation commit only, `-PreviewChallenges` produces a labeled draft.
 
 Prereqs on this machine (see `web/README.md`): emsdk **6.0.1** at `C:\Users\ebadger\emsdk`,
 Node at `C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe` (not on `PATH`), Python 3.
@@ -87,6 +93,13 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 
 ## Current state / known gaps
 
+- **Model challenges:** `challenges.html` introduces the series; `challenges/tts/` and
+  `challenges/tts/v1/` publish the complete original-TTS brief, baseline SHA and PR
+  submission guide. No engines, speech-quality results, hardware tests or ballot exist
+  in the initial publication. Entries live under `codegen/challenges/tts/v1/submissions/`.
+  `node codegen/tools/check-tts.mjs --all` validates and captures emulator PCM; it does
+  not certify intelligibility, interactive UI correctness or physical loading.
+  PR checks upload reports/recordings without deploying; owner merge gates Pages.
 - **SUNSLING:** a separate original `$0800` two-player gravity duel at
   `codegen/programs/sunsling.s`, available in the gallery and Hi-res sample picker.
   Ships and torpedoes bend around the sun; first to five wins, with simultaneous

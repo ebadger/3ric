@@ -11,3 +11,8 @@ data/
 asm6502.mjs
 wozgen.mjs
 programs/*.s
+
+# Challenge pages/downloads are generated from codegen/challenges/tts/v1.
+challenges/tts/index.html
+challenges/tts/v1/
+__pycache__/

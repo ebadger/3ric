@@ -29,6 +29,13 @@ on:
       - 'codegen/tools/hackaday.test.mjs'
       - 'codegen/tools/sunsling.test.mjs'
       - 'codegen/programs/**'
+      - 'codegen/challenges/**'
+      - 'codegen/platform/**'
+      - 'codegen/tools/*challenges*'
+      - 'codegen/tools/challenge-baseline.mjs'
+      - 'codegen/tools/tts-entry*'
+      - 'codegen/tools/check-tts.mjs'
+      - 'codegen/tools/fixtures/tts-check-*'
       - '.github/workflows/deploy-pages.yml'
   # Allow manual runs from the Actions tab.
   workflow_dispatch:
@@ -47,9 +54,19 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
       # make_sd_sparse.py + build.ps1's sd.sparse generation need `python`.
       - name: Set up Python
@@ -87,6 +104,12 @@ jobs:
           node codegen/tools/hackaday.test.mjs
           node codegen/tools/sunsling.test.mjs
           node web/test_hackaday_page.cjs
+          node codegen/tools/challenges.test.mjs
+          node codegen/tools/tts-entry.test.mjs --runtime
+          node codegen/tools/check-tts.mjs --all
+          node codegen/tools/build-challenges.mjs
+          node web/test_challenges.mjs
+          python web/test_serve.py
 
       # Stage only what the page needs (not the C++/test sources) as the site root.
       - name: Stage site
@@ -95,6 +118,10 @@ jobs:
           cp web/index.html web/emulation-clock.js web/audio-worklet.js web/gamepad.js web/virtual-keyboard.js web/debugger.js web/gallery.html web/tutorials.html web/story.html web/gallery.json web/llms.txt web/robots.txt web/sitemap.xml web/badger6502.js web/badger6502.wasm _site/
           cp web/asm6502.mjs web/wozgen.mjs _site/
           cp web/hackaday.html _site/
+          cp web/challenges.html web/challenges.css web/challenge-copy.js _site/
+          mkdir -p _site/challenges/tts
+          cp web/challenges/tts/index.html _site/challenges/tts/
+          cp -r web/challenges/tts/v1 _site/challenges/tts/v1
           cp -r web/media _site/media
           cp -r web/data _site/data
           cp -r web/programs _site/programs

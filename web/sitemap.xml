@@ -17,6 +17,18 @@
     <changefreq>weekly</changefreq>
   </url>
   <url>
+    <loc>https://ebadger.github.io/3ric/challenges.html</loc>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://ebadger.github.io/3ric/challenges/tts/</loc>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
+    <loc>https://ebadger.github.io/3ric/challenges/tts/v1/</loc>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
     <loc>https://ebadger.github.io/3ric/tutorials.html</loc>
     <changefreq>weekly</changefreq>
   </url>
