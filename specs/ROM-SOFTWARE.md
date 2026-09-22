@@ -232,7 +232,10 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     30 Hz at native 1x; steady-state work must fit a 52,448-cycle frame, including
     two active pilots and eight torpedoes. The ROM's SNES scan reloads both onboard
     timers, so the frame countdown is armed immediately after that scan, allowing
-    1,280 cycles for its bounded overhead. Completion reads the counter's wrap,
+    1,600 cycles for the current ROM scan and surrounding frame-loop overhead.
+    Regression coverage measures idle, one-pad and two-pad scans as well as full
+    combat load against the staged ROM; ROM timing changes must not be hidden by
+    widening the cadence tolerance. Completion reads the counter's wrap,
     not an IFR bit that a later ROM NMI can acknowledge. Frame periods stay within
     200 cycles of 52,448. The timer interrupt is disabled without
     disabling unrelated VIA interrupts. Prior ACR, Timer-2 interrupt enable, joystick
@@ -381,5 +384,5 @@ audio`; the program separately writes its editor and playhead into text video RA
 | SNES gamepad input | Shipped | ROM fills `GAMEPAD1/2` on a `$C070` touch; the shared emulator peripheral follows the same VIA serial protocol, and the browser maps two standard USB/Bluetooth controllers into it. |
 | Jungle Quest — The Sunstone Run | Shipped | Six-screen `$0800` mixed-hi-res platformer; focused suite includes a complete successful expedition. |
 | STAR DUEL | Shipped | Two-player `$0800` mixed-hi-res gravity duel; SNES pads + keyboard; `codegen/tools/spacewar.test.mjs` covers gravity, wrap, shots, collisions, and dual-pad input. |
-| SUNSLING | Implemented | Separate original `$0800` two-player gravity duel. `codegen/tools/sunsling.test.mjs` exercises real-VM physics, both control paths, XOR rendering, simultaneous scoring, all heading pairs under full combat load, native cadence, monitor restoration, and exported WOZ boot. |
+| SUNSLING | Implemented | Separate original `$0800` two-player gravity duel. Current-ROM scan compensation preserves the strict 200-cycle cadence tolerance; idle/one-pad/two-pad/release coverage and the full-load/900-frame regression pass (worst work 49,833, period 52,536 cycles). `codegen/tools/sunsling.test.mjs` also exercises real-VM physics, both control paths, XOR rendering, simultaneous scoring, monitor restoration, and exported WOZ boot. |
 | PULSAR DUEL | Shipped | Independent two-player `$0800` mixed-hi-res orbital duel, 5,632 bytes ending `$1E00`; 256×160 logical field, octagonal-norm inverse-square gravity via an `r^-3` force table, pilots spawn in a stable r=48 orbit, torpedoes curve; live frame measures ~8,600 cycles against the 26,224-cycle budget; `codegen/tools/pulsar.test.mjs` covers 66 checks including 240 frames of orbit stability and draw/erase round-tripping. |
