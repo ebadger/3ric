@@ -17,6 +17,27 @@ client-side so GitHub Pages can host it as static files.
 
 ## Contracts / Interfaces
 
+- **Model challenges:** `challenges.html` introduces the software-first series;
+  `challenges/tts/index.html` presents 3RIC Talks with the complete, statically rendered
+  v1 prompt, a copyable kickoff task, references, submission instructions and an honest
+  empty entries state. `codegen/challenges/tts/v1/` owns the canonical brief and submission
+  contract. `build-challenges.mjs` generates the HTML, raw Markdown, metadata and entry
+  assets; generated copies are ignored, never hand-edited. No TTS implementation,
+  intelligibility result, hardware verification, ballot or video is fabricated.
+  The immutable baseline is the Git commit that first adds the v1 prompt (full history
+  is required). Public downloads include its SHA; subsequent entry commits do not move it.
+  Uncommitted previews are explicitly labeled and cannot be used for official entries.
+  Entrants commit independent directories/PRs; only maintainer-merged entries are staged.
+  Each entry uses a unique flat `programs/tts-v1-<id>.s` launch path, preserving workbench
+  sharing and download identity. Build/PCM checks are not listening or hardware approval.
+  Fullscreen, embedding, public PR previews and voting are outside this first release.
+  Links remain relative under the `/3ric/` project root. Navigation, `llms.txt`, sitemap,
+  build staging and Pages triggers expose the same challenge.
+- **Local serving:** `serve.ps1` delegates to `serve.py`, preserving the existing
+  default port 8000 and allowing `-Port` overrides, bound to local IPv4 loopback.
+  The static handler explicitly
+  serves `.mjs`/`.js` as JavaScript and `.wasm` as WebAssembly instead of relying on
+  Windows registry MIME associations, so challenge source links can assemble locally.
 - **Build:** `web/build.ps1` compiles `Badger6502VMLib` (vm, cpu, Instructions, acia, via,
   snesgamepads, mockingboard, ay38910, PS2Keyboard, badgervmpal) + `WozLib` (DriveEmulator, WozDisk,
   WozFile) + `MockMicroSD` (SDCard, MappedFile) + `web/web_bridge.cpp` with
@@ -363,6 +384,7 @@ on the emulator whether it succeeds, is blocked, or 404s.
 
 | Item | Status | Notes |
 |------|--------|-------|
+| Public model challenges and 3RIC Talks | Implemented | Static hub/full prompt, versioned baseline, PR submission flow, source/download identity and clipboard fallback; no submitted engines yet. |
 | WASM build of the VM core + WozLib + SD | Shipped | `web/build.ps1`, Emscripten 6.0.1. |
 | Canvas video + keyboard | Shipped | text/lo-res/hi-res, `$C000` input. |
 | Mobile virtual keyboard | Shipped | Exact 1983 Apple IIe Figure 2-1 key order/widths below the canvas, minus Reset and both Apple keys; full emulator character set, one-shot Shift/Control, the same strobe-aware `$C000` queue as physical input, and viewport-fitting rows without phone-width horizontal scrolling. |

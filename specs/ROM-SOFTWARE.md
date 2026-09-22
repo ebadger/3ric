@@ -14,6 +14,17 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
 
 ## Contracts / Interfaces
 
+- **3RIC Talks v1:** the public challenge requests original English TTS implemented on
+  the 65C02 and dual-AY Mockingboard, with typed input and reusable init/speak routines.
+  Its complete, versioned contract is `codegen/challenges/tts/v1/prompt.md`; per-entry
+  README/metadata document implementation status, memory, controls, ABI and provenance.
+  There are no engines or physical-hardware results in the initial publication.
+  Sources are independent PR submissions, not replacements for ordinary gallery samples.
+  The target is 3RIC; Apple II compatibility requires a separately verified port.
+  RAM includes always-mapped `$0000-$8FFF`, an additional `$9000-$BFFF` when `$C007`
+  disables the BASIC overlay (`$C006` restores it), and language-card RAM over upper ROM.
+  Using that last region requires safe ROM visibility, input and interrupt handling;
+  `$C800-$CFFF` contains system state, not disposable scratch. No hardware map is changed.
 - **System ROM:** `emulator/Data/badger6502.bin` (512 KB; first 64 KB mapped `$D000–$FFFF`
   plus banked regions). Contains the monitor, the DOS/FAT32 shell, the Disk II boot PROM
   (`$C600`), and Microsoft BASIC (`$9000–$BFFF`). Reset vector at `$FFFC/$FFFD`. Built with
@@ -21,7 +32,7 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
 - **Font ROM:** `emulator/Data/fontrom.dat`, loaded by the text renderer.
 - **ROM entry points (contract for programs; curated in `codegen/platform/platform-ref.*`):**
   `COUT $FDED`, `COUT1 $FDF0`, `CROUT $FD8E`, `PRBYTE $FDDA`, `HOME $FC58`, `KEYIN $FD1B`;
-  DOS shell `dos $EC5C` (mount + `>` prompt), verbs `BSAVE/BLOAD/BRUN/DIR/CAT/CD`, FAT32
+  DOS shell `dos $EDBC` (mount + `>` prompt), verbs `BSAVE/BLOAD/BRUN/DIR/CAT/CD`, FAT32
   `fat32_file_read/write`.
 - **SNES gamepad (contract for programs):** the ROM scans the two SNES pads from an
   interrupt raised on the VIA CB2 edge. A program touches **`PTRIG $C070`** to raise that
@@ -356,6 +367,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 
 | Item | Status | Notes |
 |------|--------|-------|
+| 3RIC Talks v1 challenge contract | Implemented; no engines yet | Original dual-AY TTS, bank-aware RAM rules, reusable ABI and separate source/PR submissions. No speech or hardware result claimed. |
 | System ROM (monitor / DOS shell / FAT32) | Shipped | `badger6502.bin`; boots to monitor. |
 | Microsoft BASIC | Shipped | `$9000–$BFFF`; not Applesoft (known gap). |
 | Font ROM | Shipped | `fontrom.dat`. |

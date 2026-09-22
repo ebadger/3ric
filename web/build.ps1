@@ -9,6 +9,8 @@
 #
 # Usage:  pwsh -File web\build.ps1   (run from anywhere; paths are script-relative)
 
+param([switch]$PreviewChallenges)
+
 $ErrorActionPreference = "Stop"
 $web  = $PSScriptRoot
 $root = Split-Path $web -Parent
@@ -27,6 +29,7 @@ if ($onWindows) {
     $emsdk  = if ($env:EMSDK) { $env:EMSDK } else { Join-Path $env:USERPROFILE "emsdk" }
     $envBat = Join-Path $emsdk "emsdk_env.bat"
     $empp   = Join-Path $emsdk "upstream\emscripten\em++.exe"
+    if (-not (Test-Path $empp)) { $empp = Join-Path $emsdk "upstream\emscripten\em++.bat" }
 
     if (-not (Test-Path $envBat)) { throw "emsdk not found at '$emsdk'. Set `$env:EMSDK or install per web/README.md." }
     if (-not (Test-Path $empp))   { throw "em++ not found at '$empp'. Did you run 'emsdk install/activate latest'?" }
@@ -85,7 +88,7 @@ $argList = $quoted -join " "
 Write-Host "Building -> $out" -ForegroundColor Cyan
 if ($onWindows) {
     # Source emsdk_env.bat in the same cmd process that runs em++.exe.
-    $cmd = "call `"$envBat`" >nul 2>&1 && `"$empp`" $argList"
+    $cmd = "call `"$envBat`" >nul 2>&1 && call `"$empp`" $argList"
     & $env:ComSpec /c $cmd
 } else {
     # Linux/macOS (CI): em++ is already on PATH from a sourced emsdk env; allow an
@@ -181,3 +184,9 @@ foreach ($s in $samples) {
     else { Write-Warning "sample source missing: $s" }
 }
 Write-Host "Staged web assembler + $($samples.Count) sample sources into web\ and web\programs\." -ForegroundColor Green
+
+$node = Get-Command node -ErrorAction Stop
+$challengeArgs = @((Join-Path $root "codegen\tools\build-challenges.mjs"))
+if ($PreviewChallenges) { $challengeArgs += "--preview" }
+& $node.Source @challengeArgs
+if ($LASTEXITCODE -ne 0) { throw "Challenge publication failed with exit code $LASTEXITCODE" }

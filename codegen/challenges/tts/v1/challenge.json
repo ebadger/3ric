@@ -1,0 +1,13 @@
+{
+  "id": "tts-v1",
+  "version": 1,
+  "title": "3RIC Talks",
+  "status": "open",
+  "description": "An original English text-to-speech engine for the 65C02 and dual-AY Mockingboard.",
+  "sentences": [
+    "HELLO. THIS COMPUTER CAN TALK.",
+    "WE MAKE NEW SOFTWARE FOR OLD COMPUTERS.",
+    "THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG.",
+    "PLEASE TYPE A SENTENCE AND PRESS ENTER."
+  ]
+}

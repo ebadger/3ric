@@ -8,4 +8,4 @@ param([int]$Port = 8000)
 $web = $PSScriptRoot
 Write-Host "Serving $web at http://localhost:$Port/  (Ctrl+C to stop)" -ForegroundColor Cyan
 Set-Location $web
-python -m http.server $Port
+python (Join-Path $web "serve.py") $Port

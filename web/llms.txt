@@ -10,6 +10,21 @@
 
 ## Quickstart — write a valid program
 
+**For the model challenge, use its complete brief instead of the generic quickstart:**
+
+- Challenges: https://ebadger.github.io/3ric/challenges.html
+- 3RIC Talks v1 (original TTS on the 65C02 and dual-AY Mockingboard):
+  https://ebadger.github.io/3ric/challenges/tts/v1/
+- Full prompt: https://ebadger.github.io/3ric/challenges/tts/v1/prompt.md
+- Submission guide: https://ebadger.github.io/3ric/challenges/tts/v1/SUBMITTING.md
+- Frozen baseline and version: https://ebadger.github.io/3ric/challenges/tts/v1/challenge.json
+
+Challenge entries require committed source, metadata, documentation and reproducible
+checks in separate submission directories/PRs, not a gallery-only JSON snippet.
+Use the exact baseline SHA published with the challenge and its pinned references,
+not the moving `main` references below. Do not self-merge; publication follows owner
+review, merge and a successful Pages deployment.
+
 Target the project's own `asm6502` assembler dialect. The rules that matter most:
 
 - **Origin & entry.** Start with `.org $0800` (free RAM; `$6000` is also free). The load
@@ -84,7 +99,8 @@ https://github.com/ebadger/3ric/blob/main/CONTRIBUTING.md
 - **Source file.** Add your program as `codegen/programs/NAME.s` and a manifest entry:
   `{ "title": "My Game", "author": "your-name", "mode": "Text", "description": "...", "src": "programs/NAME.s" }`
 
-Open the pull request and your program appears in the gallery, credited to you.
+After maintainer review and merge, a successful Pages deployment adds your program
+to the gallery, credited to you. An open PR is not yet a published app.
 
 ## About / canonical links
 

@@ -9,7 +9,8 @@
 
 ## Purpose
 
-Faithfully emulate the 3ric machine: a WDC 65C02 CPU, 36 KB RAM, Microsoft BASIC + a 512 KB
+Faithfully emulate the 3ric machine: a WDC 65C02 CPU, 36 KiB always-mapped RAM plus
+BASIC-overlay and language-card RAM banking, Microsoft BASIC + a 512 KB
 ROM (monitor/DOS), Apple-II-style text/lo-res/hi-res video, keyboard, a `$C030` system
 speaker, a 6551 ACIA serial port, a 6522 VIA (I/O + bit-banged SPI micro-SD + two serial
 SNES gamepads), a slot-4 dual-AY Mockingboard, and a Disk II 5.25″ floppy. It is the **reference implementation of
@@ -32,8 +33,10 @@ the target hardware** — the emulator is correct when it behaves like the real 
 web bridge, and `codegen/platform-ref.*`):
 
 ```
-$0000–$8FFF  RAM (36 KB)          $2000–$5FFF  hi-res video pages
-$9000–$BFFF  Microsoft BASIC ROM  $C000        keyboard data / $C010 strobe clear
+$0000–$8FFF  always-mapped RAM (36 KiB); $2000–$5FFF includes hi-res video pages
+$9000–$BFFF  Microsoft BASIC ROM overlay or 12 KiB RAM
+$C006/$C007  BASIC ROM on/off (off exposes RAM, giving 48 KiB below I/O)
+$C000        keyboard data / $C010 strobe clear
 $C030        system speaker toggle (any read or write access)
 $C050–$C057  display soft switches (GRAPHICS/TEXT/…/LORES/HIRES)
 $C080–$C08F  language-card bank switches
@@ -49,6 +52,13 @@ $D000–$FFFF  ROM (monitor / OS / DOS shell); reset vector at $FFFC/$FFFD
 Soft switches are dispatched by `VM::DoSoftSwitches(address, write)`; memory-access
 callbacks (`CallbackWriteMemory`, `CallbackSetSoftSwitches`) let hosts hook I/O (the web
 bridge uses this to clock the SD card and advance the drive).
+
+Language-card RAM supplies alternate 4 KiB banks at `$D000-$DFFF` and shared 8 KiB at
+`$E000-$FFFF`. Read selection and write-enable sequencing are distinct; see
+`DoSoftSwitches`, `GetMemoryReadMapping` and `WriteData`. Hiding upper ROM also hides
+ROM input/output and interrupt handlers, and `SEI` does not mask NMI. Interactive
+programs must preserve these dependencies. `$C800-$CFFF` contains system state.
+These are existing mappings, not a new memory expansion.
 
 **SNES gamepad contract (onboard VIA1 at `$C200`):**
 

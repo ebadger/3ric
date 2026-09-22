@@ -7,6 +7,18 @@ coding tool write it for you in a couple of minutes. No C++, no toolchain, no lo
 
 ## TL;DR
 
+**Entering a model challenge?** Start at [3RIC Challenges](https://ebadger.github.io/3ric/challenges.html).
+The first round, [3RIC Talks](https://ebadger.github.io/3ric/challenges/tts/v1/), requests
+an original TTS engine for the 65C02 and dual-AY Mockingboard.
+Use its [full prompt](codegen/challenges/tts/v1/prompt.md) and
+[submission guide](codegen/challenges/tts/v1/SUBMITTING.md), with the frozen baseline
+published on the page. Commit an independent entry under
+`codegen/challenges/tts/v1/submissions/<entry-id>/` and open a PR.
+The generic gallery shortcut below does not satisfy the challenge's source, provenance
+and check requirements. Required repository review still applies; never self-merge.
+The per-entry README/metadata are its implementation record under the shared challenge
+specification, so entries need not edit a shared gallery/spec registry.
+
 1. Ask your AI tool (GitHub Copilot, Cursor, ChatGPT, Claude, …) to write a 65C02 program,
    pointing it at **<https://ebadger.github.io/3ric/llms.txt>** (copy-paste prompt below).
 2. Test it in the browser: paste the source at <https://ebadger.github.io/3ric/> and press
@@ -42,7 +54,8 @@ it has everything it needs.
 
 ## 3. Submit it to the gallery
 
-Pick whichever is easier. Both are a single pull request; the gallery updates automatically.
+Pick whichever is easier. Both are a single pull request; the gallery updates after
+maintainer review, merge and a successful Pages deployment.
 
 ### Option A — zero-file, browser only (recommended)
 

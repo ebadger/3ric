@@ -99,15 +99,17 @@ const ZERO_PAGE = [
 
 // High-level regions + key soft switches to surface in the MD (from the enum).
 const REGION_KEYS = [
-  ["MM_RAM_START", "MM_RAM_END", "RAM (zero page, stack, program & data)"],
+  ["MM_RAM_START", "MM_RAM_END", "Always-mapped RAM (36 KiB; zero page, stack, program & data)"],
   ["MM_VIDEO_START", "MM_VIDEO_END", "Hi-res video pages (page 1 $2000, page 2 $4000)"],
-  ["MM_BASIC_START", "MM_BASIC_END", "BASIC ROM"],
+  ["MM_BASIC_START", "MM_BASIC_END", "BASIC ROM overlay or 12 KiB RAM (select with $C006/$C007)"],
   ["MM_DEVICES_START", "MM_SS_END", "Device / soft-switch page"],
   ["MM_ACIA_START", "MM_ACIA_END", "ACIA serial port"],
   ["MM_VIA1_START", "MM_VIA1_END", "VIA #1 (timers, I/O)"],
   ["MM_ROM_START", "MM_ROM_END", "Monitor / OS ROM"],
 ];
 const SOFTSWITCH_KEYS = [
+  ["MM_SS_BASIC_ROM_ON", "Select BASIC ROM at $9000-$BFFF"],
+  ["MM_SS_BASIC_ROM_OFF", "Expose RAM at $9000-$BFFF (48 KiB lower RAM total)"],
   ["MM_SS_KEYBOARD", "Keyboard data (bit7 = key-ready strobe)"],
   ["MM_SS_KEYBD_STROBE", "Clear the keyboard strobe"],
   ["MM_SS_SPEAKER", "Toggle the system speaker (any read or write access)"],
@@ -141,6 +143,12 @@ function main() {
   const json = {
     generatedFrom: ["emulator/Badger6502VMLib/vm.h", "emulator/Data/badger6502.dbg"],
     note: "Text/lo-res video page 1 is $0400-$07FF (page 2 $0800-$0BFF); hi-res page 1 $2000, page 2 $4000. Load user programs into free RAM, e.g. $0800 or $6000. Return to the monitor with BRK.",
+    banking: [
+      "$0000-$8FFF is always-mapped RAM. Access $C007 to expose another 12 KiB at $9000-$BFFF, giving 48 KiB below I/O while upper ROM remains visible; $C006 restores BASIC ROM.",
+      "Language-card switches $C080-$C08F select alternate 4 KiB banks at $D000-$DFFF plus shared 8 KiB at $E000-$FFFF. Read selection and write enabling are distinct; see vm.cpp for sequences.",
+      "Upper-ROM overlays require safe input/output, interrupt vectors/handlers and monitor return. SEI does not mask NMI. $C800-$CFFF holds system state, not free scratch.",
+      "Browser loadData writes backing memory directly. Banked hardware loading must be established separately; bulk-load success is not a physical BRUN test.",
+    ],
     memoryMap: mm,
     regions: REGION_KEYS.filter(([s, e]) => mm[s] != null && mm[e] != null)
       .map(([s, e, desc]) => ({ start: mm[s], end: mm[e], desc })),
@@ -162,6 +170,10 @@ function main() {
 
   md += "## Memory regions\n\n| Range | Region |\n| --- | --- |\n";
   for (const r of json.regions) md += `| ${hex(r.start)}–${hex(r.end)} | ${r.desc} |\n`;
+  md += "\n";
+
+  md += "## RAM banking\n\n";
+  for (const note of json.banking) md += `- ${note}\n`;
   md += "\n";
 
   md += "## Soft switches (touch to select; read or write any access)\n\n| Address | Switch | Effect |\n| --- | --- | --- |\n";
