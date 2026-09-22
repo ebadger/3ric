@@ -630,6 +630,24 @@ try {
   held.vm.delete();
 }
 
+const cadence = await create();
+try {
+  const pressed = 0x0fff & ~SNES.START;
+  for (const [pad1, pad2] of [[0, 0], [pressed, 0], [0, pressed], [pressed, pressed], [0, 0]]) {
+    cadence.vm.setGamepadState(0, pad1);
+    cadence.vm.setGamepadState(1, pad2);
+    for (let i = 0; i < 8; i++) {
+      const cost = cadence.frame();
+      assert.ok(Math.abs(cost.total - S.FRAME_PERIOD) < 200,
+        `ROM scan compensation retains native 30 Hz for pads ${pad1}/${pad2} (${cost.total} cycles)`);
+    }
+  }
+  assert.equal(cadence.vm.peek(S.MODE), 0, "cadence checks do not leave the title");
+} finally {
+  cadence.vm.delete();
+}
+console.log("PASS current-ROM frame cadence with idle, one-pad, two-pad, and released inputs");
+
 for (const mode of [0, 1, 2, 3]) {
   for (const quit of ["Q", 27]) {
     const closing = await create({ borrowedIO: true });

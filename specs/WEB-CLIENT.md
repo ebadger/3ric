@@ -68,6 +68,11 @@ client-side so GitHub Pages can host it as static files.
   against Pages instead of serving a stale `max-age=600` copy — a freshly deployed program
   shows up on the next selection without a hard refresh. (There is no service worker, and
   GitHub Pages purges its CDN on every deploy, so the revalidation returns the new source.)
+  A flat `programs/<name>.s` deep link selects the matching built-in option or adds and
+  selects a new option for an unlisted source (including `tts-v1-<id>` entries). Repeated
+  selection must not duplicate options; the loaded source/name remain the sharing and
+  download identity. Sandbox tests execute the real page's selection code with the
+  `Option` constructor and `select.add()` DOM surface represented.
 - **Site identity:** the published web experience is branded **3RIC Studio** in page titles,
   visible page headers and footers, social metadata, the gallery manifest, and `llms.txt`.
   **3RIC** remains the name of the computer itself. Existing repository/Page URLs, the
@@ -393,7 +398,7 @@ on the emulator whether it succeeds, is blocked, or 404s.
 | In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; built-in games, demos, and tutorials; `?src=`. Sample sources fetched with `cache:"no-cache"` (revalidate) so a new deploy isn't masked by the browser cache. |
 | Source debugger | Shipped | Browser-assembled source listing with bank-qualified instruction breakpoints/highlighting, pause/continue, bank-aware step into/over, register and raw-memory inspection, plus lazy ca65 ROM symbol/file:line correlation; covered by `test_debugger.cjs`. |
 | Program downloads (.PRG / .woz) | Shipped | **Download .PRG** (raw bytes) + **Download .woz** (bootable WOZ2 via `wozgen.mjs`, a port of `dsk2woz2`, with a multi-track boot loader); verified by `web/test_woz_download.cjs`. |
-| Share / Remix deep links | Shipped | **Share** button; `?src=programs/<name>.s` for unmodified samples, inline base64url `?code=` otherwise, both carrying `&org=` when the source has no `.org`; remix banner on shared links. |
+| Share / Remix deep links | Shipped | **Share** button; `?src=programs/<name>.s` for unmodified samples, inline base64url `?code=` otherwise, both carrying `&org=` when the source has no `.org`; remix banner on shared links. `hackaday.test.mjs` covers built-in/unlisted/challenge sample selection, source identity, and duplicate avoidance using the actual page code. |
 | Community Gallery | Shipped | `gallery.html` renders the curated `gallery.json`; one-click **Run & Remix** via `?src=`/`?code=`; PR-based submissions credited by author. |
 | Bouncing Ball gallery entry | Implemented | scottybe's committed `programs/bouncing-ball.s`; native-speed description, unchanged loader/exports, and `codegen/tools/bouncing-ball.test.mjs` in the Pages build. |
 | 3RIC Groovebox sample | Shipped | Gallery and Music sample-picker entry for the guest-side Mockingboard sequencer; canonical source staged automatically, with focused guest/hardware checks in the Pages build. |

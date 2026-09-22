@@ -378,17 +378,29 @@ const selectionStart = html.indexOf("const m = /^programs");
 const selectionEnd = html.indexOf("const srcOrg =", selectionStart);
 assert.ok(selectionStart !== -1 && selectionEnd > selectionStart);
 const selectionCode = html.slice(selectionStart, selectionEnd);
-for (const name of ["hackaday", "matrix", "unlisted"]) {
+for (const name of ["hackaday", "matrix", "unlisted", "tts-v1-test-voice"]) {
+  const initialNames = ["tut1_hello", "hackaday", "matrix"];
   const sampleEl = {
     value: "tut1_hello",
-    options: ["tut1_hello", "hackaday", "matrix"].map(value => ({ value })),
+    options: initialNames.map(value => ({ text: value, value })),
+    add(option) { this.options.push(option); },
   };
-  const context = { sampleEl, srcUrl: `programs/${name}.s`, srcEl: { value: source }, loadedRef: null };
-  runInNewContext(selectionCode, context);
-  assert.equal(sampleEl.value, name === "unlisted" ? "tut1_hello" : name);
-  assert.equal(context.loadedRef.name, name);
+  const expectedNames = initialNames.includes(name) ? initialNames : [...initialNames, name];
+  for (let visit = 0; visit < 2; visit++) {
+    const context = {
+      sampleEl, srcUrl: `programs/${name}.s`, srcEl: { value: source }, loadedRef: null,
+      Option: function Option(text, value) { this.text = text; this.value = value; },
+    };
+    runInNewContext(selectionCode, context);
+    assert.equal(sampleEl.value, name);
+    assert.deepEqual(sampleEl.options.map(option => option.value), expectedNames,
+      "existing options are preserved and repeated selection never adds a duplicate");
+    assert.equal(sampleEl.options.find(option => option.value === name).text, name);
+    assert.equal(context.loadedRef.name, name);
+    assert.equal(context.loadedRef.text, source);
+  }
 }
-console.log("PASS gallery, staged source, and matching deep-link sample/download names");
+console.log("PASS gallery, staged source, built-in/dynamic deep-link identity, and duplicate-free sample selection");
 
 if (process.argv.includes("--write-preview")) {
   const directory = join(ROOT, "web", "media");
