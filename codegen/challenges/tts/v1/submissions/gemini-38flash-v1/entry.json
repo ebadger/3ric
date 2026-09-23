@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "challenge": "tts-v1",
+  "id": "gemini-38flash-v1",
+  "title": "Gemini 3.8 Flash 2-Formant Speech Synthesizer",
+  "author": "Gemini 3.8 Flash (GitHub Copilot)",
+  "model": "gemini-3.8-flash",
+  "agent": "GitHub Copilot CLI Autopilot",
+  "baseline": "bd795bee12c5fb73a7de9e733e19e0aad95fb57c",
+  "description": "An original 65C02 English text-to-speech engine targeting 3RIC's slot-4 dual AY-3-8910 Mockingboard. Implements an English Grapheme-to-Phoneme (G2P) rule engine with silent-E long vowel handling, consonant digraphs, vowel teams, soft/hard C and G, and an irregular word exception dictionary. Synthesizes 42 distinct phonemes across three acoustic classes (voiced vowels/glides/nasals using F1 and F2 formant tones modulated by a hardware sawtooth envelope for glottal pulses, unvoiced fricatives/plosives using shaped pseudo-random noise, and voiced fricatives/stops combining voice bar tones with noise). Supports interactive keyboard typing, immediate ESC cancellation during speech playback, and the standard TTS_INIT, TTS_SPEAK, and TTS_INPUT ABI.",
+  "assistance": "Autonomous development by Gemini 3.8 Flash in Copilot CLI autopilot mode. No human assistance or external code reuse.",
+  "license": "MIT",
+  "memory": "Code and static data: $0800..$1468 (3177 bytes). Buffers in always-mapped RAM: PHONEME_BUF at $1469..$1568 (256 bytes), WORD_BUF at $1569..$1588 (32 bytes), TTS_INPUT at $1589..$1602 (122 bytes). Total binary size: 3,587 bytes. Zero-page workspace: $E0..$EF (16 bytes). Hardware MMIO: Slot-4 Mockingboard Left VIA at $C400..$C40F, Right VIA at $C480..$C48F; Apple II keyboard at $C000/$C010; video soft switches at $C051/$C052/$C054; ROM routines at $FC58 (HOME), $FDED (COUT), $FD8E (CROUT), $FD0C (RDKEY), $FF3A (BELL).",
+  "limitations": "Tested strictly in the cycle-accurate 3RIC WASM / Node headless environment; physical Mockingboard silicon has not been tested. Speech has a monotone robotic pitch (F0 fixed at ~125 Hz) without complex prosodic intonation. The G2P rule system handles regular English phonics, common digraphs, silent-E patterns, and 30 irregular words, but arbitrary untranscribed foreign loanwords or irregular names fall back to default phonetic rules. Formant synthesis uses 2 resonant poles (F1 and F2) plus F0 voice bar rather than full 4-formant cascades."
+}
