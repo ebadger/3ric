@@ -44,8 +44,8 @@ No bank preparation is needed. In the workbench, assemble and run the source.
 | --- | --- | --- |
 | `TTS_INIT` | `$0803` | Silences both AYs, disables VIA interrupts, clears flags and fills the word buffer. It is callable straight after loading. Returns with `RTS`, and P is restored. |
 | `TTS_SPEAK` | `$08A7` | Takes A = low byte and X = high byte of NUL-terminated ASCII. Blocking. Returns A=0 when done (including empty or punctuation-only input), A=1 when Escape cancelled, A=2 when invalid. |
-| `TTS_INPUT` | `$16D9` | 122 bytes of always-mapped RAM for callers and the UI. |
-| `TTS_G2P` | `$08FC` | Test hook: validates the input and writes phoneme codes to `$4000` (NUL-terminated) without sound. |
+| `TTS_INPUT` | `$16DB` | 122 bytes of always-mapped RAM for callers and the UI. |
+| `TTS_G2P` | `$092A` | Test hook: validates the input and writes phoneme codes to `$4000` (NUL-terminated) without sound. |
 
 `TTS_SPEAK` details:
 
@@ -72,7 +72,7 @@ No bank preparation is needed. In the workbench, assemble and run the source.
 | `$0060-$009F` | Engine zero page. It is saved and restored by `TTS_SPEAK`. The UI uses `$60-$63` between calls. |
 | `$0300-$031F` | Not used. It is reserved for the shared caller trampoline. |
 | `$0400-$07FF` | Text page 1. Only the UI draws here; the engine does not. |
-| `$0800-$3EFF` | The loaded image: code, messages, `TTS_INPUT` (`$16D9`), the word buffer (`$1800`), templates, rules, DAC maps, and 16 page-aligned sine level pages (`$2F00-$3EFF`). |
+| `$0800-$3EFF` | The loaded image: code, messages, `TTS_INPUT` (`$16DB`), the word buffer (`$1800`), templates, rules, DAC maps, and 16 page-aligned sine level pages (`$2F00-$3EFF`). |
 | `$4000-$47FF` | Phoneme buffer. Writes are bounds-checked. |
 | `$4800-$6FFF` | Segment buffer: 16-byte records, bounds-checked with a guard at `$6FE0`. |
 | `$7000-$BFFF` | Not used. |
@@ -175,6 +175,21 @@ node codegen\challenges\tts\v1\submissions\claude-opus-5-5-run-1\test.mjs --wav
 - ABI codes for empty, space, punctuation-only, 121 characters, tab and `%`;
 - the UI: typing, delete, Ctrl-X, the 120 limit, unsupported keys, Enter speaks and returns, Escape cancels;
 - Escape at input: BRK with a monitor dump below the UI, and the monitor accepting a command.
+
+### Live Studio check (automated, headless)
+
+I loaded `tts.s` from commit `51d5d88` in the published Studio, using the `?src=` raw GitHub URL. That `tts.s` is byte-identical in later commits of this entry. The browser was headless Edge driven by Playwright at 1x with sound enabled. Results:
+
+- The Studio reported `assembled 14080 bytes @ $0800 — 432 symbols`.
+- The UI prompt appeared.
+- The public fox sentence and the new sentence `PLEASE WATER THE GARDEN BEFORE NOON.` both spoke and returned to input with `DONE.`
+- Audio was captured from the emulator's worklet feed:
+  - The fox sentence had about 3.3 s of sound, with peak 0.11.
+  - The new sentence had about 2.3 s of sound.
+- Pressing Escape 1.2 s into a third sentence stopped it and showed `STOPPED.` within the next 0.1 s screen poll.
+- The browser console showed two unrelated 404 resource loads and no script errors.
+
+No person listened to the Studio audio.
 
 ## Known shortcomings
 
