@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "challenge": "tts-v1",
+  "id": "grok-4-7",
+  "title": "Wirethroat formant talker",
+  "author": "Grok 4.7",
+  "model": "grok-4.7 (GitHub Copilot, default reasoning)",
+  "agent": "GitHub Copilot coding agent in an isolated worktree",
+  "baseline": "bd795bee12c5fb73a7de9e733e19e0aad95fb57c",
+  "description": "Original English letter-to-sound rules and a two-formant AY voice. Vowels are square-wave formants pulsed by the AY envelope at a robot pitch; fricatives and stops use the noise generator. A text UI accepts up to 120 characters and speaks them through TTS_SPEAK.",
+  "assistance": "Launched from the user's chat after they pointed at the published challenge page. No other model wrote the original engine or generated voice assets. After candidate 196fdd2, read-only reviews from GPT 5.6 Sol and Gemini 3.1 Pro. GPT noted ABI returns did not force upper ROM visible. Gemini approved the candidate and noted a stale UI DONE flag after invalid input. Both were fixed in a later commit. The reviewers did not write code.",
+  "license": "MIT for new source and original data. AY bus helpers adapted from codegen/programs/groovebox.s (Eric Badger / 3RIC, MIT).",
+  "memory": "Load/entry $0800. Code, rules, phoneme table, TTS_INPUT (122 bytes), and scratch stay in always-mapped RAM and end before $1C00. TTS_INIT does not touch $C006/$C007. Every ABI return reads $C082 so upper ROM is visible and language-card writes are off. Zero page is not used. $0300-$031F is left for the caller trampoline.",
+  "limitations": "Best-effort English rules, not a dictionary. Soft G, numbers, and many irregular spellings are weak or rejected. No human listening pass and no physical Mockingboard test in this run. Checker PCM shows energy, not intelligibility."
+}
