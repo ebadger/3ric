@@ -1,7 +1,8 @@
 // wozgen.mjs — dependency-free, dual-use (Node + browser) bootable-.woz generator.
 //
 // Packages an assembled 65C02 program into a standard 5.25" DOS-3.3-layout WOZ2
-// disk image that boots on a real Apple II (and in the 3ric emulator via C600G).
+// disk image that boots in the 3ric emulator via C600G. Apple II compatibility
+// also depends on the program's CPU, ROM and peripheral requirements.
 //
 // The nibbliser (6-and-2 encode, 4-and-4 address fields, WOZ2 INFO/TMAP/TRKS and
 // CRC32) is a faithful JS port of emulator/dsk2woz2/dsk2woz2.cpp. Track 0 sector 0
@@ -201,6 +202,8 @@ function buildWozFromDsk(dsk) {
 // We re-enter the ROM's ReadSector ($C65C) once per track to stream the payload
 // into a page-aligned staging area, phase-step the head inward between tracks,
 // then relocate a position-independent copier to $0200 and move staging -> load.
+// Staging starts one page above load: it avoids the loader at $0800-$08FF, and
+// the forward copier always writes below unread source bytes, even with overlap.
 //
 // ZP usage (avoids the ROM read ZP $26/$27/$2B/$3C/$3D/$40/$41 and the page-3
 // nibble table/scratch): driver $06-$0B, copier $0C-$12.
@@ -374,13 +377,13 @@ export function buildBootableWoz(programBytes, loadAddr, entryAddr = loadAddr) {
   if (bytes.length === 0) throw new Error("wozgen: program is empty");
 
   const nPages = Math.ceil(bytes.length / 256);
-  if (loadAddr + 2 * nPages * 256 > 0x9000)
-    throw new Error(`wozgen: program too large — load + 2*${nPages} pages exceeds $9000 (RAM top)`);
+  if (loadAddr + 256 + nPages * 256 > 0x9000)
+    throw new Error(`wozgen: program too large — load + 1 staging page + ${nPages} payload pages exceeds $9000 (RAM top)`);
   const capacityPages = 15 + 34 * 16; // track 0 gives 15 payload sectors; tracks 1-34 give 16
   if (nPages > capacityPages) throw new Error("wozgen: program exceeds one 5.25\" disk");
 
   const loadHi = (loadAddr >> 8) & 0xFF;
-  const stageHi = loadHi + nPages;
+  const stageHi = loadHi + 1;
   const loader = assembleLoader(nPages, loadHi, stageHi, entryAddr & 0xFF, (entryAddr >> 8) & 0xFF);
 
   const dsk = new Uint8Array(35 * 16 * 256);

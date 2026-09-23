@@ -102,7 +102,8 @@ client-side so GitHub Pages can host it as static files.
   **Download .PRG** (the raw assembled bytes) and **Download .woz** — a bootable 5.25″ WOZ2
   disk image of the current program, generated fully client-side by `wozgen.mjs` (a
   dependency-free JS port of the `emulator/dsk2woz2` nibbliser). The `.woz` boots the program
-  on a real Apple II or via `C600G` in the emulator.
+  via `C600G` in the emulator; Apple II compatibility additionally depends on the
+  program's CPU, ROM and peripheral requirements.
 - **Source debugger (`index.html` + `debugger.js`):** assembled programs expose a source
   listing whose instruction rows carry their generated address and can be toggled as
   breakpoints. The debugger can pause/continue, step one instruction, step over an absolute
@@ -316,11 +317,19 @@ client-side so GitHub Pages can host it as static files.
   the `$C600` P5 boot PROM auto-loads then `JMP $0801`s; the loader re-enters the ROM's
   `ReadSector` (`$C65C`) track-by-track into a page-aligned staging buffer, phase-steps the head
   inward between tracks, then relocates a position-independent copier to `$0200`, copies staging
-  → the program's load address and `JMP`s its entry. This handles multi-track programs (the
-  default `swarm` sample is ~17 pages / 2 tracks). Constraints: the load address must be
-  page-aligned and ≥ `$0800`, and `loadAddr + 2·nPages·256 ≤ $9000` (staging must fit under the
-  BASIC ROM at `$9000`). The boot loader itself is assembled at generation time by the staged
-  `asm6502.mjs`, so there is a single source of truth for the 65C02 dialect.
+  → the program's load address and `JMP`s its entry. Staging starts one page above the load
+  address, keeping the loader at `$0800-$08FF` intact throughout the reads (including the
+  ROM's count at `$0800` and return through `$0801`). Copying pages and bytes forward is
+  overlap-safe because every destination is below its unread source; no second full-size
+  buffer is needed. Constraints: the nonempty program's load address must be page-aligned
+  and ≥ `$0800`, and `loadAddr + $100 + nPages*256 <= $9000`, including final-sector zero
+  padding. At `$0800` the maximum is 135 pages / 34,560 bytes (`$8700` bytes); one more byte
+  needs a 136th page and is rejected. The 32,256-byte Astra: Copper Voice image stages at
+  `$0900-$86FF` before moving to `$0800-$85FF`. Alternate aligned load addresses and an
+  explicit 16-bit entry address remain supported. The boot loader itself is assembled at
+  generation time by the staged `asm6502.mjs`, so there is a single source of truth for the
+  65C02 dialect. `web/build.ps1` stages the canonical generator unchanged for the download
+  button; the next owner-approved merge and Pages build publish it.
 - **Community Gallery.** `gallery.html` is the discovery front door: it reads `gallery.json`
   and shows every program as a one-click **Run & Remix** card that opens in the editor via the
   same `?src=` / `?code=` deep links, so each card lands on an editable, auto-running program.
@@ -397,7 +406,7 @@ on the emulator whether it succeeds, is blocked, or 404s.
 | Disk II WOZ boot + micro-SD DOS shell | Shipped | **Boot Disk** / **Mount SD** buttons. |
 | In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; built-in games, demos, and tutorials; `?src=`. Sample sources fetched with `cache:"no-cache"` (revalidate) so a new deploy isn't masked by the browser cache. |
 | Source debugger | Shipped | Browser-assembled source listing with bank-qualified instruction breakpoints/highlighting, pause/continue, bank-aware step into/over, register and raw-memory inspection, plus lazy ca65 ROM symbol/file:line correlation; covered by `test_debugger.cjs`. |
-| Program downloads (.PRG / .woz) | Shipped | **Download .PRG** (raw bytes) + **Download .woz** (bootable WOZ2 via `wozgen.mjs`, a port of `dsk2woz2`, with a multi-track boot loader); verified by `web/test_woz_download.cjs`. |
+| Program downloads (.PRG / .woz) | Shipped | **Download .PRG** (raw bytes) + **Download .woz** (bootable WOZ2 via `wozgen.mjs`, a port of `dsk2woz2`, with overlapping staging one page above the load address). Nine grouped cases in `web/test_woz_download.cjs` cover real Disk II boots, byte-perfect large/max-size images, page padding, alternate load/entry addresses and capacity rejection. Booting a 3RIC-specific program does not establish Apple II compatibility, speech intelligibility or physical-hardware validation. |
 | Share / Remix deep links | Shipped | **Share** button; `?src=programs/<name>.s` for unmodified samples, inline base64url `?code=` otherwise, both carrying `&org=` when the source has no `.org`; remix banner on shared links. `hackaday.test.mjs` covers built-in/unlisted/challenge sample selection, source identity, and duplicate avoidance using the actual page code. |
 | Community Gallery | Shipped | `gallery.html` renders the curated `gallery.json`; one-click **Run & Remix** via `?src=`/`?code=`; PR-based submissions credited by author. |
 | Bouncing Ball gallery entry | Implemented | scottybe's committed `programs/bouncing-ball.s`; native-speed description, unchanged loader/exports, and `codegen/tools/bouncing-ball.test.mjs` in the Pages build. |

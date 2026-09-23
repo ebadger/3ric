@@ -271,7 +271,9 @@ the browser and runs it in the emulator — no CLI, no server round-trip:
    source and loads the image exactly like **Load .PRG** (`BRUN` on hardware).
    Assembler errors show as `line N: …` and are non-fatal.
 3. **Download .PRG** saves the assembled image so you can `BRUN` it on real
-   hardware or off the SD card.
+   hardware or off the SD card. **Download .woz** packages the same image as a
+   bootable floppy for monitor command `C600G` after inserting the image.
+   If the ROM shows the DOS `>` prompt, enter `MON` first.
 4. Expand **Debugger** to click instruction rows as breakpoints, pause/continue,
    step into or over an absolute `JSR`, add a breakpoint by address, and inspect
    128 bytes of memory from any hexadecimal address.
@@ -290,6 +292,14 @@ Implementation notes:
   cleanly as a browser ES module. `index.html` lazily `import()`s its `assemble()`.
 - A source's own `.org` / `*=` is authoritative; the **org $** field is only used
   when the source has no origin directive (passing both would corrupt the layout).
+- Bootable WOZ exports require a page-aligned load address at or above `$0800`.
+  The page-padded image plus one staging page must fit below `$9000`: at `$0800`,
+  up to **34,560 bytes** are supported, including the 32,256-byte Astra: Copper
+  Voice TTS image. The loader stages one page above the destination, then copies
+  forward safely through the overlap. `build.ps1` stages the canonical
+  `codegen/tools/wozgen.mjs`; `node web/test_woz_download.cjs` verifies actual Disk II
+  boots, full payload bytes, padding and size limits. A successful boot does not
+  establish Apple II compatibility, speech intelligibility or physical-board operation.
 - The editor autosaves to `localStorage`, and any program is deep-linkable. The
   **Share** button copies a self-contained link to the current program: an
   unmodified built-in sample links as the short `?src=programs/<name>.s` (fetches

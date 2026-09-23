@@ -66,7 +66,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_debugger.cjs            # breakpoints, stepping, source map, ROM debug lookup
 & $node web/test_sd.cjs                  # mount SD + DIR lists the FAT32 root
 & $node web/test_disk.cjs                # boot a WOZ floppy via C600G into a hi-res title
-& $node web/test_woz_download.cjs        # "Download .woz" builds a bootable disk that boots via C600G
+& $node web/test_woz_download.cjs        # Disk II boots, overlap-safe images through 34,560 bytes, size guards
 ```
 
 C++ CPU unit tests (`emulator/Badger6502VMTest`, MSTest): **Test → Run All Tests** in
@@ -150,6 +150,9 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   `asm6502.mjs` and runs it like `BRUN`; ships ~11 sample programs; deep-linkable via `?src=`.
   Exports the assembled program as a raw **.PRG** or a bootable **.woz** disk image
   (`wozgen.mjs`, a JS port of `dsk2woz2` with a multi-track boot loader) that boots via `C600G`.
+  WOZ staging uses one extra page, supporting up to 34,560 bytes at `$0800`, including
+  the 32,256-byte Astra: Copper Voice image. If reset shows DOS `>`, enter `MON` before
+  `C600G`. This is emulator boot coverage, not speech-quality or physical-board approval.
 - **Browser debugger:** bank-qualified, source-correlated instruction breakpoints and
   highlighting for assembled programs, pause/continue, bank-aware step into/over, live
   registers, raw-memory inspection, unconditional arbitrary-PC breakpoints, and lazy ROM
