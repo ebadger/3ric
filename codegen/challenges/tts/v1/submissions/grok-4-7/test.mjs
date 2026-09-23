@@ -33,12 +33,14 @@ const init = asm.symbols.TTS_INIT;
 const ph = asm.symbols.PHBUF;
 const romBefore = [0xd000, 0xe000, 0xf000, 0xffff, 0x9000].map(a => [a, vm.memoryMapping(a)]);
 
-function install(addr) {
+function install(addr, { clearKey = true } = {}) {
   const tramp = new Uint8Array(16).fill(0xea);
   tramp.set([0xd8, 0xa9, ptr & 255, 0xa2, ptr >> 8, 0x20, addr & 255, addr >> 8, 0x4c, 0x10, 0x03]);
   vm.loadData(0x300, tramp);
   vm.loadData(0x310, Uint8Array.of(0x4c, 0x10, 0x03));
-  vm.readBus(0xc010);
+  // $C010 is the motherboard VIA1 CB1 strobe. On this VM that edge becomes an
+  // NMI, so never touch it while language-card RAM is hiding the vectors.
+  if (clearKey) vm.readBus(0xc010);
   vm.clearBreakpoints();
   vm.addBreakpoint(0x308);
   vm.setPC(0x300);
@@ -116,6 +118,11 @@ check("BASIC window still selected", vm.memoryMapping(0x9000) === romBefore.find
 const ier = vm.readBus(0xc40e);
 check("Mockingboard IRQ enables cleared", (ier & 0x7f) === 0, `IER=$${ier.toString(16)}`);
 check("init settles silent", settleQuiet() < 0.0005, "");
+vm.writeBus(0xC080, 0);
+check("language card can hide ROM", vm.romVisible(0xD000) === false && vm.romVisible(0xFFFF) === false);
+install(init, { clearKey: false });
+const romRestore = runUntil(2);
+check("TTS_INIT restores upper ROM", romRestore.returned && vm.romVisible(0xD000) && vm.romVisible(0xE000) && vm.romVisible(0xFFFF));
 
 const empty = callSpeak("");
 check("empty A=0", empty.returned && empty.a === 0 && empty.peak < 0.0005, `A=${empty.a} peak=${empty.peak}`);
@@ -133,6 +140,13 @@ check("HELLO phonemes", hello.phones === "HH EH L AO UH", hello.phones);
 check("HELLO audible and preserved", hello.a === 0 && hello.preserved && hello.peak > 0.01, `peak=${hello.peak}`);
 check("HELLO stack balanced", hello.sp === hello.spAfter, `${hello.sp} -> ${hello.spAfter}`);
 check("HELLO silent after return", settleQuiet() < 0.0005);
+vm.writeBus(0xC080, 0);
+vm.loadData(ptr, Buffer.from("HI\0", "ascii"));
+install(speak, { clearKey: false });
+const romSpeak = runUntil(8);
+romSpeak.a = vm.regA();
+romSpeak.phones = phones();
+check("TTS_SPEAK restores upper ROM", romSpeak.returned && romSpeak.a === 0 && vm.romVisible(0xD000) && vm.romVisible(0xFFFF), romSpeak.phones);
 const hello2 = callSpeak("HELLO");
 check("repeated HELLO audible", hello2.a === 0 && hello2.peak > 0.01 && hello2.phones === hello.phones, `peak=${hello2.peak}`);
 const lower = callSpeak("hello. this computer can talk.");

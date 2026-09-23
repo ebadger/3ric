@@ -11,9 +11,9 @@
 ;   TTS_INPUT — 122-byte caller buffer
 ; Upper ROM stays visible. Sound is silent on every return.
 ; Load: BRUN TTS.PRG 0800. All code and tables are in always-mapped RAM.
-; TTS_INIT does not touch $C006/$C007 or the language card, so a caller's
-; bank choice and the upper ROM stay as they were. A normal boot already
-; has upper ROM visible.
+; TTS_INIT does not touch $C006/$C007. Every ABI return reads $C082 so upper
+; ROM is visible and language-card writes are off, even if the caller had
+; banked RAM over $D000-$FFFF.
 
         .org $0800
 
@@ -82,11 +82,14 @@ CJH = 43
 
 TTS_INIT:
         cld
+        jsr show_rom
         jsr init_chips
+        jsr show_rom
         rts
 
 TTS_SPEAK:
         cld
+        jsr show_rom
         sta srclo
         stx srchi
         lda readyf
@@ -102,12 +105,15 @@ sp_bus:
         jsr g2p
         jmp play
 sp_bad:
+        stz spoke
         jsr silence_vols
+        jsr show_rom
         lda #2
         rts
 sp_empty:
         stz spoke
         jsr silence_vols
+        jsr show_rom
         lda #0
         rts
 
@@ -963,10 +969,12 @@ pl_ph:
         jmp pl
 pl_can:
         jsr silence_vols
+        jsr show_rom
         lda #1
         rts
 pl_done:
         jsr silence_vols
+        jsr show_rom
         lda #0
         rts
 
@@ -1217,6 +1225,10 @@ fd_i:
         bne fd_o
         rts
 
+show_rom:
+        bit $C082
+        rts
+
 silence_vols:
         ldy #8
         lda #0
@@ -1386,6 +1398,7 @@ as_clr:
         jmp app_loop
 app_quit:
         jsr silence_vols
+        jsr show_rom
         bit KSTRB
         brk
 

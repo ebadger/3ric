@@ -25,10 +25,13 @@ Empty or space-only input prints `NOTHING TO SAY.` and does not beep.
 | `TTS_INPUT` | 122 always-mapped bytes at the label, for callers and the on-screen editor. |
 
 Clobbers `A`, `X`, `Y`, and flags. Does not use zero page. Does not enable a
-Mockingboard IRQ. Does not touch `$C006`/`$C007` or the language card, so upper
-ROM stays as the caller left it (visible after a normal boot or `BRUN`). Sound
-is silent on every return. Call `TTS_INIT` once before `TTS_SPEAK` if the chips
-have never been set up; `TTS_SPEAK` will initialize them on the first call.
+Mockingboard IRQ. Does not touch `$C006`/`$C007`. Every return reads `$C082`,
+so upper ROM is visible and language-card writes are off even if the caller
+had banked RAM over `$D000-$FFFF`. ROM is restored before chip setup or a
+`$C010` keyboard-strobe access, because that access edges motherboard VIA1
+CB1 and this emulator turns that edge into an NMI. Sound is silent on every return. Call
+`TTS_INIT` once before `TTS_SPEAK` if the chips have never been set up;
+`TTS_SPEAK` will initialize them on the first call.
 
 Lowercase ASCII is folded to uppercase. Allowed characters are `A-Z`, `a-z`,
 space, `'`, `-`, `.`, `,`, `?`, and `!`. Anything else, or a 121st character,
