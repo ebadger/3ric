@@ -89,6 +89,45 @@ function call(vm, routine, text, { cycles = 40_000_000, captureAudio = false, es
   return { returned, a: vm.regA(), sp: vm.sp(), cycles: used, audio };
 }
 
+// Call TTS_SPEAK from a caller that has decimal mode set and interrupts
+// enabled, and capture the processor status the routine returns with, so
+// that both the "arithmetic is binary" and the "I and D are preserved"
+// claims in README.md are actually tested rather than asserted.
+function callWithFlags(vm, routine, text, cycles = 40_000_000) {
+  const returnPC = 0x0311;
+  vm.loadData(sym.TTS_INPUT, Buffer.from(`${text}\0`, "ascii"));
+  const address = sym[routine];
+  const code = new Uint8Array([
+    0xf8,                                        // SED   decimal mode on
+    0x58,                                        // CLI   interrupts enabled
+    0xa9, sym.TTS_INPUT & 255,                   // LDA #<input
+    0xa2, sym.TTS_INPUT >> 8,                    // LDX #>input
+    0x20, address & 255, address >> 8,           // JSR routine
+    0x8d, 0x20, 0x03,                            // STA $0320   result code
+    0x08,                                        // PHP
+    0x68,                                        // PLA
+    0x8d, 0x21, 0x03,                            // STA $0321   status on return
+    0x4c, 0x11, 0x03,                            // JMP $0311   park
+  ]);
+  vm.loadData(CALLER, code);
+  vm.loadData(0x0320, new Uint8Array([0xff, 0x00]));
+  vm.readBus(0xc010);
+  vm.clearBreakpoints();
+  vm.addBreakpoint(returnPC);
+  vm.setPC(CALLER);
+  vm.drainAudio();
+  let used = 0;
+  while (used < cycles) {
+    const advanced = vm.runCycles(Math.min(200_000, cycles - used));
+    used += advanced;
+    vm.drainAudio();
+    if (vm.breakpointHit() && vm.pc() === returnPC) break;
+    if (advanced <= 0) break;
+  }
+  const status = vm.peek(0x0321);
+  return { result: vm.peek(0x0320), decimal: (status & 0x08) !== 0, irqDisabled: (status & 0x04) !== 0 };
+}
+
 function phonemes(vm) {
   const length = vm.peek(sym.PHONLEN);
   let out = "";
@@ -301,12 +340,14 @@ async function testAudio() {
 // record table asks for. This is the closest thing I have to listening.
 // The carrier words start with a sonorant so no fricative noise can
 // dominate the measurement.
+// Steady monophthongs only: a diphthong's formants are moving throughout,
+// so a single analysis window cannot be compared against one target pair.
 const VOWELS = [
   ["ME", 290, 2270],
   ["MOO", 310, 900],
   ["LAW", 590, 900],
   ["MAN", 690, 1690],
-  ["MAY", 340, 2160],
+  ["MUM", 634, 1202],
 ];
 
 // The vowel nucleus, six tenths of the way through the audible span:
@@ -395,6 +436,17 @@ async function testBehaviour() {
   const second = call(vm, "TTS_SPEAK", "HELLO.", { cycles: 40_000_000, captureAudio: true });
   ok(Math.abs(first.cycles - second.cycles) < first.cycles * 0.02, "repeatable timing",
     `${first.cycles} vs ${second.cycles}`);
+
+  // The engine must not inherit the caller's decimal mode, and must hand
+  // the caller's I and D flags back untouched.
+  const flags = callWithFlags(vm, "TTS_SPEAK", "HELLO.");
+  ok(flags.result === 0, "speaks correctly with caller decimal mode set", `A=${flags.result}`);
+  ok(flags.decimal, "caller's decimal flag is restored");
+  ok(!flags.irqDisabled, "caller's interrupt-enable is restored");
+  const baseline = call(vm, "TTS_TRANSLATE", "HELLO.", { cycles: 4_000_000 }).a;
+  const translated = callWithFlags(vm, "TTS_TRANSLATE", "HELLO.");
+  ok(translated.result === baseline && baseline > 0, "rules are binary-safe with decimal mode set",
+    `${translated.result} phonemes, binary-mode baseline ${baseline}`);
 }
 
 const which = process.argv[2] || "all";

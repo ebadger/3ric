@@ -54,7 +54,10 @@ string in `phonbuf` so the rules can be checked without synthesising audio.
 
 * `A`, `X`, `Y` and the flags are clobbered. Zero page `$06`–`$22` is used during
   synthesis and is **saved and restored** by every public entry point, so the
-  caller sees zero page unchanged.
+  caller sees zero page unchanged. Each entry point does `PHP` / `SEI` / `CLD` on
+  the way in and `PLP` on the way out, so the caller's interrupt-disable and
+  decimal flags are preserved and the engine's arithmetic is always binary even if
+  the caller was in decimal mode.
 * No banking. The upper ROM stays visible for the whole run; no soft switch other
   than the text-mode ones the app already relies on is touched.
 * Interrupts are disabled with `SEI` for the duration of an utterance and restored
@@ -133,7 +136,7 @@ channel B is the noise source and the DAC runs on A + C. When it does not
 resolution jumps by ~15 dB. `nmode` selects between the two table sets at record
 boundaries.
 
-Each table is 16 gain steps × 256 entries × one AY code per channel, indexed by
+Each table is 8 gain steps × 256 entries × one AY code per channel, indexed by
 the **signed** sample byte. The tables are not built by picking the nearest code
 combination for each level independently: because the three registers are written
 sequentially about 38 µs apart inside a 203 µs sample period, neighbouring
@@ -188,7 +191,10 @@ TTS_SHOW_ENVELOPE=1 node test.mjs vowels                   # print harmonic enve
 node offline.mjs <f1> <f2> <f3> <gain> <t0>                # spectrum of one steady record
 ```
 
-The official checker reports **passed (runtime)**.
+The official checker reports **passed (runtime)**, and the source also assembles
+unchanged in the browser assembler on the 3RIC Studio page (32848 bytes at
+`$0800`, 302 symbols) — `web/asm6502.mjs` is byte-identical to the CLI assembler
+and `.org $0800` in the source means the page's load-address field is not used.
 
 `test.mjs` covers, beyond the official checks:
 
@@ -196,14 +202,16 @@ The official checker reports **passed (runtime)**.
   silent *e*, soft *c*/*g*, digraphs, and the exception list.
 * **behaviour** — init, a full 120-character line, 121-character rejection, digit
   rejection, Escape cancellation and its return code, cancellation promptness,
-  silence after cancellation, speaking again after a cancellation, and bit-exact
-  repeatability of a repeated utterance.
+  silence after cancellation, speaking again after a cancellation, bit-exact
+  repeatability of a repeated utterance, and that a caller in decimal mode with
+  interrupts enabled still gets correct output and its `I`/`D` flags back.
 * **audio** — each public sentence: completion code, plausible duration, usable
   peak level, voiced-frame ratio (so a click or a buzz cannot pass), and that F1
   and F2 both move through many distinct regions across the sentence.
-* **vowels** — speaks `ME`, `MOO`, `LAW`, `MAN`, `MAY`, estimates F0 by
+* **vowels** — speaks `ME`, `MOO`, `LAW`, `MAN`, `MUM`, estimates F0 by
   autocorrelation, samples the spectrum **at harmonics of F0** and checks that the
-  measured F1/F2 are near the record targets.
+  measured F1/F2 are near the record targets. Only steady monophthongs are used,
+  because a diphthong's formants are moving throughout.
 
 That last point is worth stating explicitly: the voice is strictly periodic, so
 its spectrum is a comb of F0 harmonics. Reading formants off a fixed frequency

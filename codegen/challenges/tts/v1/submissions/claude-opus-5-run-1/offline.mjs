@@ -2,10 +2,13 @@
 // assembled into the image, so that synthesis errors can be told apart
 // from runtime timing errors.
 import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { assemble } from "../../../../../tools/asm6502.mjs";
 import { AY_LEVELS, FS } from "./generate.mjs";
 
-const image = assemble(fs.readFileSync("tts.s", "utf8"), { org: 0x0800 });
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const image = assemble(fs.readFileSync(path.join(HERE, "tts.s"), "utf8"), { org: 0x0800 });
 const S = image.symbols;
 const read = addr => image.bytes[addr - image.org];
 const signed = v => (v > 127 ? v - 256 : v);

@@ -1818,6 +1818,9 @@ AY_BIAS_C3 = 12
 ; Clobbers A, X, Y.
 ; ---------------------------------------------------------------------
 TTS_INIT:
+        php                     ; preserve the caller's I and D flags
+        sei                     ; no interrupt may see a half-programmed VIA
+        cld                     ; the engine's arithmetic is all binary
         jsr savezp
         lda #$7F
         sta MB0+V_IER           ; no VIA interrupts from either chip
@@ -1849,6 +1852,7 @@ TTS_INIT:
         sta MB0+V_ACR
         sta MB1+V_ACR
         jsr restzp
+        plp                     ; restore the caller's I and D
         lda #0
         rts
 
@@ -1915,6 +1919,10 @@ rz1:    lda zpsave,x
 TTS_SPEAK:
         sta ptrlo
         stx ptrhi
+        php                     ; preserve the caller's I and D flags
+        sei                     ; the sample loop is polled and must not be
+                                ; preempted; it has a 320-cycle deadline
+        cld                     ; the engine's arithmetic is all binary
         jsr savezp
         lda #2
         sta result
@@ -1933,6 +1941,7 @@ TTS_SPEAK:
         sta result
 spk_out:
         jsr restzp
+        plp                     ; restore the caller's I and D
         lda result
         rts
 
@@ -1946,6 +1955,8 @@ spk_out:
 TTS_TRANSLATE:
         sta ptrlo
         stx ptrhi
+        php                     ; preserve the caller's I and D flags
+        cld                     ; the engine's arithmetic is all binary
         jsr savezp
         lda #0
         sta phonlen
@@ -1954,6 +1965,7 @@ TTS_TRANSLATE:
         jsr translate
 ttr_out:
         jsr restzp
+        plp                     ; restore the caller's D
         lda phonlen
         rts
 
