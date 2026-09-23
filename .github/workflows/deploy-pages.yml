@@ -99,6 +99,7 @@ jobs:
           node web/test_debugger.cjs
           node web/test_keyboard.cjs
           node web/test_boot.cjs
+          node web/test_woz_download.cjs
           node codegen/tools/bouncing-ball.test.mjs
           node codegen/tools/matrix.test.mjs
           node codegen/tools/hackaday.test.mjs
