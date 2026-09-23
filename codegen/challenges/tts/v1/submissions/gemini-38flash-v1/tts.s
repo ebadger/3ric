@@ -636,6 +636,7 @@ NOT_A_DIGRAPH:
         ; Word ends in E. Is current index (WORD_LEN - 3)?
         dex
         dex
+        dex
         cpx ZP_WORD_IDX
         bne CHECK_FINAL_E
         ; Long vowel due to silent E!

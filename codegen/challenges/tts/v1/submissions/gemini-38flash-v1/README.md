@@ -8,7 +8,7 @@ This entry (`gemini-38flash-v1`) is an original 65C02 English text-to-speech eng
 
 ### 1. Acoustic Synthesis Model
 The AY-3-8910 sound generator features 3 square-wave tone channels, 1 noise generator, and 1 hardware envelope generator per chip.
-3RIC's master clock runs at `1,573,437.5 Hz` ($1.5734375$ MHz), giving an AY master clock of `983,398.4375 Hz` ($F_{master} / 16$) and tone period resolution of $f = 98339.84 / \text{period}$.
+3RIC's master clock feeds the AY directly at $\Phi_2 = 1,573,437.5\text{ Hz}$ ($1.5734375$ MHz). The AY internal tone divider divides by 16, yielding a tone frequency of $f = 1,573,437.5 / (16 \times \text{period}) = 98,339.84 / \text{period}\text{ Hz}$.
 
 The engine defines 42 distinct phoneme models categorized into three acoustic classes:
 1. **Voiced Vowels, Glides, and Nasals** (`IY`, `IH`, `EY`, `EH`, `AE`, `AA`, `AO`, `OW`, `UH`, `UW`, `AH`, `ER`, `AY`, `AW`, `OY`, `L`, `R`, `W`, `Y`, `M`, `N`, `NG`):
@@ -63,7 +63,7 @@ The entry provides three public entry points:
   - Restores all Mockingboard audio channels to complete silence before returning.
 
 ### `TTS_INPUT`
-- **Location**: In always-mapped RAM at `$1564`.
+- **Location**: In always-mapped RAM at `$1589`.
 - **Allocation**: 122 bytes reserved via `.res 122`.
 
 ## Interactive UI
@@ -85,10 +85,10 @@ Running the program from `$0800` (`JMP UI`) starts an interactive text console:
 | `$0800`–`$0802` | Jump Vector | `jmp UI` (Interactive program entry) |
 | `$0803`–`$0814` | Jump Vector | `jmp TTS_INIT` ABI entry |
 | `$0815`–`$0823` | Jump Vector | `jmp TTS_SPEAK` ABI entry |
-| `$0824`–`$1467` | Code & Data | G2P rule engine, AY control, phoneme acoustic tables, dictionary |
-| `$1468`–`$1567` | RAM Buffer | `PHONEME_BUF` (256 bytes) |
-| `$1568`–`$1587` | RAM Buffer | `WORD_BUF` (32 bytes) |
-| `$1588`–`$1601` | RAM Buffer | `TTS_INPUT` (122 bytes) |
+| `$0824`–`$1468` | Code & Data | G2P rule engine, AY control, phoneme acoustic tables, dictionary |
+| `$1469`–`$1568` | RAM Buffer | `PHONEME_BUF` (256 bytes) |
+| `$1569`–`$1588` | RAM Buffer | `WORD_BUF` (32 bytes) |
+| `$1589`–`$1602` | RAM Buffer | `TTS_INPUT` (122 bytes) |
 | `$C000`, `$C010`| MMIO | Apple II Keyboard data and clear-strobe |
 | `$C051`, `$C052`, `$C054` | Soft Switches | Text, Fullscreen, Page 1 display mode |
 | `$C400`–`$C40F` | MMIO | Slot-4 Mockingboard Left 6522 VIA |

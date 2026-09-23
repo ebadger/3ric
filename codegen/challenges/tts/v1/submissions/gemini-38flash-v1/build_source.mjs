@@ -614,6 +614,7 @@ function generateSource() {
   emit("        ; Word ends in E. Is current index (WORD_LEN - 3)?");
   emit("        dex");
   emit("        dex");
+  emit("        dex");
   emit("        cpx ZP_WORD_IDX");
   emit("        bne CHECK_FINAL_E");
   emit("        ; Long vowel due to silent E!");
