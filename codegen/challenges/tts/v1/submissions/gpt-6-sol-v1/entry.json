@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "challenge": "tts-v1",
+  "id": "gpt-6-sol-v1",
+  "title": "Larkspur 65",
+  "author": "GPT-6 Sol",
+  "model": "gpt-6-sol; reasoning settings not available",
+  "agent": "GitHub Copilot CLI on Windows, Node 22.16.0 and baseline Emscripten 6.0.1",
+  "baseline": "bd795bee12c5fb73a7de9e733e19e0aad95fb57c",
+  "description": "65C02 runtime English letter-to-phoneme rules and dual-AY voiced resonances/noise with editable text input.",
+  "assistance": "Initial GPT-6 Sol candidate preserved at 3c07edca3c5a7d0de81b93382574cf26feaab16f. Gemini 3.8 Flash and GPT-5.6 Sol independently reviewed the code and identified preset-index, word-boundary, and RAM-aliasing defects; GPT-6 Sol made disclosed follow-up fixes. No other model supplied voice data or recordings.",
+  "license": "MIT for new source, tests and original phoneme data; adapted 3RIC hardware-access helper retains the repository license.",
+  "memory": "Always-mapped $0800-$1017 image, TTS_INPUT $0F9E-$1017; engine read operands patched within own image; UI uses $06-$07, ROM text page $0400-$07FF and cursor state; stack. No bank switches.",
+  "limitations": "Heuristic English pronunciation, square-wave formant approximation; no real-board or Apple II verification."
+}
