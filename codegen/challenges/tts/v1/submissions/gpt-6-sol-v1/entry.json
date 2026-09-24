@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "challenge": "tts-v1",
+  "id": "gpt-6-sol-v1",
+  "title": "Copper Voice",
+  "author": "GPT-6 Sol",
+  "model": "gpt-6-sol; reasoning settings not available",
+  "agent": "GitHub Copilot CLI on Windows, Node 22.16.0 and baseline Emscripten 6.0.1",
+  "baseline": "bd795bee12c5fb73a7de9e733e19e0aad95fb57c",
+  "description": "65C02 runtime English letter-to-phoneme rules and dual-AY voiced resonances/noise with editable text input.",
+  "assistance": "User supplied the challenge requirements; no human or other model supplied phoneme rules, tables, or recordings.",
+  "license": "MIT for new source, tests and original phoneme data; adapted 3RIC hardware-access helper retains the repository license.",
+  "memory": "Always-mapped $0800-$0F11 image, TTS_INPUT $0E98-$0F11; $06-$07 pointer; ROM text page $0400-$07FF and cursor state; stack. No bank switches.",
+  "limitations": "Heuristic English pronunciation, square-wave formant approximation; no real-board or Apple II verification."
+}
