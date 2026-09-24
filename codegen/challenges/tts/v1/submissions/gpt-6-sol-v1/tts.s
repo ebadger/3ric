@@ -1,5 +1,5 @@
         .org $0800
-; Copper Voice. Original orthographic rules and AY voice data.
+; Larkspur 65. Original orthographic rules and AY voice data.
 ; AY bus sequencing adapted from baseline codegen/programs/groovebox.s.
 COUT    = $FDED
 HOME    = $FC58
@@ -85,16 +85,15 @@ silence:
 
 ; A/X = pointer to zero-terminated RAM text. Status A: 0 / 1 / 2.
 TTS_SPEAK:
-        sta PTR
-        stx PTR+1
+        sta read_char+1
+        stx read_char+2
         jsr silence
         ldy #0
 validate:
-        lda (PTR),y
+        jsr get_char
         beq valid
         cpy #120
         bcs invalid
-        jsr normalized
         cmp #'A'
         bcc validate_punct
         cmp #'Z'+1
@@ -177,7 +176,8 @@ cancelled:
 
 ; Read uppercased input at Y. Validation is performed on the original bytes.
 get_char:
-        lda (PTR),y
+read_char:
+        lda $ffff,y
 normalized:
         cmp #'a'
         bcc character_ready
@@ -242,8 +242,7 @@ no_rule:
 vowel_jump:
         jmp vowel
 vowel_y:
-        lda #3
-        rts
+        jmp inspect_long
 simple_letter:
         lda letter
         sec
@@ -281,7 +280,24 @@ rule_t:
         cmp #'H'
         bne simple_letter
         inc position
+        ldy position
+        iny
+        jsr get_char
+        cmp #'A'
+        beq voiced_th
+        cmp #'E'
+        beq voiced_th
+        cmp #'I'
+        bne unvoiced_th
+        iny
+        jsr get_char
+        cmp #'S'
+        beq voiced_th
+unvoiced_th:
         lda #31
+        rts
+voiced_th:
+        lda #32
         rts
 rule_s:
         lda lookahead
@@ -303,14 +319,17 @@ c_soft:
         cmp #'I'
         beq c_s
         cmp #'Y'
-        bne simple_letter
+        beq c_s
+        jmp simple_letter
 c_s:
         lda #27
         rts
 rule_p:
         lda lookahead
         cmp #'H'
-        bne simple_letter
+        beq p_h
+        jmp simple_letter
+p_h:
         inc position
         lda #25
         rts
@@ -339,16 +358,31 @@ vowel:
         cmp #'E'
         bne vowel_pair
         lda lookahead
-        bne vowel_pair
+        jsr boundary
+        bcc vowel_pair
         lda position
         beq vowel_pair
         tay
         dey
         jsr get_char
-        cmp #'H'
+        jsr boundary
         beq vowel_pair
-        cmp #' '
-        beq vowel_pair
+        lda position
+        cmp #2
+        bcc vowel_pair
+        tay
+        dey
+earlier_vowel:
+        dey
+        jsr get_char
+        jsr is_vowel
+        bcs silent_e
+        jsr boundary
+        bcs vowel_pair
+        cpy #0
+        bne earlier_vowel
+        bra vowel_pair
+silent_e:
         lda #0
         rts
 vowel_pair:
@@ -357,12 +391,32 @@ vowel_pair:
         bne pair_a
         lda lookahead
         cmp #'E'
-        beq pair_long_e
+        beq e_pair_long
         cmp #'A'
-        beq pair_long_e
+        beq e_pair_long
         cmp #'R'
-        beq pair_er
-        bra inspect_long
+        bne e_non_r
+        jmp pair_er
+e_non_r:
+        lda lookahead
+        jsr boundary
+        bcc vowel_dispatch_short
+        ldy position
+        beq vowel_dispatch_short
+        dey
+        jsr get_char
+        cmp #'M'
+        beq final_long_e
+        cmp #'W'
+        beq final_long_e
+        cmp #'B'
+        bne vowel_dispatch_short
+final_long_e:
+        jmp long_e
+vowel_dispatch_short:
+        jmp inspect_long
+e_pair_long:
+        jmp pair_long_e
 pair_a:
         cmp #'A'
         bne pair_o
@@ -373,13 +427,15 @@ pair_a:
         beq pair_long_a
         cmp #'R'
         beq pair_ar
-        bra inspect_long
+        jmp inspect_long
 pair_o:
         cmp #'O'
         bne pair_i
         lda lookahead
         cmp #'O'
         beq pair_oo
+        cmp #'E'
+        beq pair_long_o
         cmp #'W'
         beq pair_ow
         cmp #'U'
@@ -388,13 +444,20 @@ pair_o:
         beq pair_oi
         cmp #'R'
         beq pair_or
-        bra inspect_long
+        jmp inspect_long
 pair_i:
         cmp #'I'
-        bne inspect_long
+        bne pair_u
         lda lookahead
         cmp #'E'
         beq pair_long_i
+        bra inspect_long
+pair_u:
+        cmp #'U'
+        bne inspect_long
+        lda lookahead
+        cmp #'E'
+        beq pair_oo
         bra inspect_long
 pair_long_e:
         inc position
@@ -432,6 +495,10 @@ pair_long_i:
         inc position
         lda #8
         rts
+pair_long_o:
+        inc position
+        lda #9
+        rts
 inspect_long:
         ; vowel + single consonant + terminal e: MAKE, TYPE, VOICE
         lda lookahead
@@ -447,19 +514,27 @@ inspect_long:
         bne vowel_short
         iny
         jsr get_char
-        bne vowel_short
+        jsr boundary
+        bcc vowel_short
         lda letter
         cmp #'A'
         beq long_a
+        cmp #'E'
+        beq long_e
         cmp #'I'
         beq long_i
         cmp #'O'
         beq long_o
         cmp #'U'
         beq long_u
+        cmp #'Y'
+        beq long_i
         bra vowel_short
 long_a:
         lda #6
+        rts
+long_e:
+        lda #7
         rts
 long_i:
         lda #8
@@ -472,10 +547,60 @@ long_u:
         rts
 vowel_short:
         lda letter
+        cmp #'Y'
+        bne short_mapped
+        lda #3
+        rts
+short_mapped:
         sec
         sbc #'A'
         tax
         lda vowel_map,x
+        rts
+
+; Carry set for end of word. Return Z set as well for existing word rules.
+boundary:
+        cmp #0
+        beq at_boundary
+        cmp #' '
+        beq at_boundary
+        cmp #'-'
+        beq at_boundary
+        cmp #$27
+        beq at_boundary
+        cmp #'.'
+        beq at_boundary
+        cmp #','
+        beq at_boundary
+        cmp #'!'
+        beq at_boundary
+        cmp #'?'
+        beq at_boundary
+        clc
+        rts
+at_boundary:
+        sec
+        lda #0
+        rts
+
+; Carry set for A/E/I/O/U; used to keep one-syllable words intact.
+is_vowel:
+        cmp #'A'
+        beq yes_vowel
+        cmp #'E'
+        beq yes_vowel
+        cmp #'I'
+        beq yes_vowel
+        cmp #'O'
+        beq yes_vowel
+        cmp #'U'
+        beq yes_vowel
+        cmp #'Y'
+        beq yes_vowel
+        clc
+        rts
+yes_vowel:
+        sec
         rts
 
 ; Each preset has: 2.5ms ticks, mixer, two resonator periods,
@@ -483,22 +608,35 @@ vowel_short:
 ; Tone A period $02d8 ~= 135 Hz. B/C are independently retuned.
 phoneme:
         phy
+        stz offset_hi
         asl a
+        rol offset_hi
         asl a
+        rol offset_hi
         asl a
-        tax
-        lda presets,x
+        rol offset_hi
+        clc
+        adc #<presets
+        sta preset_read+1
+        lda offset_hi
+        adc #>presets
+        sta preset_read+2
+        ldy #0
+        jsr preset_read
         sta ticks_left
-        lda presets+1,x
+        iny
+        jsr preset_read
         sta mode_byte
-        lda presets+2,x
+        iny
+        jsr preset_read
         ldy #2
         jsr ay_write
         lda #0
         iny
         jsr ay_write
-        lda presets+3,x
-        iny
+        ldy #3
+        jsr preset_read
+        ldy #4
         jsr ay_write
         lda #0
         iny
@@ -509,18 +647,27 @@ phoneme:
         lda mode_byte
         iny
         jsr ay_write
-        lda presets+4,x
-        iny
+        ldy #4
+        jsr preset_read
+        ldy #8
         jsr ay_write
-        lda presets+5,x
-        iny
+        ldy #5
+        jsr preset_read
+        ldy #9
         jsr ay_write
-        lda presets+6,x
-        iny
+        ldy #6
+        jsr preset_read
+        ldy #10
         jsr ay_write
         lda ticks_left
         jsr pause_ticks
         ply
+        rts
+
+; Both indirect readers patch operands in the writable $0800 image instead
+; of modifying caller-owned zero-page strings.
+preset_read:
+        lda $ffff,y
         rts
 
 ; A ticks; ~3,900 CPU cycles each at native 1x (~400 ticks/second).
@@ -760,13 +907,14 @@ presets:
         .byte 30,$38,184,83,11,7,4,0     ; w
         .byte 28,$38,194,48,10,7,4,0     ; h/y
 
-banner:     .byte "COPPER VOICE - ESC EXITS",$0d,0
+banner:     .byte "LARKSPUR 65 - ESC EXITS",$0d,0
 prompt:     .byte $0d,"SAY> ",0
 unsupported:.byte $0d,"USE LETTERS, SPACE, ' - . , ? !",$0d,0
 limit_msg:  .byte $0d,"120 CHARACTER LIMIT",$0d,0
 ay_data:    .byte 0
 ticks_left: .byte 0
 mode_byte:  .byte 0
+offset_hi:  .byte 0
 position:   .byte 0
 letter:     .byte 0
 lookahead:  .byte 0

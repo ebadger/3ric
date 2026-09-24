@@ -52,7 +52,7 @@ try {
   session.load(bytes, org);
   vm.setPC(org);
   vm.runCycles(350_000);
-  assert.match(vm.drainOutput(), /COPPER VOICE.*SAY>/s);
+  assert.match(vm.drainOutput(), /LARKSPUR 65.*SAY>/s);
   assert.equal(input(), "");
   noLeaks();
 
@@ -142,39 +142,68 @@ try {
   assert.equal(machine.pc(), 0x304);
   machine.clearBreakpoints();
 
-  function call(text, record = false) {
+  function call(text, record = false, trace = false, pointer = S.TTS_INPUT) {
     const chars = Buffer.from(`${text}\0`, "ascii");
     assert.ok(chars.length <= 122);
-    machine.loadData(S.TTS_INPUT, chars);
-    const trampoline = Uint8Array.of(0xd8, 0xa9, S.TTS_INPUT & 255,
-      0xa2, S.TTS_INPUT >> 8, 0x20, S.TTS_SPEAK & 255, S.TTS_SPEAK >> 8, 0xea);
+    machine.loadData(pointer, chars);
+    const trampoline = Uint8Array.of(0xd8, 0xa9, pointer & 255,
+      0xa2, pointer >> 8, 0x20, S.TTS_SPEAK & 255, S.TTS_SPEAK >> 8, 0xea);
     machine.loadData(0x300, trampoline);
     machine.clearBreakpoints();
     machine.addBreakpoint(0x308);
+    if (trace) machine.addBreakpoint(S.PHONEME);
     machine.readBus(0xc010);
     machine.drainAudio();
     machine.setPC(0x300);
     const stack = machine.sp();
     const chunks = [];
+    const phonemes = [];
     let cycles = 0;
     while (machine.pc() !== 0x308 && cycles < 30_000_000) {
       cycles += machine.runCycles(16_000);
       if (record) chunks.push(machine.drainAudio());
       else machine.drainAudio();
+      if (trace && machine.breakpointHit() && machine.pc() === S.PHONEME) {
+        phonemes.push(machine.regA());
+        cycles += machine.step();
+      }
     }
     assert.equal(machine.pc(), 0x308, "public ABI returned rather than hanging");
     assert.equal(machine.sp(), stack);
     assert.deepEqual(Buffer.from(Array.from({ length: chars.length }, (_, i) =>
-      machine.peek(S.TTS_INPUT + i))), chars, "input RAM remains unchanged");
+      machine.peek(pointer + i))), chars, "input RAM remains unchanged");
     assert.equal(machine.readBus(0xc40e) & 0x7f, 0);
     assert.equal(machine.readBus(0xc48e) & 0x7f, 0);
     for (const [addr, mapping] of rom) assert.equal(machine.memoryMapping(addr), mapping);
-    return { code: machine.regA(), cycles, chunks };
+    if (trace && phonemes.length) {
+      assert.equal(machine.peek(S.PRESET_READ + 1) | (machine.peek(S.PRESET_READ + 2) << 8),
+        S.PRESETS + phonemes.at(-1) * 8, "last phoneme uses its 16-bit preset address");
+    }
+    return { code: machine.regA(), cycles, chunks, phonemes };
   }
 
   assert.equal(call("A@B").code, 2, "unsupported ASCII rejected before speech");
   assert.equal(call("A".repeat(121)).code, 2, "121st byte detected without scanning farther");
   assert.equal(call("   ").code, 0);
+  assert.deepEqual(call("MAKE ME BLUE TOE THE", false, true).phonemes,
+    [34, 6, 18, 34, 7, 13, 36, 10, 17, 9, 32, 2],
+    "runtime G2P handles long vowels, final-E, short words and voiced TH across spaces");
+  assert.deepEqual(call("MAKE. TYPE?", false, true).phonemes,
+    [34, 6, 18, 17, 8, 16],
+    "sentence punctuation is a word boundary and TYPE has a long Y vowel");
+  assert.deepEqual(call("SENTENCE", false, true).phonemes.at(-1), 27,
+    "multi-consonant endings keep the final E silent");
+  assert.deepEqual(call("THESE", false, true).phonemes, [32, 7, 27],
+    "split E-E is long and final E is silent");
+  assert.deepEqual(call("THIN THIS", false, true).phonemes.slice(0, 5),
+    [31, 3, 34, 32, 3], "THIN stays unvoiced while THIS is voiced");
+  assert.deepEqual(call("L", false, true).phonemes, [36],
+    "high-index consonant uses preset 36, not the wrapped vowel preset");
+  assert.equal(call("L", false, true, 0x0006).code, 0,
+    "low zero-page input remains intact even when it occupies UI scratch");
+  assert.equal(call("L", false, true, 0x0008).code, 0,
+    "preset lookup cannot overwrite a zero-page input buffer");
+  console.log("PASS phoneme IDs, word-boundary rules and 16-bit preset selection");
   const text = "BLUE WAVES WASH OVER SILENT STONES.";
   const spoken = call(text, true);
   assert.equal(spoken.code, 0);

@@ -1,4 +1,4 @@
-# Copper Voice — GPT-6 Sol / tts-v1
+# Larkspur 65 — GPT-6 Sol / tts-v1
 
 An original, stand-alone 3RIC English speech experiment. The source itself is
 the specification and the loadable image: it starts at `$0800`, reads ASCII on
@@ -13,7 +13,8 @@ browser. Click or press a key to activate browser audio. Type up to 120 ASCII
 characters (letters, spaces, apostrophe, hyphen, `. , ? !`); Backspace/Delete
 edits, Enter speaks and returns to a new input, Escape while speaking cancels,
 and Escape while editing exits to the monitor with `BRK`. Unsupported characters
-and a 121st character are rejected visibly. Lowercase is accepted without
+and a 121st character are rejected visibly. Non-Escape keystrokes made during
+speech are discarded rather than queued; Escape stays able to cancel. Lowercase is accepted without
 modifying the caller's buffer. Blank lines make no sound.
 
 `JSR TTS_INIT` requires the binary already loaded, returns without UI or input,
@@ -50,11 +51,13 @@ measurements.
 
 ## Memory and hardware
 
-`$0800-$0F11` contains the 1,810-byte executable image, phoneme presets,
-messages, state and the labeled 122-byte `TTS_INPUT` at `$0E98-$0F11`;
+`$0800-$1017` contains the 2,072-byte executable image, phoneme presets,
+messages, state and the labeled 122-byte `TTS_INPUT` at `$0F9E-$1017`;
 no additional code/data banking or guest relocation is required. The ROM text page
 `$0400-$07FF` and the usual stack are used through standard ROM calls;
-`$06-$07` are the engine's text pointer. Backspace
+`$06-$07` are used by the UI's string printer only. The reusable engine
+patches two 16-bit read operands in its own writable image, not caller RAM;
+it accepts zero-page caller text without clobbering it. Backspace
 uses ROM `BASCALC` to update `$24-$25` and `$28-$29` for cross-row screen
 edits. `$0300-$031F` remains reserved for the caller. BASIC
 window `$9000-$BFFF` and language-card `$D000-$FFFF` are never switched; the
@@ -71,10 +74,11 @@ run has been performed unless explicitly documented below.
 On Windows with Emscripten 6.0.1, Node 22+ and PowerShell:
 
 ```powershell
+$node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 pwsh -File web\build.ps1
-node codegen\tools\check-tts.mjs --entry gpt-6-sol-v1
-node codegen\challenges\tts\v1\submissions\gpt-6-sol-v1\test.mjs
-node codegen\tools\build-challenges.mjs
+& $node codegen\tools\check-tts.mjs --entry gpt-6-sol-v1
+& $node codegen\challenges\tts\v1\submissions\gpt-6-sol-v1\test.mjs
+& $node codegen\tools\build-challenges.mjs
 pwsh -File web\serve.ps1 -Port 8011
 ```
 
@@ -84,9 +88,9 @@ PCM-derived WAV files and a JSON report (ignored by Git). The extra local
 tests exercise actual CPU execution, not a JavaScript speech implementation.
 They also capture `unseen-blue-waves.wav` for
 `BLUE WAVES WASH OVER SILENT STONES.`. The four public WAVs lasted
-2.81, 3.63, 3.73 and 3.52 seconds respectively in the unmodified emulator;
-their guest calls used 4.43M, 5.72M, 5.87M and 5.54M cycles. The unseen
-utterance lasted approximately 3.38 seconds. The shared check and
+2.75, 3.33, 3.67 and 3.25 seconds respectively in the unmodified emulator;
+their guest calls used 4.32M, 5.23M, 5.78M and 5.12M cycles. The unseen
+utterance lasted approximately 3.17 seconds. The shared check and
 entry-local UI/API tests passed; the locally staged source also assembled
 and ran from the browser URL above at native 1x. The live Pages workbench
 assembled and ran the **manually imported** same source at native 1x;
@@ -97,7 +101,14 @@ actually listened to**, so intelligibility remains unverified.
 ## Provenance, rights and limitations
 
 Designed and implemented by GPT-6 Sol for baseline
-`bd795bee12c5fb73a7de9e733e19e0aad95fb57c`. The AY reset/register-write
+`bd795bee12c5fb73a7de9e733e19e0aad95fb57c`. The initial single-model
+candidate is preserved at commit `3c07edca3c5a7d0de81b93382574cf26feaab16f`.
+Independent Gemini 3.8 Flash and GPT-5.6 Sol reviews *after that commit*
+identified an 8-bit preset-index wrap, word-boundary errors and a RAM
+aliasing regression in the first correction. GPT-6 Sol implemented and
+tested the follow-up corrections; this later edition is explicitly
+review-assisted and must not be represented as the untouched first run.
+The AY reset/register-write
 bus sequencing is adapted from the baseline `codegen/programs/groovebox.s`
 (3RIC hardware-access helper); keyboard/COUT conventions come from the
 baseline platform reference. Pronunciation rules, formant choices, timing and
