@@ -24,6 +24,7 @@ graphics / registers → produce a `.PRG` that also `BRUN`s on real hardware.
 | `harness.cjs` | Boots the WASM emulator, loads a program, runs it, captures serial/text/registers, detects halt. |
 | `run6502.mjs` | CLI: assemble/load → run → apply checks → emit `.PRG` + verdict (exit 0 only if it halted cleanly and every check passed). |
 | `gen_platform_ref.mjs` | Regenerates `platform/platform-ref.{md,json}` from `vm.h` + `badger6502.dbg`. |
+| `patch-spyhunter.mjs` | Applies an in-place, physical-3ric input fix to a user-supplied `spyh07fd.prg`; never downloads or distributes the game. |
 
 **Platform reference (`codegen/platform/`)** — the generator's machine/human contract:
 `prompt-system.md` (assembler dialect, entry/exit conventions), `platform-ref.md` +
@@ -81,6 +82,21 @@ screen (decode `$0400`, 40×24 interleaved), graphics (`renderFrame()` RGBA), CP
   reliance on `process` outside the guarded CLI tail — breaking this breaks the in-browser
   assembler (`WEB-CLIENT.md`).
 - `platform-ref.*` is generated, not hand-edited; edit `vm.h`/symbols then regenerate.
+- **Spy Hunter input patch:** `node codegen\tools\patch-spyhunter.mjs <input.prg>
+  <output.prg>` accepts only the 34,307-byte raw `$07FD` image with SHA-256
+  `8740e1181ed35b13b129a8f25aae977d95129e885cb4f7ccfaa9126264c93af3`.
+  Unsupported/modified images and existing output files are explicit errors; the input
+  is never overwritten. The patcher assembles original replacement input routines with
+  `asm6502.mjs`, checks their exact in-place bounds, and preserves every byte outside the
+  patch ranges, the image length, and the load/entry address. It changes no ROM, emulator,
+  hardware decode, or generated platform reference. `patch-spyhunter.test.mjs` exercises
+  the replacements through the real ROM without needing a game fixture; an optional
+  local original-PRG argument additionally exercises calibration, actual car movement,
+  keyboard mode, CLI overwrite protection, and an exact-byte ROM `BSAVE`/`BRUN` card
+  round trip using the build's `web/data/sd.sparse`. Run after `web/build.ps1`:
+  `node codegen\tools\patch-spyhunter.test.mjs [path-to-original-spyh07fd.prg]`.
+  Neither the original nor patched game belongs in the repository or published assets.
+  See `ROM-SOFTWARE.md` for the hardware contract and loading instructions.
 - **AI-contributor path.** The codegen guide is exposed for external AI tools: `web/llms.txt`
   (published at the site root, owned by `WEB-CLIENT.md`) is the machine-readable entry point
   that links `prompt-system.md` + `platform-ref.md`, and `prompt-system.md` closes the loop to
@@ -111,5 +127,6 @@ breakpoints and current-PC highlighting.
 | Source listing metadata | Shipped | Each emitted record reports PC, bytes, source line, and instruction/data kind for browser debugging; covered by `asm6502.test.mjs`. |
 | `harness` + `run6502` validation loop | Shipped | serial/text/gfx/register checks + `.PRG`. |
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
+| Spy Hunter input patcher | Implemented | Fingerprint/range guards, ROM input regressions, optional full-game driving and SD round trip; no game binary is distributed. Physical-board approval remains separate. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |
 | AI-contributor entry point | Shipped | `web/llms.txt` + `CONTRIBUTING.md`; `prompt-system.md` closes the loop to the gallery. |

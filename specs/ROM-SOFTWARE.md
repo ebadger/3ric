@@ -47,10 +47,36 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   `codegen/platform/platform-ref.*`. The ROM scan also reloads VIA1 Timer 1 and
   Timer 2; a guest borrowing either timer must account for that reload and for
   the ROM NMI handler acknowledging timer flags.
+- **ROM-emulated Apple II joystick:** the same `$C070` scan updates fire-button bytes
+  `$C061-$C063` and starts the VIA timers that maintain paddle bit 7 at `$C064-$C067`.
+  These are firmware-maintained RAM values, not independent read-only Apple II inputs.
+  Button-only press/release loops must request fresh scans; changing a physical SNES
+  button alone does not refresh those bytes. Guest read-modify-write instructions such
+  as `ASL $C064` corrupt them. Read the value and shift the accumulator instead, or use
+  non-destructive sign-bit tests. P1 B/X feed the first legacy fire button; P1 A/Y feed
+  the second. SNES Start is not a legacy fire-button alias.
 - **`.PRG` programs:** assembled by the codegen toolchain (`CODEGEN.md`). Sources: tracked
   `.s` files (`codegen/programs/hello.s`, `emulator/AICodeGen/<name>/<name>.s`); assembled
   `.prg` images are git-ignored (regenerated). Run on hardware/SD via `BRUN NAME.PRG <org>`,
   or in the browser via **Load .PRG** / **Assemble & Run**.
+- **Spy Hunter (`spyh07fd.prg`) compatibility patch:** the unmodified game waits for
+  joystick presses/releases without refreshing `$C070`, and uses memory `ASL` to read
+  both buttons and paddles. This can strand calibration in a release loop that also
+  ignores the keyboard, and corrupt steering/throttle calibration. The game-side
+  `codegen/tools/patch-spyhunter.mjs` fix keeps the existing ROM and hardware interface:
+  bounded timed waits refresh the scan once per inner-counter period, other button-only
+  waits refresh before reading, and paddle/button samples never write their input bytes.
+  Replacement routines and a shared scan helper fit within the original input code;
+  no extra RAM, relocation, image header, or new ROM dependency is introduced.
+  Copy the locally patched `SPY3RIC.PRG` to the card and run `BRUN SPY3RIC.PRG 07FD`
+  (not `0800`). Advance the opening screens with a key, choose **J** at the joystick
+  prompt, and confirm centered, upper-left, and lower-right positions with a face-button
+  press and release at each calibration prompt. Then a face button starts play.
+  The original title/music animation and car-delivery sequence remain; allow delivery
+  to finish and accelerate with Up before steering.
+  Keyboard mode and its existing L/semicolon, A/Z, and 1/2 controls remain available.
+  The original and patched copyrighted game are user-supplied/local only, not distributed
+  with 3ric. Emulator coverage is not a physical-board playtest.
 - **Bouncing Ball (scottybe's community contribution):** the canonical source remains
   `web/programs/bouncing-ball.s`, loaded at `$0800` by the gallery, assembler, or
   `BRUN BOUNCE.PRG 0800`. Its 114-vertex, 128-face checkerboard sphere is transformed,
@@ -382,6 +408,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Matrix Rain | Shipped | `codegen/programs/matrix.s`; 1,079-byte `$0800` hi-res demo with staggered green trails, white heads, pause/quit controls, and focused rendering, timing, memory-boundary, and monitor-exit coverage in `codegen/tools/matrix.test.mjs`. |
 | ROCK STORM vector game | Shipped / cycle-guarded | Opening-wave live frame is 133,262 cycles against a 175,000-cycle limit; both distributed `.prg` copies are generated from `rocks.s`. |
 | SNES gamepad input | Shipped | ROM fills `GAMEPAD1/2` on a `$C070` touch; the shared emulator peripheral follows the same VIA serial protocol, and the browser maps two standard USB/Bluetooth controllers into it. |
+| Spy Hunter input compatibility | Implemented; physical confirmation pending | In-place PRG patch; real-ROM calibration, start, car movement, throttle, fire, keyboard mode, native PS/2 input, and exact-byte SD loader round trip exercised. No ROM or emulator changes or physical-board playtest. |
 | Jungle Quest — The Sunstone Run | Shipped | Six-screen `$0800` mixed-hi-res platformer; focused suite includes a complete successful expedition. |
 | STAR DUEL | Shipped | Two-player `$0800` mixed-hi-res gravity duel; SNES pads + keyboard; `codegen/tools/spacewar.test.mjs` covers gravity, wrap, shots, collisions, and dual-pad input. |
 | SUNSLING | Implemented | Separate original `$0800` two-player gravity duel. Current-ROM scan compensation preserves the strict 200-cycle cadence tolerance; idle/one-pad/two-pad/release coverage and the full-load/900-frame regression pass (worst work 49,833, period 52,536 cycles). `codegen/tools/sunsling.test.mjs` also exercises real-VM physics, both control paths, XOR rendering, simultaneous scoring, monitor restoration, and exported WOZ boot. |
