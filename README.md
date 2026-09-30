@@ -164,6 +164,10 @@ templates under [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/).
 3ric is built in public. Watch the design and construction, episode by episode:
 **[YouTube build series][youtube]**.
 
+The [porting logs](docs/porting-logs/README.md) tell the software side of that story:
+A2Robots, Spy vs Spy, Spy Hunter, and Pitfall II, with the changes, failed experiments,
+hardware evidence, and lessons for future sessions.
+
 ## Support
 
 If this project helps you learn or you just enjoy the build, please consider
