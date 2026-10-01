@@ -71,14 +71,14 @@ private:
 
 	uint8_t _register[MAX_ENUM] = { 0 };
 
+	// Deterministic power-on seeds, not hardware-defined reset values.
 	uint16_t _t1Latch = 0;
 	uint16_t _t1Counter = 0;
 	uint16_t _t2Latch = 0;
 	uint16_t _t2Counter = 0;
-	bool _t1Running = false;
-	bool _t1Fired = false;
-	bool _t2Running = false;
-	bool _t2Fired = false;
+	// Arming gates timeout IFR/PB7 events, never counter clocks.
+	bool _t1Armed = false;
+	bool _t2Armed = false;
 	bool _pb7Output = true;
 
 	uint8_t _portAInput = 0xFF;

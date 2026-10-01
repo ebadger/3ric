@@ -116,6 +116,40 @@ These are existing mappings, not a new memory expansion.
   AY outputs and the speaker from the same PHI2-derived clock and exposes one interleaved
   stereo stream. Enabling/disabling collection must not stop speaker, VIA, or AY state.
 
+**VIA timer reset and clocking contract (onboard and both slot-4 VIAs):**
+
+- `VIA::Reset()` represents an instantaneous reset and release, not a held-low RESB pin.
+  It retains T1/T2 counters and latches, clears ACR/IFR/IER, and disarms timer timeout
+  events. Construction seeds timer storage to zero for repeatability; this is an emulator
+  choice, **not** a hardware-guaranteed power-on value.
+- After reset release, T1 decrements on every PHI2 tick. T2 decrements on PHI2 when
+  ACR5 is clear, or on PB6 falling edges when ACR5 is set and PB6 is an input. Counting
+  does not require a prior timer write or an enabled interrupt. In one-shot mode,
+  underflow wraps the counter to `$FFFF` and counting continues.
+- Timeout-event arming is separate from counting and from IER. Only a write to T1CH
+  (`$05`) or T2CH (`$09`) loads that counter and arms its events, clearing its IFR bit.
+  An armed timeout sets IFR even with IER masked; IER only gates the interrupt output.
+  Reset, subsequent unarmed wraps, IER/ACR changes, and latch-only accesses cannot arm
+  events or generate timer interrupts.
+- T1 one-shot expiry disarms further IFR/PB7 events until another T1CH write. In continuous
+  mode, armed timeouts keep setting IFR and toggling PB7 when ACR7 enables timer output.
+  ACR6 selects latch reload at underflow independently of event arming: an unarmed
+  continuous-mode counter reloads but does not set IFR or toggle PB7. T2 always disarms
+  its interrupt event after the first timeout, in either clock mode.
+- T1CL/T1LL writes update only the low latch; T1LH writes update only the high latch and
+  clear T1's IFR bit. T2CL writes update only its low latch. These writes do not replace
+  a running count or rearm an expired/reset timer. Counter-low reads acknowledge the
+  corresponding IFR bit without stopping or rearming the counter.
+- Basis: [WDC W65C22 datasheet, February 16, 2024](https://www.westerndesigncenter.com/documentation/w65c22.pdf),
+  sections 2.5-2.10 and 3.9 (pp. 13-19, 35). Section 3.9 excludes timer storage from
+  reset clearing and disables operation **while RESB is asserted**; it does not specify
+  a power-on count. The reset-release counting/event separation above is the emulator's
+  explicit model, not a claim that timers run while physical reset is held.
+- This change retains the existing programmed timeout/reload cadence of `latch + 1`
+  ticks and instruction-boundary device scheduling. Exact silicon load/underflow delays,
+  held-reset timing, and shift-register behavior are outside this correction; no physical
+  hardware measurement is claimed.
+
 **Slot-4 Mockingboard contract (matching `kicad/3ric/Mockingboard.kicad_sch`):**
 
 - The board has two 65C22 VIAs and two AY-3-8910s; it has no speech chip.
@@ -164,6 +198,7 @@ left/right AY) + framebuffer + serial + register state → host (native window o
 | Text / lo-res / hi-res video | Shipped | `badgervmpal`; color/fringe logic shared with hosts. |
 | Keyboard + ACIA serial | Shipped | `$C000`/`$C010`; `PS2Keyboard`, `acia`. |
 | VIA1 + bit-banged SPI micro-SD | Shipped | `via` + `MockMicroSD`. |
+| 65C22 timer reset/release | Shipped | Retained timer storage, independent counting/event arming, quiet unarmed wraps, and synthetic cold 6502 detection probes covered by native VIA tests and `web/test_mockingboard.cjs`; timing limits are stated above. |
 | Two serial SNES gamepads on VIA1 | Shipped | Shared native/WASM peripheral; latch/clock, active-low data, reset, and two-pad scans covered by MSTest. |
 | `$C030` system speaker + VM audio mixer | Shipped | Any read/write toggles the mono latch; centered PCM mixes with both AY channels; covered by native and WASM tests. |
 | Slot-4 dual-AY Mockingboard | Shipped | Exact 3RIC `$C400/$C480`, 1.5734375 MHz, VIA IRQ, and hard-panned stereo; covered by native and WASM tests. |

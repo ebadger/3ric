@@ -10,14 +10,9 @@ VIA::VIA(VM*)
 void VIA::Reset()
 {
 	std::memset(_register, 0, sizeof(_register));
-	_t1Latch = 0;
-	_t1Counter = 0;
-	_t2Latch = 0;
-	_t2Counter = 0;
-	_t1Running = false;
-	_t1Fired = false;
-	_t2Running = false;
-	_t2Fired = false;
+	// Reset/release preserves timer storage but disarms pending timeout events.
+	_t1Armed = false;
+	_t2Armed = false;
 	_pb7Output = true;
 	_portAInput = 0xFF;
 	_portBInput = 0xFF;
@@ -30,41 +25,26 @@ bool VIA::IRQAsserted() const
 
 void VIA::Tick()
 {
-	if (_t1Running)
+	if (_t1Counter == 0)
 	{
-		if (_t1Counter == 0)
+		const bool continuous = (_register[ACR] & 0x40) != 0;
+		_t1Counter = continuous ? _t1Latch : 0xFFFF;
+		if (_t1Armed)
 		{
-			const bool continuous = (_register[ACR] & 0x40) != 0;
-			if (continuous || !_t1Fired)
+			_register[IFR] |= IFR_T1;
+			if (_register[ACR] & 0x80)
 			{
-				_register[IFR] |= IFR_T1;
+				_pb7Output = continuous ? !_pb7Output : true;
 			}
-
-			if (continuous)
-			{
-				_t1Counter = _t1Latch;
-				if (_register[ACR] & 0x80)
-				{
-					_pb7Output = !_pb7Output;
-				}
-			}
-			else
-			{
-				_t1Counter = 0xFFFF;
-				if (_register[ACR] & 0x80)
-				{
-					_pb7Output = true;
-				}
-				_t1Fired = true;
-			}
-		}
-		else
-		{
-			--_t1Counter;
+			_t1Armed = continuous;
 		}
 	}
+	else
+	{
+		--_t1Counter;
+	}
 
-	if (_t2Running && (_register[ACR] & 0x20) == 0)
+	if ((_register[ACR] & 0x20) == 0)
 	{
 		ClockTimer2();
 	}
@@ -74,10 +54,10 @@ void VIA::ClockTimer2()
 {
 	if (_t2Counter == 0)
 	{
-		if (!_t2Fired)
+		if (_t2Armed)
 		{
 			_register[IFR] |= IFR_T2;
-			_t2Fired = true;
+			_t2Armed = false;
 		}
 		_t2Counter = 0xFFFF;
 	}
@@ -255,18 +235,13 @@ void VIA::WriteRegister(uint8_t reg, uint8_t data)
 	case T1CL:
 	case T1LL:
 		_t1Latch = (uint16_t)((_t1Latch & 0xFF00) | data);
-		_register[T1CL] = data;
-		_register[T1LL] = data;
 		break;
 
 	case T1CH:
 		_t1Latch = (uint16_t)((_t1Latch & 0x00FF) | ((uint16_t)data << 8));
 		_t1Counter = _t1Latch;
-		_t1Running = true;
-		_t1Fired = false;
+		_t1Armed = true;
 		_register[IFR] &= (uint8_t)~IFR_T1;
-		_register[T1CH] = data;
-		_register[T1LH] = data;
 		if (_register[ACR] & 0x80)
 		{
 			_pb7Output = false;
@@ -275,22 +250,18 @@ void VIA::WriteRegister(uint8_t reg, uint8_t data)
 
 	case T1LH:
 		_t1Latch = (uint16_t)((_t1Latch & 0x00FF) | ((uint16_t)data << 8));
-		_register[T1LH] = data;
 		_register[IFR] &= (uint8_t)~IFR_T1;
 		break;
 
 	case T2CL:
 		_t2Latch = (uint16_t)((_t2Latch & 0xFF00) | data);
-		_register[T2CL] = data;
 		break;
 
 	case T2CH:
 		_t2Latch = (uint16_t)((_t2Latch & 0x00FF) | ((uint16_t)data << 8));
 		_t2Counter = _t2Latch;
-		_t2Running = true;
-		_t2Fired = false;
+		_t2Armed = true;
 		_register[IFR] &= (uint8_t)~IFR_T2;
-		_register[T2CH] = data;
 		break;
 
 	case SR:
@@ -318,8 +289,7 @@ void VIA::SetPortBInput(uint8_t data)
 {
 	const uint8_t previous = _portBInput;
 	_portBInput = data;
-	if (_t2Running
-		&& (_register[ACR] & 0x20)
+	if ((_register[ACR] & 0x20)
 		&& (_register[DDRB] & 0x40) == 0
 		&& (previous & 0x40)
 		&& (data & 0x40) == 0)
