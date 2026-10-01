@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-09-16 — ebadger (via Copilot)_
+_Last updated: 2026-10-01 — ebadger (via Copilot)_
 
 ---
 
@@ -145,7 +145,8 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   shell; `$C030` system speaker centered into the slot-4 dual-AY Mockingboard stereo stream
   at the hardware's 1.5734375 MHz clock; adjustable CPU clock. The browser maps standard
   USB/Bluetooth controllers through the SNES/VIA path. Shared VM core runs identically on
-  Windows and in the browser.
+  Windows and in the browser. VIA timers count after reset release without being programmed;
+  warm reset retains timer storage but disarms timeout interrupts and PB7 events.
 - **In-browser assembler:** assembles 65C02 source client-side with the project's own
   `asm6502.mjs` and runs it like `BRUN`; ships ~11 sample programs; deep-linkable via `?src=`.
   Exports the assembled program as a raw **.PRG** or a bootable **.woz** disk image
