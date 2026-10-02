@@ -3,7 +3,9 @@
 This is a software port for the existing physical 3RIC, not an Apple IIe emulator
 mode. It retains the supplied game's rules, scoring, menus, credits, shareware
 notice/countdown, speaker effects, and three original Mockingboard songs.
-**Native and WASM execution are verified; a physical-board playtest is still required.**
+**The owner confirmed keyboard and Mockingboard music working together on the
+physical board with the input-fix image below.** This is not a full-playthrough
+or every-control hardware certification.
 
 The original disk stops at `REQUIRES 128K AND 65C02`: its renderer and music genuinely
 use Apple IIe auxiliary RAM. This port converts the artwork to standard hi-res,
@@ -71,6 +73,37 @@ The two shareware blocksets, three difficulty choices, original song-selection
 keys, and gameplay-song changes are retained. Full-version content is not unlocked.
 No SNES mapping is added. Reset exits the game; scores remain in RAM for this run.
 
+## Physical keyboard fix and accepted image
+
+On 2026-10-02, the original port booted and played music on the board, but keyboard
+input stopped after leaving the shareware notice with Space. Escape/speaker-only
+mode worked. The fixed-slot detector reads `$C404`; this was not another slot scan
+mistaking the input VIA for a Mockingboard.
+
+A native timing sweep reproduced the failure with a 200-cycle PS/2 bit period,
+100-cycle DATA hold, and phase 28 in the test sequence. At cycle 92,905,045, the ROM
+was about to write `$7F` to `$C20D` with IFR `$81`: a new CA2 keyboard clock event
+was pending. The blanket acknowledgement discarded that unserviced event.
+After the complete key/release sequence, `$CE00=$03`, `$CE01=$B9`, and `$CE04=$F0`
+showed a misaligned receiver with a release prefix outstanding. The same sweep
+passed with music disabled. The executed input-VIA writes came from ROM, not the game.
+
+The fix replaces all ten guest keyboard acknowledgements with one helper that
+atomically clears bit 7 of the RAM-backed `$C000` latch using `TRB`, preserving the
+character's low bits, A/X/Y, and caller flags. The ROM already writes this same latch.
+Avoiding `$C010` avoids its extra CB1/NMI traffic; physical PS/2 decoding still uses
+the unmodified ROM. Native coverage rejects any guest `$C010` access or `$C2xx`
+write and exercises 768 phase-shifted keys with music playing.
+
+| Image | Status | SHA-256 |
+|-------|--------|---------|
+| Original `QUARX.woz` | Keyboard failure reported with music; retained for comparison | `8027a732b0a3e6fa0adc419255e769dd531d166c1757be401728539a628f6fc0` |
+| `QXINPUT.woz` | Owner confirmed keyboard and music work together | `aa55941794ee1cf61b19e7b7aacfd5e7ef39d4a7bc97e5c8942fddd65d30fd11` |
+
+The current builder produces the fixed bytes regardless of the chosen output name.
+This is a game-specific workaround, **not a firmware repair**. A firmware fix needs
+selective source acknowledgement and safe handling of still-pending events.
+
 ## Intentional adaptations
 
 - Six-color standard hi-res replaces 16-color double-hi-res. Title/background
@@ -127,8 +160,10 @@ the unrelocated original tracker, runtime ROM rejection, speaker-only mode,
 CLI overwrite protection, and a real ROM BSAVE/BRUN round-trip through FAT32/SPI.
 The sparse SD fixture is modified only inside that isolated emulator instance.
 
-The PowerShell wrapper additionally compiles the unchanged Windows core and drives
+The PowerShell wrapper additionally compiles the unchanged Windows core, sweeps
+PS/2 timing against the music IRQ, and drives
 physical PS/2 scan frames, arrows, rotation, pause, and Caps Lock while music runs.
 It rejects Apple IIe-only soft-switch accesses and hidden upper ROM. Its native host
 runs ROM/VIA initialization, then enters the monitor without SD setup; the separate
-WASM SD check covers that delivery path. This is not a physical-board or listening test.
+WASM SD check covers that delivery path. Automated evidence is distinct from the
+owner's narrower physical keyboard/music confirmation above.

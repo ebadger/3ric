@@ -170,7 +170,8 @@ hardware evidence, and lessons for future sessions.
 
 The [Quarx shareware port guide](docs/runbooks/quarx-3ric.md) explains how to build
 a physical-target PRG/WOZ from your own disk, with adapted hi-res graphics and the
-original Mockingboard music. Its board playtest is still pending.
+original Mockingboard music. Keyboard and music now work together on the owner's
+board; the guide records the exact accepted image and the input-race workaround.
 
 ## Support
 

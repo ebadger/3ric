@@ -69,6 +69,32 @@ if (diskIndex >= 0) {
 
   const require = createRequire(import.meta.url), { boot } = require("./harness.cjs");
   const session = await boot(), { vm } = session;
+  const latch = new session.Module.WebVM();
+  try {
+    latch.loadData(0x800, port.image.subarray(0x800));
+    const program = Uint8Array.from([
+      0xa2, 0xff, 0x9a, 0xa9, 0, 0x48, 0xa9, 0, 0xa2, 0x55, 0xa0, 0xaa, 0x28,
+      0x20, port.symbols.ACK_KEY & 255, port.symbols.ACK_KEY >> 8, 0xea,
+    ]);
+    check("Atomic keyboard acknowledgement preserves character, registers, flags and VIA state", () => {
+      assert.equal(port.keyboardPatches.length, 10);
+      for (const status of [0, 0xff, 0x49, 0x86]) for (const a of [0, 0x80, 0xff])
+        for (let character = 0; character < 128; character++) {
+          program[4] = status; program[7] = a;
+          latch.loadData(0x300, program); latch.poke(0xc000, character | 0x80);
+          latch.setPC(0x300); latch.clearBreakpoints(); latch.addBreakpoint(0x30d);
+          latch.run(100);
+          assert.equal(latch.pc(), 0x30d);
+          const flags = latch.status() & 0xcf;
+          latch.clearBreakpoints(); latch.addBreakpoint(0x310); latch.run(100);
+          assert.equal(latch.pc(), 0x310);
+          assert.equal(latch.peek(0xc000), character);
+          assert.deepEqual([latch.regA(), latch.regX(), latch.regY(), latch.sp(), latch.status() & 0xcf],
+            [a, 0x55, 0xaa, 0xff, flags]);
+          assert.equal(latch.readBus(0xc20d), 0, "Acknowledgement must not raise CB1");
+        }
+    });
+  } finally { latch.delete(); }
   const menuKey = port.symbols.MENU + 0xa6, menuBlockset = port.symbols.MENU + 0x478;
   const seek = (target, budget = 5_000_000) => {
     vm.clearBreakpoints(); vm.addBreakpoint(target); vm.runCycles(budget);
@@ -374,7 +400,8 @@ if (diskIndex >= 0) {
       fs.writeFileSync(disk, port.woz);
       const run = spawnSync(executable, [path.join(root, "emulator", "Data", "badger6502.bin"), disk,
         port.symbols.INIT.toString(16), port.symbols.NOTICE_KEY.toString(16),
-        menuKey.toString(16)], { encoding: "utf8" });
+        menuKey.toString(16), "--keyboard-stress"],
+        { encoding: "utf8" });
       process.stdout.write(run.stdout || ""); process.stderr.write(run.stderr || "");
       if (run.error) throw run.error;
       assert.equal(run.status, 0, "Native physical-keyboard integration");

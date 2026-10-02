@@ -92,6 +92,25 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     fingerprint manifest. See [the loading guide](../docs/runbooks/quarx-3ric.md).
     Left/Right or J/L moves, Down/K drops faster, Space/Z cycles the three blocks,
     and Escape pauses/resumes. This port adds no SNES control mapping.
+    **2026-10-02 board report:** the keyboard stops responding after continuing
+    the shareware screen with music enabled (including Space), while the music
+    keeps playing. Escape/speaker-only mode retains working input. The fixed
+    `$C404` detector does not scan the input VIA; audit executed `$C2xx` accesses
+    and IRQ/NMI timing before attributing a cause. Existing emulator passes do
+    not override this physical failure.
+    A native timing sweep reproduces a missed PS/2 CA2 edge when the ROM's
+    blanket `$C20D=$7F` acknowledgement runs during title music. The game-specific
+    fix acknowledges its RAM-backed `$C000` latch with atomic `TRB $C000`
+    (A contains `$80`), preserving the low character bits, registers,
+    and caller flags. This avoids raising the extra `$C010`/CB1 NMI; the physical
+    PS/2 decoder remains the original ROM. Apply this consistently to shareware,
+    menu, gameplay, pause, game-over and score-name entry. This is not an Apple II
+    keyboard-register contract, and must not be copied into the Apple II target.
+    The owner confirmed keyboard and music working together on the physical
+    board with `QXINPUT.woz` SHA-256
+    `aa55941794ee1cf61b19e7b7aacfd5e7ef39d4a7bc97e5c8942fddd65d30fd11`.
+    That confirms this game-side workaround, not a repaired firmware routine or
+    an exhaustive physical playthrough.
 - **Bouncing Ball (scottybe's community contribution):** the canonical source remains
   `web/programs/bouncing-ball.s`, loaded at `$0800` by the gallery, assembler, or
   `BRUN BOUNCE.PRG 0800`. Its 114-vertex, 128-face checkerboard sphere is transformed,
@@ -417,7 +436,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
-| Quarx shareware physical port | Implemented; board playtest pending | Local fingerprinted input -> hi-res PRG/WOZ, original rules/menus/three Mockingboard songs, ROM-visible physical keyboard. Native PS/2 + WASM gameplay/audio + ROM FAT32 round-trip coverage in `port-quarx.test.*`; no game assets are committed. |
+| Quarx shareware physical port | Keyboard + music confirmed on hardware | Owner-confirmed `QXINPUT.woz` uses a game-side RAM-latch acknowledgement to avoid a reproduced PS/2/CB1 NMI race. Native coverage includes 768 phase-shifted keys and rejects guest input-VIA writes/strobe NMIs. The firmware race itself remains; no exhaustive physical playthrough is claimed. |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |
 | 3RIC Groovebox | Shipped | Six-voice, 16-step Mockingboard sequencer; gamepad/keyboard editing and timer-driven stereo sound. `codegen/tools/groovebox.test.mjs` covers real stereo PCM, all controls, fractional tempo, clean exit, and a dense-step/input deadline below 6,556 cycles. |
 | Built from Bits | Implemented | 3,460-byte four-scene showcase with rendering, 63,000-cycle cadence, audio, controls, and WOZ boot coverage. ROM window bounds are preserved; Q/Esc from every scene must leave a visible prompt that can execute and display a subsequent monitor command. |

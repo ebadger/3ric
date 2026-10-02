@@ -501,9 +501,25 @@ export function buildQuarx(input, rom = fs.readFileSync(path.join(root, "emulato
   image.set(backgroundPacked, symbols.BACKGROUND_DATA);
   image.set(relocatePlayer(raw("MUSIC/PLAYER.LZ"), s), s.MUSIC);
   songs.forEach((song, n) => image.set(song, s[`SONG${n + 1}`]));
+  const keyboardPatches = [
+    ...[0x11b2, 0x1212, 0x121e, 0x1ac2, 0x1aca].map(address => ({ address, original: [0x8d, 0x10, 0xc0] })),
+    ...[s.MENU + 0xa0, s.MENU + 0x113, s.HIGH_SCORES + 0x66]
+      .map(address => ({ address, original: [0x8d, 0x10, 0xc0] })),
+  ];
+  for (const { address, original } of keyboardPatches) {
+    if (!original.every((byte, index) => image[address + index] === byte))
+      throw new Error(`Unexpected keyboard acknowledgement at ${hex(address)}`);
+    image[address] = 0x20;
+    patchWord(image, address + 1, s.ACK_KEY);
+  }
+  for (const row of engine.listing)
+    if (row.kind === "instruction" && row.bytes[0] === 0x20
+        && (row.bytes[1] | row.bytes[2] << 8) === s.ACK_KEY)
+      keyboardPatches.push({ address: row.pc, original: [0x2c, 0x10, 0xc0] });
+  if (keyboardPatches.length !== 10) throw new Error("Unexpected keyboard acknowledgement count");
   image[0x800] = 0x4c; patchWord(image, 0x801, s.INIT);
   const prg = buildPhysicalProgram(image, s.INIT), woz = buildBootableWoz(prg, 0x800);
-  return { image, prg, woz, symbols: s, patches, title, background, tiles,
+  return { image, prg, woz, symbols: s, patches, keyboardPatches, title, background, tiles,
     sizes: { engine: engine.bytes.length, title: titlePacked.length, background: backgroundPacked.length } };
 }
 

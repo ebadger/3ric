@@ -123,6 +123,12 @@ namespace
         KeyboardPeer keyboard{vm, cycles};
         bool checking = false;
         unsigned decoded = 0;
+        unsigned romVIAWrites = 0;
+        uint32_t bitPeriod = 160, dataHold = 80;
+        unsigned discardedClockEdges = 0;
+        uint8_t scanCode = 0;
+        unsigned scanBit = 0;
+        bool tracingInput = false;
 
         Machine(const std::vector<uint8_t>& rom, const char* disk)
         {
@@ -138,6 +144,8 @@ namespace
             };
             const auto checkAddress = [&](uint16_t address) {
                 if (!checking) return;
+                require(address != 0xc010 || vm.IsROMVisible(cpu->PC),
+                    "Guest raised the racy keyboard strobe NMI");
                 switch (address)
                 {
                 case 0xc002: case 0xc003: case 0xc004: case 0xc005:
@@ -150,6 +158,12 @@ namespace
             vm.CallbackReadMemory = checkAddress;
             vm.CallbackWriteMemory = [&, checkAddress](uint16_t address, uint8_t value) {
                 checkAddress(address);
+                if (checking && address >= 0xc200 && address <= 0xc2ff)
+                {
+                    require(vm.IsROMVisible(cpu->PC), "Guest wrote input VIA at PC "
+                        + std::to_string(cpu->PC) + ", address " + std::to_string(address));
+                    ++romVIAWrites;
+                }
                 if (checking && address == 0xc000 && (value & 0x80)) ++decoded;
             };
             vm.Reset();
@@ -164,6 +178,16 @@ namespace
         void step()
         {
             keyboard.tick();
+            if (tracingInput && cpu->PC == 0xf1d0 && vm.WillExecuteCurrentInstruction()
+                && (vm.GetVIA1()->ReadRegister(VIA::IFR) & 1))
+            {
+                ++discardedClockEdges;
+                std::cerr << "ROM blanket IFR clear with pending PS/2 clock: cycle=" << cycles
+                    << " scan=" << unsigned(scanCode) << " bit=" << scanBit
+                    << " CE00=" << unsigned(vm.PeekData(0xce00))
+                    << " CE01=" << unsigned(vm.PeekData(0xce01))
+                    << " IFR=" << unsigned(vm.GetVIA1()->ReadRegister(VIA::IFR)) << "\n";
+            }
             if (checking)
                 require(vm.IsROMVisible(0xfffa), "Guest hid the physical keyboard's ROM interrupt handler");
             cycles += vm.Step();
@@ -197,12 +221,16 @@ namespace
             const auto start = cycles;
             for (unsigned i = 0; i < 11; ++i)
             {
-                const auto edge = start + i * 160;
+                const auto edge = start + i * bitPeriod;
                 while (cycles < edge) step();
+                scanCode = code;
+                scanBit = i;
                 keyboard.pins(bits[i] != 0, false);
-                while (cycles < edge + 80) step();
+                while (cycles < edge + bitPeriod / 2) step();
+                keyboard.pins(bits[i] != 0, true);
+                while (cycles < edge + dataHold) step();
                 keyboard.pins(bits[i + 1] != 0, true);
-                while (cycles < edge + 160) step();
+                while (cycles < edge + bitPeriod) step();
             }
             run(160);
         }
@@ -218,6 +246,46 @@ namespace
             scan(0xe0); scan(code); run(20000);
             scan(0xe0); scan(0xf0); scan(code); run(20000);
         }
+
+        void keyboardStress(uint16_t menuPC)
+        {
+            tracingInput = true;
+            const auto ddra = vm.GetVIA1()->ReadRegister(VIA::DDRA);
+            const auto ier = vm.GetVIA1()->ReadRegister(VIA::IER);
+            for (const uint32_t hold : {80u, 88u, 100u})
+            {
+                bitPeriod = hold == 100 ? 200 : 160;
+                dataHold = hold;
+                for (unsigned phase = 0; phase < 256; ++phase)
+                {
+                    seek(menuPC, 2000000);
+                    run((25642 - cycles % 25642) % 25642 + phase);
+                    const auto before = decoded;
+                    extended(0x72);
+                    run(50000);
+                    require(decoded == before + 1, "PS/2 scan lost with period/hold/phase "
+                        + std::to_string(bitPeriod) + "/" + std::to_string(hold) + "/"
+                        + std::to_string(phase) + "; CE00=" + std::to_string(vm.PeekData(0xce00))
+                        + " CE01=" + std::to_string(vm.PeekData(0xce01)));
+                    require(vm.PeekData(0xce00) == 0 && vm.PeekData(0xce04) == 0,
+                        "PS/2 receiver remained inside a frame/release at period/hold/phase "
+                        + std::to_string(bitPeriod) + "/" + std::to_string(hold) + "/"
+                        + std::to_string(phase) + "; CE00=" + std::to_string(vm.PeekData(0xce00))
+                        + " CE01=" + std::to_string(vm.PeekData(0xce01))
+                        + " CE04=" + std::to_string(vm.PeekData(0xce04))
+                        + " PC=" + std::to_string(cpu->PC)
+                        + " discarded clock edges=" + std::to_string(discardedClockEdges));
+                    require(vm.GetVIA1()->ReadRegister(VIA::DDRA) == ddra
+                        && vm.GetVIA1()->ReadRegister(VIA::IER) == ier,
+                        "Keyboard VIA configuration changed during title music");
+                }
+            }
+            bitPeriod = 160;
+            dataHold = 80;
+            require(discardedClockEdges == 0, "ROM discarded a pending PS/2 clock edge");
+            std::cout << "PASS 768 phase-shifted PS/2 keys; "
+                << romVIAWrites << " input-VIA writes, all from visible ROM\n";
+        }
     };
 }
 
@@ -225,13 +293,31 @@ int main(int argc, char** argv)
 {
     try
     {
-        require(argc == 6, "Usage: quarx-native <rom> <ported.woz> <init-hex> <notice-key-hex> <menu-key-hex>");
+        require(argc == 6 || argc == 7,
+            "Usage: quarx-native <rom> <ported.woz> <init-hex> <notice-key-hex> <menu-key-hex> [--keyboard-stress|--keyboard-stress-silent]");
+        const bool silent = argc == 7 && std::string(argv[6]) == "--keyboard-stress-silent";
         Machine machine(readFile(argv[1]), argv[2]);
         machine.seek(static_cast<uint16_t>(std::stoul(argv[3], nullptr, 16)), 100000000);
         machine.checking = true;
         machine.seek(static_cast<uint16_t>(std::stoul(argv[4], nullptr, 16)), 20000000);
-        machine.key(0x29);
-        machine.seek(static_cast<uint16_t>(std::stoul(argv[5], nullptr, 16)), 5000000);
+        machine.key(silent ? 0x76 : 0x29);
+        const auto menuPC = static_cast<uint16_t>(std::stoul(argv[5], nullptr, 16));
+        machine.seek(menuPC, 5000000);
+        if (argc == 7)
+        {
+            require(std::string(argv[6]) == "--keyboard-stress" || silent, "Unknown native test option");
+            machine.keyboardStress(menuPC);
+            if (silent) return 0;
+            machine.seek(menuPC, 2000000);
+            require(machine.vm.PeekData(0xe8) < 3, "Invalid menu selection after keyboard timing sweep");
+            for (unsigned attempt = 0; attempt < 3 && machine.vm.PeekData(0xe8) != 0; ++attempt)
+            {
+                machine.extended(0x72);
+                machine.run(200000);
+                machine.seek(menuPC, 2000000);
+            }
+            require(machine.vm.PeekData(0xe8) == 0, "Could not select Start Game after keyboard timing sweep");
+        }
         machine.key(0x5a);
         machine.seek(0x118d, 5000000);
         require(machine.vm.EnableAudio(44100), "Could not enable native PCM collection");

@@ -100,8 +100,11 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   and all three supplied Mockingboard songs remain. The player uses lower RAM and
   the ROM's IRQ hook, retaining physical PS/2 input and correcting the faster AY
   clock. Native/WASM execution, full tracker loops, game-over/restart, score entry,
-  and actual ROM BSAVE/BRUN through FAT32/SPI are covered. **Physical-board playtest
-  remains pending.** See [build/loading instructions](../docs/runbooks/quarx-3ric.md).
+  and actual ROM BSAVE/BRUN through FAT32/SPI are covered. The owner confirmed
+  keyboard + music on hardware with **`QXINPUT.woz`** after replacing the guest's
+  `$C010` acknowledgements with an atomic RAM-latch clear. This avoids a reproduced
+  ROM PS/2/CB1 flag-clear race; it does not repair the firmware itself or establish
+  a full physical playthrough. See [build/loading instructions](../docs/runbooks/quarx-3ric.md).
 - **Model challenges:** `challenges.html` introduces the series; `challenges/tts/` and
   `challenges/tts/v1/` publish the complete original-TTS brief, baseline SHA and PR
   submission guide. No engines, speech-quality results, hardware tests or ballot exist

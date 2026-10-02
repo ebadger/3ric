@@ -169,11 +169,11 @@ notice_delay:
         sta tens
         dec hundreds
         bpl notice_tick
-        bit $C010
+        jsr ack_key
 notice_key:
         lda $C000
         bpl notice_key
-        bit $C010
+        jsr ack_key
         rts
 
 start_game:
@@ -761,3 +761,14 @@ font_shift: .byte 0
 hundreds:   .byte 0
 tens:       .byte 0
 ones:       .byte 0
+
+; $C000 is the same writable RAM latch the 3RIC ROM fills. Avoid the CB1
+; strobe NMI whose blanket IFR clear can discard a pending PS/2 clock edge.
+ack_key:
+        php
+        pha
+        lda #$80
+        trb $C000
+        pla
+        plp
+        rts
