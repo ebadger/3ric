@@ -51,6 +51,102 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   `.s` files (`codegen/programs/hello.s`, `emulator/AICodeGen/<name>/<name>.s`); assembled
   `.prg` images are git-ignored (regenerated). Run on hardware/SD via `BRUN NAME.PRG <org>`,
   or in the browser via **Load .PRG** / **Assemble & Run**.
+- **Quarx shareware physical-machine port:** the supplied Apple II
+  v1.00 disk genuinely requires 128 KiB, a 65C02, and double-hi-res graphics. Merely
+  bypassing its machine check is not a port. The owner-selected target is existing
+  3RIC hardware, not an emulator-only Apple IIe expansion.
+  - Retain the supplied game's rules, scoring, difficulty choices, credits, and
+    shareware restrictions. Convert its graphics for standard hi-res and replace
+    auxiliary-memory drawing/storage with code and assets that fit 3RIC's existing
+    RAM. Adapted colors are intentional; do not claim pixel-identical Apple IIe output.
+    The board interior uses black instead of the original animated dither, and the
+    font is reduced from double-hi-res to standard-hi-res width. Tile silhouettes,
+    title/background artwork, menu text/credits, and the original game-over scroll
+    remain. High scores are session-only, as in this supplied disk's in-memory table.
+  - Build locally from a fingerprint-checked, owner-supplied disk. Do not commit the
+    game, its extracted assets, or generated images. Unsupported versions must fail
+    explicitly rather than receive guessed binary patches.
+  - Rendering and gameplay execute on the 65C02. Keyboard input must work through
+    the physical PS/2/VIA/ROM path, not just browser key injection; any banked work
+    must preserve interrupt access. No ROM, VM, memory-map, platform-reference, or
+    hardware-decoder change is part of this port.
+  - The owner requested the original Mockingboard music as well as speaker effects.
+    Retain all three songs supplied on the shareware disk and its tracker decoder.
+    Relocate the player into lower RAM and decompress only the selected song into
+    a reusable lower-RAM buffer. Use the ROM's existing `$03FE` IRQ dispatch hook;
+    upper ROM remains visible, including during music and physical PS/2 interrupts.
+    Slot-4 VIA Timer 1 preserves the original `$411A` latch's approximately
+    61.362 Hz cadence using a `$6429` latch (25,642 modeled 3RIC cycles).
+    Tone/envelope/noise
+    periods must compensate for the faster AY clock, with register-width limits
+    documented rather than hidden. Do not add unavailable full-version songs.
+    Probe only the known slot-4 VIA, never the onboard input VIA; an absent card
+    selects speaker-only play. Escape at the completed shareware notice also
+    selects speaker-only mode without removing the music from the deliverable.
+    The builder pins the canonical ROM hash and the guest checks its interrupt
+    dispatch bytes before using the `$03FE` ABI.
+  - Delivery must be loadable through an existing physical disk/SD path, and
+    verification must exercise the generated artifact without debugger repairs.
+    Emulator evidence does not establish physical-board approval.
+    `port-quarx.mjs` emits a self-expanding `$0800` PRG, a bootable WOZ, and a JSON
+    fingerprint manifest. See [the loading guide](../docs/runbooks/quarx-3ric.md).
+    Left/Right or J/L moves, Down/K drops faster, Space/Z cycles the three blocks,
+    and Escape pauses/resumes. This port adds no SNES control mapping.
+    **2026-10-02 board report:** the keyboard stops responding after continuing
+    the shareware screen with music enabled (including Space), while the music
+    keeps playing. Escape/speaker-only mode retains working input. The fixed
+    `$C404` detector does not scan the input VIA; audit executed `$C2xx` accesses
+    and IRQ/NMI timing before attributing a cause. Existing emulator passes do
+    not override this physical failure.
+    A native timing sweep reproduces a missed PS/2 CA2 edge when the ROM's
+    blanket `$C20D=$7F` acknowledgement runs during title music. The game-specific
+    fix acknowledges its RAM-backed `$C000` latch with atomic `TRB $C000`
+    (A contains `$80`), preserving the low character bits, registers,
+    and caller flags. This avoids raising the extra `$C010`/CB1 NMI; the physical
+    PS/2 decoder remains the original ROM. Apply this consistently to shareware,
+    menu, gameplay, pause, game-over and score-name entry. This is not an Apple II
+    keyboard-register contract, and must not be copied into the Apple II target.
+    The owner confirmed keyboard and music working together on the physical
+    board with `QXINPUT.woz` SHA-256
+    `aa55941794ee1cf61b19e7b7aacfd5e7ef39d4a7bc97e5c8942fddd65d30fd11`.
+    That confirms this game-side workaround, not a repaired firmware routine or
+    an exhaustive physical playthrough.
+- **Quarx Apple II+ companion port:** produce a separately named
+  WOZ for an original NMOS 6502 Apple II+ with 64 KiB (48 KiB main RAM plus the
+  16 KiB language card), Disk II in slot 6 and optional Mockingboard in slot 4.
+  Keep the working 3RIC PRG/WOZ byte-for-byte unchanged. Reuse the adapted hi-res
+  artwork and original game/menu/score/tracker logic, not the unmodified 128 KiB
+  Apple IIe executable.
+  - All executed guest code, including the boot loader, unpacker and interrupt
+    paths, must use documented NMOS 6502 instructions. Replace 65C02-only
+    operations with flag/register/stack-correct 6502 code; preserve incoming
+    control-flow targets and reject unsafe binary patch boundaries.
+  - Use the existing language card for these code expansions. Shadow the
+    machine's own ROM at startup, retaining the monitor code and saving the
+    original firmware vectors; generated images must not contain Apple firmware. No auxiliary RAM,
+    double-hi-res or 3RIC-specific `$C006/$C007` ROM overlay is required.
+    A lower-RAM reset trampoline restores ROM visibility before chaining to the
+    machine's original reset vector, rather than restarting Applesoft in RAM
+    whose lower pages now contain expansion stubs.
+    The standard `$03F2-$03F4` soft-reset vector silences the Mockingboard and
+    disables its IRQs before selecting the monitor (`$FF69`), so Reset cannot
+    interrupt through game handlers after their language-card code is hidden.
+    A private NMOS IRQ veneer saves A and retains the hardware stack layout for
+    the tracker, avoiding the different Apple II+ and enhanced-IIe ROM IRQ ABIs.
+    BRK disables the game's timer and restores ROM before chaining to the saved
+    firmware IRQ/BRK vector.
+  - Use the Apple II's original Mockingboard period/cadence, not 3RIC's clock
+    scaling. Explicitly clear decimal mode in the music ISR because NMOS IRQ
+    entry does not do so. Return through `RTI` with interrupted state preserved.
+  - The owner's final input decision is **original controls only**. This
+    supplied Quarx uses the keyboard, not a joystick, so add no SNES/joystick
+    mapping. Apple2TS does not currently implement an SNES MAX expansion card.
+  - Verify a cold WOZ boot and interactive play in Apple2TS's Apple II+ / 64 KiB
+    configuration with its illegal-6502 breakpoint armed, not an enhanced-IIe
+    run mislabeled as a 6502 test. Physical-board approval remains separate.
+    `port-quarx-apple2.mjs` emits the companion WOZ; the same image also runs in
+    Apple2TS's enhanced-IIe configuration. The original 3RIC image remains
+    pinned and unchanged. See [the Apple II guide](../docs/runbooks/quarx-apple2.md).
 - **Bouncing Ball (scottybe's community contribution):** the canonical source remains
   `web/programs/bouncing-ball.s`, loaded at `$0800` by the gallery, assembler, or
   `BRUN BOUNCE.PRG 0800`. Its 114-vertex, 128-face checkerboard sphere is transformed,
@@ -376,6 +472,8 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
+| Quarx shareware physical port | Keyboard + music confirmed on hardware | Owner-confirmed `QXINPUT.woz` uses a game-side RAM-latch acknowledgement to avoid a reproduced PS/2/CB1 NMI race. Native coverage includes 768 phase-shifted keys and rejects guest input-VIA writes/strobe NMIs. The firmware race itself remains; no exhaustive physical playthrough is claimed. |
+| Quarx Apple II+ companion | Implemented; Apple2TS verified | Separate 64 KiB/NMOS-6502 image, also exercised on enhanced IIe. Documented-opcode lowering, original controls/music, ROM shadow with safe IRQ/reset handling; no new controller mapping or physical Apple-board claim. |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |
 | 3RIC Groovebox | Shipped | Six-voice, 16-step Mockingboard sequencer; gamepad/keyboard editing and timer-driven stereo sound. `codegen/tools/groovebox.test.mjs` covers real stereo PCM, all controls, fractional tempo, clean exit, and a dense-step/input deadline below 6,556 cycles. |
 | Built from Bits | Implemented | 3,460-byte four-scene showcase with rendering, 63,000-cycle cadence, audio, controls, and WOZ boot coverage. ROM window bounds are preserved; Q/Esc from every scene must leave a visible prompt that can execute and display a subsequent monitor command. |
