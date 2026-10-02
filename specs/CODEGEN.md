@@ -26,6 +26,8 @@ graphics / registers → produce a `.PRG` that also `BRUN`s on real hardware.
 | `gen_platform_ref.mjs` | Regenerates `platform/platform-ref.{md,json}` from `vm.h` + `badger6502.dbg`. |
 | `port-quarx.mjs` | Fingerprint-checked local Quarx shareware port: ProDOS file extraction, LZSA2 asset conversion, guest-code relocation, packed `$0800` PRG, ordinary bootable WOZ, and JSON hashes. |
 | `port-quarx.test.mjs` / `.test.ps1` | Asset-free format tests; optional supplied-disk WASM integration and native physical-PS/2/Mockingboard checks. |
+| `port-quarx-apple2.mjs` | Separate NMOS-6502 / 64 KiB Apple II companion WOZ from the same pinned shareware input and unchanged 3RIC base. |
+| `port-quarx-apple2.test.mjs` / `.browser.cjs` | Lowering/ABI/CLI regression checks plus optional real Apple2TS browser acceptance. The browser check uses externally installed Playwright; conversion remains dependency-free. |
 
 **Quarx port builder:** transform the fingerprint-checked local
 `a2quarx-sw.po` shareware disk into a physical-3RIC program, preserving the original
@@ -42,6 +44,26 @@ assets and the active tracker module fit below `$C000`, leaving ROM/NMI visible.
 The original 6502 decompressor remains the runtime decoder; the Node LZSA2 encoder
 is only a build-time asset tool. No commercial bytes or generated game media enter Git.
 The test script clearly reports when supplied-disk integration was not run.
+
+**Apple II+ companion builder:** consume the same pinned shareware
+input and reuse the converted assets while generating a separate 64 KiB/NMOS-6502
+WOZ. Preserve the 3RIC builder's exact outputs. Language-card expansion stubs must
+preserve instruction semantics and avoid incoming branch/call targets and
+self-modifying operands. The boot-time ROM shadow comes from the running machine,
+not embedded Apple ROM data. Reject pool overflow and unknown executable opcodes;
+an illegal-opcode trap on the actual Apple II emulator is part of acceptance.
+The image pins the hardware-confirmed 3RIC base WOZ hash before adaptation.
+Flag/register/stack-correct NMOS stubs replace 98 CMOS instruction sites/blocks
+without moving the game's data or public entry points. The known self-modifying
+font operands are explicitly relocated; unknown unsafe boundaries fail closed.
+A 1,501-byte language-card payload includes the interrupt veneer. The loader
+retains the machine's own monitor and saves its firmware vectors; software reset
+silences the sound card, restores ROM and returns to a usable monitor.
+The optional browser check uses a fresh profile, boots the actual generated WOZ,
+and observes the existing worker API without changing the emulator. It verifies
+both Apple II+ and enhanced-IIe configurations, actual image expansion, controls,
+music register frames, game-over/restart, and normal-speed Reset. In II+ mode it
+also demonstrates that the illegal-6502 breakpoint traps a separate `PHX` fixture.
 
 **Platform reference (`codegen/platform/`)** — the generator's machine/human contract:
 `prompt-system.md` (assembler dialect, entry/exit conventions), `platform-ref.md` +
@@ -131,4 +153,5 @@ breakpoints and current-PC highlighting.
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |
 | Quarx physical-port builder | Implemented | Reproducible local PRG/WOZ/manifest; existing-file protection, RAM geometry and ROM/input guards, original tracker-loop comparisons, gameplay/score/restart, native PS/2, and real ROM SD loading. See `docs/runbooks/quarx-3ric.md`. |
+| Quarx Apple II companion | Implemented | 16 conversion/semantic/CLI checks and live Apple2TS acceptance; original 3RIC output hash remains unchanged. No firmware or game media are committed. See `docs/runbooks/quarx-apple2.md`. |
 | AI-contributor entry point | Shipped | `web/llms.txt` + `CONTRIBUTING.md`; `prompt-system.md` closes the loop to the gallery. |

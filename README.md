@@ -172,6 +172,8 @@ The [Quarx shareware port guide](docs/runbooks/quarx-3ric.md) explains how to bu
 a physical-target PRG/WOZ from your own disk, with adapted hi-res graphics and the
 original Mockingboard music. Keyboard and music now work together on the owner's
 board; the guide records the exact accepted image and the input-race workaround.
+There is also a [separate Apple II+ / Apple2TS WOZ](docs/runbooks/quarx-apple2.md)
+using the original 6502 instruction set and 64 KiB, without changing the 3RIC image.
 
 ## Support
 

@@ -105,6 +105,15 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   `$C010` acknowledgements with an atomic RAM-latch clear. This avoids a reproduced
   ROM PS/2/CB1 flag-clear race; it does not repair the firmware itself or establish
   a full physical playthrough. See [build/loading instructions](../docs/runbooks/quarx-3ric.md).
+- **Quarx Apple II companion:** `port-quarx-apple2.mjs` emits a separate WOZ for
+  a 64 KiB Apple II+ with an NMOS 6502 and optional slot-4 Mockingboard. It reuses
+  the adapted hi-res art and original game/music, with bounded language-card
+  expansion stubs and a model-independent IRQ entry. The actual WOZ runs in
+  Apple2TS's Apple II+ and enhanced-IIe models; the II+ run traps illegal 6502
+  instructions and checks controls, menu pixels, sound, game-over/restart, and
+  normal-speed Reset to a usable monitor. No new joystick/SNES mapping is added.
+  The working 3RIC disk is unchanged. No physical Apple II test is claimed.
+  See [the Apple II loading guide](../docs/runbooks/quarx-apple2.md).
 - **Model challenges:** `challenges.html` introduces the series; `challenges/tts/` and
   `challenges/tts/v1/` publish the complete original-TTS brief, baseline SHA and PR
   submission guide. No engines, speech-quality results, hardware tests or ballot exist

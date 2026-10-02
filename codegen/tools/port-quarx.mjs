@@ -208,7 +208,7 @@ function convertScreen(aux, main) {
 
 function patchWord(bytes, p, value) { bytes[p] = value & 255; bytes[p + 1] = value >> 8; }
 
-export function buildPhysicalProgram(image, entry) {
+export function packQuarxImage(image) {
   if (image.length !== 0xc000) throw new Error("Expected the complete 48 KiB lower-memory image");
   const packed = [];
   let pos = 0x900;
@@ -240,6 +240,11 @@ export function buildPhysicalProgram(image, entry) {
     }
   }
   if (destination !== 0x8ff || source !== -1) throw new Error("Invalid packed program geometry");
+  return Uint8Array.from(packed);
+}
+
+export function buildPhysicalProgram(image, entry) {
+  const packed = packQuarxImage(image);
   const decoder = assemble(`
         .org $0200
         sei
@@ -348,7 +353,7 @@ function replaceCalls(bytes, org, replacements) {
   return changes;
 }
 
-const instructionSizes = new Map([
+export const instructionSizes = new Map([
   ["00 08 0a 18 1a 28 2a 38 3a 40 48 4a 58 5a 60 68 6a 78 7a 88 8a 98 9a a8 aa b8 ba c8 ca cb d8 da db e8 ea f8 fa", 1],
   ["01 04 05 06 09 10 11 12 14 15 16 21 24 25 26 29 30 31 32 34 35 36 41 45 46 49 50 51 52 55 56 61 64 65 66 69 70 71 72 74 75 76 80 81 84 85 86 89 90 91 92 94 95 96 a0 a1 a2 a4 a5 a6 a9 b0 b1 b2 b4 b5 b6 c0 c1 c4 c5 c6 c9 d0 d1 d2 d5 d6 e0 e1 e4 e5 e6 e9 f0 f1 f2 f5 f6", 2],
   ["0c 0d 0e 19 1c 1d 1e 20 2c 2d 2e 39 3c 3d 3e 4c 4d 4e 59 5d 5e 6c 6d 6e 79 7c 7d 7e 8c 8d 8e 99 9c 9d 9e ac ad ae b9 bc bd be cc cd ce d9 dd de ec ed ee f9 fd fe", 3],

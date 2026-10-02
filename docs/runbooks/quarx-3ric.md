@@ -13,6 +13,10 @@ replaces the auxiliary-memory blitters, relocates the menu and original tracker,
 and keeps upper ROM visible for real PS/2 interrupts. No system ROM, emulator,
 web bridge, platform reference, or hardware decoding is changed.
 
+For Apple2TS or a conventional Apple II, use the
+[separate Apple II companion](quarx-apple2.md). The 3RIC-specific WOZ is not an
+ordinary Apple II disk; the two targets have different ROM and keyboard contracts.
+
 ## Build from your own disk
 
 Use Node 22 or newer from the repository root:
