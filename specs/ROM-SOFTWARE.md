@@ -51,6 +51,47 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   `.s` files (`codegen/programs/hello.s`, `emulator/AICodeGen/<name>/<name>.s`); assembled
   `.prg` images are git-ignored (regenerated). Run on hardware/SD via `BRUN NAME.PRG <org>`,
   or in the browser via **Load .PRG** / **Assemble & Run**.
+- **Quarx shareware physical-machine port:** the supplied Apple II
+  v1.00 disk genuinely requires 128 KiB, a 65C02, and double-hi-res graphics. Merely
+  bypassing its machine check is not a port. The owner-selected target is existing
+  3RIC hardware, not an emulator-only Apple IIe expansion.
+  - Retain the supplied game's rules, scoring, difficulty choices, credits, and
+    shareware restrictions. Convert its graphics for standard hi-res and replace
+    auxiliary-memory drawing/storage with code and assets that fit 3RIC's existing
+    RAM. Adapted colors are intentional; do not claim pixel-identical Apple IIe output.
+    The board interior uses black instead of the original animated dither, and the
+    font is reduced from double-hi-res to standard-hi-res width. Tile silhouettes,
+    title/background artwork, menu text/credits, and the original game-over scroll
+    remain. High scores are session-only, as in this supplied disk's in-memory table.
+  - Build locally from a fingerprint-checked, owner-supplied disk. Do not commit the
+    game, its extracted assets, or generated images. Unsupported versions must fail
+    explicitly rather than receive guessed binary patches.
+  - Rendering and gameplay execute on the 65C02. Keyboard input must work through
+    the physical PS/2/VIA/ROM path, not just browser key injection; any banked work
+    must preserve interrupt access. No ROM, VM, memory-map, platform-reference, or
+    hardware-decoder change is part of this port.
+  - The owner requested the original Mockingboard music as well as speaker effects.
+    Retain all three songs supplied on the shareware disk and its tracker decoder.
+    Relocate the player into lower RAM and decompress only the selected song into
+    a reusable lower-RAM buffer. Use the ROM's existing `$03FE` IRQ dispatch hook;
+    upper ROM remains visible, including during music and physical PS/2 interrupts.
+    Slot-4 VIA Timer 1 preserves the original `$411A` latch's approximately
+    61.362 Hz cadence using a `$6429` latch (25,642 modeled 3RIC cycles).
+    Tone/envelope/noise
+    periods must compensate for the faster AY clock, with register-width limits
+    documented rather than hidden. Do not add unavailable full-version songs.
+    Probe only the known slot-4 VIA, never the onboard input VIA; an absent card
+    selects speaker-only play. Escape at the completed shareware notice also
+    selects speaker-only mode without removing the music from the deliverable.
+    The builder pins the canonical ROM hash and the guest checks its interrupt
+    dispatch bytes before using the `$03FE` ABI.
+  - Delivery must be loadable through an existing physical disk/SD path, and
+    verification must exercise the generated artifact without debugger repairs.
+    Emulator evidence does not establish physical-board approval.
+    `port-quarx.mjs` emits a self-expanding `$0800` PRG, a bootable WOZ, and a JSON
+    fingerprint manifest. See [the loading guide](../docs/runbooks/quarx-3ric.md).
+    Left/Right or J/L moves, Down/K drops faster, Space/Z cycles the three blocks,
+    and Escape pauses/resumes. This port adds no SNES control mapping.
 - **Bouncing Ball (scottybe's community contribution):** the canonical source remains
   `web/programs/bouncing-ball.s`, loaded at `$0800` by the gallery, assembler, or
   `BRUN BOUNCE.PRG 0800`. Its 114-vertex, 128-face checkerboard sphere is transformed,
@@ -376,6 +417,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
+| Quarx shareware physical port | Implemented; board playtest pending | Local fingerprinted input -> hi-res PRG/WOZ, original rules/menus/three Mockingboard songs, ROM-visible physical keyboard. Native PS/2 + WASM gameplay/audio + ROM FAT32 round-trip coverage in `port-quarx.test.*`; no game assets are committed. |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |
 | 3RIC Groovebox | Shipped | Six-voice, 16-step Mockingboard sequencer; gamepad/keyboard editing and timer-driven stereo sound. `codegen/tools/groovebox.test.mjs` covers real stereo PCM, all controls, fractional tempo, clean exit, and a dense-step/input deadline below 6,556 cycles. |
 | Built from Bits | Implemented | 3,460-byte four-scene showcase with rendering, 63,000-cycle cadence, audio, controls, and WOZ boot coverage. ROM window bounds are preserved; Q/Esc from every scene must leave a visible prompt that can execute and display a subsequent monitor command. |

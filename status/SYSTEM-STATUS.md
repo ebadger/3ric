@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-01 — ebadger (via Copilot)_
+_Last updated: 2026-10-02 — ebadger (via Copilot)_
 
 ---
 
@@ -93,6 +93,15 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 
 ## Current state / known gaps
 
+- **Quarx shareware port:** `codegen\tools\port-quarx.mjs` builds a physical-target
+  `$0800` PRG and bootable WOZ from the owner's exact `a2quarx-sw.po`, without
+  committing game assets. Standard hi-res replaces its Apple IIe double-hi-res and
+  auxiliary-RAM renderer; original gameplay, menus, shareware notice, speaker effects
+  and all three supplied Mockingboard songs remain. The player uses lower RAM and
+  the ROM's IRQ hook, retaining physical PS/2 input and correcting the faster AY
+  clock. Native/WASM execution, full tracker loops, game-over/restart, score entry,
+  and actual ROM BSAVE/BRUN through FAT32/SPI are covered. **Physical-board playtest
+  remains pending.** See [build/loading instructions](../docs/runbooks/quarx-3ric.md).
 - **Model challenges:** `challenges.html` introduces the series; `challenges/tts/` and
   `challenges/tts/v1/` publish the complete original-TTS brief, baseline SHA and PR
   submission guide. No engines, speech-quality results, hardware tests or ballot exist

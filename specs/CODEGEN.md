@@ -24,6 +24,24 @@ graphics / registers → produce a `.PRG` that also `BRUN`s on real hardware.
 | `harness.cjs` | Boots the WASM emulator, loads a program, runs it, captures serial/text/registers, detects halt. |
 | `run6502.mjs` | CLI: assemble/load → run → apply checks → emit `.PRG` + verdict (exit 0 only if it halted cleanly and every check passed). |
 | `gen_platform_ref.mjs` | Regenerates `platform/platform-ref.{md,json}` from `vm.h` + `badger6502.dbg`. |
+| `port-quarx.mjs` | Fingerprint-checked local Quarx shareware port: ProDOS file extraction, LZSA2 asset conversion, guest-code relocation, packed `$0800` PRG, ordinary bootable WOZ, and JSON hashes. |
+| `port-quarx.test.mjs` / `.test.ps1` | Asset-free format tests; optional supplied-disk WASM integration and native physical-PS/2/Mockingboard checks. |
+
+**Quarx port builder:** transform the fingerprint-checked local
+`a2quarx-sw.po` shareware disk into a physical-3RIC program, preserving the original
+game logic and restrictions while adapting graphics and memory use as specified in
+`ROM-SOFTWARE.md`. Generated game bytes stay outside Git. Conversion errors, unknown
+inputs, memory overflow, and attempts to overwrite the source must be explicit errors.
+Use the existing assembler and emulator for guest code and execution evidence rather
+than introducing a different CPU or a browser-only implementation.
+The builder also verifies the canonical system-ROM hash. The PRG's 65C02 loader
+expands backward into `$0900-$BFFF`, explicitly checking that writes never overtake
+unread packed bytes; `$0800-$08FF` is reconstructed separately. The existing WOZ
+generator boots that same PRG without changes. Relocated guest code, source-derived
+assets and the active tracker module fit below `$C000`, leaving ROM/NMI visible.
+The original 6502 decompressor remains the runtime decoder; the Node LZSA2 encoder
+is only a build-time asset tool. No commercial bytes or generated game media enter Git.
+The test script clearly reports when supplied-disk integration was not run.
 
 **Platform reference (`codegen/platform/`)** — the generator's machine/human contract:
 `prompt-system.md` (assembler dialect, entry/exit conventions), `platform-ref.md` +
@@ -112,4 +130,5 @@ breakpoints and current-PC highlighting.
 | `harness` + `run6502` validation loop | Shipped | serial/text/gfx/register checks + `.PRG`. |
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |
+| Quarx physical-port builder | Implemented | Reproducible local PRG/WOZ/manifest; existing-file protection, RAM geometry and ROM/input guards, original tracker-loop comparisons, gameplay/score/restart, native PS/2, and real ROM SD loading. See `docs/runbooks/quarx-3ric.md`. |
 | AI-contributor entry point | Shipped | `web/llms.txt` + `CONTRIBUTING.md`; `prompt-system.md` closes the loop to the gallery. |
