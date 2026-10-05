@@ -51,6 +51,33 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   `.s` files (`codegen/programs/hello.s`, `emulator/AICodeGen/<name>/<name>.s`); assembled
   `.prg` images are git-ignored (regenerated). Run on hardware/SD via `BRUN NAME.PRG <org>`,
   or in the browser via **Load .PRG** / **Assemble & Run**.
+- **Castle Wolfenstein keyboard compatibility experiment:** a disk-only patch for the
+  owner's 143,360-byte French DOS-order image, SHA-256
+  `82f12169a75fbb26472df750a8b31883bd73ef6d68df58a0f81e5ac569ac7239`, against the
+  unchanged repository ROM, SHA-256
+  `fcea03683b77b7f113e6d8f0064ea8edbd6c75b04b472ec5c84de1c3a9f86435`.
+  - Keep the disk's DOS, title, assets, keyboard driver and game logic. Complete DOS
+    initialization and `BRUN @INIT` directly instead of starting the unavailable
+    Applesoft interpreter to execute the `^HELLO` greeting.
+  - Return BASIC-dependent game exits to the ROM's monitor initialization at `$FF59`.
+    Acknowledge Escape before entering the monitor so the next command's first
+    character is not consumed as an Apple II monitor escape command. The game file
+    may grow into its checked sector padding, but must not overlap its `$1F00`
+    input driver or change DOS allocation.
+  - Deliver a separate standard WOZ2, converted with the existing DOS-order encoder.
+    Reject different disk/ROM fingerprints, unexpected patch preimages and existing
+    outputs. No game image or extracted assets are repository content. There is no
+    resident adapter, new memory contract, or ROM/VM/web/hardware change.
+  - The approved scope is keyboard play of the supplied castle: Return at the title,
+    then K. Preserve both direction grids and the game's aim, fire, search and
+    inventory controls. Analog paddle/joystick choices are not a new SNES adaptation.
+    Timing and speaker pitch remain tied to 3RIC's clock.
+  - **Persistence limit:** the existing Disk II emulator ignores writes. The game's
+    save message is not evidence of a saved game, and creating a new castle does not
+    persist it. This port must disclose that limitation, not claim save support.
+    Acceptance covers actual cold disk boot, keyboard movement/stop/aim/fire,
+    speaker output, death/restart and usable monitor return, including native PS/2
+    input. A passing emulator run is not physical-board or full-playthrough approval.
 - **Archon compatibility experiment:** an image-specific, disk-only adapter for the
   owner-supplied WOZ2 with SHA-256
   `a7722abdfc42ef7372b5183283b6f55464c3817b1c855256186cb5c30e600c8d`.
@@ -411,6 +438,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Microsoft BASIC | Shipped | `$9000–$BFFF`; not Applesoft (known gap). |
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
+| Castle Wolfenstein disk-only keyboard port | Experimental / emulator-verified | Exact-image DOS startup and monitor-exit patch; native PS/2 and WASM movement/aim/fire, capture/restart and monitor checks pass. Emulator save persistence and a SNES adaptation are out of scope; see the [porting log](../docs/porting-logs/castle-wolfenstein.md). |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |

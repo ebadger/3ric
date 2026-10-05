@@ -164,7 +164,19 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   click/press a key once for browser audio; edits are RAM-only until encoded in source.
 - **Disk gap:** DOS 3.3 / Quick-DOS and games that chain through an Applesoft auto-run
   greeting don't run — this clone's `$E000` BASIC is generic Microsoft BASIC, not Applesoft.
-  Self-booting machine-code disks work.
+  Self-booting machine-code disks work; a title-specific patch can bypass a BASIC
+  greeting when the game itself is machine code. Disk II writes are not implemented,
+  so an in-game save message does not imply persistence.
+- **Castle Wolfenstein keyboard candidate:** `codegen\tools\patch-castle-wolfenstein.mjs`
+  converts the exact owner-supplied French `.do` image into a separate bootable WOZ.
+  It changes DOS startup to `BRUN @INIT` and returns BASIC-dependent exits to the
+  monitor, without changing the ROM or VM. Boot with `C600G` from `*` (`MON` first
+  from `>`), press Return at the title, then K. The web Insert action may leave
+  `EH?` at `>`; enter `MON`, then `C600G` manually in that case.
+  Native PS/2 and WASM keyboard gameplay/capture/restart/exit checks pass.
+  Saves and new castles do not persist in the emulator; no SNES adaptation,
+  full-playthrough or physical-board approval is claimed. See the
+  [porting log](../docs/porting-logs/castle-wolfenstein.md).
 - **Archon compatibility candidate:** the owner-supplied disk needs a game-specific
   bank-safe input adapter; its menu/board otherwise hide the ROM NMI handler.
   `codegen\tools\patch-archon.mjs` creates a separate local WOZ without changing the

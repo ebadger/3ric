@@ -25,6 +25,7 @@ graphics / registers → produce a `.PRG` that also `BRUN`s on real hardware.
 | `run6502.mjs` | CLI: assemble/load → run → apply checks → emit `.PRG` + verdict (exit 0 only if it halted cleanly and every check passed). |
 | `gen_platform_ref.mjs` | Regenerates `platform/platform-ref.{md,json}` from `vm.h` + `badger6502.dbg`. |
 | `patch-archon.mjs` | Exact-image local WOZ compatibility patcher; see `ROM-SOFTWARE.md`. Contains only adapter code and guarded replacements, never downloads game assets, and refuses input overwrite or fingerprint/sector validation failure. |
+| `patch-castle-wolfenstein.mjs` | Exact-image local DOS-order-to-WOZ2 keyboard port; see `ROM-SOFTWARE.md`. Guards disk/ROM fingerprints and byte preimages, preserves other DOS sectors, and creates output exclusively. No game assets are included or downloaded. |
 | `wozedit.mjs` | Node-only checked WOZ2 sector reading/editing, reusing the dual-use `wozgen.mjs` CRC and 6-and-2 codec. Preserves non-edited bitstream and metadata bytes. |
 
 **Platform reference (`codegen/platform/`)** — the generator's machine/human contract:
@@ -87,6 +88,12 @@ screen (decode `$0400`, 40×24 interleaved), graphics (`renderFrame()` RGBA), CP
   checksums and exact preimages before changing data. Re-encode only changed sector
   data fields; do not rebuild a supplied disk into a different track layout. Synthetic
   fixtures must cover malformed input, round trips and unchanged surrounding bits.
+- A supplied raw DOS-order image has no bitstream layout to preserve. The Castle
+  Wolfenstein patcher changes only its declared byte ranges and then uses
+  `wozgen.mjs` to encode all 560 sectors. Tests must decode every sector back to the
+  patched DOS-order bytes and reverse the byte patches to the exact original.
+  Optional owner-image integration must boot that output, not inject game code into
+  emulator memory. Without the private image, report that integration was skipped.
 - **AI-contributor path.** The codegen guide is exposed for external AI tools: `web/llms.txt`
   (published at the site root, owned by `WEB-CLIENT.md`) is the machine-readable entry point
   that links `prompt-system.md` + `platform-ref.md`, and `prompt-system.md` closes the loop to
@@ -118,5 +125,6 @@ breakpoints and current-PC highlighting.
 | `harness` + `run6502` validation loop | Shipped | serial/text/gfx/register checks + `.PRG`. |
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Archon local WOZ patching | Experimental / emulator-verified | `patch-archon.test.mjs` covers synthetic editor fixtures and optional owner-supplied-disk gameplay; `patch-archon.test.ps1` covers native PS/2 timing and LED commands. Both game images stay outside the repository. |
+| Castle Wolfenstein local disk patching | Experimental / emulator-verified | `patch-castle-wolfenstein.test.mjs` covers guards, exact reversal, all 560 encoded sectors and optional owner-image gameplay; `.test.ps1` covers the native build and physical-path PS/2 input. No game assets or save-persistence claim. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |
 | AI-contributor entry point | Shipped | `web/llms.txt` + `CONTRIBUTING.md`; `prompt-system.md` closes the loop to the gallery. |

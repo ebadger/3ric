@@ -18,6 +18,7 @@ below as working on the physical machine.
 | Title | Main lesson | Evidence boundary |
 |-------|-------------|-------------------|
 | [Archon](archon.md) (2026-10-05) | Preserve input interrupts across both language-card banks, and avoid paddle-timer traffic in a digital-controller adapter | Reproducible disk patcher with native PS/2 and WASM board/combat coverage; physical-board confirmation remains open |
+| [Castle Wolfenstein](castle-wolfenstein.md) (2026-10-05) | Bypass an Applesoft greeting without replacing DOS, and consume Escape before handing input back to the monitor | Disk-only keyboard candidate; native PS/2 and WASM gameplay/restart coverage; emulator save persistence is unsupported and physical-board confirmation remains open |
 
 ## Scope and evidence
 
@@ -33,8 +34,9 @@ are included or offered for download here. Short instruction changes describe th
 engineering intervention, not a redistribution of the games.
 
 Historical patchers and runbooks named in the four September logs are **not present
-in this checkout**. The newer Archon experiment includes its own patcher and tests,
-but neither its original nor patched game image. Local commit IDs identify retained development history;
+in this checkout**. The newer Archon and Castle Wolfenstein experiments include
+their own patchers and tests, but neither their original nor patched game images.
+Local commit IDs identify retained development history;
 they may not be reachable from `origin` or available in a fresh clone. They are
 intentionally not GitHub commit links. The offsets, transformations, hashes, and
 evidence in each log remain useful without those tools.
