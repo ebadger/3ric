@@ -66,6 +66,25 @@ function encode6and2(dest, src, srcOff) {
   for (let c = 0; c < 343; c++) dest[c] = SIX_AND_TWO[dest[c]];
 }
 
+function decode6and2(src) {
+  if (src.length !== 343) throw new Error("wozgen: a 6-and-2 field must contain 343 bytes");
+  const six = new Uint8Array(342);
+  let previous = 0;
+  for (let i = 0; i < src.length; i++) {
+    const value = SIX_AND_TWO.indexOf(src[i]);
+    if (value < 0) throw new Error(`wozgen: invalid 6-and-2 byte at ${i}`);
+    previous ^= value;
+    if (i < six.length) six[i] = previous;
+  }
+  if (previous !== 0) throw new Error("wozgen: 6-and-2 checksum mismatch");
+  const data = new Uint8Array(256);
+  for (let i = 0; i < data.length; i++) {
+    const low = (six[i % 86] >> (2 * Math.floor(i / 86))) & 3;
+    data[i] = (six[86 + i] << 2) | BIT_REVERSE[low];
+  }
+  return data;
+}
+
 // ---------------------------------------------------------------------------
 // Bit-level writers into a track buffer (position is measured in bits).
 // ---------------------------------------------------------------------------
@@ -401,4 +420,4 @@ export function buildBootableWoz(programBytes, loadAddr, entryAddr = loadAddr) {
   return buildWozFromDsk(dsk);
 }
 
-export { buildWozFromDsk, assembleLoader };
+export { buildWozFromDsk, assembleLoader, crc32, encode6and2, decode6and2 };

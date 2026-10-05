@@ -51,6 +51,42 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   `.s` files (`codegen/programs/hello.s`, `emulator/AICodeGen/<name>/<name>.s`); assembled
   `.prg` images are git-ignored (regenerated). Run on hardware/SD via `BRUN NAME.PRG <org>`,
   or in the browser via **Load .PRG** / **Assemble & Run**.
+- **Archon compatibility experiment:** an image-specific, disk-only adapter for the
+  owner-supplied WOZ2 with SHA-256
+  `a7722abdfc42ef7372b5183283b6f55464c3817b1c855256186cb5c30e600c8d`.
+  It targets the unchanged repository ROM with SHA-256
+  `fcea03683b77b7f113e6d8f0064ea8edbd6c75b04b472ec5c84de1c3a9f86435`.
+  The game and resulting disk are local inputs/outputs, not repository assets.
+  - **Banking:** the original menu temporarily exposes language-card RAM; gameplay
+    also uses both language-card banks. Neither preserves 3ric's ROM NMI vector.
+    A resident adapter must keep a valid NMI entry when RAM is visible, preserve
+    interrupted registers and the selected bank, and coexist with the game's loaded
+    graphics/code. Forcing ROM permanently visible or suppressing input is not a fix.
+    This profile reserves `$C800-$C9FF`, `$CC00-$CDFF`, `$CF00-$CFFF` and the shared
+    language-card NMI vector at `$FFFA-$FFFB`; these are **not general free-RAM
+    declarations**. Interactive menu drawing remains RAM-mapped. Bank-switch wrappers
+    preserve the requested bank; a stop-bit interrupt at the switch/state-store
+    boundary recovers the just-selected mode from the interrupted X register.
+  - **Input:** retain keyboard gameplay and the game's options, and adapt the two
+    onboard SNES pads through real VIA latch/clock/data pins. Avoid unnecessary
+    paddle-timer/strobe NMIs and acknowledge serviced VIA sources without discarding
+    an arriving PS/2 clock. Keyboard coverage must include real scan frames and
+    bidirectional Caps/Num Lock command exchanges, not only browser `keyDown`.
+    The D-pad supplies neutral/low/high digital axes; B or X selects/fires for each
+    controller. Both two-player keyboard-side options retain their original side
+    assignment. Keyboard direction latches and fire duration remain game-owned.
+  - **Delivery:** reject other disk/ROM revisions, write a separate output file,
+    preserve unrelated WOZ bits, track layout, metadata and sectors, and regenerate
+    affected sector checksums and the container CRC. No firmware, VM, web bridge,
+    generated platform-reference or hardware-decoder change is part of this port.
+    The patcher checks the full ROM file fingerprint; the boot installer checks the
+    relevant NMI proxy/input-code ABI, not a full physical-ROM readback.
+  - **Acceptance:** cold-boot the actual output through the Disk II loader in native
+    and WASM builds; exercise options, board input and combat, including mixed
+    keyboard/pad traffic and bank restoration. Emulator results are not a physical
+    board or complete-playthrough certification. The implementation is an
+    emulator-verified hardware-trial candidate; commands, fingerprints, coverage and
+    remaining limits are recorded in [`docs/porting-logs/archon.md`](../docs/porting-logs/archon.md).
 - **Bouncing Ball (scottybe's community contribution):** the canonical source remains
   `web/programs/bouncing-ball.s`, loaded at `$0800` by the gallery, assembler, or
   `BRUN BOUNCE.PRG 0800`. Its 114-vertex, 128-face checkerboard sphere is transformed,
@@ -375,6 +411,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Microsoft BASIC | Shipped | `$9000–$BFFF`; not Applesoft (known gap). |
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
+| Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |
 | 3RIC Groovebox | Shipped | Six-voice, 16-step Mockingboard sequencer; gamepad/keyboard editing and timer-driven stereo sound. `codegen/tools/groovebox.test.mjs` covers real stereo PCM, all controls, fractional tempo, clean exit, and a dense-step/input deadline below 6,556 cycles. |
