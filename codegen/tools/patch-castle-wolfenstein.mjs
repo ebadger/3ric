@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { assemble } from "./asm6502.mjs";
 import { buildWozFromDsk } from "./wozgen.mjs";
 import { sha256 } from "./wozedit.mjs";
 
@@ -24,6 +25,122 @@ export const PATCHES = Object.freeze([
     purpose: "@INIT $0B7E: return to the monitor if BRUN returns" },
 ].map(patch => Object.freeze(patch)));
 
+const instruction = (opcode, address) => Buffer.from([opcode, address & 255, address >> 8]);
+
+function replace(bytes, offset, before, after) {
+  before = Buffer.from(before);
+  after = Buffer.from(after);
+  if (before.length !== after.length || !bytes.subarray(offset, offset + before.length).equals(before))
+    throw new Error(`Unexpected bytes at offset $${offset.toString(16)}`);
+  bytes.set(after, offset);
+}
+
+export function buildControllerPayload() {
+  const resident = assemble(fs.readFileSync(path.join(root, "codegen", "patches", "castle-wolfenstein-snes.s"), "utf8"));
+  if (resident.org !== 0xc800 || resident.symbols.RESIDENT_END > 0xcafe)
+    throw new Error("SNES resident overlaps the ROM banking state");
+  const source = 0x1b00;
+  const fullPages = Math.floor(resident.bytes.length / 256);
+  const tail = resident.bytes.length % 256;
+  const copy = Array.from({ length: fullPages }, (_, page) =>
+    `lda $${(source + page * 256).toString(16)},x\nsta $${(resident.org + page * 256).toString(16)},x`).join("\n");
+  const lastPage = tail ? `
+        cpx #${tail}
+        bcs copied
+        lda $${(source + fullPages * 256).toString(16)},x
+        sta $${(resident.org + fullPages * 256).toString(16)},x` : "";
+  const installer = assemble(`
+        .org $${(Math.ceil((source + resident.bytes.length) / 16) * 16).toString(16)}
+        php
+        pha
+        phx
+        phy
+        ldx #0
+copy:
+        ${copy}
+        ${lastPage}
+copied:
+        inx
+        bne copy
+        jsr $${resident.symbols.INIT.toString(16)}
+        ply
+        plx
+        pla
+        plp
+        jmp $FB39
+`);
+  const end = installer.org + installer.bytes.length;
+  if (end > 0x1f00) throw new Error("SNES staging overlaps the original keyboard driver");
+  return { resident, installer, source, end };
+}
+
+function readSingleListFile(dsk, list) {
+  if (dsk[list + 1] || dsk[list + 2]) throw new Error("Unexpected chained DOS sector list");
+  const positions = [];
+  for (let i = 12; i < 256 && dsk[list + i]; i += 2) {
+    const track = dsk[list + i], sector = dsk[list + i + 1];
+    if (track >= 35 || sector >= 16) throw new Error("Invalid DOS file sector");
+    positions.push(track * 4096 + sector * 256);
+  }
+  if (!positions.length || new Set(positions).size !== positions.length)
+    throw new Error("Invalid DOS file allocation");
+  const data = Buffer.concat(positions.map(offset => dsk.subarray(offset, offset + 256)));
+  return { positions, data, org: data.readUInt16LE(0), length: data.readUInt16LE(2) };
+}
+
+function installController(dsk, payload) {
+  const { resident, installer, source, end } = payload;
+  const s = resident.symbols;
+  const list = 0xda00;
+  const catalog = 0x11b74;
+  const init = readSingleListFile(dsk, list);
+  if (init.org !== 0x0880 || init.length !== 0x1243 || init.positions.length !== 19
+      || dsk.readUInt16LE(catalog + 33) !== 20)
+    throw new Error("Unexpected @INIT file layout");
+  const length = end - init.org;
+  const pages = Math.ceil((length + 4) / 256);
+  const expanded = Buffer.alloc(pages * 256, 0xff);
+  expanded.set(init.data);
+  expanded.fill(0, init.length + 4, length + 4);
+  expanded.writeUInt16LE(length, 2);
+  expanded.set(resident.bytes, source - init.org + 4);
+  expanded.set(installer.bytes, installer.org - init.org + 4);
+  const editInit = (pc, before, after) => replace(expanded, pc - init.org + 4, before, after);
+  editInit(0x0880, [0x20, 0x39, 0xfb], instruction(0x20, installer.org));
+  editInit(0x0c44, [0xad, 0, 0xc0], instruction(0x20, s.READ_TITLE));
+  editInit(0x0a4a, [0x20, 0x0c, 0xfd], instruction(0x20, s.WAIT_MENU));
+  editInit(0x1a23, [0x4c, 0x0b, 0x1f, 0x4c, 0x0b, 0x1f, 0x4c, 0x8d, 0x1f],
+    Buffer.concat([instruction(0x4c, s.GAME_INPUT), instruction(0x4c, s.GAME_INPUT), instruction(0x4c, s.GAME_FIRE)]));
+  const high = text => Buffer.from(text).map(byte => byte | 128);
+  editInit(0x09ae, high("TAPER K --> CLAVIER"), high("START/K --> SNES+KB"));
+
+  const added = pages - init.positions.length;
+  const bitmap = 0x11038 + 4 * 4;
+  let free = dsk.readUInt32BE(bitmap);
+  for (let sector = 0; sector < added; sector++) {
+    const offset = 0x4000 + sector * 256;
+    const bit = 1 << (16 + sector);
+    if (!(free & bit) || !dsk.subarray(offset, offset + 256).equals(Buffer.alloc(256)))
+      throw new Error("SNES extension sector is not free and empty");
+    replace(dsk, list + 12 + init.positions.length * 2, [0, 0], [4, sector]);
+    init.positions.push(offset);
+    free = (free & ~bit) >>> 0;
+  }
+  dsk.writeUInt32BE(free, bitmap);
+  dsk.writeUInt16LE(pages + 1, catalog + 33);
+  init.positions.forEach((offset, page) => dsk.set(expanded.subarray(page * 256, (page + 1) * 256), offset));
+
+  const wolf = readSingleListFile(dsk, 0xc600);
+  if (wolf.org !== 0x0810 || wolf.length !== 0x16ee) throw new Error("Unexpected @WOLF file layout");
+  const editWolf = (pc, before, after) => {
+    const offset = pc - wolf.org + 4;
+    replace(dsk, wolf.positions[offset >> 8] + (offset & 255), before, after);
+  };
+  editWolf(0x08ae, [0x20, 0x1b, 0xfd], instruction(0x20, s.WAIT_CONTINUE));
+  editWolf(0x1301, [0xad, 0, 0xc0], instruction(0x20, s.READ_ACTION));
+  return { addedSectors: added, initLength: length };
+}
+
 export function patchCastleWolfenstein(input, rom) {
   if (sha256(rom) !== ROM_SHA256)
     throw new Error(`Unsupported 3ric ROM; expected SHA-256 ${ROM_SHA256}`);
@@ -31,14 +148,17 @@ export function patchCastleWolfenstein(input, rom) {
     throw new Error(`Unsupported Castle Wolfenstein DOS-order image; expected SHA-256 ${INPUT_SHA256}`);
   const dsk = Buffer.from(input);
   for (const patch of PATCHES) {
-    const before = Buffer.from(patch.before, "hex");
-    const after = Buffer.from(patch.after, "hex");
-    if (before.length !== after.length
-        || !dsk.subarray(patch.offset, patch.offset + before.length).equals(before))
-      throw new Error(`Unexpected bytes at DOS image offset $${patch.offset.toString(16)}`);
-    dsk.set(after, patch.offset);
+    replace(dsk, patch.offset, Buffer.from(patch.before, "hex"), Buffer.from(patch.after, "hex"));
   }
-  return { dsk, woz: Buffer.from(buildWozFromDsk(dsk)) };
+  const payload = buildControllerPayload();
+  const allocation = installController(dsk, payload);
+  const patches = [];
+  for (let offset = 0; offset < dsk.length; offset += 256) {
+    const before = Buffer.from(input.subarray(offset, offset + 256));
+    const after = dsk.subarray(offset, offset + 256);
+    if (!before.equals(after)) patches.push({ offset, before: before.toString("hex"), after: after.toString("hex") });
+  }
+  return { dsk, woz: Buffer.from(buildWozFromDsk(dsk)), patches, payload, ...allocation };
 }
 
 function main(args) {
@@ -55,7 +175,9 @@ function main(args) {
   const result = patchCastleWolfenstein(fs.readFileSync(input), rom);
   fs.writeFileSync(output, result.woz, { flag: "wx" });
   console.log(`Created ${output}\nSHA-256: ${sha256(result.woz)}\n`
-    + "Boot with C600G from the monitor. Press Return at the title, then K for keyboard.\n"
+    + "Boot with C600G from the monitor. Press Start at the title and options, or Return then K.\n"
+    + "Pad 1: D-pad moves; X/A/B/Y aim up/right/down/left; L fires; R searches.\n"
+    + "Tap Select: inventory. Select+L: grenade; Select+R: use; Start+Select: exit.\n"
     + "Experimental hardware-trial image; physical-board confirmation is still required.\n"
     + "The current Disk II emulator ignores writes: saves and new castles do not persist.");
 }

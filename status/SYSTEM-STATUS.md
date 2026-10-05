@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-01 — ebadger (via Copilot)_
+_Last updated: 2026-10-05 — ebadger (via Copilot)_
 
 ---
 
@@ -167,14 +167,19 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   Self-booting machine-code disks work; a title-specific patch can bypass a BASIC
   greeting when the game itself is machine code. Disk II writes are not implemented,
   so an in-game save message does not imply persistence.
-- **Castle Wolfenstein keyboard candidate:** `codegen\tools\patch-castle-wolfenstein.mjs`
+- **Castle Wolfenstein keyboard/SNES candidate:** `codegen\tools\patch-castle-wolfenstein.mjs`
   converts the exact owner-supplied French `.do` image into a separate bootable WOZ.
   It changes DOS startup to `BRUN @INIT` and returns BASIC-dependent exits to the
-  monitor, without changing the ROM or VM. Boot with `C600G` from `*` (`MON` first
-  from `>`), press Return at the title, then K. The web Insert action may leave
+  monitor, without changing the ROM or VM. A disk-loaded resident adds pad-1
+  D-pad movement, X/A/B/Y aim up/right/down/left, L fire and R search/open. Start
+  advances the title/options and continues after capture; release it between screens.
+  Tap Select for inventory, Select+L for grenade, Select+R for use/equip and
+  Start+Select for quit. Keyboard controls remain available (Space searches,
+  T throws a grenade, U uses/equips, Return inventories).
+  Boot with `C600G` from `*` (`MON` first from `>`). The web Insert action may leave
   `EH?` at `>`; enter `MON`, then `C600G` manually in that case.
-  Native PS/2 and WASM keyboard gameplay/capture/restart/exit checks pass.
-  Saves and new castles do not persist in the emulator; no SNES adaptation,
+  Native PS/2/SNES and WASM gameplay/capture/restart/exit checks pass.
+  Saves and new castles do not persist in the emulator; no
   full-playthrough or physical-board approval is claimed. See the
   [porting log](../docs/porting-logs/castle-wolfenstein.md).
 - **Archon compatibility candidate:** the owner-supplied disk needs a game-specific

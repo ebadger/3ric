@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -92,7 +93,12 @@ namespace
             const uint64_t end = cycles + budget;
             while (cpu->PC != address || !vm->WillExecuteCurrentInstruction())
             {
-                require(cycles < end, "Execution checkpoint timed out");
+                if (cycles >= end)
+                {
+                    std::ostringstream message;
+                    message << "Timed out waiting for $" << std::hex << address << " at $" << cpu->PC;
+                    throw std::runtime_error(message.str());
+                }
                 step();
             }
         }
@@ -141,6 +147,22 @@ namespace
             run(10000);
         }
 
+        void pad(uint16_t mask)
+        {
+            require(vm->SetGamepadState(0, mask), "Could not set pad 1 state");
+        }
+
+        template<typename Predicate>
+        void until(Predicate ready, const char* message)
+        {
+            const uint64_t end = cycles + 10000000;
+            while (!ready())
+            {
+                require(cycles < end, message);
+                run(1000);
+            }
+        }
+
         std::string text()
         {
             std::string result;
@@ -156,6 +178,129 @@ namespace
             return result;
         }
     };
+
+    void startPadMenu(Machine& m)
+    {
+        m.step();
+        const uint64_t end = m.cycles + 100000;
+        while (m.cycles < end)
+        {
+            require(m.cpu->PC != 0x0a4d, "Held Start skipped the options screen");
+            m.step();
+        }
+        m.pad(0);
+        m.run(20000);
+        m.pad(1 << 3);
+        m.seek(0x0810);
+        m.pad(0);
+        m.seek(0x119c);
+    }
+
+    void checkMixedInput(Machine& m)
+    {
+        constexpr std::array<uint8_t, 14> loop{0x08, 0x48, 0xda, 0x5a, 0x20, 0, 0x1f,
+            0x7a, 0xfa, 0x68, 0x28, 0x4c, 0, 3};
+        std::array<uint8_t, loop.size()> saved{};
+        std::array<uint8_t, 256> keyState{};
+        std::copy_n(m.vm->GetData() + 0x300, saved.size(), saved.begin());
+        std::copy_n(m.vm->GetData() + 0xcb00, keyState.size(), keyState.begin());
+        const uint16_t pc = m.cpu->PC;
+        const uint8_t a = m.cpu->A, x = m.cpu->X, y = m.cpu->Y, sp = m.cpu->SP, flags = m.cpu->flags.reg;
+        const uint8_t bankMode = m.peek(0xcafe);
+        std::copy(loop.begin(), loop.end(), m.vm->GetData() + 0x300);
+        m.cpu->PC = 0x300;
+        for (unsigned i = 0; i < 64; ++i)
+        {
+            m.pad((1 << 6) | (1 << 7) | (i & 1 ? 1 << 9 : 1 << 8));
+            const unsigned count = m.characters[0xc9];
+            m.key(0x43); // I, while the disk-installed resident clocks the SNES pad
+            m.settleKey();
+            require(m.characters[0xc9] == count + 1, "Mixed SNES traffic lost or duplicated a PS/2 key");
+        }
+        m.pad(0);
+        m.run(20000);
+        m.seek(0x300);
+        require(m.cpu->A == a && m.cpu->X == x && m.cpu->Y == y && m.cpu->SP == sp
+            && (m.cpu->flags.reg & 0xcf) == (flags & 0xcf), "Mixed input corrupted saved CPU context");
+        require(m.peek(0xcafe) == bankMode, "Resident corrupted the ROM banking state");
+        require(std::equal(keyState.begin(), keyState.end(), m.vm->GetData() + 0xcb00),
+            "Released PS/2 keys or the ROM key-state table were corrupted");
+        require(m.vm->IsROMVisible(0xfffa) && !m.vm->IsROMVisible(0x9d00), "Mixed input changed ROM/DOS mapping");
+        std::copy(saved.begin(), saved.end(), m.vm->GetData() + 0x300);
+        m.cpu->PC = pc;
+        m.cpu->flags.reg = flags;
+    }
+
+    void sampleDriver(Machine& m)
+    {
+        m.seek(0x1f00);
+        const uint16_t returnPC = uint16_t((m.peek(0x100 | uint8_t(m.cpu->SP + 1))
+            | m.peek(0x100 | uint8_t(m.cpu->SP + 2)) << 8) + 1);
+        m.step();
+        m.seek(returnPC);
+    }
+
+    void checkController(const char* rom, const char* disk)
+    {
+        constexpr uint16_t start = 1 << 3, select = 1 << 2, left = 1 << 6;
+        constexpr uint16_t down = 1 << 5, aimUp = 1 << 9, aimRight = 1 << 8, fire = 1 << 10;
+        Machine m(rom, disk);
+        require(m.vm->SetGamepadState(1, start), "Could not set pad 2 state");
+        m.run(100000);
+        require(m.peek(0x1f00) != 0x4c, "Controller 2 selected controls");
+        m.vm->SetGamepadState(1, 0);
+        m.pad(start);
+        m.seek(0x0a4a);
+        startPadMenu(m);
+        checkMixedInput(m);
+        const uint8_t tile = m.peek(0x4343);
+        m.pad(left | aimRight | fire);
+        m.seek(0x1489);
+        m.expect(0x4341, 4, "Pad did not move left");
+        m.expect(0x4342, 8, "Pad did not independently aim right");
+        m.step();
+        m.until([&] { return m.peek(0x4347) < 10; }, "Pad fire did not consume ammunition");
+        m.pad(left | aimRight);
+        m.until([&] { return m.peek(0x4343) != tile; }, "Pad did not move the player");
+        m.pad(0);
+        m.until([&] { return m.peek(0x4341) == 0; }, "Released D-pad left movement latched");
+        m.expect(0x4342, 8, "Released face buttons lost the aim");
+        m.pad(start | select);
+        m.seek(0xff59);
+        require(!(m.peek(0xc000) & 0x80), "Controller Escape leaked into the monitor");
+        m.pad(0);
+        m.step();
+        m.run(1000000);
+        for (uint8_t code : {0x21, 0x36, 0x45, 0x45, 0x34, 0x5a}) m.key(code); // C600G + Return
+        m.seek(0x0c44);
+        m.pad(start);
+        m.seek(0x0a4a);
+        startPadMenu(m);
+        m.pad(down | aimUp);
+        m.seek(0x08ae);
+        m.expect(0x436f, 0x40, "Pad-driven guard capture did not occur");
+        m.pad(start);
+        m.step();
+        m.seek(0x0a4a);
+        startPadMenu(m);
+        m.pad(select);
+        sampleDriver(m);
+        m.pad(0);
+        m.seek(0x1e49);
+        m.step();
+        m.seek(0x1301);
+        m.pad(start | select);
+        m.step();
+        m.seek(0xff59);
+        require(!(m.peek(0xc000) & 0x80), "Controller Escape leaked into the monitor");
+        m.pad(0);
+        m.step();
+        m.run(1000000);
+        for (uint8_t code : {0x25, 0x26, 0x25, 0x26, 0x5a}) m.key(code);
+        require(m.text().find("4343-") != std::string::npos, "Controller exit damaged physical keyboard input");
+        std::cout << "PASS native SNES start, move/aim/fire, capture/restart, inventory and quit; "
+            << m.packets << " PS/2 packets including 64 mixed-input make/break pairs\n";
+    }
 }
 
 int main(int argc, char** argv)
@@ -166,7 +311,7 @@ int main(int argc, char** argv)
         Machine m(argv[1], argv[2]);
         m.key(0x5a); // Return
         m.seek(0x0a4a);
-        require(m.text().find("TAPER K --> CLAVIER") != std::string::npos, "Keyboard menu missing");
+        require(m.text().find("START/K --> SNES+KB") != std::string::npos, "Keyboard/SNES menu missing");
         m.step();
         m.run(10000);
         m.key(0x42); // K
@@ -227,6 +372,7 @@ int main(int argc, char** argv)
         std::cout << "PASS native Disk II boot, " << m.packets
             << " PS/2 packets, move/stop/aim/fire, PCM, capture/restart and monitor return\n"
             << "Save persistence and physical-board approval are not claimed.\n";
+        checkController(argv[1], argv[2]);
         return 0;
     }
     catch (const std::exception& error)

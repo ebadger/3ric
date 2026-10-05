@@ -51,7 +51,7 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   `.s` files (`codegen/programs/hello.s`, `emulator/AICodeGen/<name>/<name>.s`); assembled
   `.prg` images are git-ignored (regenerated). Run on hardware/SD via `BRUN NAME.PRG <org>`,
   or in the browser via **Load .PRG** / **Assemble & Run**.
-- **Castle Wolfenstein keyboard compatibility experiment:** a disk-only patch for the
+- **Castle Wolfenstein compatibility experiment:** a disk-only patch for the
   owner's 143,360-byte French DOS-order image, SHA-256
   `82f12169a75fbb26472df750a8b31883bd73ef6d68df58a0f81e5ac569ac7239`, against the
   unchanged repository ROM, SHA-256
@@ -66,18 +66,47 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     input driver or change DOS allocation.
   - Deliver a separate standard WOZ2, converted with the existing DOS-order encoder.
     Reject different disk/ROM fingerprints, unexpected patch preimages and existing
-    outputs. No game image or extracted assets are repository content. There is no
-    resident adapter, new memory contract, or ROM/VM/web/hardware change.
-  - The approved scope is keyboard play of the supplied castle: Return at the title,
-    then K. Preserve both direction grids and the game's aim, fire, search and
-    inventory controls. Analog paddle/joystick choices are not a new SNES adaptation.
-    Timing and speaker pitch remain tied to 3RIC's clock.
+    outputs. No game image or extracted assets are repository content. The original
+    keyboard-only candidate remains a separately fingerprinted local artifact.
+  - **Single SNES controller:** pad 1's D-pad controls movement; X/A/B/Y aim
+    up/right/down/left independently. Adjacent directions combine diagonally and
+    opposing directions cancel per axis. Releasing the D-pad stops pad-controlled
+    movement; releasing aim buttons retains the last valid aim. L fires while held,
+    and R performs the game's search/open action (Space), once per press.
+  - **Additional actions:** tap Select for inventory (Return); Select+L throws a
+    grenade (T), Select+R uses/equips (U), and Start+Select exits (Escape). Chords
+    suppress the tap-inventory and ordinary shoulder actions, with quit taking
+    priority over use, then grenade. After a modifier chord, release L before it
+    can fire ordinary bullets again, even if Select is released first.
+    Keep one pending action without overwriting a ready physical key; quit may
+    replace a queued non-quit action. Actions temporarily stop movement so the original game's
+    stationary action dispatcher can service them; held R keeps movement stopped.
+    Start advances the title, chooses the enhanced K mode on the options screen,
+    and continues after capture. A held Start must not skip successive screens.
+  - **Keyboard coexistence and hardware:** retain the original K-mode keyboard
+    driver and direction/fire latches, including its swapped-control option.
+    Poll the real active-low SNES serial data on VIA1 PB5 using the shared PB6/PB7
+    latch/clock, without paddle-timer interrupts or changing VIA configuration.
+    The second pad must not control the game. No firmware, VM, browser bridge,
+    global memory map or hardware change is part of this port.
+  - **Resident and loading:** reserve only `$C800-$CAFD` for this exact game/ROM
+    profile, leaving `$CAFE`, the `$CB00` key-state table and `$CE00` input state
+    untouched. This borrows inactive ROM FAT32 workspace while the floppy game
+    runs; it is not general free RAM. Extend `@INIT` into checked free DOS sectors,
+    updating its binary length, track/sector list, catalog count and VTOC bitmap.
+    A disk-loaded installer copies the resident before the title; the game and
+    graphics may then overwrite the staging bytes. Installers and staging must
+    remain below the retained `$1F00` keyboard driver. Re-entering `@INIT` must
+    reinstall cleanly and seed button-edge state from the current physical pad.
+    Analog P/J modes remain separate; timing and speaker pitch stay at 3RIC's clock.
   - **Persistence limit:** the existing Disk II emulator ignores writes. The game's
     save message is not evidence of a saved game, and creating a new castle does not
     persist it. This port must disclose that limitation, not claim save support.
-    Acceptance covers actual cold disk boot, keyboard movement/stop/aim/fire,
-    speaker output, death/restart and usable monitor return, including native PS/2
-    input. A passing emulator run is not physical-board or full-playthrough approval.
+    Acceptance covers actual cold disk boot, independent simultaneous movement/aim/fire,
+    releases/opposites, search and modifier actions, Start/capture/restart,
+    keyboard fallback, speaker output and usable monitor return, including native
+    mixed PS/2/pad traffic. A passing emulator run is not physical-board or
+    full-playthrough approval.
 - **Archon compatibility experiment:** an image-specific, disk-only adapter for the
   owner-supplied WOZ2 with SHA-256
   `a7722abdfc42ef7372b5183283b6f55464c3817b1c855256186cb5c30e600c8d`.
@@ -438,7 +467,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Microsoft BASIC | Shipped | `$9000–$BFFF`; not Applesoft (known gap). |
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
-| Castle Wolfenstein disk-only keyboard port | Experimental / emulator-verified | Exact-image DOS startup and monitor-exit patch; native PS/2 and WASM movement/aim/fire, capture/restart and monitor checks pass. Emulator save persistence and a SNES adaptation are out of scope; see the [porting log](../docs/porting-logs/castle-wolfenstein.md). |
+| Castle Wolfenstein disk-only port | Experimental / emulator-verified | Keyboard and single-SNES-pad play, independent movement/aim/fire, modifier actions, Start/capture/restart, monitor return and native mixed PS/2/pad traffic pass. Emulator save persistence and physical-board approval remain open; see the [porting log](../docs/porting-logs/castle-wolfenstein.md). |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |
