@@ -34,7 +34,9 @@ $testImage = Join-Path $out ('wolf-' + [guid]::NewGuid().ToString() + '.woz')
 try {
     & node (Join-Path $PSScriptRoot 'patch-castle-wolfenstein.mjs') $inputImage $testImage
     if ($LASTEXITCODE -ne 0) { throw 'Could not generate the native test image' }
-    & $exe (Join-Path $root 'emulator\Data\badger6502.bin') $testImage
+    $profile = & node --input-type=module -e 'import fs from "node:fs"; import {pathToFileURL} from "node:url"; const {detectCastleProfile} = await import(pathToFileURL(process.argv[2])); console.log(detectCastleProfile(fs.readFileSync(process.argv[3])).id);' wolf-profile-probe (Join-Path $PSScriptRoot 'patch-castle-wolfenstein.mjs') $inputImage
+    if ($LASTEXITCODE -ne 0) { throw 'Could not identify the native test profile' }
+    & $exe (Join-Path $root 'emulator\Data\badger6502.bin') $testImage $profile
     if ($LASTEXITCODE -ne 0) { throw "Native keyboard check failed ($LASTEXITCODE)" }
 } finally {
     if (Test-Path -LiteralPath $testImage) {

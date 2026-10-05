@@ -1,4 +1,4 @@
-; Resident for the checked French disk and 3RIC ROM, not general-purpose RAM.
+; Resident for the checked game/ROM profiles, not general-purpose RAM.
         .org $C800
 
 KEYBOARD = $C000
@@ -11,6 +11,7 @@ init:
         stz previous_motion
         stz previous_chord
         stz suppress_l
+        stz action_pause
         jsr scan_pad
         lda pad+2
         sta previous_select
@@ -141,9 +142,22 @@ keep_keyboard_motion:
         beq keep_aim
         sta AIM_DIR
 keep_aim:
+        lda KEYBOARD
+        bmi pause_motion
         lda pending_key
+        bne pause_motion
+        lda previous_motion
+        bne check_pause
+        stz action_pause
+check_pause:
+        lda action_pause
         ora pad+11
         beq input_done
+        bra stop_motion
+pause_motion:
+        lda previous_motion
+        sta action_pause
+stop_motion:
         stz MOVE_DIR
 input_done:
         ply
@@ -255,6 +269,23 @@ read_action:
         beq action_done
         sta KEYBOARD
 action_done:
+        cmp #$80
+        bcc action_flags
+; The action may have arrived after the movement scan; sample its hold state now.
+        pha
+        phx
+        phy
+        jsr scan_pad
+        lda pad+4
+        ora pad+5
+        ora pad+6
+        ora pad+7
+        sta action_pause
+        stz MOVE_DIR
+        ply
+        plx
+        pla
+action_flags:
         ora #0
         rts
 
@@ -286,6 +317,7 @@ previous_start:  .byte 0
 previous_r:      .byte 0
 previous_chord:  .byte 0
 suppress_l:      .byte 0
+action_pause:    .byte 0
 select_used:     .byte 0
 chord:           .byte 0
 pending_key:     .byte 0

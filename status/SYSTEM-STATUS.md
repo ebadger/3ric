@@ -168,7 +168,9 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   greeting when the game itself is machine code. Disk II writes are not implemented,
   so an in-game save message does not imply persistence.
 - **Castle Wolfenstein keyboard/SNES candidate:** `codegen\tools\patch-castle-wolfenstein.mjs`
-  converts the exact owner-supplied French `.do` image into a separate bootable WOZ.
+  accepts the exact owner-supplied English 13-sector `.woz` or French `.do` image
+  and creates a separate bootable WOZ. English editing preserves the original
+  bitstream layout, metadata and mixed-format bootstrap.
   It changes DOS startup to `BRUN @INIT` and returns BASIC-dependent exits to the
   monitor, without changing the ROM or VM. A disk-loaded resident adds pad-1
   D-pad movement, X/A/B/Y aim up/right/down/left, L fire and R search/open. Start
@@ -176,9 +178,13 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   Tap Select for inventory, Select+L for grenade, Select+R for use/equip and
   Start+Select for quit. Keyboard controls remain available (Space searches,
   T throws a grenade, U uses/equips, Return inventories).
+  The corrected resident lets physical action keys interrupt a held D-pad;
+  release the D-pad before moving again so timed U actions can finish.
   Boot with `C600G` from `*` (`MON` first from `>`). The web Insert action may leave
   `EH?` at `>`; enter `MON`, then `C600G` manually in that case.
-  Native PS/2/SNES and WASM gameplay/capture/restart/exit checks pass.
+  Both profiles pass native PS/2/SNES and WASM gameplay/restart/exit checks,
+  including U collecting plans or equipping a uniform from open-chest fixtures.
+  The English disk retains its slower DOS 3.2 loading and original introduction.
   Saves and new castles do not persist in the emulator; no
   full-playthrough or physical-board approval is claimed. See the
   [porting log](../docs/porting-logs/castle-wolfenstein.md).

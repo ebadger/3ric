@@ -56,6 +56,11 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   `82f12169a75fbb26472df750a8b31883bd73ef6d68df58a0f81e5ac569ac7239`, against the
   unchanged repository ROM, SHA-256
   `fcea03683b77b7f113e6d8f0064ea8edbd6c75b04b472ec5c84de1c3a9f86435`.
+  Also support the owner's English 234,815-byte WOZ2, SHA-256
+  `727335c08ffc39b470f95e6b1c89de28de6ca6c3be30b0191757ec9cfc474ad3`.
+  This is a distinct DOS 3.2 / 13-sector profile, not a translated copy of the
+  French image. Its sector IDs are doubled after track 2. Preserve the original
+  track layout, synchronization bits, metadata and mixed-format bootstrap.
   - Keep the disk's DOS, title, assets, keyboard driver and game logic. Complete DOS
     initialization and `BRUN @INIT` directly instead of starting the unavailable
     Applesoft interpreter to execute the `^HELLO` greeting.
@@ -81,6 +86,15 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     Keep one pending action without overwriting a ready physical key; quit may
     replace a queued non-quit action. Actions temporarily stop movement so the original game's
     stationary action dispatcher can service them; held R keeps movement stopped.
+    A ready physical action key must also stop pad-controlled movement until the
+    game consumes it. In particular U, Space, Return, T and Escape must remain
+    usable with the D-pad held, not merely when the pad is neutral. Acceptance
+    must include U on an opened chest reaching its real use/equip behavior,
+    through both host-key and native PS/2 paths.
+    Once an action pauses a held D-pad, require D-pad release before movement
+    resumes; otherwise clearing U's strobe immediately restarts movement and
+    cancels the game's timed use operation. This does not prevent deliberately
+    cancelling an interaction with a fresh movement press.
     Start advances the title, chooses the enhanced K mode on the options screen,
     and continues after capture. A held Start must not skip successive screens.
   - **Keyboard coexistence and hardware:** retain the original K-mode keyboard
@@ -99,6 +113,10 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     remain below the retained `$1F00` keyboard driver. Re-entering `@INIT` must
     reinstall cleanly and seed button-edge state from the current physical pad.
     Analog P/J modes remain separate; timing and speaker pitch stay at 3RIC's clock.
+    The English profile stages after its longer original `@INIT`, and extends it
+    into verified free sectors on track 12. Those sectors contain old unallocated
+    data, not guaranteed zeroes; retain their exact preimages and validate DOS
+    allocation rather than assuming empty bytes imply free space.
   - **Persistence limit:** the existing Disk II emulator ignores writes. The game's
     save message is not evidence of a saved game, and creating a new castle does not
     persist it. This port must disclose that limitation, not claim save support.
@@ -467,7 +485,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Microsoft BASIC | Shipped | `$9000–$BFFF`; not Applesoft (known gap). |
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
-| Castle Wolfenstein disk-only port | Experimental / emulator-verified | Keyboard and single-SNES-pad play, independent movement/aim/fire, modifier actions, Start/capture/restart, monitor return and native mixed PS/2/pad traffic pass. Emulator save persistence and physical-board approval remain open; see the [porting log](../docs/porting-logs/castle-wolfenstein.md). |
+| Castle Wolfenstein disk-only port | English/French emulator-verified candidates | Exact-profile English 13-sector WOZ and French DOS-order patching; keyboard/SNES controls, restart, and actual U item use with held D-pad pass in WASM and native PS/2 checks. Original WOZ bits/metadata outside edited fields are preserved. Emulator save persistence and physical-board approval remain open; see the [porting log](../docs/porting-logs/castle-wolfenstein.md). |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |

@@ -7,8 +7,9 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { assemble } from "./asm6502.mjs";
 import { buildWozFromDsk, crc32 } from "./wozgen.mjs";
-import { readWozSectors, sha256 } from "./wozedit.mjs";
-import { INPUT_SHA256, PATCHES, ROM_SHA256, buildControllerPayload, patchCastleWolfenstein } from "./patch-castle-wolfenstein.mjs";
+import { decode5and3, encode5and3, patchWozSectors, readWozSectors, sha256 } from "./wozedit.mjs";
+import { FRENCH_PROFILE, ENGLISH_PROFILE, PATCHES, ROM_SHA256, buildControllerPayload,
+  decodeEnglishDisk, detectCastleProfile, englishCoordinates, patchCastleWolfenstein } from "./patch-castle-wolfenstein.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
@@ -17,9 +18,10 @@ const { SNES: PAD } = require(path.join(root, "web", "gamepad.js"));
 const rom = fs.readFileSync(path.join(root, "emulator", "Data", "badger6502.bin"));
 const cliPath = path.join(root, "codegen", "tools", "patch-castle-wolfenstein.mjs");
 const coordinates = Array.from({ length: 560 }, (_, i) => ({ track: i >> 4, sector: i & 15 }));
-const payload = buildControllerPayload();
+let profile = FRENCH_PROFILE;
+let payload = buildControllerPayload(profile);
 
-function seek(vm, pc, budget = 50000000) {
+function seek(vm, pc, budget = profile.id === "english" ? 1000000000 : 50000000) {
   assert(vm.addBreakpoint(pc));
   vm.runCycles(budget);
   vm.removeBreakpoint(pc);
@@ -48,9 +50,13 @@ function verifySectors(woz, dsk) {
 
 function testGuards() {
   assert.equal(sha256(rom), ROM_SHA256);
-  assert.equal(payload.resident.org, 0xc800);
-  assert(payload.resident.symbols.RESIDENT_END <= 0xcafe);
-  assert(payload.end <= 0x1f00);
+  for (const diskProfile of [FRENCH_PROFILE, ENGLISH_PROFILE]) {
+    const built = buildControllerPayload(diskProfile);
+    assert.equal(built.resident.org, 0xc800);
+    assert(built.resident.symbols.RESIDENT_END <= 0xcafe);
+    assert(built.end <= 0x1f00);
+    assert(built.source >= 0x880 + diskProfile.initLength);
+  }
   const fixture = Buffer.from(Uint8Array.from({ length: 143360 }, (_, i) => (i * 17 + (i >> 8)) & 255));
   verifySectors(Buffer.from(buildWozFromDsk(fixture)), fixture);
   const used = new Set();
@@ -89,6 +95,63 @@ function testGuards() {
   console.log("PASS DOS-order conversion, all 560 sector checksums, patch bounds and rejection/no-output guards");
 }
 
+function testFiveAndThree() {
+  assert.deepEqual(encode5and3(new Uint8Array(256)), new Uint8Array(411).fill(0xab));
+  for (let value = 0; value < 256; value++) {
+    const data = Uint8Array.from({ length: 256 }, (_, i) => (value * 17 + i * 13) & 255);
+    data[255] = value;
+    assert.deepEqual(decode5and3(encode5and3(data)), data);
+  }
+  assert.throws(() => encode5and3(new Uint8Array(255)), /256 bytes/);
+  assert.throws(() => decode5and3(new Uint8Array(410)), /411 nibbles/);
+  const bad = encode5and3(new Uint8Array(256));
+  bad[20] = 0;
+  assert.throws(() => decode5and3(bad), /Invalid 5-and-3/);
+  bad[20] = 0xab;
+  bad[410] = 0xad;
+  assert.throws(() => decode5and3(bad), /checksum/);
+
+  const woz = Buffer.from(buildWozFromDsk(new Uint8Array(143360)));
+  const start = 1536;
+  woz.fill(0, start, start + 13 * 512);
+  let pos = 32;
+  const put = value => {
+    for (let bit = 7; bit >= 0; bit--, pos++)
+      if (value & (1 << bit)) woz[start + (pos >> 3)] |= 0x80 >> (pos & 7);
+  };
+  const address = value => { put((value >> 1) | 0xaa); put(value | 0xaa); };
+  [0xd5, 0xaa, 0xb5].forEach(put);
+  pos++;
+  [1, 0, 24, 1 ^ 24].forEach(address);
+  [0xde, 0xaa].forEach(put);
+  for (let i = 0; i < 7; i++) { put(0xff); pos += 2; }
+  [0xd5, 0xaa, 0xad].forEach(put);
+  const data = Uint8Array.from({ length: 256 }, (_, i) => i);
+  const dataBits = new Set();
+  for (const value of encode5and3(data)) {
+    pos++;
+    for (let i = 0; i < 8; i++) dataBits.add(pos + i);
+    put(value);
+  }
+  [0xde, 0xaa].forEach(put);
+  woz.writeUInt32LE(pos + 20, 260);
+  woz.writeUInt32LE(crc32(woz, 12, woz.length), 8);
+  const coordinate = { track: 0, sector: 24, encoding: "5and3" };
+  assert.deepEqual(readWozSectors(woz, [coordinate])[0].data, Buffer.from(data));
+  const patch = { ...coordinate, offset: 70, before: "46474849", after: "7f00ff81" };
+  const edited = patchWozSectors(woz, [patch]);
+  assert.deepEqual(patchWozSectors(edited, [{ ...patch, before: patch.after, after: patch.before }]), woz);
+  for (let byte = 12; byte < woz.length; byte++) {
+    const changed = woz[byte] ^ edited[byte];
+    for (let bit = 0; bit < 8; bit++) if (changed & (0x80 >> bit))
+      assert(dataBits.has((byte - start) * 8 + bit), "Editing changed a framing/address/metadata bit");
+  }
+  assert.throws(() => readWozSectors(woz, [{ ...coordinate, encoding: "unknown" }]), /encoding/);
+  assert.throws(() => readWozSectors(woz, [{ ...coordinate, sector: 256 }]), /sector/);
+  assert.throws(() => patchWozSectors(woz, [{ ...patch, before: "00000000" }]), /Unexpected bytes/);
+  console.log("PASS 5-and-3 codec, malformed fields, extended sector IDs and bit-exact editing with nibble gaps");
+}
+
 async function bootTitle(woz) {
   const session = await boot();
   const vm = session.vm;
@@ -96,7 +159,7 @@ async function bootTitle(woz) {
     assert(vm.insertDisk(0, woz));
     type(vm, "MON\r");
     type(vm, "C600G\r");
-    seek(vm, 0x0c44);
+    seek(vm, profile.titleKey);
     assert.equal(vm.textMode(), 0);
     assert.equal(vm.lores(), 0);
     assert.equal(vm.gfxPage(), 0);
@@ -114,7 +177,7 @@ async function bootTitle(woz) {
 function enterMenu(session) {
   session.vm.keyDown(13);
   seek(session.vm, 0x0a4a);
-  assert.match(session.textScreen().join("\n"), /START\/K.*SNES\+KB/);
+  assert.match(session.textScreen().join("\n"), /START\/K.*SNES\+K/);
   session.vm.step();
   session.vm.runCycles(10000);
 }
@@ -170,7 +233,7 @@ async function testGameplay(woz) {
     assert.equal(vm.peek(0x4347), bullets - 1, "Fire did not consume a bullet");
     assert(peak > 0.01, "No system-speaker PCM was produced");
     vm.disableAudio();
-    console.log("PASS actual disk boot, French title/menu, keyboard movement/stop/aim/fire and speaker PCM");
+    console.log(`PASS actual ${profile.id} disk boot, title/menu, keyboard movement/stop/aim/fire and speaker PCM`);
 
     press(vm, "O", 0x1f56);
     press(vm, "X", 0x1f50);
@@ -180,7 +243,7 @@ async function testGameplay(woz) {
     vm.runCycles(10000);
     vm.keyDown(13);
     seek(vm, 0x0a4a);
-    assert.match(session.textScreen().join("\n"), /START\/K.*SNES\+KB/);
+    assert.match(session.textScreen().join("\n"), /START\/K.*SNES\+K/);
     vm.step();
     vm.runCycles(10000);
     startGame(vm);
@@ -196,7 +259,7 @@ async function testGameplay(woz) {
     type(vm, "4343\r");
     assert.match(session.textScreen().join("\n"), /4343-/, "Monitor lost the first command character");
     type(vm, "C600G\r");
-    seek(vm, 0x0c44);
+    seek(vm, profile.titleKey);
     assert.equal(vm.textMode(), 0);
     console.log("PASS Escape exit, usable monitor and disk reboot; save persistence is NOT supported");
   } finally {
@@ -270,7 +333,7 @@ async function bootPadGame(woz) {
     vm.setGamepadState(1, 0);
     vm.setGamepadState(0, PAD.START);
     seek(vm, 0x0a4a);
-    assert.match(session.textScreen().join("\n"), /START\/K.*SNES\+KB/);
+    assert.match(session.textScreen().join("\n"), /START\/K.*SNES\+K/);
     startFromPadMenu(vm);
     return session;
   } catch (error) {
@@ -357,6 +420,20 @@ async function testPadDriver(woz) {
     acknowledge();
     sample(PAD.R);
     assert.equal(pending(), 0, "Held search repeated its action");
+    sample(0);
+    vm.keyDown(85);
+    assert.equal(sample(PAD.RIGHT)[0], 0, "Physical U must reach the action dispatcher with the D-pad held");
+    assert.equal(action(), 0xd5);
+    acknowledge();
+    assert.equal(sample(PAD.RIGHT)[0], 0, "Clearing U must not cancel a timed use operation by resuming motion");
+    sample(0);
+    assert.equal(sample(PAD.RIGHT)[0], 8, "D-pad release must rearm movement after an action");
+    sample(0);
+    vm.setGamepadState(0, PAD.RIGHT);
+    vm.keyDown(85);
+    assert.equal(action(), 0xd5);
+    acknowledge();
+    assert.equal(sample(PAD.RIGHT)[0], 0, "An action arriving after the movement scan was cancelled");
     sample(0);
     vm.keyDown(85);
     sample(PAD.R);
@@ -450,27 +527,29 @@ async function testPadActions(woz) {
   const session = await bootPadGame(woz), vm = session.vm;
   const symbols = payload.resident.symbols;
   try {
-    for (const [mask, tile] of [[PAD.UP, 6], [PAD.LEFT, 1]]) {
-      vm.setGamepadState(0, mask);
-      until(vm, () => vm.peek(0x4343) === tile, `D-pad did not reach tile ${tile}`);
+    if (profile.id === "french") {
+      for (const [mask, tile] of [[PAD.UP, 6], [PAD.LEFT, 1]]) {
+        vm.setGamepadState(0, mask);
+        until(vm, () => vm.peek(0x4343) === tile, `D-pad did not reach tile ${tile}`);
+      }
+      vm.setGamepadState(0, PAD.Y);
+      until(vm, () => vm.peek(0x4341) === 0 && vm.peek(0x4342) === 4, "Did not aim at the chest");
+      vm.setGamepadState(0, PAD.Y | PAD.R);
+      seek(vm, 0x1343);
+      assert.equal(vm.peek(0xc000), 0xa0);
+      assert.equal(vm.regA(), 0xa0, "Search did not target the first chest");
+      vm.step();
+      seek(vm, 0x59d7);
+      assert(vm.peek(0x587b) > 0, "Chest opening did not begin");
+      vm.setGamepadState(0, PAD.SELECT | PAD.R);
+      vm.step();
+      seek(vm, 0x5a58);
+      assert(vm.peek(0x587b) > 0, "Use fixture must still have a closed chest");
     }
-    vm.setGamepadState(0, PAD.Y);
-    until(vm, () => vm.peek(0x4341) === 0 && vm.peek(0x4342) === 4, "Did not aim at the chest");
-    vm.setGamepadState(0, PAD.Y | PAD.R);
-    seek(vm, 0x1343);
-    assert.equal(vm.peek(0xc000), 0xa0);
-    assert.equal(vm.regA(), 0xa0, "Search did not target the first chest");
-    vm.step();
-    seek(vm, 0x59d7);
-    assert(vm.peek(0x587b) > 0, "Chest opening did not begin");
-    vm.setGamepadState(0, PAD.SELECT | PAD.R);
-    vm.step();
-    seek(vm, 0x5a58);
-    assert(vm.peek(0x587b) > 0, "Use fixture must still have a closed chest");
-    vm.setGamepadState(0, PAD.DOWN | PAD.X);
+    vm.setGamepadState(0, profile.id === "english" ? PAD.LEFT | PAD.A : PAD.DOWN | PAD.X);
     vm.step();
     seek(vm, 0x08ae);
-    assert.equal(vm.peek(0x436f), 0x40);
+    assert.equal(vm.peek(0x436f), profile.id === "english" ? 0x50 : 0x40);
     vm.setGamepadState(0, PAD.START);
     vm.step();
     seek(vm, 0x0a4a);
@@ -493,7 +572,46 @@ async function testPadActions(woz) {
     vm.step();
     until(vm, () => vm.peek(0x4348) === 0, "Grenade chord did not consume grenade stock");
     assert.equal(vm.peek(0x4347), 10, "Grenade chord also fired an ordinary bullet");
-    console.log("PASS real chest search/use dispatch, Start capture/restart, Select inventory and grenade dispatch (seeded grenade stock)");
+    console.log("PASS Start capture/restart, Select inventory and grenade dispatch (seeded grenade stock)");
+  } finally {
+    vm.delete();
+  }
+}
+
+async function testKeyboardUse(woz) {
+  const session = await bootPadGame(woz), vm = session.vm;
+  const english = profile.id === "english";
+  const aim = english ? PAD.A : PAD.Y;
+  const itemFlag = english ? 0x436c : 0x4349;
+  try {
+    // Position beside the disk's real first chest; only its opening timer is shortened.
+    vm.poke(0x4343, english ? 58 : 1);
+    vm.setGamepadState(0, aim | PAD.R);
+    seek(vm, 0x1343);
+    assert.equal(vm.regA(), 0xa0);
+    vm.step();
+    seek(vm, 0x59d7);
+    assert.equal(vm.peek(0x5879), english ? 15 : 11);
+    assert(vm.peek(0x587a) > 0);
+    vm.poke(0x587b, 0);
+    vm.step();
+    seek(vm, 0x1301);
+    vm.step();
+    assert.equal(vm.peek(itemFlag), 0);
+    vm.setGamepadState(0, PAD.RIGHT | aim);
+    vm.keyDown(85);
+    seek(vm, 0x5a58, 3000000);
+    assert.equal(vm.peek(0x4341), 0);
+    assert.equal(vm.peek(0xc000), 0xd5);
+    assert.equal(vm.peek(0x587b), 0);
+    vm.step();
+    until(vm, () => vm.peek(itemFlag) === 1, "Keyboard U did not finish using the open chest", 50000000);
+    assert.equal(vm.peek(0x4341), 0, "Held movement cancelled the use action");
+    vm.setGamepadState(0, 0);
+    until(vm, () => vm.peek(payload.resident.symbols.ACTION_PAUSE) === 0, "D-pad release did not clear action pause");
+    vm.setGamepadState(0, PAD.RIGHT);
+    until(vm, () => vm.peek(0x4341) === 8, "Fresh D-pad press did not resume movement");
+    console.log(`PASS keyboard U with held D-pad ${english ? "collects the plans" : "equips a uniform"} from an open-chest fixture`);
   } finally {
     vm.delete();
   }
@@ -501,26 +619,37 @@ async function testPadActions(woz) {
 
 async function testImage(inputPath) {
   const original = fs.readFileSync(inputPath);
-  assert.equal(sha256(original), INPUT_SHA256);
-  const { dsk, woz, patches, addedSectors, initLength } = patchCastleWolfenstein(original, rom);
+  profile = detectCastleProfile(original);
+  const result = patchCastleWolfenstein(original, rom);
+  payload = result.payload;
+  const { dsk, woz, patches, wozPatches, addedSectors, initLength } = result;
+  const originalDisk = profile.id === "english" ? decodeEnglishDisk(original) : original;
   const restored = Buffer.from(dsk);
   for (const { offset, before, after } of patches) {
     assert.equal(restored.subarray(offset, offset + after.length / 2).toString("hex"), after);
     restored.set(Buffer.from(before, "hex"), offset);
   }
-  assert.deepEqual(restored, original);
-  assert.equal(dsk.readUInt16LE(0xc500) + dsk.readUInt16LE(0xc502), 0x1efe);
-  assert.equal(dsk.readUInt16LE(0xd902), initLength);
+  assert.deepEqual(restored, originalDisk);
+  const firstSector = list => dsk[list + 12] * 4096 + dsk[list + 13] * 256;
+  assert.equal(dsk.readUInt16LE(firstSector(profile.wolfList)) + dsk.readUInt16LE(firstSector(profile.wolfList) + 2), 0x1efe);
+  assert.equal(dsk.readUInt16LE(firstSector(profile.initList) + 2), initLength);
   assert.equal(dsk.readUInt16LE(0x11b74 + 33), 20 + addedSectors);
-  let bitmap = original.readUInt32BE(0x11048);
+  const bitmapOffset = 0x11038 + profile.extensionTrack * 4;
+  let bitmap = originalDisk.readUInt32BE(bitmapOffset);
   for (let sector = 0; sector < addedSectors; sector++) {
-    assert.deepEqual(dsk.subarray(0xda00 + 12 + (19 + sector) * 2, 0xda00 + 14 + (19 + sector) * 2),
-      Buffer.from([4, sector]));
-    bitmap = (bitmap & ~(1 << (16 + sector))) >>> 0;
+    assert.deepEqual(dsk.subarray(profile.initList + 12 + (19 + sector) * 2, profile.initList + 14 + (19 + sector) * 2),
+      Buffer.from([profile.extensionTrack, sector]));
+    bitmap = (bitmap & ~(1 << (profile.bitmapShift + sector))) >>> 0;
   }
-  assert.equal(dsk.readUInt32BE(0x11048), bitmap);
-  assert.equal(sha256(original), INPUT_SHA256, "Patcher modified its input buffer");
-  verifySectors(woz, dsk);
+  assert.equal(dsk.readUInt32BE(bitmapOffset), bitmap);
+  assert.equal(sha256(original), profile.sha256, "Patcher modified its input buffer");
+  if (profile.id === "english") {
+    assert.equal(woz.length, original.length);
+    assert.deepEqual(patchWozSectors(woz, wozPatches.map(p => ({ ...p, before: p.after, after: p.before }))), original);
+    assert.deepEqual(woz.subarray(12, 1536), original.subarray(12, 1536), "WOZ metadata/track descriptors changed");
+    assert.equal(englishCoordinates().length, 453);
+    assert.deepEqual(decodeEnglishDisk(woz), dsk);
+  } else verifySectors(woz, dsk);
   const changed = Buffer.from(original);
   changed[0x0ce7] ^= 1;
   assert.throws(() => patchCastleWolfenstein(changed, rom), /Unsupported Castle Wolfenstein/);
@@ -537,6 +666,7 @@ async function testImage(inputPath) {
     await testPadDriver(woz);
     await testPadGameplay(woz);
     await testPadActions(woz);
+    await testKeyboardUse(woz);
   } finally {
     fs.rmSync(temporary, { recursive: true, force: true });
   }
@@ -545,7 +675,8 @@ async function testImage(inputPath) {
 }
 
 testGuards();
+testFiveAndThree();
 const args = process.argv.slice(2);
-if (args.length === 0) console.log("SKIP owner-disk gameplay: pass --disk <original.do> (game assets are not bundled)");
+if (args.length === 0) console.log("SKIP owner-disk gameplay: pass --disk <original.do|original.woz> (game assets are not bundled)");
 else if (args.length === 2 && args[0] === "--disk") await testImage(path.resolve(args[1]));
-else throw new Error("Usage: node codegen\\tools\\patch-castle-wolfenstein.test.mjs [--disk <original.do>]");
+else throw new Error("Usage: node codegen\\tools\\patch-castle-wolfenstein.test.mjs [--disk <original.do|original.woz>]");

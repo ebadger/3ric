@@ -18,7 +18,7 @@ below as working on the physical machine.
 | Title | Main lesson | Evidence boundary |
 |-------|-------------|-------------------|
 | [Archon](archon.md) (2026-10-05) | Preserve input interrupts across both language-card banks, and avoid paddle-timer traffic in a digital-controller adapter | Reproducible disk patcher with native PS/2 and WASM board/combat coverage; physical-board confirmation remains open |
-| [Castle Wolfenstein](castle-wolfenstein.md) (2026-10-05) | Bypass an Applesoft greeting without replacing DOS; add independent SNES movement/aim and return cleanly to the monitor | Disk-only keyboard/SNES candidate; native mixed PS/2/pad and WASM gameplay/restart coverage; emulator save persistence is unsupported and physical-board confirmation remains open |
+| [Castle Wolfenstein](castle-wolfenstein.md) (2026-10-05) | Preserve a mixed-format English WOZ; bypass BASIC startup, add independent SNES movement/aim and keep timed keyboard U actions usable | English/French disk-only candidates; native PS/2 and WASM item-use/gameplay/restart coverage; emulator save persistence is unsupported and physical-board confirmation remains open |
 
 ## Scope and evidence
 

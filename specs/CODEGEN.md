@@ -25,8 +25,8 @@ graphics / registers → produce a `.PRG` that also `BRUN`s on real hardware.
 | `run6502.mjs` | CLI: assemble/load → run → apply checks → emit `.PRG` + verdict (exit 0 only if it halted cleanly and every check passed). |
 | `gen_platform_ref.mjs` | Regenerates `platform/platform-ref.{md,json}` from `vm.h` + `badger6502.dbg`. |
 | `patch-archon.mjs` | Exact-image local WOZ compatibility patcher; see `ROM-SOFTWARE.md`. Contains only adapter code and guarded replacements, never downloads game assets, and refuses input overwrite or fingerprint/sector validation failure. |
-| `patch-castle-wolfenstein.mjs` | Exact-image local DOS-order-to-WOZ2 keyboard/SNES port; see `ROM-SOFTWARE.md`. Guards disk/ROM fingerprints, byte preimages and extension allocation, preserves other DOS sectors, and creates output exclusively. No game assets are included or downloaded. |
-| `wozedit.mjs` | Node-only checked WOZ2 sector reading/editing, reusing the dual-use `wozgen.mjs` CRC and 6-and-2 codec. Preserves non-edited bitstream and metadata bytes. |
+| `patch-castle-wolfenstein.mjs` | Exact-image French DOS-order / English 13-sector WOZ2 keyboard/SNES port; see `ROM-SOFTWARE.md`. Guards disk/ROM fingerprints, byte preimages and extension allocation, preserves non-edited sectors/bits, and creates output exclusively. No game assets are included or downloaded. |
+| `wozedit.mjs` | Node-only checked WOZ2 sector reading/editing. Reuses `wozgen.mjs` CRC/6-and-2 and provides explicitly selected DOS 3.2 5-and-3 coding. Preserves non-edited bitstream and metadata bytes. |
 
 **Platform reference (`codegen/platform/`)** — the generator's machine/human contract:
 `prompt-system.md` (assembler dialect, entry/exit conventions), `platform-ref.md` +
@@ -98,6 +98,14 @@ screen (decode `$0400`, 40×24 interleaved), graphics (`renderFrame()` RGBA), CP
   installed from an extended `@INIT`. Only checked free sectors may be appended;
   file length, track/sector list, catalog sector count and VTOC allocation must agree.
   Return reversible, non-overlapping changed-sector records for the complete patch.
+  English WOZ coordinates explicitly select `encoding: "5and3"` and the actual
+  on-disk address-sector value (0-255), rather than assuming labels are 0-12.
+  Validate 411-nibble XOR checksums, 4-and-4 address checksums, and the two-byte
+  DOS 3.2 epilogues. Read self-synchronizing nibbles and replace only their eight
+  data bits, preserving intervening zero bits. Existing default 6-and-2 validation
+  remains unchanged. The English image's absent 5-and-3 fields at track 0/sector
+  10 and track 2/sector 12 are explicitly excluded, never synthesized or edited;
+  preserve the separate 16-sector bootstrap and all other original bits.
 - **AI-contributor path.** The codegen guide is exposed for external AI tools: `web/llms.txt`
   (published at the site root, owned by `WEB-CLIENT.md`) is the machine-readable entry point
   that links `prompt-system.md` + `platform-ref.md`, and `prompt-system.md` closes the loop to
@@ -129,6 +137,6 @@ breakpoints and current-PC highlighting.
 | `harness` + `run6502` validation loop | Shipped | serial/text/gfx/register checks + `.PRG`. |
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Archon local WOZ patching | Experimental / emulator-verified | `patch-archon.test.mjs` covers synthetic editor fixtures and optional owner-supplied-disk gameplay; `patch-archon.test.ps1` covers native PS/2 timing and LED commands. Both game images stay outside the repository. |
-| Castle Wolfenstein local disk patching | Experimental / emulator-verified | `patch-castle-wolfenstein.test.mjs` covers guards, resident bounds, DOS allocation, exact reversal, all 560 encoded sectors and optional keyboard/SNES gameplay; `.test.ps1` covers the native build, physical PS/2 and mixed pad traffic. No game assets or save-persistence claim. |
+| Castle Wolfenstein local disk patching | English/French emulator-verified | `patch-castle-wolfenstein.test.mjs` covers guards, resident/DOS allocation, 5-and-3 codec/framing, exact inverse editing, 453 English or 560 French sectors and keyboard/SNES gameplay including completed U item use. `.test.ps1` covers both profiles with native PS/2 and mixed pad traffic. No game assets or save-persistence claim. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |
 | AI-contributor entry point | Shipped | `web/llms.txt` + `CONTRIBUTING.md`; `prompt-system.md` closes the loop to the gallery. |

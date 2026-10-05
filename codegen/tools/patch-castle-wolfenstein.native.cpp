@@ -24,10 +24,13 @@ namespace
         CPU* cpu = vm->GetCPU();
         uint64_t cycles = 0, diskCycle = 0;
         unsigned packets = 0;
+        uint16_t titleKey;
+        unsigned useCalls = 0;
         std::string serial;
         std::array<unsigned, 256> characters{};
 
-        Machine(const char* romPath, const char* diskPath)
+        Machine(const char* romPath, const char* diskPath, uint16_t titlePoll)
+            : titleKey(titlePoll)
         {
             std::ifstream rom(romPath, std::ios::binary);
             require(bool(rom.read(reinterpret_cast<char*>(vm->GetData()), 65536)), "Cannot read ROM");
@@ -62,11 +65,15 @@ namespace
                 vm->WriteData(0xc000, ch | 0x80);
                 run(300000);
             }
-            seek(0x0c44);
+            seek(titleKey);
         }
 
         uint8_t peek(uint16_t address) { return vm->PeekData(address); }
-        void step() { cycles += vm->Step(); }
+        void step()
+        {
+            if (cpu->PC == 0x5a58 && vm->WillExecuteCurrentInstruction()) ++useCalls;
+            cycles += vm->Step();
+        }
 
         void expect(uint16_t address, uint8_t value, const char* message)
         {
@@ -88,8 +95,9 @@ namespace
             while (cycles < end) step();
         }
 
-        void seek(uint16_t address, uint64_t budget = 50000000)
+        void seek(uint16_t address, uint64_t budget = 0)
         {
+            if (budget == 0) budget = titleKey == 0x0c56 ? 1000000000 : 50000000;
             const uint64_t end = cycles + budget;
             while (cpu->PC != address || !vm->WillExecuteCurrentInstruction())
             {
@@ -153,9 +161,9 @@ namespace
         }
 
         template<typename Predicate>
-        void until(Predicate ready, const char* message)
+        void until(Predicate ready, const char* message, uint64_t budget = 10000000)
         {
-            const uint64_t end = cycles + 10000000;
+            const uint64_t end = cycles + budget;
             while (!ready())
             {
                 require(cycles < end, message);
@@ -240,11 +248,11 @@ namespace
         m.seek(returnPC);
     }
 
-    void checkController(const char* rom, const char* disk)
+    void checkController(const char* rom, const char* disk, uint16_t titleKey)
     {
         constexpr uint16_t start = 1 << 3, select = 1 << 2, left = 1 << 6;
         constexpr uint16_t down = 1 << 5, aimUp = 1 << 9, aimRight = 1 << 8, fire = 1 << 10;
-        Machine m(rom, disk);
+        Machine m(rom, disk, titleKey);
         require(m.vm->SetGamepadState(1, start), "Could not set pad 2 state");
         m.run(100000);
         require(m.peek(0x1f00) != 0x4c, "Controller 2 selected controls");
@@ -272,7 +280,7 @@ namespace
         m.step();
         m.run(1000000);
         for (uint8_t code : {0x21, 0x36, 0x45, 0x45, 0x34, 0x5a}) m.key(code); // C600G + Return
-        m.seek(0x0c44);
+        m.seek(titleKey);
         m.pad(start);
         m.seek(0x0a4a);
         startPadMenu(m);
@@ -301,17 +309,57 @@ namespace
         std::cout << "PASS native SNES start, move/aim/fire, capture/restart, inventory and quit; "
             << m.packets << " PS/2 packets including 64 mixed-input make/break pairs\n";
     }
+
+    void checkKeyboardUse(const char* rom, const char* disk, uint16_t titleKey)
+    {
+        const bool english = titleKey == 0x0c56;
+        const uint16_t aim = english ? 1 << 8 : 1 << 1;
+        const uint16_t itemFlag = english ? 0x436c : 0x4349;
+        Machine m(rom, disk, titleKey);
+        m.pad(1 << 3);
+        m.seek(0x0a4a);
+        startPadMenu(m);
+        // Use the real chest's contents; shorten only its opening wait and position the player beside it.
+        m.vm->WriteData(0x4343, english ? 58 : 1);
+        m.pad(aim | (1 << 11));
+        m.seek(0x1343);
+        require(m.cpu->A == 0xa0, "Open-chest fixture did not target the real chest");
+        m.step();
+        m.seek(0x59d7);
+        m.expect(0x5879, english ? 15 : 11, "Unexpected chest contents");
+        require(m.peek(0x587a) > 0, "Chest is empty");
+        m.vm->WriteData(0x587b, 0);
+        m.step();
+        m.seek(0x1301);
+        m.step();
+        m.expect(itemFlag, 0, "Item was already in inventory");
+        m.pad(aim | (1 << 7));
+        const unsigned before = m.useCalls;
+        m.key(0x3c); // Physical U, not keyboard-latch injection
+        m.until([&] { return m.peek(itemFlag) == 1; }, "Physical U did not complete the chest action", 50000000);
+        require(m.useCalls > before, "Physical U did not reach the use handler");
+        m.expect(0x4341, 0, "Held D-pad cancelled the timed use action");
+        m.pad(0);
+        sampleDriver(m);
+        m.pad(1 << 7);
+        m.until([&] { return m.peek(0x4341) == 8; }, "Releasing the D-pad did not rearm movement");
+        std::cout << "PASS physical PS/2 U with held D-pad "
+            << (english ? "collects the plans" : "equips a uniform") << " from an open-chest fixture\n";
+    }
 }
 
 int main(int argc, char** argv)
 {
     try
     {
-        require(argc == 3, "Usage: wolf-native-test <rom> <patched.woz>");
-        Machine m(argv[1], argv[2]);
+        require(argc == 4, "Usage: wolf-native-test <rom> <patched.woz> <french|english>");
+        const std::string profile = argv[3];
+        require(profile == "english" || profile == "french", "Unknown disk profile");
+        const uint16_t titleKey = profile == "english" ? 0x0c56 : 0x0c44;
+        Machine m(argv[1], argv[2], titleKey);
         m.key(0x5a); // Return
         m.seek(0x0a4a);
-        require(m.text().find("START/K --> SNES+KB") != std::string::npos, "Keyboard/SNES menu missing");
+        require(m.text().find("START/K") != std::string::npos, "Keyboard/SNES menu missing");
         m.step();
         m.run(10000);
         m.key(0x42); // K
@@ -372,7 +420,8 @@ int main(int argc, char** argv)
         std::cout << "PASS native Disk II boot, " << m.packets
             << " PS/2 packets, move/stop/aim/fire, PCM, capture/restart and monitor return\n"
             << "Save persistence and physical-board approval are not claimed.\n";
-        checkController(argv[1], argv[2]);
+        checkController(argv[1], argv[2], titleKey);
+        checkKeyboardUse(argv[1], argv[2], titleKey);
         return 0;
     }
     catch (const std::exception& error)
