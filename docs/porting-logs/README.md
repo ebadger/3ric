@@ -13,12 +13,18 @@ below as working on the physical machine.
 | [Spy Hunter](spy-hunter.md) | Refresh software-backed joystick state and never destructively sample its registers | Owner lists it as working on 2026-09-30; earlier detailed coverage is real-ROM emulator testing |
 | [Pitfall II](pitfall-ii.md) | Avoid probing the input VIA as a sound card; then separate audio-clock correction from tonal quality | Explicit board confirmation of gamepad control and music with the direct-slot-4 patch; later tuning has separate caveats |
 
+## Current experiments
+
+| Title | Main lesson | Evidence boundary |
+|-------|-------------|-------------------|
+| [Archon](archon.md) (2026-10-05) | Preserve input interrupts across both language-card banks, and avoid paddle-timer traffic in a digital-controller adapter | Reproducible disk patcher with native PS/2 and WASM board/combat coverage; physical-board confirmation remains open |
+
 ## Scope and evidence
 
 This directory is **narrative documentation, not a new specification or a patch
 distribution**. It changes no ROM, emulator, hardware, tooling, or game behavior.
-All runtime tests described in the title logs are **prior-session evidence**, not
-tests rerun while writing these notes. Calculated pitch errors are not listening
+The four September logs describe **prior-session evidence**, not tests rerun while
+writing those notes. New experiments state their own executed coverage. Calculated pitch errors are not listening
 tests, and successful browser input is not proof of a physical PS/2 exchange.
 
 The games and patched images were owner-supplied/local artifacts. No game bytes,
@@ -26,8 +32,9 @@ disk images, commercial assets, replacement firmware, or private diagnostic medi
 are included or offered for download here. Short instruction changes describe the
 engineering intervention, not a redistribution of the games.
 
-Historical patchers and runbooks named in backticks are **not present on this
-documentation branch**. Local commit IDs identify retained development history;
+Historical patchers and runbooks named in the four September logs are **not present
+in this checkout**. The newer Archon experiment includes its own patcher and tests,
+but neither its original nor patched game image. Local commit IDs identify retained development history;
 they may not be reachable from `origin` or available in a fresh clone. They are
 intentionally not GitHub commit links. The offsets, transformations, hashes, and
 evidence in each log remain useful without those tools.

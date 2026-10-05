@@ -165,6 +165,11 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 - **Disk gap:** DOS 3.3 / Quick-DOS and games that chain through an Applesoft auto-run
   greeting don't run — this clone's `$E000` BASIC is generic Microsoft BASIC, not Applesoft.
   Self-booting machine-code disks work.
+- **Archon compatibility candidate:** the owner-supplied disk needs a game-specific
+  bank-safe input adapter; its menu/board otherwise hide the ROM NMI handler.
+  `codegen\tools\patch-archon.mjs` creates a separate local WOZ without changing the
+  ROM or VM. Native PS/2/LED and WASM board/combat checks pass; hardware confirmation
+  remains open. See [`docs/porting-logs/archon.md`](../docs/porting-logs/archon.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**
