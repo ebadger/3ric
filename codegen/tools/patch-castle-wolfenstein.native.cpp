@@ -5,6 +5,7 @@
 #include <array>
 #include <cmath>
 #include <fstream>
+#include <initializer_list>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -33,6 +34,8 @@ namespace
         uint32_t bitPeriod = 160, dataHold = 80, minLatency = 0xffffffff, maxLatency = 0;
         uint64_t lastEdge = 0;
         bool receiving = false, checking = false;
+        bool capturePackets = false;
+        std::vector<uint8_t> completedPackets;
         struct InterruptFrame
         {
             uint16_t pc;
@@ -60,6 +63,7 @@ namespace
                 }
             };
             vm->CallbackWriteMemory = [&](uint16_t address, uint8_t value) {
+                if (capturePackets && address == 0xce01) completedPackets.push_back(value);
                 if (address == 0xc000 && (value & 0x80)) ++characters[value];
                 if (address == 0xc201 || address == 0xc20f)
                 {
@@ -100,6 +104,17 @@ namespace
                 lock(0x58, 0);
                 lock(0x77, 2);
                 lock(0x77, 0);
+                const unsigned beforeA = characters[0xc1], beforeG = characters[0xc7];
+                scanPackets({0x1c, 0xf0, 0x1c, 0x34, 0xf0, 0x34});
+                require(characters[0xc1] == beforeA + 1 && characters[0xc7] == beforeG + 1,
+                    "Back-to-back A/G frames produced the wrong ASCII keys");
+                require(peek(0xce01) == 0x34 && peek(0xc000) == 0xc7,
+                    "The completed raw byte and ASCII latch disagree");
+                vm->WriteData(0xc000, 0);
+                scanPackets({0xe0, 0x75, 0xe0, 0xf0, 0x75});
+                require(peek(0xce03) == 0 && peek(0xce04) == 0 && peek(0xcb75) == 0,
+                    "Consecutive extended-key frames left stale prefix or held-key state");
+                vm->WriteData(0xc000, 0);
             }
             timing(160, 80);
             // Keep the gameplay fixture independent of time spent exercising title LEDs.
@@ -191,36 +206,47 @@ namespace
             }
         }
 
-        void scan(uint8_t code)
+        void scanPackets(std::initializer_list<uint8_t> codes)
         {
             waitKeyboard();
-            std::array<uint8_t, 12> bits{};
-            uint8_t parity = 1;
-            for (int i = 0; i < 8; ++i)
-            {
-                bits[i + 1] = (code >> i) & 1;
-                parity ^= bits[i + 1];
-            }
-            bits[9] = parity;
-            bits[10] = bits[11] = 1;
+            completedPackets.clear();
+            capturePackets = !vm->IsROMVisible(0xfffa);
             const uint64_t start = cycles;
+            unsigned frame = 0;
             receiving = true;
-            for (int i = 0; i < 11; ++i)
+            for (uint8_t code : codes)
             {
-                const uint64_t edge = start + uint64_t(i) * bitPeriod;
-                while (cycles < edge) step();
-                lastEdge = cycles;
-                keyboard.pins(bits[i] != 0, false);
-                while (cycles < edge + bitPeriod / 2) step();
-                keyboard.pins(bits[i] != 0, true);
-                while (cycles < edge + dataHold) step();
-                keyboard.pins(bits[i + 1] != 0, true);
-                while (cycles < edge + bitPeriod) step();
+                std::array<uint8_t, 12> bits{};
+                uint8_t parity = 1;
+                for (unsigned i = 0; i < 8; ++i)
+                {
+                    bits[i + 1] = (code >> i) & 1;
+                    parity ^= bits[i + 1];
+                }
+                bits[9] = parity;
+                bits[10] = bits[11] = 1;
+                for (unsigned i = 0; i < 11; ++i)
+                {
+                    const uint64_t edge = start + uint64_t(frame * 11 + i) * bitPeriod;
+                    while (cycles < edge) step();
+                    lastEdge = cycles;
+                    keyboard.pins(bits[i] != 0, false);
+                    while (cycles < edge + bitPeriod / 2) step();
+                    keyboard.pins(bits[i] != 0, true);
+                    while (cycles < edge + dataHold) step();
+                    keyboard.pins(bits[i + 1] != 0, true);
+                    while (cycles < edge + bitPeriod) step();
+                }
+                ++frame;
             }
             receiving = false;
             run(1000);
             waitKeyboard();
-            ++packets;
+            if (capturePackets)
+                require(completedPackets == std::vector<uint8_t>(codes),
+                    "Consecutive PS/2 packets were corrupted, lost or duplicated");
+            capturePackets = false;
+            packets += unsigned(codes.size());
         }
 
         void waitKeyboard()
@@ -246,7 +272,8 @@ namespace
         void lock(uint8_t code, uint8_t leds)
         {
             const size_t before = keyboard.commands.size();
-            key(code);
+            scanPackets({code, 0xf0, code});
+            run(20000);
             waitKeyboard();
             const std::vector<uint8_t> expected{0xf0, 2, 0xed, leds, 0xf4};
             require(std::vector<uint8_t>(keyboard.commands.begin() + before, keyboard.commands.end()) == expected,
@@ -272,10 +299,9 @@ namespace
         void key(uint8_t code)
         {
             require(!(peek(0xc000) & 0x80), "Previous physical key not consumed");
-            scan(code);
+            scanPackets({code});
             run(20000);
-            scan(0xf0);
-            scan(code);
+            scanPackets({0xf0, code});
             run(20000);
         }
 
@@ -526,6 +552,7 @@ int main(int argc, char** argv)
         Machine m(argv[1], argv[2], titleKey, padAddress);
         m.timing(94, 47);
         m.key(0x5a); // Return
+        m.expect(0xce01, 0x5a, "Physical Return raw scan code was corrupted");
         m.seek(0x0a4a);
         require(m.text().find("START/K") != std::string::npos, "Keyboard/SNES menu missing");
         m.step();
@@ -590,7 +617,8 @@ int main(int argc, char** argv)
         require(m.text().find("4343-") != std::string::npos, "Monitor lost the first physical key");
         require(!m.vm->IsROMVisible(0x9d00), "ROM input corrupted DOS banking");
         std::cout << "PASS native Disk II boot, " << m.packets
-            << " PS/2 packets, move/stop/aim/fire, PCM, capture/restart and monitor return\n"
+            << " PS/2 packets with back-to-back make/break/extended bytes, raw/ASCII codes, "
+            << "move/stop/aim/fire, PCM, capture/restart and monitor return\n"
             << "Save persistence and physical-board approval are not claimed.\n";
         checkController(argv[1], argv[2], titleKey, padAddress);
         checkKeyboardUse(argv[1], argv[2], titleKey, padAddress);

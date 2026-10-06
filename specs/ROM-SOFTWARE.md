@@ -131,15 +131,27 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     nested input interrupts. Restore upper ROM visibility on game exit.
     Check the on-machine NMI proxy ABI before patching its RAM copy; a mismatch
     must show an explicit error and stop rather than run an incompatible handler.
+    **Back-to-back packets:** bit-sampling speed alone is insufficient. At the
+    stop edge, reset the receive phase and acknowledge CA2 before banking or
+    decoding, so an immediately following start edge begins a new frame.
+    Assemble new bits in a private receive byte; `$CE01` must retain the completed
+    packet until the ROM's key decoder has consumed it. The installer clears
+    stale partial-frame/prefix state before enabling the new receiver, retaining
+    key/lock tables. Native input tests must send `F0` + released scan code with
+    no added inter-byte delay or artificial wait for decoder idle, and compare
+    the resulting raw and ASCII codes as well as lock-key command exchanges.
   - **Resident and loading:** reserve only `$C800-$CAFD` for this exact game/ROM
-    profile, leaving `$CAFE`, the `$CB00` key-state table and `$CE00` input state
-    untouched. This borrows inactive ROM FAT32 workspace while the floppy game
+    profile; never overlap `$CAFE`, the `$CB00` key-state table or `$CE00` input
+    storage. Only the documented receive-state reset changes that shared state
+    at installation. This borrows inactive ROM FAT32 workspace while the floppy game
     runs; it is not general free RAM. Extend `@INIT` into checked free DOS sectors,
     updating its binary length, track/sector list, catalog count and VTOC bitmap.
     A disk-loaded installer copies the resident before the title; the game and
     graphics may then overwrite the staging bytes. Installers and staging must
-    remain below the retained `$1F00` keyboard driver and never overwrite its
-    original template in `@INIT`. Re-entering `@INIT` must
+    never overwrite the original keyboard-driver template in `@INIT`. Temporary
+    installer staging may extend into `$1F00-$1FFF`, before the menu copies the
+    live driver there; it must finish before that copy and end below the `$2000`
+    picture area. Re-entering `@INIT` must
     reinstall cleanly and seed button-edge state from the current physical pad.
     Analog P/J modes remain separate; timing and speaker pitch stay at 3RIC's clock.
     The English profile stages after its longer original `@INIT`, and extends it
@@ -518,7 +530,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Microsoft BASIC | Shipped | `$9000–$BFFF`; not Applesoft (known gap). |
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
-| Castle Wolfenstein disk-only port | Solid-state DOS loading / emulator-verified | English DOS skips only mechanical spin-up waits: cold title 85.44 to 15.49 seconds, options-to-game 305.86 to 59.40 seconds at 1x. Exact prior-image inverse, unchanged loaded game/title, native input and WASM gameplay checks pass. The owner still reports intermittent physical Return/Caps Lock failure; hardware diagnosis and save persistence remain open. See the [porting log](../docs/porting-logs/castle-wolfenstein.md). |
+| Castle Wolfenstein disk-only port | Packet-boundary correction / emulator-verified | Fast DOS loading retained. New receiver clears stale startup phase, resets/acknowledges the stop edge before decoding, and separates partial from completed bytes. Consecutive raw/ASCII, LED and SNES tests pass; old packet loss and Return-to-G misdecoding are reproduced in differential fixtures. The new candidate still needs physical-board confirmation; save persistence remains unsupported. See the [porting log](../docs/porting-logs/castle-wolfenstein.md). |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |

@@ -7,6 +7,11 @@ MOVE_DIR = $4341
 AIM_DIR = $4342
 
 init:
+        stz $CE00
+        stz $CE01
+        stz $CE03
+        stz $CE04
+        stz $CE19
         stz pending_key
         stz previous_motion
         stz previous_chord
@@ -328,9 +333,21 @@ ps2_edge:
         dec
         beq ps2_data
         dec
-        bne nmi_rom
+        beq ps2_parity
+; Release the receive state before decoding; the next start can arrive immediately.
+        stz $CE00
+        lda receive_byte
+        sta $CE01
+        lda #1
+        sta $C20D
+        phx
+        phy
+        inc $CAFE
+        bit $C006
+        jmp $B7C0
+ps2_parity:
         inc $CE00
-        lda $CE01
+        lda receive_byte
         cmp #$12
         beq ps2_modifier
         cmp #$59
@@ -343,12 +360,12 @@ ps2_modifier:
 ps2_data:
         lda $C20F
         asl
-        ror $CE01
+        ror receive_byte
         bcc ps2_done
         bra ps2_advance
 ps2_start:
         lda #$80
-        sta $CE01
+        sta receive_byte
 ps2_advance:
         inc $CE00
 ps2_done:
@@ -373,8 +390,8 @@ nmi_resume:
         lda #4
         sta $C20D
         lda $C20D
-        bmi nmi_dispatch
-        bra nmi_return
+        bpl nmi_return
+        jmp nmi_dispatch
 
 button_order:
         .byte 5,4,6,7,0,9,1,8
@@ -394,5 +411,6 @@ select_used:     .byte 0
 chord:           .byte 0
 pending_key:     .byte 0
 start_key:       .byte 0
+receive_byte:    .byte 0
 pad:            .res 16
 resident_end:

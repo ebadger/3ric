@@ -100,9 +100,13 @@ screen (decode `$0400`, 40×24 interleaved), graphics (`renderFrame()` RGBA), CP
   Return reversible, non-overlapping changed-sector records for the complete patch.
   The physical-keyboard installer also checks the NMI proxy ABI, copies the
   current upper ROM to language-card RAM, patches only its vector/return path
-  and maps the copy read-only. Staging must remain below the `$1F00` keyboard driver.
+  and maps the copy read-only. Installer staging ends below `$2000`; it may borrow
+  the future `$1F00` driver page only before the menu installs that driver.
   Native tests reuse the PS/2 command/LED peer and change incoming DATA at the
   rising clock edge, with explicit title and gameplay LED-command assertions.
+  Test device-paced consecutive make/break/extended frames without waiting for
+  the receiver state to become idle between bytes. This must expose a stop/start
+  overlap and shared receive-byte corruption, not hide either with a host delay.
   English WOZ coordinates explicitly select `encoding: "5and3"` and the actual
   on-disk address-sector value (0-255), rather than assuming labels are 0-12.
   Validate 411-nibble XOR checksums, 4-and-4 address checksums, and the two-byte
@@ -113,7 +117,7 @@ screen (decode `$0400`, 40×24 interleaved), graphics (`renderFrame()` RGBA), CP
   preserve the separate 16-sector bootstrap and all other original bits.
   The English solid-state profile additionally guards the two-byte DOS spin-up
   branch and changes only its opcode. A differential test must reverse that edit
-  to the exact prior WOZ fingerprint, cold-boot both disks through the real ROM,
+  to an otherwise identical wait-enabled baseline, cold-boot both disks through the real ROM,
   measure cycles to title/menu/game, and prove the new path never enters the
   spin-up busy-wait. The French profile and sector readers are unchanged.
 - **AI-contributor path.** The codegen guide is exposed for external AI tools: `web/llms.txt`
@@ -147,6 +151,6 @@ breakpoints and current-PC highlighting.
 | `harness` + `run6502` validation loop | Shipped | serial/text/gfx/register checks + `.PRG`. |
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Archon local WOZ patching | Experimental / emulator-verified | `patch-archon.test.mjs` covers synthetic editor fixtures and optional owner-supplied-disk gameplay; `patch-archon.test.ps1` covers native PS/2 timing and LED commands. Both game images stay outside the repository. |
-| Castle Wolfenstein local disk patching | English/French emulator-verified | `patch-castle-wolfenstein.test.mjs` covers profile/sector guards, ROM shadow, ABI rejection, gameplay and differential English DOS cold/warm loading budgets with exact prior-image reversal. `.test.ps1` covers native PS/2/LED/SNES behavior; unresolved physical Return/LED reports are not overridden by those passes. No game assets or save-persistence claim. |
+| Castle Wolfenstein local disk patching | Packet-boundary correction / emulator-verified | `patch-castle-wolfenstein.test.mjs` covers profile/sector guards, ROM shadow, startup receive-state clearing, ABI rejection, gameplay and differential DOS loading budgets. Native checks send consecutive make/break/extended packets with exact raw/ASCII and LED assertions, not artificial inter-byte idle waits. Physical-board confirmation remains open; no game assets or save-persistence claim. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |
 | AI-contributor entry point | Shipped | `web/llms.txt` + `CONTRIBUTING.md`; `prompt-system.md` closes the loop to the gallery. |

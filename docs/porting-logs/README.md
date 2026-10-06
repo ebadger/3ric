@@ -18,7 +18,7 @@ below as working on the physical machine.
 | Title | Main lesson | Evidence boundary |
 |-------|-------------|-------------------|
 | [Archon](archon.md) (2026-10-05) | Preserve input interrupts across both language-card banks, and avoid paddle-timer traffic in a digital-controller adapter | Reproducible disk patcher with native PS/2 and WASM board/combat coverage; physical-board confirmation remains open |
-| [Castle Wolfenstein](castle-wolfenstein.md) (2026-10-06) | Preserve the English WOZ, add SNES controls, and skip DOS motor waits on the solid-state disk interface | Cold title 85.44 -> 15.49 seconds in the VM; input checks pass but intermittent physical Return/LED failure and emulator saves remain unresolved |
+| [Castle Wolfenstein](castle-wolfenstein.md) (2026-10-06) | Preserve the English WOZ, skip electronic-disk motor waits, and separate PS/2 receive state from slower packet decoding | Fast loading plus consecutive-packet/raw-code/LED coverage; the newest keyboard candidate still needs board confirmation and emulator saves remain unsupported |
 
 ## Scope and evidence
 

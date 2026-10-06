@@ -185,7 +185,7 @@ expected_proxy:
         .byte ${byteList(proxy)}
 `);
   const end = installer.org + installer.bytes.length;
-  if (end > 0x1f00) throw new Error("Input installer overlaps the original keyboard driver");
+  if (end > 0x2000) throw new Error("Input installer overlaps the title picture area");
   return { resident, installer, source, end };
 }
 

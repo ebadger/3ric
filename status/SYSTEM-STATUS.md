@@ -191,12 +191,20 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   `EH?` at `>`; enter `MON`, then `C600G` manually in that case.
   Both profiles pass native PS/2/SNES and WASM gameplay/restart/exit checks,
   including U collecting plans or equipping a uniform from open-chest fixtures.
-  The latest `castle-wolfenstein-3ric-english-fastload.woz` changes one additional
+  The `castle-wolfenstein-3ric-english-fastload.woz` trial changed one additional
   DOS byte to skip mechanical spin-up waiting on 3RIC's solid-state disk interface.
   At unchanged 1x speed, cold title loading measures 85.44 -> 15.49 seconds and
   options-to-game loading 305.86 -> 59.40 seconds. Readiness polling, checksums,
   retries, game data and the introduction remain intact; not for mechanical drives.
-  This is not a further keyboard fix.
+  The latest `castle-wolfenstein-3ric-english-packetfix.woz` retains that speedup
+  and fixes a separately reproduced packet-boundary fault: the next PS/2 byte
+  could start before receive state was reset, or overwrite a byte still being
+  decoded. The handler now resets/acknowledges early and uses a private shift
+  byte; initialization clears stale phase/prefix state. Native tests send
+  consecutive make/break/extended bytes and verify raw and ASCII codes plus
+  LED exchanges. A matching packet diagnostic is available locally. The earlier
+  board report was Return `KEY=C7`, `BYTE=80`; the new candidate is not yet
+  board-confirmed.
   Saves and new castles do not persist in the emulator; no
   full-playthrough or physical-board approval is claimed. See the
   [porting log](../docs/porting-logs/castle-wolfenstein.md).

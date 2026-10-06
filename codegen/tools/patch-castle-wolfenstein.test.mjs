@@ -55,7 +55,7 @@ function testGuards() {
     const built = buildControllerPayload(diskProfile);
     assert.equal(built.resident.org, 0xc800);
     assert(built.resident.symbols.RESIDENT_END <= 0xcafe);
-    assert(built.end <= 0x1f00);
+    assert(built.end <= 0x2000);
     assert(built.source >= 0x880 + diskProfile.initLength);
   }
   const fixture = Buffer.from(Uint8Array.from({ length: 143360 }, (_, i) => (i * 17 + (i >> 8)) & 255));
@@ -646,6 +646,27 @@ async function testRuntimeGuard(woz) {
   }
 }
 
+async function testReceiverStartup(woz) {
+  const session = await boot(), vm = session.vm;
+  try {
+    assert(vm.insertDisk(0, woz));
+    type(vm, "MON\rC600G\r");
+    seek(vm, payload.installer.org);
+    for (const [address, value] of [[0xce00, 1], [0xce01, 0x80], [0xce03, 0xe0], [0xce04, 0xf0], [0xce19, 0x12]])
+      vm.poke(address, value);
+    vm.poke(0xcb58, 0x81);
+    vm.step();
+    seek(vm, profile.titleKey);
+    for (const address of [0xce00, 0xce01, 0xce03, 0xce04, 0xce19])
+      assert.equal(vm.peek(address), 0, `Stale startup receive state survived at $${address.toString(16)}`);
+    assert.equal(vm.peek(0xcb58), 0x81, "Installing the receiver changed the lock-key table");
+    assert.equal(vm.peek(payload.resident.symbols.RECEIVE_BYTE), 0);
+    console.log("PASS stale partial-frame/prefix state cleared at installation without resetting lock state");
+  } finally {
+    vm.delete();
+  }
+}
+
 async function measureDiskLoading(woz, skipSpinup) {
   const session = await boot(), vm = session.vm;
   const advance = (pc, budget = 1000000000) => {
@@ -696,8 +717,10 @@ async function testSolidStateLoading(woz) {
     track: 0, sector: 7, encoding: "5and3", offset: 0x7b,
     before: ENGLISH_SPINUP_PATCH.after, after: ENGLISH_SPINUP_PATCH.before,
   }]);
-  assert.equal(sha256(slow), "07106c99054bf6408f6e4f74c19cbb8768541694b120ea03c530876542932722",
-    "The solid-state disk changed more than the guarded DOS branch");
+  assert.deepEqual(patchWozSectors(slow, [{
+    track: 0, sector: 7, encoding: "5and3", offset: 0x7b,
+    before: ENGLISH_SPINUP_PATCH.before, after: ENGLISH_SPINUP_PATCH.after,
+  }]), woz, "Loading baselines must differ only by the guarded DOS branch");
   const before = await measureDiskLoading(slow, false);
   const after = await measureDiskLoading(woz, true);
   assert.equal(after.titleFrame, before.titleFrame, "The title output changed");
@@ -768,7 +791,10 @@ async function testImage(inputPath) {
     await testPadGameplay(woz);
     await testPadActions(woz);
     await testKeyboardUse(woz);
-    if (profile.id === "french") await testRuntimeGuard(woz);
+    if (profile.id === "french") {
+      await testRuntimeGuard(woz);
+      await testReceiverStartup(woz);
+    }
   } finally {
     fs.rmSync(temporary, { recursive: true, force: true });
   }
