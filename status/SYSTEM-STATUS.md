@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-05 — ebadger (via Copilot)_
+_Last updated: 2026-10-06 — ebadger (via Copilot)_
 
 ---
 
@@ -180,17 +180,23 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   T throws a grenade, U uses/equips, Return inventories).
   The corrected resident lets physical action keys interrupt a held D-pad;
   release the D-pad before moving again so timed U actions can finish.
-  The latest `castle-wolfenstein-3ric-english-ps2.woz` candidate also installs a
+  The `castle-wolfenstein-3ric-english-ps2.woz` candidate also installs a
   read-only RAM copy of the monitor with a fast PS/2 NMI front end; no ROM reburn
   is needed. It fixes a reproduced late-DATA sampling failure that corrupted
   Return/Caps Lock at faster valid keyboard clocks. Title/gameplay LED exchanges
-  and mixed SNES traffic pass native checks; physical-board confirmation is open.
+  and mixed SNES traffic pass native checks, but the owner still reports
+  intermittent physical Return/Caps Lock failures; that diagnosis remains open.
   Exit restores the original ROM and its original keyboard timing.
   Boot with `C600G` from `*` (`MON` first from `>`). The web Insert action may leave
   `EH?` at `>`; enter `MON`, then `C600G` manually in that case.
   Both profiles pass native PS/2/SNES and WASM gameplay/restart/exit checks,
   including U collecting plans or equipping a uniform from open-chest fixtures.
-  The English disk retains its slower DOS 3.2 loading and original introduction.
+  The latest `castle-wolfenstein-3ric-english-fastload.woz` changes one additional
+  DOS byte to skip mechanical spin-up waiting on 3RIC's solid-state disk interface.
+  At unchanged 1x speed, cold title loading measures 85.44 -> 15.49 seconds and
+  options-to-game loading 305.86 -> 59.40 seconds. Readiness polling, checksums,
+  retries, game data and the introduction remain intact; not for mechanical drives.
+  This is not a further keyboard fix.
   Saves and new castles do not persist in the emulator; no
   full-playthrough or physical-board approval is claimed. See the
   [porting log](../docs/porting-logs/castle-wolfenstein.md).

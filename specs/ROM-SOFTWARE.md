@@ -64,6 +64,22 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   - Keep the disk's DOS, title, assets, keyboard driver and game logic. Complete DOS
     initialization and `BRUN @INIT` directly instead of starting the unavailable
     Applesoft interpreter to execute the `^HELLO` greeting.
+  - **Solid-state disk loading (English profile):** the owner requested removing
+    DOS's mechanical spin-up delay because 3RIC uses an electronic disk interface.
+    At runtime `$BD7B`, replace `BNE $BD8A` with 65C02 `BRA $BD8A` (physical
+    track 0 / sector 7 / byte `$7B`). This bypasses only the busy-wait at
+    `$BD7D-$BD88`, including its initial invocation; motor/select soft-switches,
+    track positioning, actual data-ready polling, sector/address checksums and
+    retry/error paths remain intact. This is a 3RIC solid-state-specific disk,
+    not a replacement DOS for a mechanical Apple II drive. Do not overclock the
+    guest or change the game, ROM, VM or Pico disk implementation to achieve it.
+    Compare identical cold-boot/title, menu and game-load checkpoints against
+    the prior image using emulated cycles. Require no spin-up-loop entry on
+    the patched path, a cold title within 35 seconds at 1,573,437.5 Hz, and
+    at least a twofold cold-title speedup over the unmodified-wait baseline.
+    Existing keyboard/controller behavior and WOZ preservation still apply.
+    This loading optimization does not resolve the owner's intermittent
+    physical Return/Caps Lock failure, which remains under investigation.
   - Return BASIC-dependent game exits to the ROM's monitor initialization at `$FF59`.
     Acknowledge Escape before entering the monitor so the next command's first
     character is not consumed as an Apple II monitor escape command. The game file
@@ -502,7 +518,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Microsoft BASIC | Shipped | `$9000–$BFFF`; not Applesoft (known gap). |
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
-| Castle Wolfenstein disk-only port | Fast PS/2 candidate / emulator-verified | English/French gameplay and U fixes retained. Read-only RAM monitor shadow samples PS/2 DATA early; title Return and title/gameplay Caps/Num LED exchanges pass at 94/47, 120/60 and 160/80 cycle timing, including mixed SNES traffic and NMI-context preservation. Original ROM visibility is restored on exit. Save persistence and physical-board approval remain open; see the [porting log](../docs/porting-logs/castle-wolfenstein.md). |
+| Castle Wolfenstein disk-only port | Solid-state DOS loading / emulator-verified | English DOS skips only mechanical spin-up waits: cold title 85.44 to 15.49 seconds, options-to-game 305.86 to 59.40 seconds at 1x. Exact prior-image inverse, unchanged loaded game/title, native input and WASM gameplay checks pass. The owner still reports intermittent physical Return/Caps Lock failure; hardware diagnosis and save persistence remain open. See the [porting log](../docs/porting-logs/castle-wolfenstein.md). |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |

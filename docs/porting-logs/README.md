@@ -18,7 +18,7 @@ below as working on the physical machine.
 | Title | Main lesson | Evidence boundary |
 |-------|-------------|-------------------|
 | [Archon](archon.md) (2026-10-05) | Preserve input interrupts across both language-card banks, and avoid paddle-timer traffic in a digital-controller adapter | Reproducible disk patcher with native PS/2 and WASM board/combat coverage; physical-board confirmation remains open |
-| [Castle Wolfenstein](castle-wolfenstein.md) (2026-10-05) | Preserve the English WOZ; add SNES controls, preserve timed U actions, and sample physical PS/2 DATA before the rising edge | English/French disk-only candidates; native title/gameplay LED and mixed-input timing checks plus WASM gameplay; emulator saves and physical-board confirmation remain open |
+| [Castle Wolfenstein](castle-wolfenstein.md) (2026-10-06) | Preserve the English WOZ, add SNES controls, and skip DOS motor waits on the solid-state disk interface | Cold title 85.44 -> 15.49 seconds in the VM; input checks pass but intermittent physical Return/LED failure and emulator saves remain unresolved |
 
 ## Scope and evidence
 

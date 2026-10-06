@@ -1,12 +1,14 @@
 # Castle Wolfenstein: a disk-only keyboard and SNES port
 
-**2026-10-05. Emulator-verified candidate; not yet confirmed on the physical board.**
+**2026-10-06 update. Emulator-verified; intermittent physical Return/LED failure remains unresolved.**
 The owner first supplied a French DOS-order disk, then requested independent SNES
 movement/aiming, and subsequently supplied the intended English WOZ and reported
 that keyboard actions such as U did not work in play. Both exact disk profiles now
 use the corrected resident. A later report of dead Return/Caps Lock led to the
 owner-approved RAM-shadowed monitor/fast NMI correction below. Floppy-save
 persistence remains explicitly out of scope.
+The latest English-only change bypasses DOS motor spin-up waits at the owner's
+request because the 3RIC disk interface is solid-state; it does not change input.
 
 ## Exact artifacts
 
@@ -21,7 +23,8 @@ and tests.
 | Earlier French `castle-wolfenstein-3ric-snes.woz` (before the U fix; preserved, superseded) | 234,496 | `c7988ffe09cb4397d6d6a828a63faeae72755d75e084fac61b44ef0f7aef7ec6` |
 | Owner's English `Castle Wolfenstein - Disk 1, Side A.woz` | 234,815 | `727335c08ffc39b470f95e6b1c89de28de6ca6c3be30b0191757ec9cfc474ad3` |
 | Earlier English `castle-wolfenstein-3ric-english-snes.woz` (U fix, before fast PS/2; preserved) | 234,815 | `d7c1c07775a2fb151a5c9bea0cf8a2a8eb0206527a376692d0998ff26343ba24` |
-| Current `castle-wolfenstein-3ric-english-ps2.woz` | 234,815 | `07106c99054bf6408f6e4f74c19cbb8768541694b120ea03c530876542932722` |
+| Earlier `castle-wolfenstein-3ric-english-ps2.woz` (mechanical delays retained; preserved) | 234,815 | `07106c99054bf6408f6e4f74c19cbb8768541694b120ea03c530876542932722` |
+| Current `castle-wolfenstein-3ric-english-fastload.woz` | 234,815 | `b29fad63fe20319006915ddfb87161969c24847c4f886ff36ae81ab765bb5cbe` |
 | Current regenerated French output with fast PS/2 | 234,496 | `7eb409b342f912ed459d65d2551e217f0fb27d6512272ab6ee298ec244f03de6` |
 | Unchanged repository `badger6502.bin` | 524,288 | `fcea03683b77b7f113e6d8f0064ea8edbd6c75b04b472ec5c84de1c3a9f86435` |
 
@@ -99,6 +102,13 @@ fast receiver is therefore **game-scoped**; it does not repair original firmware
 timing before installation or after exit. Release keys during disk loading.
 An on-machine proxy mismatch displays `3RIC INPUT ROM MISMATCH - RESET` and stops.
 
+**Hardware follow-up, October 6:** the owner still reports intermittent Return and
+Caps Lock LEDs with the PS/2 candidate. Typing the entire boot command through
+physical-path PS/2 frames also passed in the native emulator; this did not reproduce
+the remaining failure. Live title-screen pin/interrupt/receiver diagnostics were
+prepared for the board. Do not interpret emulator success or the separate DOS
+speedup below as confirmation that physical keyboard input is fixed.
+
 ## Exact changes
 
 These are **French DOS-order file offsets**, not physical WOZ sector numbers.
@@ -172,7 +182,7 @@ shared `@WOLF` hooks and action logic retain the same addresses as the French ga
 Extension sectors contain stale **unallocated** data, so the patcher verifies the
 VTOC and exact image fingerprint rather than assuming free sectors are zero.
 
-Only **1,116 decoded byte values in 17 sector data fields**, their encoded checksums,
+Only **1,117 decoded byte values in 18 sector data fields**, their encoded checksums,
 and the WOZ CRC change. Reversing these field edits restores the entire original
 234,815-byte file exactly. Track layout, address fields, synchronization bits,
 metadata, and the separate 16-sector bootstrap are retained.
@@ -182,12 +192,50 @@ All **453 standard 5-and-3 fields** round-trip. The absent 5-and-3 fields at tra
 be edited by this profile. They are not replaced with fabricated sectors. The
 generic editor's existing default 6-and-2 validation is unchanged.
 
+## Solid-state DOS loading
+
+Profiling the earlier English PS/2 candidate found 79 visits to DOS's mechanical
+spin-up loop at `$BD7D-$BD88`, consuming about 58 of the 85 seconds before the title.
+DOS compares closely spaced `$C0EC` reads to detect a running motor; equal values
+repeatedly select the delay on 3RIC's electronic disk interface.
+
+The owner requested a DOS patch because there is no physical motor. In physical
+track 0 / sector 7 / byte `$7B` (normalized offset `$077B`), change opcode `$D0`
+to `$80`: runtime `BNE $BD8A` becomes 65C02 `BRA $BD8A`. The branch destination and
+unused loop bytes stay unchanged. This skips every DOS spin-up delay, including
+the first, but keeps motor/select accesses, track positioning, data-ready polling,
+address/data checksums, retries and error handling intact. The VM and Pico device's
+own readiness model are unchanged; their data still has to become available.
+This is **specific to 3RIC's solid-state interface, not mechanical Apple II drives**.
+
+Reversing that one decoded byte in the new WOZ recovers the exact earlier
+`07106c...` image. No game code, resident, castle/chest contents or frame pacing
+changes accompany it. The original English introduction remains.
+
+The differential check boots both full images through the unchanged ROM and
+measures emulated cycles with no overclock or RAM-loaded game shortcut:
+
+| Interval | Old cycles | New cycles | Old / new seconds at 1x |
+|----------|-----------:|-----------:|-----------------------:|
+| Cold `C600G` Return to title | 134,428,957 | 24,366,145 | 85.44 / 15.49 |
+| Title Return to options | 6,543,744 | 1,019,555 | 4.16 / 0.65 |
+| K at options to first live frame | 481,256,150 | 93,467,703 | 305.86 / 59.40 |
+| Escape to monitor entry | 2,863,443 | 502,577 | 1.82 / 0.32 |
+| Reboot after motor-off interval | 136,756,926 | 24,389,881 | 86.92 / 15.50 |
+
+These are emulator measurements, not board wall-clock guarantees. The new path
+must never execute the spin-up loop, must reach the cold/reboot title within
+35 seconds at 1,573,437.5 Hz, and must at least halve cold-title time. It also
+compares the title framebuffer and disk-loaded game binary against the old image.
+Native English keyboard/SNES/LED/U checks and the unchanged French output pass.
+The optimization is independent of the unresolved physical keyboard report.
+
 ## Generate and play
 
 With the exact original disk available locally:
 
 ```powershell
-node codegen\tools\patch-castle-wolfenstein.mjs ".\Castle Wolfenstein - Disk 1, Side A.woz" .\castle-wolfenstein-3ric-english-ps2.woz
+node codegen\tools\patch-castle-wolfenstein.mjs ".\Castle Wolfenstein - Disk 1, Side A.woz" .\castle-wolfenstein-3ric-english-fastload.woz
 ```
 
 The same command accepts the exact French `.do` input and a different output name.
@@ -204,8 +252,9 @@ Press **Start** at the title, release it, then press **Start** again at the opti
 Return then K still works. Keep native 1x speed; 3RIC's clock still determines
 game speed and speaker pitch. A standard USB/Bluetooth controller uses the
 browser's existing SNES mapping; L/R accept its shoulder or trigger buttons.
-The English version retains its original introduction and much slower, scattered
-DOS 3.2 disk loading; allow those reads to finish rather than resetting mid-load.
+The English version retains its introduction and scattered DOS 3.2 reads. With
+spin-up waits bypassed, allow roughly 16 seconds to the title and a further minute
+from selecting controls to gameplay at 1x in the emulator; do not reset mid-load.
 
 | SNES pad 1 | Action |
 |------------|--------|
@@ -269,6 +318,8 @@ native profiles compile the same shared sources. The actual local attachment pat
 is supplied to `--disk` / `-InputDisk`.
 Without `--disk`, the JavaScript check exercises synthetic sector conversion,
 patch bounds and rejection/no-output guards, and explicitly skips game integration.
+The English suite now also runs the differential loading check above against the
+exact earlier PS/2 image reconstructed by reversing only the DOS branch patch.
 
 Both integrations cold-boot the generated disk through `$C600`, without injecting
 game code or changing the PC to bypass loading. They exercise keyboard movement
@@ -337,6 +388,7 @@ Consequently either language's save message is not a persistence guarantee, and 
 persist a newly generated castle. This patch deliberately does not implement
 floppy writing, suppress that limitation, or claim a successful save test.
 
-**Still open:** physical-board confirmation, complete-playthrough coverage, all
+**Still open:** intermittent physical Return/Caps Lock failure, physical-board
+confirmation of the solid-state DOS timing, complete-playthrough coverage, all
 items/room transitions, analog P/J modes and Apple II clock correction.
 Speaker PCM establishes signal generation, not a human speech-quality assessment.

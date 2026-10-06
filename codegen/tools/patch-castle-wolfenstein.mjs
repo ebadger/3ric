@@ -34,6 +34,10 @@ export const FRENCH_PROFILE = Object.freeze({
   extensionTrack: 4, bitmapShift: 16, emptyExtension: true,
   bootPatches: PATCHES.slice(0, 3),
 });
+export const ENGLISH_SPINUP_PATCH = Object.freeze({
+  offset: 0x077b, before: "d00d", after: "800d",
+  purpose: "DOS $BD7B: bypass mechanical spin-up waiting on the solid-state 3RIC disk interface",
+});
 export const ENGLISH_PROFILE = Object.freeze({
   id: "english", sha256: ENGLISH_SHA256, size: 234815, sectorCount: 13,
   initList: 0xba00, initLength: 0x12be, wolfList: 0x7400,
@@ -41,6 +45,7 @@ export const ENGLISH_PROFILE = Object.freeze({
   menuLabel: "PRESS K FOR KEYBOARD", replacementLabel: "START/K FOR SNES+KEY",
   extensionTrack: 12, bitmapShift: 19, emptyExtension: false,
   bootPatches: [
+    ENGLISH_SPINUP_PATCH,
     { offset: 0x10d2, before: "6c5c1d", after: "4cd51d" },
     { offset: 0x1122, before: "4c7624", after: "4c2723" },
     { offset: 0x1cb8, before: "dec8c5cccccf", after: "c0c9cec9d4a0" },
@@ -298,6 +303,7 @@ function main(args) {
   const result = patchCastleWolfenstein(fs.readFileSync(input), rom);
   fs.writeFileSync(output, result.woz, { flag: "wx" });
   console.log(`Created ${output}\nProfile: ${result.profile.id}\nSHA-256: ${sha256(result.woz)}\n`
+    + (result.profile.id === "english" ? "English DOS spin-up waits are bypassed for solid-state 3RIC disks, not mechanical drives.\n" : "")
     + "Boot with C600G from the monitor. Press Start at the title and options, or Return then K.\n"
     + "Pad 1: D-pad moves; X/A/B/Y aim up/right/down/left; L fires; R searches.\n"
     + "Tap Select: inventory. Select+L: grenade; Select+R: use; Start+Select: exit.\n"

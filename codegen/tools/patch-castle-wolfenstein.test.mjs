@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { assemble } from "./asm6502.mjs";
 import { buildWozFromDsk, crc32 } from "./wozgen.mjs";
 import { decode5and3, encode5and3, patchWozSectors, readWozSectors, sha256 } from "./wozedit.mjs";
-import { FRENCH_PROFILE, ENGLISH_PROFILE, PATCHES, ROM_SHA256, buildControllerPayload,
+import { FRENCH_PROFILE, ENGLISH_PROFILE, ENGLISH_SPINUP_PATCH, PATCHES, ROM_SHA256, buildControllerPayload,
   decodeEnglishDisk, detectCastleProfile, englishCoordinates, patchCastleWolfenstein } from "./patch-castle-wolfenstein.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -18,6 +18,7 @@ const { SNES: PAD } = require(path.join(root, "web", "gamepad.js"));
 const rom = fs.readFileSync(path.join(root, "emulator", "Data", "badger6502.bin"));
 const cliPath = path.join(root, "codegen", "tools", "patch-castle-wolfenstein.mjs");
 const coordinates = Array.from({ length: 560 }, (_, i) => ({ track: i >> 4, sector: i & 15 }));
+const CPU_HZ = 1573437.5;
 let profile = FRENCH_PROFILE;
 let payload = buildControllerPayload(profile);
 
@@ -645,6 +646,73 @@ async function testRuntimeGuard(woz) {
   }
 }
 
+async function measureDiskLoading(woz, skipSpinup) {
+  const session = await boot(), vm = session.vm;
+  const advance = (pc, budget = 1000000000) => {
+    assert(vm.addBreakpoint(pc));
+    const cycles = vm.runCycles(budget);
+    vm.removeBreakpoint(pc);
+    assert(vm.breakpointHit());
+    assert.equal(vm.pc(), pc, `Loading stopped at $${vm.pc().toString(16)} instead of $${pc.toString(16)}`);
+    return cycles;
+  };
+  try {
+    assert(vm.insertDisk(0, woz));
+    type(vm, "MON\rC600G");
+    if (skipSpinup) assert(vm.addBreakpoint(0xbd7d));
+    vm.keyDown(13);
+    const title = advance(0x0c56);
+    assert.equal(vm.peekMapped(0xbd7b), skipSpinup ? 0x80 : 0xd0);
+    const titleFrame = sha256(Buffer.from(vm.renderFrame()));
+
+    vm.keyDown(13);
+    const menu = advance(0x0a4a);
+    vm.step();
+    vm.runCycles(10000);
+    vm.keyDown(75);
+    let game = advance(0x0810);
+    const binary = sha256(Buffer.from(Array.from({ length: 0x16ee }, (_, i) => vm.peek(0x0810 + i))));
+    game += advance(0x119c);
+    assert.equal(vm.textMode(), 0);
+    assert.equal(vm.peek(0x4347), 10);
+
+    // Include a motor-off interval before cold-reentering the disk loader.
+    vm.keyDown(27);
+    const exit = advance(0xff59);
+    vm.step();
+    vm.runCycles(Math.ceil(2 * CPU_HZ));
+    type(vm, "C600G");
+    vm.keyDown(13);
+    const reboot = advance(0x0c56);
+    assert.equal(sha256(Buffer.from(vm.renderFrame())), titleFrame);
+    return { title, menu, game, exit, reboot, titleFrame, binary };
+  } finally {
+    vm.delete();
+  }
+}
+
+async function testSolidStateLoading(woz) {
+  const slow = patchWozSectors(woz, [{
+    track: 0, sector: 7, encoding: "5and3", offset: 0x7b,
+    before: ENGLISH_SPINUP_PATCH.after, after: ENGLISH_SPINUP_PATCH.before,
+  }]);
+  assert.equal(sha256(slow), "07106c99054bf6408f6e4f74c19cbb8768541694b120ea03c530876542932722",
+    "The solid-state disk changed more than the guarded DOS branch");
+  const before = await measureDiskLoading(slow, false);
+  const after = await measureDiskLoading(woz, true);
+  assert.equal(after.titleFrame, before.titleFrame, "The title output changed");
+  assert.equal(after.binary, before.binary, "The disk-loaded game binary changed");
+  assert(after.title <= 35 * CPU_HZ, "Cold title exceeded the 35-second solid-state limit");
+  assert(after.title * 2 <= before.title, "Cold title was not at least twice as fast");
+  for (const stage of ["menu", "game", "exit", "reboot"])
+    assert(after[stage] < before[stage], `${stage} loading did not improve`);
+  assert(after.reboot <= 35 * CPU_HZ, "Reboot exceeded the solid-state limit");
+  for (const stage of ["title", "menu", "game", "exit", "reboot"])
+    console.log(`  ${stage}: ${before[stage]} -> ${after[stage]} cycles `
+      + `(${(before[stage] / CPU_HZ).toFixed(2)} -> ${(after[stage] / CPU_HZ).toFixed(2)} seconds at 1x)`);
+  console.log("PASS solid-state DOS: exact branch-only delta, no spin-up-loop entries, unchanged title/game and faster cold/warm loading");
+}
+
 async function testImage(inputPath) {
   const original = fs.readFileSync(inputPath);
   profile = detectCastleProfile(original);
@@ -677,6 +745,10 @@ async function testImage(inputPath) {
     assert.deepEqual(woz.subarray(12, 1536), original.subarray(12, 1536), "WOZ metadata/track descriptors changed");
     assert.equal(englishCoordinates().length, 453);
     assert.deepEqual(decodeEnglishDisk(woz), dsk);
+    assert.equal(originalDisk[0x077b], 0xd0);
+    assert.equal(dsk[0x077b], 0x80);
+    assert.deepEqual(dsk.subarray(0x077c, 0x078a), originalDisk.subarray(0x077c, 0x078a),
+      "Spin-up edit changed its destination or delay-loop bytes");
   } else verifySectors(woz, dsk);
   const changed = Buffer.from(original);
   changed[0x0ce7] ^= 1;
@@ -690,6 +762,7 @@ async function testImage(inputPath) {
     assert.deepEqual(fs.readFileSync(output), woz);
     assert.equal(cli().status, 1, "Patcher overwrote an existing output");
     assert.deepEqual(fs.readFileSync(output), woz);
+    if (profile.id === "english") await testSolidStateLoading(woz);
     await testGameplay(fs.readFileSync(output));
     await testPadDriver(woz);
     await testPadGameplay(woz);

@@ -111,6 +111,11 @@ screen (decode `$0400`, 40×24 interleaved), graphics (`renderFrame()` RGBA), CP
   remains unchanged. The English image's absent 5-and-3 fields at track 0/sector
   10 and track 2/sector 12 are explicitly excluded, never synthesized or edited;
   preserve the separate 16-sector bootstrap and all other original bits.
+  The English solid-state profile additionally guards the two-byte DOS spin-up
+  branch and changes only its opcode. A differential test must reverse that edit
+  to the exact prior WOZ fingerprint, cold-boot both disks through the real ROM,
+  measure cycles to title/menu/game, and prove the new path never enters the
+  spin-up busy-wait. The French profile and sector readers are unchanged.
 - **AI-contributor path.** The codegen guide is exposed for external AI tools: `web/llms.txt`
   (published at the site root, owned by `WEB-CLIENT.md`) is the machine-readable entry point
   that links `prompt-system.md` + `platform-ref.md`, and `prompt-system.md` closes the loop to
@@ -142,6 +147,6 @@ breakpoints and current-PC highlighting.
 | `harness` + `run6502` validation loop | Shipped | serial/text/gfx/register checks + `.PRG`. |
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Archon local WOZ patching | Experimental / emulator-verified | `patch-archon.test.mjs` covers synthetic editor fixtures and optional owner-supplied-disk gameplay; `patch-archon.test.ps1` covers native PS/2 timing and LED commands. Both game images stay outside the repository. |
-| Castle Wolfenstein local disk patching | English/French emulator-verified | `patch-castle-wolfenstein.test.mjs` covers sector/profile guards, ROM-shadow bytes/write protection, on-machine ABI rejection and keyboard/SNES gameplay. `.test.ps1` covers fast PS/2 DATA timing, title/gameplay LED exchanges, mixed pad traffic and preserved interrupt context using the shared `ps2-keyboard-peer.h`. No game assets or save-persistence claim. |
+| Castle Wolfenstein local disk patching | English/French emulator-verified | `patch-castle-wolfenstein.test.mjs` covers profile/sector guards, ROM shadow, ABI rejection, gameplay and differential English DOS cold/warm loading budgets with exact prior-image reversal. `.test.ps1` covers native PS/2/LED/SNES behavior; unresolved physical Return/LED reports are not overridden by those passes. No game assets or save-persistence claim. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |
 | AI-contributor entry point | Shipped | `web/llms.txt` + `CONTRIBUTING.md`; `prompt-system.md` closes the loop to the gallery. |
