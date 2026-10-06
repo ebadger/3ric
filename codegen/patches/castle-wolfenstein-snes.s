@@ -304,6 +304,78 @@ keyboard_fire:
         pla
         rts
 
+exit_game:
+        bit $C082
+        jmp $FF59
+
+; Short receive phases run before banking. The copied ROM handles complete packets.
+nmi_entry:
+        pha
+nmi_dispatch:
+        lda $C20D
+        lsr
+        bcs ps2_edge
+        and #$08
+        beq nmi_rom
+        lda KEYBOARD
+        and #$7F
+        sta KEYBOARD
+        lda #$10
+        bra nmi_ack
+ps2_edge:
+        lda $CE00
+        beq ps2_start
+        dec
+        beq ps2_data
+        dec
+        bne nmi_rom
+        inc $CE00
+        lda $CE01
+        cmp #$12
+        beq ps2_modifier
+        cmp #$59
+        beq ps2_modifier
+        cmp #$14
+        bne ps2_done
+ps2_modifier:
+        sta $CE19
+        bra ps2_done
+ps2_data:
+        lda $C20F
+        asl
+        ror $CE01
+        bcc ps2_done
+        bra ps2_advance
+ps2_start:
+        lda #$80
+        sta $CE01
+ps2_advance:
+        inc $CE00
+ps2_done:
+        lda #1
+nmi_ack:
+        sta $C20D
+        lda $C20D
+        bmi nmi_dispatch
+nmi_return:
+        pla
+        rti
+nmi_rom:
+        phx
+        phy
+        inc $CAFE
+        bit $C006
+        jmp $B6A9
+nmi_resume:
+        ply
+        plx
+; The ROM's unused shift-register path was clear-only, not a data consumer.
+        lda #4
+        sta $C20D
+        lda $C20D
+        bmi nmi_dispatch
+        bra nmi_return
+
 button_order:
         .byte 5,4,6,7,0,9,1,8
 directions:

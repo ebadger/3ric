@@ -98,6 +98,11 @@ screen (decode `$0400`, 40×24 interleaved), graphics (`renderFrame()` RGBA), CP
   installed from an extended `@INIT`. Only checked free sectors may be appended;
   file length, track/sector list, catalog sector count and VTOC allocation must agree.
   Return reversible, non-overlapping changed-sector records for the complete patch.
+  The physical-keyboard installer also checks the NMI proxy ABI, copies the
+  current upper ROM to language-card RAM, patches only its vector/return path
+  and maps the copy read-only. Staging must remain below the `$1F00` keyboard driver.
+  Native tests reuse the PS/2 command/LED peer and change incoming DATA at the
+  rising clock edge, with explicit title and gameplay LED-command assertions.
   English WOZ coordinates explicitly select `encoding: "5and3"` and the actual
   on-disk address-sector value (0-255), rather than assuming labels are 0-12.
   Validate 411-nibble XOR checksums, 4-and-4 address checksums, and the two-byte
@@ -137,6 +142,6 @@ breakpoints and current-PC highlighting.
 | `harness` + `run6502` validation loop | Shipped | serial/text/gfx/register checks + `.PRG`. |
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Archon local WOZ patching | Experimental / emulator-verified | `patch-archon.test.mjs` covers synthetic editor fixtures and optional owner-supplied-disk gameplay; `patch-archon.test.ps1` covers native PS/2 timing and LED commands. Both game images stay outside the repository. |
-| Castle Wolfenstein local disk patching | English/French emulator-verified | `patch-castle-wolfenstein.test.mjs` covers guards, resident/DOS allocation, 5-and-3 codec/framing, exact inverse editing, 453 English or 560 French sectors and keyboard/SNES gameplay including completed U item use. `.test.ps1` covers both profiles with native PS/2 and mixed pad traffic. No game assets or save-persistence claim. |
+| Castle Wolfenstein local disk patching | English/French emulator-verified | `patch-castle-wolfenstein.test.mjs` covers sector/profile guards, ROM-shadow bytes/write protection, on-machine ABI rejection and keyboard/SNES gameplay. `.test.ps1` covers fast PS/2 DATA timing, title/gameplay LED exchanges, mixed pad traffic and preserved interrupt context using the shared `ps2-keyboard-peer.h`. No game assets or save-persistence claim. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |
 | AI-contributor entry point | Shipped | `web/llms.txt` + `CONTRIBUTING.md`; `prompt-system.md` closes the loop to the gallery. |

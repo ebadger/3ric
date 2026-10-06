@@ -101,8 +101,20 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     driver and direction/fire latches, including its swapped-control option.
     Poll the real active-low SNES serial data on VIA1 PB5 using the shared PB6/PB7
     latch/clock, without paddle-timer interrupts or changing VIA configuration.
-    The second pad must not control the game. No firmware, VM, browser bridge,
-    global memory map or hardware change is part of this port.
+    The second pad must not control the game. No burned-ROM image, VM, browser
+    bridge, global memory map or hardware change is part of this port.
+    The owner approved a disk-only correction for the physical PS/2 receiver:
+    the original ROM samples DATA about 66-71 CPU cycles after a falling edge,
+    too late for valid 94/47- or 120/60-cycle clock/data-hold timing.
+    Copy the existing upper ROM into read-only language-card bank-2 RAM and
+    install a fast NMI front end there; leave the burned ROM unchanged. The
+    short start/data/parity phases sample PA7 through the non-handshaking VIA
+    alias, acknowledge only serviced sources, and forward completed packets,
+    lock-key commands and other enabled input sources to the existing banked
+    ROM decoder. Preserve A/X/Y, flags, stack and BASIC overlay state, including
+    nested input interrupts. Restore upper ROM visibility on game exit.
+    Check the on-machine NMI proxy ABI before patching its RAM copy; a mismatch
+    must show an explicit error and stop rather than run an incompatible handler.
   - **Resident and loading:** reserve only `$C800-$CAFD` for this exact game/ROM
     profile, leaving `$CAFE`, the `$CB00` key-state table and `$CE00` input state
     untouched. This borrows inactive ROM FAT32 workspace while the floppy game
@@ -110,7 +122,8 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     updating its binary length, track/sector list, catalog count and VTOC bitmap.
     A disk-loaded installer copies the resident before the title; the game and
     graphics may then overwrite the staging bytes. Installers and staging must
-    remain below the retained `$1F00` keyboard driver. Re-entering `@INIT` must
+    remain below the retained `$1F00` keyboard driver and never overwrite its
+    original template in `@INIT`. Re-entering `@INIT` must
     reinstall cleanly and seed button-edge state from the current physical pad.
     Analog P/J modes remain separate; timing and speaker pitch stay at 3RIC's clock.
     The English profile stages after its longer original `@INIT`, and extends it
@@ -125,6 +138,10 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     keyboard fallback, speaker output and usable monitor return, including native
     mixed PS/2/pad traffic. A passing emulator run is not physical-board or
     full-playthrough approval.
+    Physical-keyboard acceptance also covers Return at the title, bidirectional
+    Caps/Num Lock LED exchanges at title and gameplay, and 94/47, 120/60 and
+    160/80-cycle period/data-hold cases. Holding DATA for a full bit period is
+    insufficient evidence for a physical PS/2 receiver.
 - **Archon compatibility experiment:** an image-specific, disk-only adapter for the
   owner-supplied WOZ2 with SHA-256
   `a7722abdfc42ef7372b5183283b6f55464c3817b1c855256186cb5c30e600c8d`.
@@ -485,7 +502,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Microsoft BASIC | Shipped | `$9000–$BFFF`; not Applesoft (known gap). |
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
-| Castle Wolfenstein disk-only port | English/French emulator-verified candidates | Exact-profile English 13-sector WOZ and French DOS-order patching; keyboard/SNES controls, restart, and actual U item use with held D-pad pass in WASM and native PS/2 checks. Original WOZ bits/metadata outside edited fields are preserved. Emulator save persistence and physical-board approval remain open; see the [porting log](../docs/porting-logs/castle-wolfenstein.md). |
+| Castle Wolfenstein disk-only port | Fast PS/2 candidate / emulator-verified | English/French gameplay and U fixes retained. Read-only RAM monitor shadow samples PS/2 DATA early; title Return and title/gameplay Caps/Num LED exchanges pass at 94/47, 120/60 and 160/80 cycle timing, including mixed SNES traffic and NMI-context preservation. Original ROM visibility is restored on exit. Save persistence and physical-board approval remain open; see the [porting log](../docs/porting-logs/castle-wolfenstein.md). |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |

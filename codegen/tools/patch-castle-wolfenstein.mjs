@@ -99,12 +99,24 @@ export function buildControllerPayload(profile = FRENCH_PROFILE) {
         bcs copied
         lda $${(source + fullPages * 256).toString(16)},x
         sta $${(resident.org + fullPages * 256).toString(16)},x` : "";
+  const proxy = Buffer.from("eefeca2c06c048da4ca9b6cefecad0032c07c0a97f8d0dc2fa6840", "hex");
+  const byteList = bytes => Array.from(bytes, value => `$${value.toString(16)}`).join(",");
   const installer = assemble(`
         .org $${(Math.ceil((source + resident.bytes.length) / 16) * 16).toString(16)}
+install:
         php
         pha
         phx
         phy
+        bit $C081
+        bit $C081
+        ldx #${proxy.length - 1}
+check_proxy:
+        lda $F1BB,x
+        cmp expected_proxy,x
+        bne failed
+        dex
+        bpl check_proxy
         ldx #0
 copy:
         ${copy}
@@ -113,14 +125,62 @@ copied:
         inx
         bne copy
         jsr $${resident.symbols.INIT.toString(16)}
+        ldx #0
+copy_rom:
+        lda $D000,x
+write_rom:
+        sta $D000,x
+        inx
+        bne copy_rom
+        inc copy_rom+2
+        inc write_rom+2
+        bne copy_rom
+        lda #$4C
+        sta $F1CE
+        lda #<$${resident.symbols.NMI_RESUME.toString(16)}
+        sta $F1CF
+        lda #>$${resident.symbols.NMI_RESUME.toString(16)}
+        sta $F1D0
+        lda #<$${resident.symbols.NMI_ENTRY.toString(16)}
+        sta $FFFA
+        lda #>$${resident.symbols.NMI_ENTRY.toString(16)}
+        sta $FFFB
+        bit $C080
         ply
         plx
         pla
         plp
         jmp $FB39
+failed:
+        bit $C082
+        bit $C007
+        bit $C051
+        bit $C054
+        bit $C052
+        ldx #0
+        lda #$A0
+clear_error:
+        sta $0400,x
+        sta $0500,x
+        sta $0600,x
+        sta $0700,x
+        inx
+        bne clear_error
+show_error:
+        lda error_text,x
+        beq halted
+        sta $0400,x
+        inx
+        bne show_error
+halted:
+        jmp halted
+error_text:
+        .byte ${byteList(Buffer.from("3RIC INPUT ROM MISMATCH - RESET").map(value => value | 0x80))},0
+expected_proxy:
+        .byte ${byteList(proxy)}
 `);
   const end = installer.org + installer.bytes.length;
-  if (end > 0x1f00) throw new Error("SNES staging overlaps the original keyboard driver");
+  if (end > 0x1f00) throw new Error("Input installer overlaps the original keyboard driver");
   return { resident, installer, source, end };
 }
 
@@ -163,7 +223,7 @@ function installController(dsk, payload, profile) {
     Buffer.concat([instruction(0x4c, s.GAME_INPUT), instruction(0x4c, s.GAME_INPUT), instruction(0x4c, s.GAME_FIRE)]));
   const high = text => Buffer.from(text).map(byte => byte | 128);
   editInit(0x09ae, high(profile.menuLabel), high(profile.replacementLabel));
-  editInit(profile.initExit, [0x4c, 0, 0xe0], [0x4c, 0x59, 0xff]);
+  editInit(profile.initExit, [0x4c, 0, 0xe0], instruction(0x4c, s.EXIT_GAME));
 
   const added = pages - init.positions.length;
   const bitmap = 0x11038 + profile.extensionTrack * 4;
@@ -188,7 +248,8 @@ function installController(dsk, payload, profile) {
     replace(wolf.data, offset, before, after);
   };
   wolf.data.writeUInt16LE(wolf.length + 3, 2);
-  editWolf(0x1ef8, [0x4c, 0, 0xe0, 0xff, 0xff, 0xff], [0x9c, 0, 0xc0, 0x4c, 0x59, 0xff]);
+  editWolf(0x1ef8, [0x4c, 0, 0xe0, 0xff, 0xff, 0xff],
+    Buffer.concat([Buffer.from([0x9c, 0, 0xc0]), instruction(0x4c, s.EXIT_GAME)]));
   editWolf(0x08ae, [0x20, 0x1b, 0xfd], instruction(0x20, s.WAIT_CONTINUE));
   editWolf(0x1301, [0xad, 0, 0xc0], instruction(0x20, s.READ_ACTION));
   wolf.positions.forEach((offset, page) => dsk.set(wolf.data.subarray(page * 256, (page + 1) * 256), offset));

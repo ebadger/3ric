@@ -180,6 +180,12 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   T throws a grenade, U uses/equips, Return inventories).
   The corrected resident lets physical action keys interrupt a held D-pad;
   release the D-pad before moving again so timed U actions can finish.
+  The latest `castle-wolfenstein-3ric-english-ps2.woz` candidate also installs a
+  read-only RAM copy of the monitor with a fast PS/2 NMI front end; no ROM reburn
+  is needed. It fixes a reproduced late-DATA sampling failure that corrupted
+  Return/Caps Lock at faster valid keyboard clocks. Title/gameplay LED exchanges
+  and mixed SNES traffic pass native checks; physical-board confirmation is open.
+  Exit restores the original ROM and its original keyboard timing.
   Boot with `C600G` from `*` (`MON` first from `>`). The web Insert action may leave
   `EH?` at `>`; enter `MON`, then `C600G` manually in that case.
   Both profiles pass native PS/2/SNES and WASM gameplay/restart/exit checks,

@@ -1,5 +1,6 @@
 #include "SDCard.h"
 #include "vm.h"
+#include "ps2-keyboard-peer.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -23,14 +24,28 @@ namespace
         SDCard sd;
         CPU* cpu = vm->GetCPU();
         uint64_t cycles = 0, diskCycle = 0;
+        PS2KeyboardPeer keyboard{*vm, cycles};
         unsigned packets = 0;
         uint16_t titleKey;
+        uint16_t padAddress;
         unsigned useCalls = 0;
+        unsigned checkedInterrupts = 0, scanInterrupts = 0, ledExchanges = 0;
+        uint32_t bitPeriod = 160, dataHold = 80, minLatency = 0xffffffff, maxLatency = 0;
+        uint64_t lastEdge = 0;
+        bool receiving = false, checking = false;
+        struct InterruptFrame
+        {
+            uint16_t pc;
+            uint8_t a, x, y, sp, flags;
+            MemoryReadMapping bank;
+            bool basic;
+        };
+        std::vector<InterruptFrame> interrupts;
         std::string serial;
         std::array<unsigned, 256> characters{};
 
-        Machine(const char* romPath, const char* diskPath, uint16_t titlePoll)
-            : titleKey(titlePoll)
+        Machine(const char* romPath, const char* diskPath, uint16_t titlePoll, uint16_t padTable)
+            : titleKey(titlePoll), padAddress(padTable)
         {
             std::ifstream rom(romPath, std::ios::binary);
             require(bool(rom.read(reinterpret_cast<char*>(vm->GetData()), 65536)), "Cannot read ROM");
@@ -55,6 +70,15 @@ namespace
                     vm->GetVIA1()->SetPortAInputBits(2, sd.GetMISO() ? 2 : 0);
                 }
             };
+            vm->CallbackReadMemory = [&](uint16_t address) {
+                if (receiving && address == 0xc20f && peek(0xce00) == 1 && !vm->IsROMVisible(0xfffa))
+                {
+                    const auto latency = uint32_t(cycles - lastEdge);
+                    minLatency = (std::min)(minLatency, latency);
+                    maxLatency = (std::max)(maxLatency, latency);
+                    require(latency < dataHold, "PS/2 DATA was sampled after it changed");
+                }
+            };
             vm->Reset();
             run(5000000);
             require(serial.find("3RIC 6502") != std::string::npos, "ROM did not cold-boot");
@@ -66,13 +90,69 @@ namespace
                 run(300000);
             }
             seek(titleKey);
+            require(!vm->IsROMVisible(0xfffa), "Fast input ROM shadow was not installed");
+            checking = true;
+            const std::array<uint8_t, 4> startupRandom{peek(0x4a), peek(0x4b), peek(0x4e), peek(0x4f)};
+            for (uint32_t period : {94u, 120u, 160u})
+            {
+                timing(period, period / 2);
+                lock(0x58, 4);
+                lock(0x58, 0);
+                lock(0x77, 2);
+                lock(0x77, 0);
+            }
+            timing(160, 80);
+            // Keep the gameplay fixture independent of time spent exercising title LEDs.
+            for (unsigned i = 0; i < 2; ++i)
+            {
+                vm->WriteData(uint16_t(0x4a + i), startupRandom[i]);
+                vm->WriteData(uint16_t(0x4e + i), startupRandom[i + 2]);
+            }
         }
 
         uint8_t peek(uint16_t address) { return vm->PeekData(address); }
         void step()
         {
-            if (cpu->PC == 0x5a58 && vm->WillExecuteCurrentInstruction()) ++useCalls;
+            keyboard.tick();
+            if (!checking)
+            {
+                cycles += vm->Step();
+                return;
+            }
+            const bool executing = vm->WillExecuteCurrentInstruction();
+            InterruptFrame before{};
+            uint16_t vector = 0;
+            if (!executing)
+            {
+                before = {cpu->PC, cpu->A, cpu->X, cpu->Y, cpu->SP, cpu->flags.reg,
+                    vm->GetMemoryReadMapping(0xd000), vm->IsROMVisible(0x9000)};
+                vector = uint16_t(peek(0xfffa) | peek(0xfffb) << 8);
+            }
+            const bool returning = checking && executing && !interrupts.empty()
+                && peek(cpu->PC) == 0x40 && cpu->SP == uint8_t(interrupts.back().sp - 3);
+            if (returning)
+            {
+                const auto& frame = interrupts.back();
+                require(cpu->A == frame.a && cpu->X == frame.x && cpu->Y == frame.y,
+                    "Input interrupt corrupted A/X/Y");
+                require(vm->GetMemoryReadMapping(0xd000) == frame.bank
+                    && vm->IsROMVisible(0x9000) == frame.basic, "Input interrupt corrupted banking");
+            }
+            if (cpu->PC == 0x5a58 && executing) ++useCalls;
             cycles += vm->Step();
+            if (returning)
+            {
+                const auto& frame = interrupts.back();
+                require(cpu->PC == frame.pc && cpu->SP == frame.sp
+                    && (cpu->flags.reg & 0xcf) == (frame.flags & 0xcf), "Input interrupt corrupted return context");
+                interrupts.pop_back();
+                ++checkedInterrupts;
+            }
+            if (checking && !executing && cpu->PC == vector && cpu->SP == uint8_t(before.sp - 3))
+            {
+                interrupts.push_back(before);
+                if (before.pc >= 0xc800 && before.pc < 0xc900) ++scanInterrupts;
+            }
         }
 
         void expect(uint16_t address, uint8_t value, const char* message)
@@ -113,7 +193,8 @@ namespace
 
         void scan(uint8_t code)
         {
-            std::array<uint8_t, 11> bits{};
+            waitKeyboard();
+            std::array<uint8_t, 12> bits{};
             uint8_t parity = 1;
             for (int i = 0; i < 8; ++i)
             {
@@ -121,17 +202,71 @@ namespace
                 parity ^= bits[i + 1];
             }
             bits[9] = parity;
-            bits[10] = 1;
-            for (uint8_t bit : bits)
+            bits[10] = bits[11] = 1;
+            const uint64_t start = cycles;
+            receiving = true;
+            for (int i = 0; i < 11; ++i)
             {
-                vm->GetVIA1()->SetPortAInputBits(0xc0, bit << 7);
-                vm->SignalVIA1Pin(VIA::CA2);
-                run(80);
-                vm->GetVIA1()->SetPortAInputBits(0x40, 0x40);
-                run(80);
+                const uint64_t edge = start + uint64_t(i) * bitPeriod;
+                while (cycles < edge) step();
+                lastEdge = cycles;
+                keyboard.pins(bits[i] != 0, false);
+                while (cycles < edge + bitPeriod / 2) step();
+                keyboard.pins(bits[i] != 0, true);
+                while (cycles < edge + dataHold) step();
+                keyboard.pins(bits[i + 1] != 0, true);
+                while (cycles < edge + bitPeriod) step();
             }
+            receiving = false;
             run(1000);
+            waitKeyboard();
             ++packets;
+        }
+
+        void waitKeyboard()
+        {
+            const uint64_t end = cycles + 1000000;
+            while (keyboard.phase != PS2KeyboardPeer::Phase::Idle || !interrupts.empty() || peek(0xce00) != 0)
+            {
+                require(cycles < end, "PS/2 command/receive did not finish");
+                step();
+            }
+        }
+
+        void timing(uint32_t period, uint32_t hold)
+        {
+            waitKeyboard();
+            require(period >= 94 && hold >= period / 2 && hold <= period, "Invalid PS/2 timing case");
+            bitPeriod = period;
+            dataHold = hold;
+            keyboard.halfPeriod = period / 2;
+            keyboard.replyDataOnRise = hold < period;
+        }
+
+        void lock(uint8_t code, uint8_t leds)
+        {
+            const size_t before = keyboard.commands.size();
+            key(code);
+            waitKeyboard();
+            const std::vector<uint8_t> expected{0xf0, 2, 0xed, leds, 0xf4};
+            require(std::vector<uint8_t>(keyboard.commands.begin() + before, keyboard.commands.end()) == expected,
+                "Wrong PS/2 lock-key command sequence");
+            require(keyboard.leds == leds, "Keyboard did not receive the expected LED state");
+            ++ledExchanges;
+        }
+
+        void expectPad(uint16_t mask)
+        {
+            for (unsigned bit = 0; bit < 16; ++bit)
+            {
+                const auto actual = peek(uint16_t(padAddress + bit));
+                if (actual != ((mask >> bit) & 1))
+                {
+                    std::cerr << "pad mismatch: bit " << bit << " value " << unsigned(actual)
+                        << " expected mask " << mask << " PC " << std::hex << cpu->PC << std::dec << '\n';
+                    throw std::runtime_error("PS/2 traffic lost or duplicated an SNES serial bit");
+                }
+            }
         }
 
         void key(uint8_t code)
@@ -166,7 +301,15 @@ namespace
             const uint64_t end = cycles + budget;
             while (!ready())
             {
-                require(cycles < end, message);
+                if (cycles >= end)
+                {
+                    std::ostringstream error;
+                    error << message << ": PC=$" << std::hex << cpu->PC
+                        << ", room=" << unsigned(peek(0x4340)) << ", tile=" << unsigned(peek(0x4343))
+                        << ", move=" << unsigned(peek(0x4341)) << ", aim=" << unsigned(peek(0x4342))
+                        << ", key=$" << unsigned(peek(0xc000));
+                    throw std::runtime_error(error.str());
+                }
                 run(1000);
             }
         }
@@ -219,11 +362,23 @@ namespace
         m.cpu->PC = 0x300;
         for (unsigned i = 0; i < 64; ++i)
         {
-            m.pad((1 << 6) | (1 << 7) | (i & 1 ? 1 << 9 : 1 << 8));
+            const uint32_t period = std::array<uint32_t, 3>{94, 120, 160}[i % 3];
+            m.timing(period, period / 2);
+            const uint16_t mask = (1 << 6) | (1 << 7) | (i & 1 ? 1 << 9 : 1 << 8);
+            m.pad(mask);
             const unsigned count = m.characters[0xc9];
             m.key(0x43); // I, while the disk-installed resident clocks the SNES pad
             m.settleKey();
             require(m.characters[0xc9] == count + 1, "Mixed SNES traffic lost or duplicated a PS/2 key");
+            if (i % 8 == 0)
+            {
+                m.lock(0x58, 4);
+                m.lock(0x58, 0);
+                m.lock(0x77, 2);
+                m.lock(0x77, 0);
+            }
+            m.seek(0x300);
+            m.expectPad(mask);
         }
         m.pad(0);
         m.run(20000);
@@ -233,7 +388,7 @@ namespace
         require(m.peek(0xcafe) == bankMode, "Resident corrupted the ROM banking state");
         require(std::equal(keyState.begin(), keyState.end(), m.vm->GetData() + 0xcb00),
             "Released PS/2 keys or the ROM key-state table were corrupted");
-        require(m.vm->IsROMVisible(0xfffa) && !m.vm->IsROMVisible(0x9d00), "Mixed input changed ROM/DOS mapping");
+        require(!m.vm->IsROMVisible(0xfffa) && !m.vm->IsROMVisible(0x9d00), "Mixed input changed ROM/DOS mapping");
         std::copy(saved.begin(), saved.end(), m.vm->GetData() + 0x300);
         m.cpu->PC = pc;
         m.cpu->flags.reg = flags;
@@ -248,11 +403,11 @@ namespace
         m.seek(returnPC);
     }
 
-    void checkController(const char* rom, const char* disk, uint16_t titleKey)
+    void checkController(const char* rom, const char* disk, uint16_t titleKey, uint16_t padAddress)
     {
         constexpr uint16_t start = 1 << 3, select = 1 << 2, left = 1 << 6;
         constexpr uint16_t down = 1 << 5, aimUp = 1 << 9, aimRight = 1 << 8, fire = 1 << 10;
-        Machine m(rom, disk, titleKey);
+        Machine m(rom, disk, titleKey, padAddress);
         require(m.vm->SetGamepadState(1, start), "Could not set pad 2 state");
         m.run(100000);
         require(m.peek(0x1f00) != 0x4c, "Controller 2 selected controls");
@@ -279,11 +434,14 @@ namespace
         m.pad(0);
         m.step();
         m.run(1000000);
+        require(m.vm->IsROMVisible(0xfffa), "Game exit did not restore the original ROM");
+        m.timing(160, 160); // The original monitor is outside the game's fast receiver.
         for (uint8_t code : {0x21, 0x36, 0x45, 0x45, 0x34, 0x5a}) m.key(code); // C600G + Return
         m.seek(titleKey);
         m.pad(start);
         m.seek(0x0a4a);
         startPadMenu(m);
+        m.timing(94, 47);
         m.pad(down | aimUp);
         m.seek(0x08ae);
         m.expect(0x436f, 0x40, "Pad-driven guard capture did not occur");
@@ -304,18 +462,24 @@ namespace
         m.pad(0);
         m.step();
         m.run(1000000);
+        require(m.vm->IsROMVisible(0xfffa), "Game exit did not restore the original ROM");
+        m.timing(160, 160);
         for (uint8_t code : {0x25, 0x26, 0x25, 0x26, 0x5a}) m.key(code);
         require(m.text().find("4343-") != std::string::npos, "Controller exit damaged physical keyboard input");
+        require(m.scanInterrupts > 0, "Mixed input did not interrupt resident input code");
         std::cout << "PASS native SNES start, move/aim/fire, capture/restart, inventory and quit; "
-            << m.packets << " PS/2 packets including 64 mixed-input make/break pairs\n";
+            << m.packets << " PS/2 packets including 64 mixed-input make/break pairs, "
+            << m.ledExchanges << " LED exchanges; DATA latency " << m.minLatency << '-' << m.maxLatency
+            << " cycles; " << m.checkedInterrupts << " preserved NMIs, "
+            << m.scanInterrupts << " in resident input code; 64 exact pad samples\n";
     }
 
-    void checkKeyboardUse(const char* rom, const char* disk, uint16_t titleKey)
+    void checkKeyboardUse(const char* rom, const char* disk, uint16_t titleKey, uint16_t padAddress)
     {
         const bool english = titleKey == 0x0c56;
         const uint16_t aim = english ? 1 << 8 : 1 << 1;
         const uint16_t itemFlag = english ? 0x436c : 0x4349;
-        Machine m(rom, disk, titleKey);
+        Machine m(rom, disk, titleKey, padAddress);
         m.pad(1 << 3);
         m.seek(0x0a4a);
         startPadMenu(m);
@@ -352,27 +516,32 @@ int main(int argc, char** argv)
 {
     try
     {
-        require(argc == 4, "Usage: wolf-native-test <rom> <patched.woz> <french|english>");
+        require(argc == 5, "Usage: wolf-native-test <rom> <patched.woz> <french|english> <pad-table-hex>");
         const std::string profile = argv[3];
         require(profile == "english" || profile == "french", "Unknown disk profile");
         const uint16_t titleKey = profile == "english" ? 0x0c56 : 0x0c44;
-        Machine m(argv[1], argv[2], titleKey);
+        const unsigned padTable = unsigned(std::stoul(argv[4], nullptr, 16));
+        require(padTable >= 0xc800 && padTable <= 0xcaee, "Invalid resident pad table");
+        const uint16_t padAddress = uint16_t(padTable);
+        Machine m(argv[1], argv[2], titleKey, padAddress);
+        m.timing(94, 47);
         m.key(0x5a); // Return
         m.seek(0x0a4a);
         require(m.text().find("START/K") != std::string::npos, "Keyboard/SNES menu missing");
         m.step();
         m.run(10000);
         m.key(0x42); // K
+        m.seek(0x0810);
         m.seek(0x119c);
         require(m.peek(0x4347) == 10, "Castle inventory did not load");
         const uint8_t tile = m.peek(0x4343);
         m.key(0x1c); // A: move left
         m.settleKey();
-        m.run(100000);
         m.expect(0x4341, 4, "PS/2 movement key was not decoded");
+        m.until([&] { return m.peek(0x4343) != tile; }, "Player did not move");
         m.key(0x1b); // S: stop
         m.settleKey();
-        m.run(100000);
+        m.until([&] { return m.peek(0x4341) == 0; }, "PS/2 stop was not applied");
         m.expect(0x4341, 0, "PS/2 stop key was not decoded");
         require(m.peek(0x4343) != tile, "Player did not move");
         m.key(0x4c); // Semicolon: aim right
@@ -395,7 +564,7 @@ int main(int argc, char** argv)
         require(m.peek(0x4347) == 9, "PS/2 fire did not consume a bullet");
         require(peak > 0.01f, "No speaker PCM");
         m.vm->DisableAudio();
-        require(m.vm->IsROMVisible(0xfffa), "Game hid the input NMI vector");
+        require(!m.vm->IsROMVisible(0xfffa), "Game lost the fast input NMI vector");
 
         m.key(0x44); // O: aim away from the guard
         m.settleKey();
@@ -407,6 +576,7 @@ int main(int argc, char** argv)
         m.step();
         m.run(10000);
         m.key(0x42);
+        m.seek(0x0810);
         m.seek(0x119c);
         require(m.peek(0x4347) == 10, "Restart did not reload the supplied castle");
         m.key(0x76); // Escape: leave the game's nonpersistent save path
@@ -414,14 +584,16 @@ int main(int argc, char** argv)
         require(!(m.peek(0xc000) & 0x80), "Escape leaked into the monitor");
         m.step();
         m.run(1000000);
+        require(m.vm->IsROMVisible(0xfffa), "Exit did not restore the original monitor");
+        m.timing(160, 160);
         for (uint8_t code : {0x25, 0x26, 0x25, 0x26, 0x5a}) m.key(code); // 4343 + Return
         require(m.text().find("4343-") != std::string::npos, "Monitor lost the first physical key");
         require(!m.vm->IsROMVisible(0x9d00), "ROM input corrupted DOS banking");
         std::cout << "PASS native Disk II boot, " << m.packets
             << " PS/2 packets, move/stop/aim/fire, PCM, capture/restart and monitor return\n"
             << "Save persistence and physical-board approval are not claimed.\n";
-        checkController(argv[1], argv[2], titleKey);
-        checkKeyboardUse(argv[1], argv[2], titleKey);
+        checkController(argv[1], argv[2], titleKey, padAddress);
+        checkKeyboardUse(argv[1], argv[2], titleKey, padAddress);
         return 0;
     }
     catch (const std::exception& error)

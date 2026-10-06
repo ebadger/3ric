@@ -163,6 +163,15 @@ async function bootTitle(woz) {
     assert.equal(vm.textMode(), 0);
     assert.equal(vm.lores(), 0);
     assert.equal(vm.gfxPage(), 0);
+    const shadow = Buffer.from(rom.subarray(0xd000, 0x10000));
+    const symbols = payload.resident.symbols;
+    shadow.set([0x4c, symbols.NMI_RESUME & 255, symbols.NMI_RESUME >> 8], 0xf1ce - 0xd000);
+    shadow.writeUInt16LE(symbols.NMI_ENTRY, 0xfffa - 0xd000);
+    assert(!vm.romVisible(0xfffa), "The fast NMI RAM shadow is not mapped");
+    assert.deepEqual(Buffer.from(Array.from({ length: shadow.length }, (_, i) => vm.peekMapped(0xd000 + i))), shadow);
+    vm.writeBus(0xd000, shadow[0] ^ 255);
+    assert.equal(vm.peekMapped(0xd000), shadow[0], "The monitor shadow must be read-only");
+    assert.equal(vm.peek(0xf1ce), rom[0xf1ce], "Installing the shadow changed the original ROM");
     const frame = vm.renderFrame();
     let lit = 0;
     for (let i = 0; i < frame.length; i += 4) if (frame[i] || frame[i + 1] || frame[i + 2]) lit++;
@@ -189,7 +198,8 @@ function startGame(vm) {
   assert.equal(vm.peek(0x1f00), 0x4c, "Original keyboard driver was not installed");
   assert.equal(vm.peek(0x4347), 10, "The supplied castle's inventory did not load");
   assert.equal(vm.textMode(), 0);
-  assert(vm.romVisible(0xfffa), "Game hid the ROM input handler");
+  assert(!vm.romVisible(0xfffa), "Game lost the fast RAM input handler");
+  assert.equal(vm.peekMapped(0xfffa) | vm.peekMapped(0xfffb) << 8, payload.resident.symbols.NMI_ENTRY);
   assert(!vm.romVisible(0x9d00), "DOS RAM was replaced by BASIC");
 }
 
@@ -251,6 +261,7 @@ async function testGameplay(woz) {
 
     vm.keyDown(27);
     seek(vm, 0xff59);
+    assert(vm.romVisible(0xfffa), "Exit did not restore the original ROM");
     assert.equal(vm.peek(0xc000) & 128, 0, "Escape leaked into the monitor");
     assert.equal(vm.peek(0x1efb), 0x4c, "Extended game tail was not loaded by DOS");
     vm.step();
@@ -617,6 +628,23 @@ async function testKeyboardUse(woz) {
   }
 }
 
+async function testRuntimeGuard(woz) {
+  const session = await boot(), vm = session.vm;
+  try {
+    assert(vm.insertDisk(0, woz));
+    type(vm, "MON\rC600G\r");
+    seek(vm, payload.installer.org);
+    vm.poke(0xf1bb, vm.peek(0xf1bb) ^ 1);
+    vm.step();
+    seek(vm, payload.installer.symbols.HALTED, 1000000);
+    assert.match(session.textScreen().join("\n"), /3RIC INPUT ROM MISMATCH - RESET/);
+    assert(vm.romVisible(0xfffa), "Rejected installer left the RAM shadow active");
+    console.log("PASS on-machine NMI-proxy mismatch rejection");
+  } finally {
+    vm.delete();
+  }
+}
+
 async function testImage(inputPath) {
   const original = fs.readFileSync(inputPath);
   profile = detectCastleProfile(original);
@@ -667,6 +695,7 @@ async function testImage(inputPath) {
     await testPadGameplay(woz);
     await testPadActions(woz);
     await testKeyboardUse(woz);
+    if (profile.id === "french") await testRuntimeGuard(woz);
   } finally {
     fs.rmSync(temporary, { recursive: true, force: true });
   }
