@@ -18,7 +18,7 @@ below as working on the physical machine.
 | Title | Main lesson | Evidence boundary |
 |-------|-------------|-------------------|
 | [Archon](archon.md) (2026-10-05) | Preserve input interrupts across both language-card banks, and avoid paddle-timer traffic in a digital-controller adapter | Reproducible disk patcher with native PS/2 and WASM board/combat coverage; physical-board confirmation remains open |
-| [Castle Wolfenstein](castle-wolfenstein.md) (2026-10-06) | Preserve the English WOZ, skip electronic-disk motor waits, and separate PS/2 receive state from slower packet decoding | Fast loading plus consecutive-packet/raw-code/LED coverage; the newest keyboard candidate still needs board confirmation and emulator saves remain unsupported |
+| [Castle Wolfenstein](castle-wolfenstein.md) (2026-10-06) | Preserve fast disk loading, support Start-to-lower-gun, and remove competing keyboard-strobe interrupts | Owner confirmed packet-input improvement but reported U/LED trouble; the new strobe-mask/holster candidate passes native/WASM checks and awaits board confirmation |
 
 ## Scope and evidence
 

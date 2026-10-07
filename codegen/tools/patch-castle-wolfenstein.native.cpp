@@ -33,6 +33,7 @@ namespace
         unsigned checkedInterrupts = 0, scanInterrupts = 0, ledExchanges = 0;
         uint32_t bitPeriod = 160, dataHold = 80, minLatency = 0xffffffff, maxLatency = 0;
         uint64_t lastEdge = 0;
+        uint32_t strobeLead = 0;
         bool receiving = false, checking = false;
         bool capturePackets = false;
         std::vector<uint8_t> completedPackets;
@@ -63,6 +64,8 @@ namespace
                 }
             };
             vm->CallbackWriteMemory = [&](uint16_t address, uint8_t value) {
+                if (checking && address == 0xc010 && !vm->IsROMVisible(0xfffa))
+                    throw std::runtime_error("Game still writes the interrupt-based keyboard strobe");
                 if (capturePackets && address == 0xce01) completedPackets.push_back(value);
                 if (address == 0xc000 && (value & 0x80)) ++characters[value];
                 if (address == 0xc201 || address == 0xc20f)
@@ -75,6 +78,8 @@ namespace
                 }
             };
             vm->CallbackReadMemory = [&](uint16_t address) {
+                if (checking && address == 0xc010 && !vm->IsROMVisible(0xfffa))
+                    throw std::runtime_error("Game still reads the interrupt-based keyboard strobe");
                 if (receiving && address == 0xc20f && peek(0xce00) == 1 && !vm->IsROMVisible(0xfffa))
                 {
                     const auto latency = uint32_t(cycles - lastEdge);
@@ -211,9 +216,10 @@ namespace
             waitKeyboard();
             completedPackets.clear();
             capturePackets = !vm->IsROMVisible(0xfffa);
-            const uint64_t start = cycles;
+            const uint64_t start = cycles + strobeLead;
             unsigned frame = 0;
             receiving = true;
+            if (strobeLead) vm->SignalVIA1Pin(VIA::CB1);
             for (uint8_t code : codes)
             {
                 std::array<uint8_t, 12> bits{};
@@ -235,6 +241,11 @@ namespace
                     keyboard.pins(bits[i] != 0, true);
                     while (cycles < edge + dataHold) step();
                     keyboard.pins(bits[i + 1] != 0, true);
+                    if (strobeLead)
+                    {
+                        while (cycles < edge + bitPeriod - strobeLead) step();
+                        vm->SignalVIA1Pin(VIA::CB1);
+                    }
                     while (cycles < edge + bitPeriod) step();
                 }
                 ++frame;
@@ -279,6 +290,9 @@ namespace
             require(std::vector<uint8_t>(keyboard.commands.begin() + before, keyboard.commands.end()) == expected,
                 "Wrong PS/2 lock-key command sequence");
             require(keyboard.leds == leds, "Keyboard did not receive the expected LED state");
+            if (!vm->IsROMVisible(0xfffa))
+                require(!(vm->GetVIA1()->ReadRegister(VIA::IER) & 0x10),
+                    "LED setup re-enabled redundant keyboard-strobe NMIs");
             ++ledExchanges;
         }
 
@@ -442,6 +456,20 @@ namespace
         m.seek(0x0a4a);
         startPadMenu(m);
         checkMixedInput(m);
+        m.pad(aimRight);
+        m.until([&] { return m.peek(0x4342) == 8; }, "Initial aim did not raise the gun");
+        m.pad(start | aimRight | fire);
+        m.until([&] { return m.peek(0x4342) == 0; }, "Start did not holster");
+        m.run(10000);
+        m.expect(0x4342, 0, "Held face buttons raised the holstered gun");
+        m.expect(0x4347, 10, "Gun fired while holstered");
+        m.pad(aimRight);
+        m.run(5000);
+        m.expect(0x4342, 0, "Releasing Start alone rearmed aim");
+        m.pad(0);
+        sampleDriver(m);
+        m.pad(aimUp);
+        m.until([&] { return m.peek(0x4342) == 2; }, "Fresh aim did not rearm after Start");
         const uint8_t tile = m.peek(0x4343);
         m.pad(left | aimRight | fire);
         m.seek(0x1489);
@@ -524,8 +552,11 @@ namespace
         m.step();
         m.expect(itemFlag, 0, "Item was already in inventory");
         m.pad(aim | (1 << 7));
+        m.timing(94, 47);
+        m.strobeLead = 4;
         const unsigned before = m.useCalls;
         m.key(0x3c); // Physical U, not keyboard-latch injection
+        m.strobeLead = 0;
         m.until([&] { return m.peek(itemFlag) == 1; }, "Physical U did not complete the chest action", 50000000);
         require(m.useCalls > before, "Physical U did not reach the use handler");
         m.expect(0x4341, 0, "Held D-pad cancelled the timed use action");
@@ -551,6 +582,20 @@ int main(int argc, char** argv)
         const uint16_t padAddress = uint16_t(padTable);
         Machine m(argv[1], argv[2], titleKey, padAddress);
         m.timing(94, 47);
+        for (uint32_t lead : {4u, 8u, 12u, 16u, 24u, 32u, 40u})
+        {
+            std::cout << "Checking simultaneous strobe lead " << lead << '\n';
+            m.strobeLead = lead;
+            m.scanPackets({0x1c, 0xf0, 0x1c});
+            m.expect(0xce01, 0x1c, "Overlapping strobes corrupted the raw A scan code");
+            m.expect(0xc000, 0xc1, "Overlapping strobes corrupted the decoded A key");
+            m.vm->WriteData(0xc000, 0);
+            m.scanPackets({0x3c, 0xf0, 0x3c});
+            m.expect(0xce01, 0x3c, "Overlapping strobes corrupted the raw U scan code");
+            m.expect(0xc000, 0xd5, "Overlapping strobes corrupted the decoded U key");
+            m.vm->WriteData(0xc000, 0);
+        }
+        m.strobeLead = 0;
         m.key(0x5a); // Return
         m.expect(0xce01, 0x5a, "Physical Return raw scan code was corrupted");
         m.seek(0x0a4a);
@@ -616,7 +661,7 @@ int main(int argc, char** argv)
         for (uint8_t code : {0x25, 0x26, 0x25, 0x26, 0x5a}) m.key(code); // 4343 + Return
         require(m.text().find("4343-") != std::string::npos, "Monitor lost the first physical key");
         require(!m.vm->IsROMVisible(0x9d00), "ROM input corrupted DOS banking");
-        std::cout << "PASS native Disk II boot, " << m.packets
+        std::cout << "PASS native Disk II boot and overlapping strobe/U/A clock cases, " << m.packets
             << " PS/2 packets with back-to-back make/break/extended bytes, raw/ASCII codes, "
             << "move/stop/aim/fire, PCM, capture/restart and monitor return\n"
             << "Save persistence and physical-board approval are not claimed.\n";

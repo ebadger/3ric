@@ -92,22 +92,41 @@ function replace(bytes, offset, before, after) {
 
 export function buildControllerPayload(profile = FRENCH_PROFILE) {
   const resident = assemble(fs.readFileSync(path.join(root, "codegen", "patches", "castle-wolfenstein-snes.s"), "utf8"));
-  if (resident.org !== 0xc800 || resident.symbols.RESIDENT_END > 0xcafe)
+  if (resident.org !== 0xc800 || !(resident.symbols.RESIDENT_END > 0xc800 && resident.symbols.RESIDENT_END <= 0xcafe)
+      || !(resident.symbols.HELPERS_END > 0xcf00 && resident.symbols.HELPERS_END <= 0xd000))
     throw new Error("SNES resident overlaps the ROM banking state");
   const source = profile.staging;
-  const fullPages = Math.floor(resident.bytes.length / 256);
-  const tail = resident.bytes.length % 256;
-  const copy = Array.from({ length: fullPages }, (_, page) =>
-    `lda $${(source + page * 256).toString(16)},x\nsta $${(resident.org + page * 256).toString(16)},x`).join("\n");
-  const lastPage = tail ? `
+  const segments = [
+    { org: 0xc800, bytes: resident.bytes.subarray(0, resident.symbols.RESIDENT_END - 0xc800) },
+    { org: 0xcf00, bytes: resident.bytes.subarray(0x700, resident.symbols.HELPERS_END - 0xc800) },
+  ];
+  const residentBytes = Buffer.concat(segments.map(segment => Buffer.from(segment.bytes)));
+  let sourceOffset = 0;
+  const copies = segments.map((segment, index) => {
+    const start = source + sourceOffset;
+    sourceOffset += segment.bytes.length;
+    const pages = Math.floor(segment.bytes.length / 256), tail = segment.bytes.length % 256;
+    const full = Array.from({ length: pages }, (_, page) =>
+      `lda $${(start + page * 256).toString(16)},x\nsta $${(segment.org + page * 256).toString(16)},x`).join("\n");
+    const last = tail ? `
         cpx #${tail}
-        bcs copied
-        lda $${(source + fullPages * 256).toString(16)},x
-        sta $${(resident.org + fullPages * 256).toString(16)},x` : "";
+        bcs copied_${index}
+        lda $${(start + pages * 256).toString(16)},x
+        sta $${(segment.org + pages * 256).toString(16)},x` : "";
+    return `
+        ldx #0
+copy_${index}:
+        ${full}
+        ${last}
+copied_${index}:
+        inx
+        bne copy_${index}
+`;
+  }).join("\n");
   const proxy = Buffer.from("eefeca2c06c048da4ca9b6cefecad0032c07c0a97f8d0dc2fa6840", "hex");
   const byteList = bytes => Array.from(bytes, value => `$${value.toString(16)}`).join(",");
   const installer = assemble(`
-        .org $${(Math.ceil((source + resident.bytes.length) / 16) * 16).toString(16)}
+        .org $${(Math.ceil((source + residentBytes.length) / 16) * 16).toString(16)}
 install:
         php
         pha
@@ -119,16 +138,12 @@ install:
 check_proxy:
         lda $F1BB,x
         cmp expected_proxy,x
-        bne failed
+        beq proxy_ok
+        jmp failed
+proxy_ok:
         dex
         bpl check_proxy
-        ldx #0
-copy:
-        ${copy}
-        ${lastPage}
-copied:
-        inx
-        bne copy
+        ${copies}
         jsr $${resident.symbols.INIT.toString(16)}
         ldx #0
 copy_rom:
@@ -150,6 +165,11 @@ write_rom:
         sta $FFFA
         lda #>$${resident.symbols.NMI_ENTRY.toString(16)}
         sta $FFFB
+        lda #$EB
+        sta $E056
+        lda #$10
+        sta $C20E
+        sta $C20D
         bit $C080
         ply
         plx
@@ -186,7 +206,7 @@ expected_proxy:
 `);
   const end = installer.org + installer.bytes.length;
   if (end > 0x2000) throw new Error("Input installer overlaps the title picture area");
-  return { resident, installer, source, end };
+  return { resident, residentBytes, segments, installer, source, end };
 }
 
 function readSingleListFile(dsk, list) {
@@ -204,7 +224,7 @@ function readSingleListFile(dsk, list) {
 }
 
 function installController(dsk, payload, profile) {
-  const { resident, installer, source, end } = payload;
+  const { resident, residentBytes, installer, source, end } = payload;
   const s = resident.symbols;
   const list = profile.initList;
   const catalog = 0x11b74;
@@ -218,7 +238,7 @@ function installController(dsk, payload, profile) {
   expanded.set(init.data);
   expanded.fill(0, init.length + 4, length + 4);
   expanded.writeUInt16LE(length, 2);
-  expanded.set(resident.bytes, source - init.org + 4);
+  expanded.set(residentBytes, source - init.org + 4);
   expanded.set(installer.bytes, installer.org - init.org + 4);
   const editInit = (pc, before, after) => replace(expanded, pc - init.org + 4, before, after);
   editInit(0x0880, [0x20, 0x39, 0xfb], instruction(0x20, installer.org));
@@ -229,6 +249,8 @@ function installController(dsk, payload, profile) {
   const high = text => Buffer.from(text).map(byte => byte | 128);
   editInit(0x09ae, high(profile.menuLabel), high(profile.replacementLabel));
   editInit(profile.initExit, [0x4c, 0, 0xe0], instruction(0x4c, s.EXIT_GAME));
+  for (const pc of [profile.titleKey - 9, profile.titleKey + 7, profile.driverSource + 0x29, profile.driverSource + 0x45])
+    editInit(pc, [0x8d, 0x10, 0xc0], [0x9c, 0, 0xc0]);
 
   const added = pages - init.positions.length;
   const bitmap = 0x11038 + profile.extensionTrack * 4;
@@ -257,6 +279,8 @@ function installController(dsk, payload, profile) {
     Buffer.concat([Buffer.from([0x9c, 0, 0xc0]), instruction(0x4c, s.EXIT_GAME)]));
   editWolf(0x08ae, [0x20, 0x1b, 0xfd], instruction(0x20, s.WAIT_CONTINUE));
   editWolf(0x1301, [0xad, 0, 0xc0], instruction(0x20, s.READ_ACTION));
+  for (const pc of [0x1314, 0x135b, 0x1366, 0x19ce])
+    editWolf(pc, [0x8d, 0x10, 0xc0], [0x9c, 0, 0xc0]);
   wolf.positions.forEach((offset, page) => dsk.set(wolf.data.subarray(page * 256, (page + 1) * 256), offset));
   return { addedSectors: added, initLength: length };
 }
@@ -305,7 +329,7 @@ function main(args) {
   console.log(`Created ${output}\nProfile: ${result.profile.id}\nSHA-256: ${sha256(result.woz)}\n`
     + (result.profile.id === "english" ? "English DOS spin-up waits are bypassed for solid-state 3RIC disks, not mechanical drives.\n" : "")
     + "Boot with C600G from the monitor. Press Start at the title and options, or Return then K.\n"
-    + "Pad 1: D-pad moves; X/A/B/Y aim up/right/down/left; L fires; R searches.\n"
+    + "Pad 1: D-pad moves; X/A/B/Y aim up/right/down/left; L fires; R searches; Start lowers the gun.\n"
     + "Tap Select: inventory. Select+L: grenade; Select+R: use; Start+Select: exit.\n"
     + "Experimental hardware-trial image; physical-board confirmation is still required.\n"
     + "The current Disk II emulator ignores writes: saves and new castles do not persist.");

@@ -1,15 +1,15 @@
 # Castle Wolfenstein: a disk-only keyboard and SNES port
 
-**2026-10-06 update. Packet-boundary correction is emulator-verified; the newest candidate needs board confirmation.**
+**2026-10-06 update. Start holster and strobe-collision correction are emulator-verified; board confirmation remains open.**
 The owner first supplied a French DOS-order disk, then requested independent SNES
 movement/aiming, and subsequently supplied the intended English WOZ and reported
 that keyboard actions such as U did not work in play. Both exact disk profiles now
 use the corrected resident. A later report of dead Return/Caps Lock led to the
 owner-approved RAM-shadowed monitor/fast NMI correction below. Floppy-save
 persistence remains explicitly out of scope.
-The English profile also bypasses DOS motor spin-up waits at the owner's request.
-The latest input correction handles tightly spaced packets and stale startup
-receive state, following the owner's observed Return-to-G misdecoding.
+The English profile also bypasses DOS motor spin-up waits. The owner confirmed the
+packet correction improved input, then reported that U/LEDs still failed although
+Select+R worked, and requested gameplay Start as a way to lower the gun.
 
 ## Exact artifacts
 
@@ -26,9 +26,11 @@ and tests.
 | Earlier English `castle-wolfenstein-3ric-english-snes.woz` (U fix, before fast PS/2; preserved) | 234,815 | `d7c1c07775a2fb151a5c9bea0cf8a2a8eb0206527a376692d0998ff26343ba24` |
 | Earlier `castle-wolfenstein-3ric-english-ps2.woz` (mechanical delays retained; preserved) | 234,815 | `07106c99054bf6408f6e4f74c19cbb8768541694b120ea03c530876542932722` |
 | Earlier `castle-wolfenstein-3ric-english-fastload.woz` (packet-boundary defect remains) | 234,815 | `b29fad63fe20319006915ddfb87161969c24847c4f886ff36ae81ab765bb5cbe` |
-| Current `castle-wolfenstein-3ric-english-packetfix.woz` | 234,815 | `76866ae833061c0bb2ba756c7a6d77f5cecee772731a90dd46201a989008b1c3` |
-| Matching local `castle-wolfenstein-3ric-english-packet-diagnostic.woz` | 234,815 | `083507db2a8e79575be046d85247fcc825ec742612cecdb69c49816329d29582` |
-| Current regenerated French output | 234,496 | `715eb08d642205d9c86cdecc18527ace1ee4dfcfa1f9321b8fcafa3bb2779a9b` |
+| Earlier `castle-wolfenstein-3ric-english-packetfix.woz` | 234,815 | `76866ae833061c0bb2ba756c7a6d77f5cecee772731a90dd46201a989008b1c3` |
+| Earlier local `castle-wolfenstein-3ric-english-packet-diagnostic.woz` | 234,815 | `083507db2a8e79575be046d85247fcc825ec742612cecdb69c49816329d29582` |
+| Current `castle-wolfenstein-3ric-english-controls.woz` | 234,815 | `e5ebf6161c1f05b01a817d5eeb2b57734df3b0c638cba13b4663219ed396a8cd` |
+| Matching local `castle-wolfenstein-3ric-english-controls-diagnostic.woz` | 234,815 | `7f7eda65ad2441f4cdd06e7b78a85fb8c22bc872ed6a9f38f4278732564585c0` |
+| Current regenerated French output | 234,496 | `6add9bf814796586e8b47375682170da25a6f2f5894cca8fb60372f6930b225d` |
 | Unchanged repository `badger6502.bin` | 524,288 | `fcea03683b77b7f113e6d8f0064ea8edbd6c75b04b472ec5c84de1c3a9f86435` |
 
 The ROM fingerprint identifies the repository file, not a physical-board readback.
@@ -125,7 +127,7 @@ earlier fast-loading image. Its stop-edge path banked into the ROM before resett
 shared `$CE01` with a packet that the slower decoder could still be reading.
 
 The corrected handler resets the phase and acknowledges CA2 **before banking**,
-assembles the next packet in private `receive_byte` at `$CAEB`, and publishes
+assembles the next packet in a private `receive_byte` (currently `$CAE0`), and publishes
 the completed byte to `$CE01` before entering ROM `process_key` at `$B7C0`.
 `$CE01` is now a stable completed-byte value rather than the live shift register.
 Installer initialization discards stale partial-frame/extended/break/modifier
@@ -145,6 +147,31 @@ field now shows completed scan codes. Expected Return is `BYTE=5A`, `KEY=8D`
 until consumed; expected A is `BYTE=1C`, `KEY=C1`. The game and diagnostic
 both pass the compact-packet native probe, but a new board trial is still needed.
 
+**Strobe-collision follow-up:** the owner confirmed the packet version was working
+better, but U still failed on the normal game image where Select+R succeeded;
+Caps Lock's LED also remained stuck. Early and late U tests alone passed, so the
+remaining problem was not established as an item-dispatch failure.
+
+Overlapping a CB1 keyboard-strobe interrupt with an incoming PS/2 edge reproduced
+an incomplete receive on the preceding candidate. A lead of four CPU cycles was
+already enough to fail. The game was requesting an extra NMI solely to acknowledge
+its RAM-backed key latch, competing with time-sensitive keyboard-clock interrupts.
+
+The current image replaces **all eight game `STA $C010` sites** with `STZ $C000`:
+two in the title, two in the copied K-mode driver, and four in `@WOLF` at `$1314`,
+`$135B`, `$1366` and `$19CE`. The game's movement/fire state remains separately
+latched. Only VIA CB1's enable bit is masked while playing. The RAM monitor copy
+changes `$E056` from `$FB` to `$EB` so the ROM's LED-command cleanup cannot
+re-enable it; exit clears CB1's stale flag and restores its enable before returning
+to the original monitor. No port direction, timer or burned-ROM change is made.
+
+Native cases with CB1 leads of 4, 8, 12, 16, 24, 32 and 40 cycles now complete A/U
+make/break packets with exact raw and ASCII codes. Checks also reject any remaining
+game access to `$C010`, verify masking after every LED exchange, and complete a
+physical U item action with overlapping strobe traffic. The matching diagnostic
+normally shows `IER=EB`, not the older `FB`. This repairs the reproduced collision;
+the owner's exact remaining physical failure still needs confirmation on the new image.
+
 ## Exact changes
 
 These are **French DOS-order file offsets**, not physical WOZ sector numbers.
@@ -160,26 +187,28 @@ The French keyboard-only baseline, retained by the SNES version:
 | `$0D602` | `@INIT` `$0B7E` | Use `$FF59` rather than `$E000` if its final BRUN returns. |
 
 The baseline changes **16 byte values in six logical sectors**. The corrected French
-SNES/PS2 version changes **1,193 byte values in 18 logical sectors**, including the
+SNES/PS2 version changes **1,207 byte values in 20 logical sectors**, including the
 resident and its file allocation. Reversing the returned sector replacements
 reproduces the original `.do` exactly. The raw input has no track-bitstream layout
 to preserve; the existing `wozgen.mjs` encodes all 560 sectors into standard WOZ2,
 including sector checksums and the container CRC. Decoding every output sector
 recovers exactly the patched DOS-order image.
 
-The shared input resident is **764 bytes at `$C800-$CAFB`**, borrowing inactive ROM FAT32
-workspace only while this floppy game runs. It leaves `$CAFE`, the `$CB00` key-state
-table and `$CE00` input storage outside the resident. Installation only resets the
-documented partial-frame/prefix fields there. This is not a general free-RAM declaration.
+The resident has two spans: **753 bytes at `$C800-$CAF0`** and **61 bytes at
+`$CF00-$CF3C`** for aim/exit helpers and state. These borrow inactive workspace
+and an otherwise unused page in this exact profile, not general free RAM.
+Only the two spans are packed and copied; `$CAFE`, `$CB00` key state, the intervening
+workspace and `$CE00` input storage are not overwritten by alignment padding.
+Installation only resets the documented partial-frame/prefix fields.
 
-| Profile | Original / patched `@INIT` | Staging | 214-byte installer | Added logical sectors |
+| Profile | Original / patched `@INIT` | Packed staging | 245-byte installer | Added logical sectors |
 |---------|----------------------------|---------|-------------------|-----------------------|
-| French | 4,675 / 5,718 bytes | `$1B00` | `$1E00-$1ED5` | Track 4: 0, 1, 2, 3 |
-| English | 4,798 / 5,782 bytes | `$1B40` | `$1E40-$1F15` | Track 12: 0, 1, 2, 3 |
+| French | 4,675 / 5,797 bytes | `$1B00` | `$1E30-$1F24` | Track 4: 0, 1, 2, 3 |
+| English | 4,798 / 5,861 bytes | `$1B40` | `$1E70-$1F64` | Track 12: 0, 1, 2, 3 |
 
 Binary length, sector list, catalog count and VTOC allocation are updated together.
-Both installers end below the `$2000` picture area. English installer staging
-temporarily uses `$1F00-$1F15` before the menu copies the keyboard driver there.
+Both installers end below the `$2000` picture area. Installer staging temporarily
+borrows the future `$1F00` input-driver page before the menu copies the driver there.
 It is never called while that driver is live; restarting reloads `@INIT` first.
 Game exits now use the resident's ROM-restoring wrapper before `$FF59`.
 
@@ -191,7 +220,8 @@ The labels read `START/K --> SNES+KB` in French and `START/K FOR SNES+KEY` in En
 
 The resident clocks the actual SNES shift register on VIA1 PB6/PB7 and reads PB5.
 It does not fake browser keys for movement or aiming, call the paddle timer path,
-or reconfigure the VIA. Releasing movement, retaining aim, opposing axes and
+or reconfigure ports/timers; only the documented CB1 enable is changed.
+Releasing movement, retaining aim, opposing axes and
 modifier actions are handled by guest 65C02 code. Keyboard movement/fire arriving
 between the early scan and the action dispatcher is serviced before that dispatcher
 can discard it. The original language-specific title, DOS, castle data, sprites and speech
@@ -221,7 +251,7 @@ shared `@WOLF` hooks and action logic retain the same addresses as the French ga
 Extension sectors contain stale **unallocated** data, so the patcher verifies the
 VTOC and exact image fingerprint rather than assuming free sectors are zero.
 
-Only **1,137 decoded byte values in 18 sector data fields**, their encoded checksums,
+Only **1,150 decoded byte values in 20 sector data fields**, their encoded checksums,
 and the WOZ CRC change. Reversing these field edits restores the entire original
 234,815-byte file exactly. Track layout, address fields, synchronization bits,
 metadata, and the separate 16-sector bootstrap are retained.
@@ -257,11 +287,11 @@ measures emulated cycles with no overclock or RAM-loaded game shortcut:
 
 | Interval | Old cycles | New cycles | Old / new seconds at 1x |
 |----------|-----------:|-----------:|-----------------------:|
-| Cold `C600G` Return to title | 134,438,279 | 24,375,467 | 85.44 / 15.49 |
-| Title Return to options | 6,543,744 | 1,019,555 | 4.16 / 0.65 |
-| K at options to first live frame | 481,256,150 | 93,467,703 | 305.86 / 59.40 |
-| Escape to monitor entry | 2,863,443 | 502,577 | 1.82 / 0.32 |
-| Reboot after motor-off interval | 136,766,248 | 24,399,203 | 86.92 / 15.51 |
+| Cold `C600G` Return to title | 134,463,385 | 24,400,573 | 85.46 / 15.51 |
+| Title Return to options | 6,543,684 | 1,019,495 | 4.16 / 0.65 |
+| K at options to first live frame | 481,256,274 | 93,467,827 | 305.86 / 59.40 |
+| Escape to monitor entry | 2,863,579 | 502,713 | 1.82 / 0.32 |
+| Reboot after motor-off interval | 136,791,354 | 24,424,309 | 86.94 / 15.52 |
 
 These are emulator measurements, not board wall-clock guarantees. The new path
 must never execute the spin-up loop, must reach the cold/reboot title within
@@ -275,7 +305,7 @@ The optimization is independent of the unresolved physical keyboard report.
 With the exact original disk available locally:
 
 ```powershell
-node codegen\tools\patch-castle-wolfenstein.mjs ".\Castle Wolfenstein - Disk 1, Side A.woz" .\castle-wolfenstein-3ric-english-packetfix.woz
+node codegen\tools\patch-castle-wolfenstein.mjs ".\Castle Wolfenstein - Disk 1, Side A.woz" .\castle-wolfenstein-3ric-english-controls.woz
 ```
 
 The same command accepts the exact French `.do` input and a different output name.
@@ -302,7 +332,7 @@ from selecting controls to gameplay at 1x in the emulator; do not reset mid-load
 | X / A / B / Y | Aim up / right / down / left |
 | L | Fire; hold to repeat at the game's cadence |
 | R | Search guards or open doors/chests; press once per action |
-| Start | Advance title/options; continue after capture |
+| Start | Lower the gun during play; advance title/options or continue after capture |
 | Select tap | Inventory, on release |
 | Select + L | Throw a grenade |
 | Select + R | Use/equip contents |
@@ -310,6 +340,10 @@ from selecting controls to gameplay at 1x in the emulator; do not reset mid-load
 
 Movement and aiming work simultaneously; adjacent buttons give diagonals.
 Opposing directions cancel per axis, and releasing aim retains the last direction.
+Gameplay Start sets aim to neutral and discards a pending keyboard shot without
+stopping movement. Held aim buttons stay suppressed until released; a fresh face
+press raises the gun again. Holding L cannot fire while aim is neutral.
+Start+Select still quits rather than also triggering holster.
 Keyboard and controller actions stop movement while the original game handles them.
 If the D-pad was held, release it before moving again. This lets a timed U action
 finish instead of being cancelled as soon as its keyboard strobe is cleared.
@@ -389,11 +423,11 @@ movement stopped, and resume only after a direction release/new press. Both WASM
 host keys and native PS/2 scan packets pass this check. The fixture does not claim
 a natural route to the English chest or a full-duration chest-opening playtest.
 
-The expanded native keyboard scenario sends **117 packets**, the SNES
+The expanded native keyboard scenario sends **159 packets**, the SNES
 scenario **390**, and the U scenario **72**. Each cold title exercises Caps and Num
 Lock on/off at **94/47, 120/60 and 160/80** cycle period/hold settings. The SNES
 scenario includes **44 complete LED exchanges**, 64 mixed make/break pairs,
-**4,358 register/flag/stack/bank-preserving NMIs** (2,830 while executing the
+**4,290 register/flag/stack/bank-preserving NMIs** (2,621 while executing the
 resident input prefix), and **64 exact sampled pad-table comparisons**.
 The keyboard peer is shared with the existing Archon harness; its defaults retain
 Archon's earlier timing, while these checks change DATA on the rising edge.
@@ -401,6 +435,10 @@ Each key release sends `$F0` and its code consecutively, with no extra delay or
 decoder-idle wait. Lock-key tests send entire make/break sequences back-to-back;
 additional A/G and extended-key bursts assert every completed raw byte, the
 decoded ASCII and cleared prefix/key state.
+Both profiles now include overlapping-strobe A/U cases, early/late U action
+entry, direct-strobe-site checks, and live Start holster/rearm before combat.
+Focused resident calls also cover held/opposing aim, pending keyboard fire,
+movement preservation, and Start+Select quit priority.
 
 The native title fixture saves/restores its volatile startup random counters around
 the added LED exercises so gameplay assertions do not depend on time spent toggling
@@ -413,8 +451,10 @@ that firmware path has intentionally been restored.
 The WASM check also seeds stale partial-frame/prefix state before installation
 and verifies that it is cleared without changing the lock-key table. It compares
 the entire monitor RAM shadow against the original
-ROM plus its five changed bytes, proves the shadow is write-protected, verifies
-original-ROM visibility after exit, and exercises the runtime ABI mismatch stop.
+ROM plus its six changed bytes, proves the shadow is write-protected, verifies
+CB1 enable and original-ROM restoration after exit, and exercises the runtime ABI
+mismatch stop. Sentinel bytes in the gaps between resident spans guard against
+accidentally copying the assembler's sparse-address padding over system state.
 Archon's native source was recompiled after extracting the shared peer; its
 asset-free editor/payload tests pass, while private Archon gameplay was not rerun.
 None of these checks is a measurement or approval of the physical board's LEDs.

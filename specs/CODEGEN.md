@@ -94,12 +94,15 @@ screen (decode `$0400`, 40×24 interleaved), graphics (`renderFrame()` RGBA), CP
   patched DOS-order bytes and reverse the byte patches to the exact original.
   Optional owner-image integration must boot that output, not inject game code into
   emulator memory. Without the private image, report that integration was skipped.
-  The SNES resident is assembled from original source, bounded below `$CAFE`, and
-  installed from an extended `@INIT`. Only checked free sectors may be appended;
+  The SNES resident is assembled from original source: its main span ends below
+  `$CAFE` and a helper span is bounded to `$CF00-$CFFF`. Pack those spans into
+  an extended `@INIT` and copy only their bytes, never the intervening system
+  state. Only checked free sectors may be appended;
   file length, track/sector list, catalog sector count and VTOC allocation must agree.
   Return reversible, non-overlapping changed-sector records for the complete patch.
   The physical-keyboard installer also checks the NMI proxy ABI, copies the
-  current upper ROM to language-card RAM, patches only its vector/return path
+  current upper ROM to language-card RAM, patches its vector/return path and
+  the game-local CB1 enable mask,
   and maps the copy read-only. Installer staging ends below `$2000`; it may borrow
   the future `$1F00` driver page only before the menu installs that driver.
   Native tests reuse the PS/2 command/LED peer and change incoming DATA at the
@@ -107,6 +110,11 @@ screen (decode `$0400`, 40×24 interleaved), graphics (`renderFrame()` RGBA), CP
   Test device-paced consecutive make/break/extended frames without waiting for
   the receiver state to become idle between bytes. This must expose a stop/start
   overlap and shared receive-byte corruption, not hide either with a host delay.
+  The game's eight keyboard-strobe sites are exact-preimage edits to direct
+  `$C000` clearing. Verify game-local CB1 masking survives ROM LED setup and
+  that exit restores the original enable. Start-holster coverage includes held
+  aim/fire buttons, neutral gun state, rearming after release and unchanged
+  title/options/quit behavior.
   English WOZ coordinates explicitly select `encoding: "5and3"` and the actual
   on-disk address-sector value (0-255), rather than assuming labels are 0-12.
   Validate 411-nibble XOR checksums, 4-and-4 address checksums, and the two-byte
@@ -151,6 +159,6 @@ breakpoints and current-PC highlighting.
 | `harness` + `run6502` validation loop | Shipped | serial/text/gfx/register checks + `.PRG`. |
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Archon local WOZ patching | Experimental / emulator-verified | `patch-archon.test.mjs` covers synthetic editor fixtures and optional owner-supplied-disk gameplay; `patch-archon.test.ps1` covers native PS/2 timing and LED commands. Both game images stay outside the repository. |
-| Castle Wolfenstein local disk patching | Packet-boundary correction / emulator-verified | `patch-castle-wolfenstein.test.mjs` covers profile/sector guards, ROM shadow, startup receive-state clearing, ABI rejection, gameplay and differential DOS loading budgets. Native checks send consecutive make/break/extended packets with exact raw/ASCII and LED assertions, not artificial inter-byte idle waits. Physical-board confirmation remains open; no game assets or save-persistence claim. |
+| Castle Wolfenstein local disk patching | Gameplay-control candidate / emulator-verified | Profile/sector guards, two-span reserved-RAM sentinels, six-byte ROM-shadow delta, CB1-mask lifetime, Start holster/rearm, early/late U and DOS timing budgets pass. Native checks overlap strobe and PS/2 clocks with exact A/U codes and completed use/LED actions. Physical-board confirmation remains open; no game assets or save-persistence claim. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |
 | AI-contributor entry point | Shipped | `web/llms.txt` + `CONTRIBUTING.md`; `prompt-system.md` closes the loop to the gallery. |

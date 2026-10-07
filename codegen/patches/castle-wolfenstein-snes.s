@@ -17,6 +17,7 @@ init:
         stz previous_chord
         stz suppress_l
         stz action_pause
+        stz aim_blocked
         jsr scan_pad
         lda pad+2
         sta previous_select
@@ -144,8 +145,7 @@ keep_keyboard_motion:
         sta previous_motion
         ldx #7
         jsr direction
-        beq keep_aim
-        sta AIM_DIR
+        jsr apply_aim
 keep_aim:
         lda KEYBOARD
         bmi pause_motion
@@ -243,8 +243,6 @@ compare_chord:
 remember_buttons:
         lda pad+2
         sta previous_select
-        lda pad+3
-        sta previous_start
         lda pad+11
         sta previous_r
         rts
@@ -308,10 +306,6 @@ game_fire:
 keyboard_fire:
         pla
         rts
-
-exit_game:
-        bit $C082
-        jmp $FF59
 
 ; Short receive phases run before banking. The copied ROM handles complete packets.
 nmi_entry:
@@ -414,3 +408,40 @@ start_key:       .byte 0
 receive_byte:    .byte 0
 pad:            .res 16
 resident_end:
+
+        .org $CF00
+apply_aim:
+        pha
+        jsr start_edge
+        beq face_aim
+        lda pad+2
+        bne face_aim
+        stz AIM_DIR
+        stz $1F90
+        lda #1
+        sta aim_blocked
+face_aim:
+        lda raw_direction
+        bne check_aim
+        stz aim_blocked
+check_aim:
+        lda aim_blocked
+        bne discard_aim
+        pla
+        beq aim_done
+        sta AIM_DIR
+aim_done:
+        rts
+discard_aim:
+        pla
+        rts
+
+exit_game:
+        lda #$10
+        sta $C20D
+        lda #$90
+        sta $C20E
+        bit $C082
+        jmp $FF59
+aim_blocked: .byte 0
+helpers_end:

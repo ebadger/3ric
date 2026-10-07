@@ -94,6 +94,10 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     opposing directions cancel per axis. Releasing the D-pad stops pad-controlled
     movement; releasing aim buttons retains the last valid aim. L fires while held,
     and R performs the game's search/open action (Space), once per press.
+    A fresh Start press during gameplay lowers the gun (`AIM_DIR=0`) without
+    stopping movement. Held face buttons cannot immediately raise it again;
+    release them before a fresh aim. Start+Select retains quit priority.
+    Start keeps its original title/options/continue role outside gameplay.
   - **Additional actions:** tap Select for inventory (Return); Select+L throws a
     grenade (T), Select+R uses/equips (U), and Start+Select exits (Escape). Chords
     suppress the tap-inventory and ordinary shoulder actions, with quit taking
@@ -116,7 +120,8 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   - **Keyboard coexistence and hardware:** retain the original K-mode keyboard
     driver and direction/fire latches, including its swapped-control option.
     Poll the real active-low SNES serial data on VIA1 PB5 using the shared PB6/PB7
-    latch/clock, without paddle-timer interrupts or changing VIA configuration.
+    latch/clock, without paddle-timer interrupts or changing port directions/timers.
+    The game-local CB1 interrupt mask below is the only VIA configuration change.
     The second pad must not control the game. No burned-ROM image, VM, browser
     bridge, global memory map or hardware change is part of this port.
     The owner approved a disk-only correction for the physical PS/2 receiver:
@@ -140,11 +145,23 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     key/lock tables. Native input tests must send `F0` + released scan code with
     no added inter-byte delay or artificial wait for decoder idle, and compare
     the resulting raw and ASCII codes as well as lock-key command exchanges.
-  - **Resident and loading:** reserve only `$C800-$CAFD` for this exact game/ROM
+    **Keyboard-strobe collision:** replace the game's eight `STA $C010`
+    acknowledgments (title, copied keyboard driver, action dispatcher, grenade)
+    with `STZ $C000`. This preserves the original direction/fire latches while
+    avoiding a redundant CB1 NMI competing with keyboard-clock reception.
+    Disable only CB1's VIA interrupt enable during the game and mask it in the
+    RAM copy of the ROM's VIA reinitialization, so LED exchanges cannot re-enable
+    it. Clear the stale CB1 flag and restore its enable on monitor exit.
+    Native checks must overlap CB1 with incoming clocks, including consecutive
+    packets, and confirm keyboard U and LED command exchanges still complete.
+  - **Resident and loading:** reserve `$C800-$CAFD` and one helper page
+    `$CF00-$CFFF` for this exact game/ROM
     profile; never overlap `$CAFE`, the `$CB00` key-state table or `$CE00` input
     storage. Only the documented receive-state reset changes that shared state
     at installation. This borrows inactive ROM FAT32 workspace while the floppy game
-    runs; it is not general free RAM. Extend `@INIT` into checked free DOS sectors,
+    runs, plus an otherwise unused page in this checked profile; it is not general
+    free RAM. Pack/load only the two used spans, never overwrite the intervening
+    banking/key-state/input tables. Extend `@INIT` into checked free DOS sectors,
     updating its binary length, track/sector list, catalog count and VTOC bitmap.
     A disk-loaded installer copies the resident before the title; the game and
     graphics may then overwrite the staging bytes. Installers and staging must
@@ -530,7 +547,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Microsoft BASIC | Shipped | `$9000–$BFFF`; not Applesoft (known gap). |
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
-| Castle Wolfenstein disk-only port | Packet-boundary correction / emulator-verified | Fast DOS loading retained. New receiver clears stale startup phase, resets/acknowledges the stop edge before decoding, and separates partial from completed bytes. Consecutive raw/ASCII, LED and SNES tests pass; old packet loss and Return-to-G misdecoding are reproduced in differential fixtures. The new candidate still needs physical-board confirmation; save persistence remains unsupported. See the [porting log](../docs/porting-logs/castle-wolfenstein.md). |
+| Castle Wolfenstein disk-only port | Start holster / strobe-collision candidate | Gameplay Start clears aim without stopping movement, held aim requires release, and quit/menu roles remain. Eight direct latch-clear patches and game-local CB1 masking remove a reproduced strobe/PS2 receive collision; early/late U, native overlapping A/U packets, LED and SNES checks pass. Owner confirmed improved packet input but reported remaining U/LED trouble on the preceding candidate; the new one needs board confirmation. See the [porting log](../docs/porting-logs/castle-wolfenstein.md). |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |

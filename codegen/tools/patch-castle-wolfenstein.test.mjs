@@ -55,6 +55,8 @@ function testGuards() {
     const built = buildControllerPayload(diskProfile);
     assert.equal(built.resident.org, 0xc800);
     assert(built.resident.symbols.RESIDENT_END <= 0xcafe);
+    assert(built.resident.symbols.HELPERS_END <= 0xd000);
+    assert.equal(built.residentBytes.length, built.segments.reduce((sum, segment) => sum + segment.bytes.length, 0));
     assert(built.end <= 0x2000);
     assert(built.source >= 0x880 + diskProfile.initLength);
   }
@@ -168,11 +170,13 @@ async function bootTitle(woz) {
     const symbols = payload.resident.symbols;
     shadow.set([0x4c, symbols.NMI_RESUME & 255, symbols.NMI_RESUME >> 8], 0xf1ce - 0xd000);
     shadow.writeUInt16LE(symbols.NMI_ENTRY, 0xfffa - 0xd000);
+    shadow[0xe056 - 0xd000] = 0xeb;
     assert(!vm.romVisible(0xfffa), "The fast NMI RAM shadow is not mapped");
     assert.deepEqual(Buffer.from(Array.from({ length: shadow.length }, (_, i) => vm.peekMapped(0xd000 + i))), shadow);
     vm.writeBus(0xd000, shadow[0] ^ 255);
     assert.equal(vm.peekMapped(0xd000), shadow[0], "The monitor shadow must be read-only");
     assert.equal(vm.peek(0xf1ce), rom[0xf1ce], "Installing the shadow changed the original ROM");
+    assert.equal(vm.readBus(0xc20e) & 0x10, 0, "Game left redundant keyboard-strobe NMIs enabled");
     const frame = vm.renderFrame();
     let lit = 0;
     for (let i = 0; i < frame.length; i += 4) if (frame[i] || frame[i + 1] || frame[i + 2]) lit++;
@@ -263,6 +267,7 @@ async function testGameplay(woz) {
     vm.keyDown(27);
     seek(vm, 0xff59);
     assert(vm.romVisible(0xfffa), "Exit did not restore the original ROM");
+    assert.equal(vm.readBus(0xc20e) & 0x10, 0x10, "Exit did not restore keyboard-strobe interrupts");
     assert.equal(vm.peek(0xc000) & 128, 0, "Escape leaked into the monitor");
     assert.equal(vm.peek(0x1efb), 0x4c, "Extended game tail was not loaded by DOS");
     vm.step();
@@ -358,6 +363,7 @@ async function testPadDriver(woz) {
   const session = await bootPadGame(woz), vm = session.vm;
   const symbols = payload.resident.symbols;
   const code = () => Buffer.from(Array.from({ length: symbols.PORT_LOW - 0xc800 }, (_, i) => vm.peek(0xc800 + i)));
+  const helpers = () => Buffer.from(Array.from({ length: symbols.AIM_BLOCKED - 0xcf00 }, (_, i) => vm.peek(0xcf00 + i)));
   const bankMode = vm.peek(0xcafe);
   const keys = Buffer.from(Array.from({ length: 256 }, (_, i) => vm.peek(0xcb00 + i)));
   const sample = (mask, decimal = false) => {
@@ -374,6 +380,7 @@ async function testPadDriver(woz) {
   const acknowledge = () => vm.writeBus(0xc000, 0);
   try {
     assert.deepEqual(code(), Buffer.from(payload.resident.bytes.subarray(0, symbols.PORT_LOW - 0xc800)));
+    assert.deepEqual(helpers(), Buffer.from(payload.segments[1].bytes.subarray(0, symbols.AIM_BLOCKED - 0xcf00)));
     for (const [mask, direction] of [
       [PAD.UP, 2], [PAD.RIGHT, 8], [PAD.DOWN, 1], [PAD.LEFT, 4],
       [PAD.UP | PAD.RIGHT, 10], [PAD.DOWN | PAD.RIGHT, 9],
@@ -426,6 +433,22 @@ async function testPadDriver(woz) {
     sample(0);
     assert.equal(guestCall(vm, 0x1f06).a, 0x80, "Swapped-keyboard fire stopped working");
     vm.poke(0x1f09, 0);
+
+    assert.deepEqual(sample(PAD.LEFT | PAD.A), [4, 8]);
+    vm.poke(0x1f90, 0x80);
+    assert.deepEqual(sample(PAD.LEFT | PAD.A | PAD.L | PAD.START), [4, 0], "Start must holster without stopping movement");
+    assert.equal(vm.peek(0x1f90), 0, "Holstering left a pending keyboard shot");
+    assert.equal(pending(), 0, "Gameplay Start became an action key");
+    assert.equal(sample(PAD.A | PAD.L | PAD.START)[1], 0);
+    assert.equal(sample(PAD.A)[1], 0, "Held face button immediately raised the gun");
+    assert.equal(sample(PAD.A | PAD.X)[1], 0, "Aim rearmed before the old face buttons were released");
+    sample(0);
+    assert.equal(sample(PAD.X)[1], 2, "A fresh face-button press did not rearm aim");
+    sample(0);
+    assert.equal(sample(PAD.SELECT | PAD.START)[1], 2, "Quit chord also holstered the gun");
+    assert.equal(action(), 0x9b);
+    acknowledge();
+    sample(0);
 
     assert.equal(sample(PAD.RIGHT | PAD.R)[0], 0, "Search must stop movement");
     assert.equal(action(), 0xa0);
@@ -497,6 +520,7 @@ async function testPadDriver(woz) {
     assert.equal(vm.peek(0xcafe), bankMode);
     assert.deepEqual(Buffer.from(Array.from({ length: 256 }, (_, i) => vm.peek(0xcb00 + i))), keys);
     assert.deepEqual(code(), Buffer.from(payload.resident.bytes.subarray(0, symbols.PORT_LOW - 0xc800)));
+    assert.deepEqual(helpers(), Buffer.from(payload.segments[1].bytes.subarray(0, symbols.AIM_BLOCKED - 0xcf00)));
     console.log("PASS disk-installed SNES driver: independent axes, diagonals/opposites, releases, held fire, chords, keyboard arbitration and controller-2 isolation");
   } finally {
     vm.delete();
@@ -506,6 +530,20 @@ async function testPadDriver(woz) {
 async function testPadGameplay(woz) {
   const session = await bootPadGame(woz), vm = session.vm;
   try {
+    vm.setGamepadState(0, PAD.A);
+    until(vm, () => vm.peek(0x4342) === 8, "Initial aim did not raise the gun");
+    vm.setGamepadState(0, PAD.START | PAD.A | PAD.L);
+    until(vm, () => vm.peek(0x4342) === 0, "Start did not lower the gun in live gameplay");
+    vm.runCycles(10000);
+    assert.equal(vm.peek(0x4342), 0);
+    assert.equal(vm.peek(0x4347), 10, "Held fire shot while the gun was down");
+    vm.setGamepadState(0, PAD.A | PAD.L);
+    vm.runCycles(5000);
+    assert.equal(vm.peek(0x4342), 0);
+    vm.setGamepadState(0, 0);
+    until(vm, () => vm.peek(payload.resident.symbols.AIM_BLOCKED) === 0, "Face release did not rearm aim");
+    vm.setGamepadState(0, PAD.X);
+    until(vm, () => vm.peek(0x4342) === 2, "Fresh aim did not raise the gun again");
     const originalTile = vm.peek(0x4343);
     vm.setGamepadState(0, PAD.LEFT | PAD.A | PAD.L);
     assert(vm.enableAudio(44100));
@@ -529,7 +567,7 @@ async function testPadGameplay(woz) {
     vm.runCycles(1000000);
     type(vm, "4343\r");
     assert.match(session.textScreen().join("\n"), /4343-/);
-    console.log("PASS controller-only start, live simultaneous movement/aim/fire, release-to-stop and Start+Select monitor exit");
+    console.log("PASS controller-only start, Start gun-down/rearm, live movement/aim/fire and Start+Select exit");
   } finally {
     vm.delete();
   }
@@ -590,7 +628,7 @@ async function testPadActions(woz) {
   }
 }
 
-async function testKeyboardUse(woz) {
+async function testKeyboardUse(woz, early = false) {
   const session = await bootPadGame(woz), vm = session.vm;
   const english = profile.id === "english";
   const aim = english ? PAD.A : PAD.Y;
@@ -607,7 +645,7 @@ async function testKeyboardUse(woz) {
     assert(vm.peek(0x587a) > 0);
     vm.poke(0x587b, 0);
     vm.step();
-    seek(vm, 0x1301);
+    seek(vm, early ? 0x119c : 0x1301);
     vm.step();
     assert.equal(vm.peek(itemFlag), 0);
     vm.setGamepadState(0, PAD.RIGHT | aim);
@@ -623,7 +661,7 @@ async function testKeyboardUse(woz) {
     until(vm, () => vm.peek(payload.resident.symbols.ACTION_PAUSE) === 0, "D-pad release did not clear action pause");
     vm.setGamepadState(0, PAD.RIGHT);
     until(vm, () => vm.peek(0x4341) === 8, "Fresh D-pad press did not resume movement");
-    console.log(`PASS keyboard U with held D-pad ${english ? "collects the plans" : "equips a uniform"} from an open-chest fixture`);
+    console.log(`PASS ${early ? "early" : "late"} keyboard U with held D-pad ${english ? "collects the plans" : "equips a uniform"} from an open-chest fixture`);
   } finally {
     vm.delete();
   }
@@ -655,11 +693,15 @@ async function testReceiverStartup(woz) {
     for (const [address, value] of [[0xce00, 1], [0xce01, 0x80], [0xce03, 0xe0], [0xce04, 0xf0], [0xce19, 0x12]])
       vm.poke(address, value);
     vm.poke(0xcb58, 0x81);
+    const sentinels = [[0xcafd, 0xa5], [0xcaff, 0x5a], [0xcc00, 0x3c], [0xcdee, 0xc3], [0xceef, 0x69], [0xcfff, 0x96]];
+    for (const [address, value] of sentinels) vm.poke(address, value);
     vm.step();
     seek(vm, profile.titleKey);
     for (const address of [0xce00, 0xce01, 0xce03, 0xce04, 0xce19])
       assert.equal(vm.peek(address), 0, `Stale startup receive state survived at $${address.toString(16)}`);
     assert.equal(vm.peek(0xcb58), 0x81, "Installing the receiver changed the lock-key table");
+    for (const [address, value] of sentinels)
+      assert.equal(vm.peek(address), value, `Packed resident overwrote reserved/unowned RAM at $${address.toString(16)}`);
     assert.equal(vm.peek(payload.resident.symbols.RECEIVE_BYTE), 0);
     console.log("PASS stale partial-frame/prefix state cleared at installation without resetting lock state");
   } finally {
@@ -791,6 +833,7 @@ async function testImage(inputPath) {
     await testPadGameplay(woz);
     await testPadActions(woz);
     await testKeyboardUse(woz);
+    await testKeyboardUse(woz, true);
     if (profile.id === "french") {
       await testRuntimeGuard(woz);
       await testReceiverStartup(woz);

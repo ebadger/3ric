@@ -196,7 +196,7 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   At unchanged 1x speed, cold title loading measures 85.44 -> 15.49 seconds and
   options-to-game loading 305.86 -> 59.40 seconds. Readiness polling, checksums,
   retries, game data and the introduction remain intact; not for mechanical drives.
-  The latest `castle-wolfenstein-3ric-english-packetfix.woz` retains that speedup
+  The `castle-wolfenstein-3ric-english-packetfix.woz` trial retained that speedup
   and fixes a separately reproduced packet-boundary fault: the next PS/2 byte
   could start before receive state was reset, or overwrite a byte still being
   decoded. The handler now resets/acknowledges early and uses a private shift
@@ -204,7 +204,14 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   consecutive make/break/extended bytes and verify raw and ASCII codes plus
   LED exchanges. A matching packet diagnostic is available locally. The earlier
   board report was Return `KEY=C7`, `BYTE=80`; the new candidate is not yet
-  board-confirmed.
+  fully board-confirmed. The owner subsequently confirmed improved input but
+  reported U/LED failure despite Select+R working.
+  The latest `castle-wolfenstein-3ric-english-controls.woz` makes gameplay Start
+  lower the gun; release held face buttons before aiming again. It also replaces
+  the game's keyboard-strobe IRQ requests with direct latch clearing, masks only
+  CB1 while the game runs (including across LED setup), and restores it on exit.
+  This removes a reproduced overlapping-strobe/PS2 receive failure; native U,
+  LED and holster checks pass, but the new physical U/LED result remains open.
   Saves and new castles do not persist in the emulator; no
   full-playthrough or physical-board approval is claimed. See the
   [porting log](../docs/porting-logs/castle-wolfenstein.md).
