@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-01 — ebadger (via Copilot)_
+_Last updated: 2026-10-06 — ebadger (via Copilot)_
 
 ---
 
@@ -164,7 +164,57 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   click/press a key once for browser audio; edits are RAM-only until encoded in source.
 - **Disk gap:** DOS 3.3 / Quick-DOS and games that chain through an Applesoft auto-run
   greeting don't run — this clone's `$E000` BASIC is generic Microsoft BASIC, not Applesoft.
-  Self-booting machine-code disks work.
+  Self-booting machine-code disks work; a title-specific patch can bypass a BASIC
+  greeting when the game itself is machine code. Disk II writes are not implemented,
+  so an in-game save message does not imply persistence.
+- **Castle Wolfenstein keyboard/SNES candidate:** `codegen\tools\patch-castle-wolfenstein.mjs`
+  accepts the exact owner-supplied English 13-sector `.woz` or French `.do` image
+  and creates a separate bootable WOZ. English editing preserves the original
+  bitstream layout, metadata and mixed-format bootstrap.
+  It changes DOS startup to `BRUN @INIT` and returns BASIC-dependent exits to the
+  monitor, without changing the ROM or VM. A disk-loaded resident adds pad-1
+  D-pad movement, X/A/B/Y aim up/right/down/left, L fire and R search/open. Start
+  advances the title/options and continues after capture; release it between screens.
+  Tap Select for inventory, Select+L for grenade, Select+R for use/equip and
+  Start+Select for quit. Keyboard controls remain available (Space searches,
+  T throws a grenade, U uses/equips, Return inventories).
+  The corrected resident lets physical action keys interrupt a held D-pad;
+  release the D-pad before moving again so timed U actions can finish.
+  The `castle-wolfenstein-3ric-english-ps2.woz` candidate also installs a
+  read-only RAM copy of the monitor with a fast PS/2 NMI front end; no ROM reburn
+  is needed. It fixes a reproduced late-DATA sampling failure that corrupted
+  Return/Caps Lock at faster valid keyboard clocks. Title/gameplay LED exchanges
+  and mixed SNES traffic pass native checks, but the owner still reports
+  intermittent physical Return/Caps Lock failures; that diagnosis remains open.
+  Exit restores the original ROM and its original keyboard timing.
+  Boot with `C600G` from `*` (`MON` first from `>`). The web Insert action may leave
+  `EH?` at `>`; enter `MON`, then `C600G` manually in that case.
+  Both profiles pass native PS/2/SNES and WASM gameplay/restart/exit checks,
+  including U collecting plans or equipping a uniform from open-chest fixtures.
+  The `castle-wolfenstein-3ric-english-fastload.woz` trial changed one additional
+  DOS byte to skip mechanical spin-up waiting on 3RIC's solid-state disk interface.
+  At unchanged 1x speed, cold title loading measures 85.44 -> 15.49 seconds and
+  options-to-game loading 305.86 -> 59.40 seconds. Readiness polling, checksums,
+  retries, game data and the introduction remain intact; not for mechanical drives.
+  The `castle-wolfenstein-3ric-english-packetfix.woz` trial retained that speedup
+  and fixes a separately reproduced packet-boundary fault: the next PS/2 byte
+  could start before receive state was reset, or overwrite a byte still being
+  decoded. The handler now resets/acknowledges early and uses a private shift
+  byte; initialization clears stale phase/prefix state. Native tests send
+  consecutive make/break/extended bytes and verify raw and ASCII codes plus
+  LED exchanges. A matching packet diagnostic is available locally. The earlier
+  board report was Return `KEY=C7`, `BYTE=80`; the new candidate is not yet
+  fully board-confirmed. The owner subsequently confirmed improved input but
+  reported U/LED failure despite Select+R working.
+  The latest `castle-wolfenstein-3ric-english-controls.woz` makes gameplay Start
+  lower the gun; release held face buttons before aiming again. It also replaces
+  the game's keyboard-strobe IRQ requests with direct latch clearing, masks only
+  CB1 while the game runs (including across LED setup), and restores it on exit.
+  This removes a reproduced overlapping-strobe/PS2 receive failure; native U,
+  LED and holster checks pass, but the new physical U/LED result remains open.
+  Saves and new castles do not persist in the emulator; no
+  full-playthrough or physical-board approval is claimed. See the
+  [porting log](../docs/porting-logs/castle-wolfenstein.md).
 - **Archon compatibility candidate:** the owner-supplied disk needs a game-specific
   bank-safe input adapter; its menu/board otherwise hide the ROM NMI handler.
   `codegen\tools\patch-archon.mjs` creates a separate local WOZ without changing the
