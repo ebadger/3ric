@@ -18,6 +18,7 @@ below as working on the physical machine.
 | Title | Main lesson | Evidence boundary |
 |-------|-------------|-------------------|
 | [Archon](archon.md) (2026-10-05) | Preserve input interrupts across both language-card banks, and avoid paddle-timer traffic in a digital-controller adapter | Reproducible disk patcher with native PS/2 and WASM board/combat coverage; physical-board confirmation remains open |
+| [Ultima I Enhanced](ultima-i.md) (2026-10-07) | Inhibit PS/2 during banked ProDOS I/O; explicitly distinguish a RAM checkpoint from a persistent disk save | Single-disk patcher, actual-disk world/location coverage and native keyboard/LED checks; RAM saves only, physical-board confirmation open |
 
 ## Scope and evidence
 
@@ -33,7 +34,7 @@ are included or offered for download here. Short instruction changes describe th
 engineering intervention, not a redistribution of the games.
 
 Historical patchers and runbooks named in the four September logs are **not present
-in this checkout**. The newer Archon experiment includes its own patcher and tests,
+in this checkout**. The newer Archon and Ultima experiments include their patchers and tests,
 but neither its original nor patched game image. Local commit IDs identify retained development history;
 they may not be reachable from `origin` or available in a fresh clone. They are
 intentionally not GitHub commit links. The offsets, transformations, hashes, and

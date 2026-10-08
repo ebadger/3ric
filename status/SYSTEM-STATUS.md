@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-01 — ebadger (via Copilot)_
+_Last updated: 2026-10-07 — ebadger (via Copilot)_
 
 ---
 
@@ -170,6 +170,14 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   `codegen\tools\patch-archon.mjs` creates a separate local WOZ without changing the
   ROM or VM. Native PS/2/LED and WASM board/combat checks pass; hardware confirmation
   remains open. See [`docs/porting-logs/archon.md`](../docs/porting-logs/archon.md).
+- **Ultima I Enhanced compatibility candidate:** `codegen\tools\patch-ultima.mjs`
+  creates local DSK/WOZ copies for the exact owner-supplied disk, without ROM or VM
+  changes. Native PS/2 and WASM checks cover character creation, world movement,
+  RAM Save/Continue, and castle/town/dungeon loading. Outdoors, Q saves to RAM and
+  returns to the menu; B continues. **Reset/power-off loses progress.** Both the
+  current VM and Pico floppy paths lack writes; persistent saves were explicitly
+  deferred. Physical-board confirmation remains open. See
+  [`docs/porting-logs/ultima-i.md`](../docs/porting-logs/ultima-i.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**

@@ -51,6 +51,42 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   `.s` files (`codegen/programs/hello.s`, `emulator/AICodeGen/<name>/<name>.s`); assembled
   `.prg` images are git-ignored (regenerated). Run on hardware/SD via `BRUN NAME.PRG <org>`,
   or in the browser via **Load .PRG** / **Assemble & Run**.
+- **Ultima I Enhanced disk-only port:** targets only the owner-supplied, DOS-sector-order
+  143,360-byte disk with SHA-256
+  `3b80cb92955436524ae99584f543e3ac641bf7fe4aa4fb040c48ce9a330ea33d`
+  and the unchanged repository ROM with SHA-256
+  `fcea03683b77b7f113e6d8f0064ea8edbd6c75b04b472ec5c84de1c3a9f86435`.
+  The owner selected physical, single-disk play and explicitly deferred persistent saves.
+  Neither the input nor generated game images are repository assets.
+  - **Input and banking:** the supplied ProDOS kernel hides 3ric's ROM NMI handler.
+    A disk-installed adapter must inhibit the physical PS/2 clock and mask onboard VIA
+    interrupt sources before boot/kernel banked disk work, then restore ROM visibility,
+    receiver synchronization and the previous VIA interrupt-enable and port-direction
+    settings before releasing input. Finish an already-started receive frame before
+    masking interrupts; a bounded receiver timeout must stop with a visible error.
+    Hold clock low for at least 200 CPU cycles
+    (over 100 microseconds at the physical clock), so an interrupted PS/2 frame restarts.
+    Ordinary interactive keyboard input continues through the original ROM decoder.
+    `SEI` alone is not sufficient; no VM, firmware, memory-map or hardware change is allowed.
+  - **Session-only saves:** the game's character creation and Save/Continue operations
+    use one 458-byte RAM checkpoint, not a pretend successful floppy write. Display an
+    explicit in-game warning that reset/power-off loses progress. Continue without a saved
+    character must report an error. Outdoors, Q saves to RAM and returns to the character
+    menu; B continues that checkpoint without resetting the machine.
+    Do not silently replace unrelated file operations:
+    the supplied game still loads its program, world and overlays from the real disk.
+    This exact profile reserves `$C800-$C9FF` for the checkpoint and `$CC00-$CDFF`
+    for the resident adapter; these are not general free-RAM declarations.
+  - **Delivery:** validate exact image/ROM fingerprints, ProDOS file allocation and patch
+    preimages; allocate adapter storage without overwriting the raw intro outside the
+    filesystem. Create separate DSK and WOZ outputs exclusively. Reuse the existing
+    DOS-order WOZ encoder and retain the original game assets and boot/title sequence.
+  - **Acceptance:** boot the generated disk through `$C600`, create a character, enter
+    the overworld, exercise movement and location transitions, and demonstrate RAM
+    Save/Continue plus physical PS/2 input in the native VM. No persistent-save,
+    physical-board or full-playthrough certification is implied by emulator coverage.
+    Commands, fingerprints and remaining limits are recorded in
+    [`docs/porting-logs/ultima-i.md`](../docs/porting-logs/ultima-i.md).
 - **Archon compatibility experiment:** an image-specific, disk-only adapter for the
   owner-supplied WOZ2 with SHA-256
   `a7722abdfc42ef7372b5183283b6f55464c3817b1c855256186cb5c30e600c8d`.
@@ -411,6 +447,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Microsoft BASIC | Shipped | `$9000–$BFFF`; not Applesoft (known gap). |
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
+| Ultima I Enhanced single-disk adapter | Experimental / emulator-verified | Actual disk boot, character creation, Q/Continue checkpoint, overworld, castle/town/dungeon transitions and native PS/2/LED checks. RAM saves only; physical-board and full-playthrough confirmation remain open. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |
