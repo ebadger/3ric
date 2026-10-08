@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-01 — ebadger (via Copilot)_
+_Last updated: 2026-10-07 — ebadger (via Copilot)_
 
 ---
 
@@ -170,6 +170,16 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   `codegen\tools\patch-archon.mjs` creates a separate local WOZ without changing the
   ROM or VM. Native PS/2/LED and WASM board/combat checks pass; hardware confirmation
   remains open. See [`docs/porting-logs/archon.md`](../docs/porting-logs/archon.md).
+- **Popeye disk-only port:** `codegen\tools\patch-popeye.mjs` converts the exact
+  owner-supplied `PopEye.do` into a separate local WOZ. An original 65C02 supervisor
+  replaces its Applesoft/DOS lifecycle; the supplied graphics/gameplay and slot-4
+  sound remain. WASM checks cover all three disk-loaded levels, keyboard/SNES
+  controls, death/restart, high score and monitor exit; native checks cover real
+  PS/2 input. No ROM/emulator change or physical-board approval is claimed.
+  Owner-retained limitations: short SNES latch timing may affect physical pads;
+  integration does not yet reach the difficulty floor. Prefer keyboard for the
+  initial board trial.
+  See [`docs/porting-logs/popeye.md`](../docs/porting-logs/popeye.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**
