@@ -25,6 +25,7 @@ graphics / registers → produce a `.PRG` that also `BRUN`s on real hardware.
 | `run6502.mjs` | CLI: assemble/load → run → apply checks → emit `.PRG` + verdict (exit 0 only if it halted cleanly and every check passed). |
 | `gen_platform_ref.mjs` | Regenerates `platform/platform-ref.{md,json}` from `vm.h` + `badger6502.dbg`. |
 | `patch-archon.mjs` | Exact-image local WOZ compatibility patcher; see `ROM-SOFTWARE.md`. Contains only adapter code and guarded replacements, never downloads game assets, and refuses input overwrite or fingerprint/sector validation failure. |
+| `patch-ballblazer.mjs` | Exact-image local DOS-order DSK/gzip to bootable-WOZ port; see `ROM-SOFTWARE.md`. Extracts the supplied binary, installs guarded bank-safe keyboard/two-pad support and reuses `wozgen.mjs`; never downloads or commits game assets. |
 | `wozedit.mjs` | Node-only checked WOZ2 sector reading/editing, reusing the dual-use `wozgen.mjs` CRC and 6-and-2 codec. Preserves non-edited bitstream and metadata bytes. |
 
 **Platform reference (`codegen/platform/`)** — the generator's machine/human contract:
@@ -87,6 +88,14 @@ screen (decode `$0400`, 40×24 interleaved), graphics (`renderFrame()` RGBA), CP
   checksums and exact preimages before changing data. Re-encode only changed sector
   data fields; do not rebuild a supplied disk into a different track layout. Synthetic
   fixtures must cover malformed input, round trips and unchanged surrounding bits.
+- The Ballblazer importer accepts only the documented uncompressed disk fingerprint,
+  caps gzip expansion at one 143,360-byte disk and validates the DOS binary's sector
+  chain and load extent. It creates a new self-booting image rather than pretending
+  to preserve the original DOS boot/catalog. Shared bank-safe PS/2 code and native
+  input-test plumbing must preserve the existing Archon adapter's emitted bytes.
+  Guest ROM/preimage failures are explicit reset-required screens. Integration checks
+  take a locally supplied game; asset-free checks must report that integration was
+  skipped, not claim that a game booted.
 - **AI-contributor path.** The codegen guide is exposed for external AI tools: `web/llms.txt`
   (published at the site root, owned by `WEB-CLIENT.md`) is the machine-readable entry point
   that links `prompt-system.md` + `platform-ref.md`, and `prompt-system.md` closes the loop to
@@ -118,5 +127,6 @@ breakpoints and current-PC highlighting.
 | `harness` + `run6502` validation loop | Shipped | serial/text/gfx/register checks + `.PRG`. |
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Archon local WOZ patching | Experimental / emulator-verified | `patch-archon.test.mjs` covers synthetic editor fixtures and optional owner-supplied-disk gameplay; `patch-archon.test.ps1` covers native PS/2 timing and LED commands. Both game images stay outside the repository. |
+| Ballblazer local DSK/gzip porting | Experimental / emulator-verified | `patch-ballblazer.test.mjs` covers synthetic guards and optional supplied-disk gameplay; `patch-ballblazer.test.ps1` covers native PS/2/SNES input. Shared receiver extraction preserves all Archon payload bytes. Generated games remain local. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |
 | AI-contributor entry point | Shipped | `web/llms.txt` + `CONTRIBUTING.md`; `prompt-system.md` closes the loop to the gallery. |
