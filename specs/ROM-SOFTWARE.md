@@ -51,6 +51,46 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   `.s` files (`codegen/programs/hello.s`, `emulator/AICodeGen/<name>/<name>.s`); assembled
   `.prg` images are git-ignored (regenerated). Run on hardware/SD via `BRUN NAME.PRG <org>`,
   or in the browser via **Load .PRG** / **Assemble & Run**.
+- **World Karate Championship compatibility port:** a disk-only adaptation of the
+  owner-supplied, DOS-sector-order `wckarate.dsk` (143,360 bytes, SHA-256
+  `6d3892128898de49c24d8cebc975dd822b3880bb8536a26b8d688d321644a2ca`).
+  It targets the same unchanged 3ric ROM fingerprint as the Archon adapter below.
+  Neither the supplied game nor generated images are repository assets.
+  - **Boot and disk:** keep the existing ProDOS boot blocks, file allocation, game,
+    title and eight scenery images. Initialize the slot-6 game reader's head record
+    to the final track loaded by this exact boot image instead of its stale initial
+    value. Enter through the real `$C600` loader, not a host-injected game snapshot.
+    The adapter stages at `$5A00-$5FFF`: startup copies graphics only through `$59FF`,
+    and the subsequent title-picture read overwrites this staging area before play.
+  - **Bank-safe input:** reserve `$C800-$C8FF`, `$CC00-$CDFF`, `$CF00-$CFFF` and the existing
+    language-card vector holes at `$FFF8-$FFFF` for this profile. Preserve both
+    `$D000` graphics banks, interrupted registers/flags/stack and bank selection.
+    Scenery-cache copies must never temporarily overwrite the live RAM NMI vector,
+    nor restore a vector to ROM code hidden by the cache. Reuse the Archon port's
+    fast PS/2 receiver/ROM-decoder forwarding path without changing its emitted code.
+    These reservations are not a general declaration of free system RAM.
+    Speaker waveform reads use a boot-time copy of the ROM's `$D000` page, and
+    in-game waits use an instruction-equivalent RAM copy of `WAIT`; long beeps
+    must not hide the fast RAM input handler by exposing ROM for their duration.
+  - **Controls:** retain 1/2 for single/two-player games, Esc pause, Ctrl-S sound,
+    Ctrl-J/Ctrl-K for player one's joystick/keyboard modes, and the original two
+    keyboard direction grids and attack modifiers. Replace analog paddle timing
+    with real SNES serial reads through VIA1; D-pad supplies digital directions,
+    with opposite directions cancelling, and B/X supplies the attack modifier.
+    Player two may use its SNES pad or its original keyboard controls without
+    stale pad motion after release. Start on pad 1/2 starts the respective mode
+    on a fresh press and must not overwrite a pending keyboard character.
+  - **Delivery and acceptance:** reject other disk/ROM revisions and existing output
+    paths; convert the separately patched DSK sectors to a bootable WOZ2 using the
+    existing codec. Guard the input ROM ABI on-machine before installing the adapter.
+    Verify actual output-disk boot, both starting locations, scenery reloads,
+    single/two-player movement and attacks, keyboard/pad interaction, pause/sound,
+    and native PS/2 input. Preserve the game-owned rules, rendering and speaker
+    routines; timing/pitch remain tied to 3ric's native clock. No firmware, VM,
+    web bridge, memory-map, generated-reference or hardware-decoder change is required.
+    Emulator evidence is not physical-board or complete-playthrough approval.
+    Commands, fingerprints and coverage limits are recorded in
+    [`docs/porting-logs/wckarate.md`](../docs/porting-logs/wckarate.md).
 - **Archon compatibility experiment:** an image-specific, disk-only adapter for the
   owner-supplied WOZ2 with SHA-256
   `a7722abdfc42ef7372b5183283b6f55464c3817b1c855256186cb5c30e600c8d`.
@@ -396,6 +436,14 @@ For Groovebox:
 software-envelope state -> real VIA/AY register writes -> shared VM stereo PCM -> host
 audio`; the program separately writes its editor and playhead into text video RAM.
 
+For World Karate Championship:
+`owner DSK + checked ROM -> guarded local patcher -> WOZ -> $C600/ProDOS boot ->
+resident install -> original game + bank-safe keyboard/SNES input -> game-owned
+movement, attacks and disk scenery reads -> hi-res pages / $C030 -> existing
+native/WASM framebuffer and PCM`. Physical PS/2 edges reach the shared resident
+receiver and ROM decoder; controller state reaches the game through VIA1 serial
+pins. Scenery copies and sound waits retain that interrupt path.
+
 ## Dependencies
 
 - **Upstream:** the assembler/build (cc65/ca65 for the ROM; `CODEGEN.md` for programs).
@@ -411,6 +459,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Microsoft BASIC | Shipped | `$9000–$BFFF`; not Applesoft (known gap). |
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
+| World Karate Championship disk-only port | Experimental / emulator-verified | Actual output-disk boot, both starting locations, all eight scenery reads/cache refills, one/two-player keyboard/SNES input, speaker PCM and native PS/2/LED/register/bank checks. Physical board and complete-playthrough approval remain open; see the porting log. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |

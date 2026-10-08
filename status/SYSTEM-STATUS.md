@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-01 — ebadger (via Copilot)_
+_Last updated: 2026-10-07 — ebadger (via Copilot)_
 
 ---
 
@@ -67,6 +67,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_sd.cjs                  # mount SD + DIR lists the FAT32 root
 & $node web/test_disk.cjs                # boot a WOZ floppy via C600G into a hi-res title
 & $node web/test_woz_download.cjs        # Disk II boots, overlap-safe images through 34,560 bytes, size guards
+& $node codegen\tools\patch-wckarate.test.mjs # payload guards; add --dsk <original.dsk> for game integration
 ```
 
 C++ CPU unit tests (`emulator/Badger6502VMTest`, MSTest): **Test → Run All Tests** in
@@ -90,6 +91,7 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 | `web/serve.ps1` | Local static server for the browser build (port 8011). |
 | `codegen/tools/run6502.mjs` | Assemble → run → check a 6502 program; emit a card-ready `.PRG`. |
 | `codegen/tools/gen_platform_ref.mjs` | Regenerate `codegen/platform/platform-ref.*` from `vm.h` + `badger6502.dbg`. |
+| `codegen/tools/patch-wckarate.mjs` | Create a local, exact-image World Karate Championship WOZ port from the owner's original DSK; game assets are not published. |
 
 ## Current state / known gaps
 
@@ -170,6 +172,14 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   `codegen\tools\patch-archon.mjs` creates a separate local WOZ without changing the
   ROM or VM. Native PS/2/LED and WASM board/combat checks pass; hardware confirmation
   remains open. See [`docs/porting-logs/archon.md`](../docs/porting-logs/archon.md).
+- **World Karate Championship compatibility candidate:** the owner-supplied DSK now has
+  a disk-only WOZ adapter for the unchanged ROM/VM. It corrects the initial disk-head
+  record, preserves bank-safe keyboard interrupts across scenery copies and sounds, and
+  adapts the original joystick path to two SNES pads. Both starting locations, all eight
+  scenery reads, one/two-player controls, speaker PCM and native PS/2/LED traffic have
+  emulator coverage. The input/output game images remain local; physical-board and
+  complete-playthrough confirmation remain open. See
+  [`docs/porting-logs/wckarate.md`](../docs/porting-logs/wckarate.md) for generation and controls.
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**
