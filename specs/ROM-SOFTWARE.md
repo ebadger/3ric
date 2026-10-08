@@ -87,6 +87,54 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     board or complete-playthrough certification. The implementation is an
     emulator-verified hardware-trial candidate; commands, fingerprints, coverage and
     remaining limits are recorded in [`docs/porting-logs/archon.md`](../docs/porting-logs/archon.md).
+- **Ballblazer compatibility port:** a disk-only adapter for the owner-supplied
+  DOS-order disk, optionally gzip-compressed. Its uncompressed SHA-256 is
+  `5e0cc7aa1fd0832ceccb24e3a24f4921534e200cadc57ea96e576d02c60b0aeb`;
+  the supported repository ROM has SHA-256
+  `fcea03683b77b7f113e6d8f0064ea8edbd6c75b04b472ec5c84de1c3a9f86435`.
+  Neither the game nor generated images are repository or download assets.
+  - **Boot:** extract the checked DOS binary and package it with the existing
+    multi-track WOZ loader, bypassing the Applesoft `HELLO` program. Retain the
+    supplied intro and game. A guest installer checks the input-code ROM ABI and
+    game patch preimages before entering the game; a mismatch must show an explicit
+    reset-required error. The patcher rejects unsupported inputs and existing outputs.
+  - **Banking and keyboard:** reserve `$C800-$C9FF`, `$CC00-$CDFF` and `$CF00-$CFFF`
+    for this adapter, preserving the ROM's keyboard state/tables, `$CAFE` and both
+    controller tables. Keep a valid RAM NMI vector and restore interrupted registers,
+    flags, stack and banking. Reuse the bank-safe PS/2 receive path, including real
+    make/break packets and Caps/Num Lock command exchanges; direct browser key
+    injection is not sufficient hardware coverage. Game strobe acknowledgements and
+    pad scans must not generate unnecessary keyboard/paddle/timer NMIs.
+  - **Sound:** keep upper RAM selected during the game's ROM-derived noise effects
+    so physical input still uses the resident receiver. The otherwise-unused
+    `$E000-$FFFF` RAM holds a copy of this 3ric ROM's noise bytes, except for the
+    adapter NMI and original game reset vectors. This is a game-specific reservation,
+    not a memory-map expansion or a claim of Apple II audio identity. Original
+    speaker synthesis and the native 3ric clock remain in use.
+  - **Two SNES pads:** scan the real VIA1 latch/clock/data pins. Each D-pad supplies
+    eight digital directions; opposing directions cancel per axis. B or X fires.
+    Start advances the intro, starts a match, or sends the game's Space pause/resume
+    command during play. Select sends Escape: enter options from the title, or leave
+    a paused match. In title/options mode, Up/Down cycles the selected option and
+    Left/Right cycles its value, using the original menu commands. Menu buttons are
+    edge-triggered, not repeated while held; an existing keyboard character has
+    priority. A separate virtual key latch preserves commands across the title's
+    non-acknowledging reads without writing over `$C000`; acknowledging a virtual
+    key must not clear an arriving physical key. Computer-player choices remain
+    computer-controlled.
+  - **Mixed input:** retain both original keyboard layouts, fire timing and menu
+    commands. A held pad direction overrides that player's keyboard direction;
+    releasing it returns to the keyboard's latched direction (normally stopped).
+    Keyboard stop keys remain D and K in the default layouts. Pad fire is combined
+    with, not stored into, the game's keyboard fire latch. New rounds clear the
+    adapter's keyboard latches; held menu buttons must not retrigger across transitions.
+  - **Acceptance:** boot the actual generated WOZ through `$C600` in native and WASM
+    builds. Cover both pads, neutral/opposing/released inputs, both keyboard layouts,
+    mixed input, options, pause/resume, restart, AI choices and a complete timed
+    match. Native checks must exercise physical PS/2 frames, LED commands and
+    register/bank-preserving interrupts while rendering and producing sound.
+    Emulator acceptance is not physical-board approval. No ROM, VM, web bridge,
+    platform-reference or hardware-decoder change belongs to this port.
 - **Bouncing Ball (scottybe's community contribution):** the canonical source remains
   `web/programs/bouncing-ball.s`, loaded at `$0800` by the gallery, assembler, or
   `BRUN BOUNCE.PRG 0800`. Its 114-vertex, 128-face checkerboard sphere is transformed,
@@ -412,6 +460,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
+| Ballblazer disk-only compatibility adapter | Experimental / emulator-verified | Exact-image WOZ boot, both SNES pads, original keyboard layouts, menus, pause/restart, a complete timed match and native PS/2/LED/register/bank checks. Physical-board approval remains open; see [`docs/porting-logs/ballblazer.md`](../docs/porting-logs/ballblazer.md). |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |
 | 3RIC Groovebox | Shipped | Six-voice, 16-step Mockingboard sequencer; gamepad/keyboard editing and timer-driven stereo sound. `codegen/tools/groovebox.test.mjs` covers real stereo PCM, all controls, fractional tempo, clean exit, and a dense-step/input deadline below 6,556 cycles. |
