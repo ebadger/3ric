@@ -74,13 +74,16 @@ physical write support or fake successful disk write is added.
 
 ## Generate and play
 
-With the original disk available locally:
+Keep the original disk outside the checkout and generate copies in the existing
+git-ignored output directory (replace `$disk` with the real external path):
 
 ```powershell
-node codegen\tools\patch-ultima.mjs .\Ultima_I-Enhanced.dsk .\Ultima_I-3ric-RAM
+$disk = "C:\path\outside\checkout\Ultima_I-Enhanced.dsk"
+New-Item -ItemType Directory -Force codegen\out\ultima | Out-Null
+node codegen\tools\patch-ultima.mjs $disk codegen\out\ultima\Ultima_I-3ric-RAM
 ```
 
-This creates separate `.dsk` and `.woz` files. It refuses an existing output or a
+This creates separate `.dsk` and `.woz` files under `codegen\out\ultima`. It refuses an existing output or a
 different disk/ROM revision. WOZ uses the existing DOS-order encoder; all 560
 decoded sectors match the patched DSK. Use the WOZ with the current 3ric/Pico
 disk interface. Do not replace the original input.
@@ -104,8 +107,8 @@ integration arguments:
 
 ```powershell
 pwsh -NoProfile -File web\build.ps1
-node codegen\tools\patch-ultima.test.mjs --dsk .\Ultima_I-Enhanced.dsk
-pwsh -NoProfile -File codegen\tools\patch-ultima.test.ps1 -InputDsk .\Ultima_I-Enhanced.dsk
+node codegen\tools\patch-ultima.test.mjs --dsk $disk
+pwsh -NoProfile -File codegen\tools\patch-ultima.test.ps1 -InputDsk $disk
 node codegen\tools\asm6502.test.mjs
 node codegen\tools\patch-archon.test.mjs
 node web\test_boot.cjs
