@@ -170,6 +170,13 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   `codegen\tools\patch-archon.mjs` creates a separate local WOZ without changing the
   ROM or VM. Native PS/2/LED and WASM board/combat checks pass; hardware confirmation
   remains open. See [`docs/porting-logs/archon.md`](../docs/porting-logs/archon.md).
+- **Silent Service compatibility candidate:** `codegen\tools\patch-silent-service.mjs`
+  adapts the exact owner-supplied DOS-order DSK and creates a separate local WOZ or DSK.
+  The game boots into practice, convoy and patrol scenarios without changing the ROM,
+  VM or web client. Native PS/2 input/LED checks pass at 120/160-cycle bit periods;
+  the 94-cycle case during ROM calls remains a firmware timing limitation, accepted
+  for this disk-only delivery. No physical-board or full-playthrough approval is
+  claimed. See [`docs/porting-logs/silent-service.md`](../docs/porting-logs/silent-service.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**
