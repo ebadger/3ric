@@ -51,6 +51,15 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   `.s` files (`codegen/programs/hello.s`, `emulator/AICodeGen/<name>/<name>.s`); assembled
   `.prg` images are git-ignored (regenerated). Run on hardware/SD via `BRUN NAME.PRG <org>`,
   or in the browser via **Load .PRG** / **Assemble & Run**.
+- **The Halley Project compatibility:** the owner-supplied 143,360-byte DOS-order DSK,
+  SHA-256 `f86cc6ddb805077e1d41eec8274694a250bb619e297e3f35ca828fc54ade80a8`,
+  runs without game or firmware patches after conversion with the existing
+  `wozgen.mjs` encoder. Preserve all 560 sector payloads; neither image is a repository
+  asset. Its timed Apple II paddle reads already work through the ROM's SNES scan,
+  and upper ROM remains visible for keyboard NMIs. Native PS/2 input and WASM flight,
+  steering, braking, power and radar have been exercised; physical-board operation,
+  landing, mission completion and saved progress remain unverified. See
+  [`docs/porting-logs/halley-project.md`](../docs/porting-logs/halley-project.md).
 - **Archon compatibility experiment:** an image-specific, disk-only adapter for the
   owner-supplied WOZ2 with SHA-256
   `a7722abdfc42ef7372b5183283b6f55464c3817b1c855256186cb5c30e600c8d`.
@@ -411,6 +420,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Microsoft BASIC | Shipped | `$9000–$BFFF`; not Applesoft (known gap). |
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
+| The Halley Project | Conversion-only / emulator-verified | Exact owner-supplied DSK converts losslessly to WOZ; native and WASM input/flight work with the unchanged game and ROM. Browser startup enters the monitor before `C600G`; see the porting log for fingerprints and limits. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |

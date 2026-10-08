@@ -65,7 +65,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node codegen\tools\pulsar.test.mjs    # PULSAR DUEL orbits, curved torpedoes, XOR draw/erase, pads
 & $node web/test_debugger.cjs            # breakpoints, stepping, source map, ROM debug lookup
 & $node web/test_sd.cjs                  # mount SD + DIR lists the FAT32 root
-& $node web/test_disk.cjs                # boot a WOZ floppy via C600G into a hi-res title
+& $node web/test_disk.cjs                # real browser cold boot -> MON -> C600G, with/without SD
 & $node web/test_woz_download.cjs        # Disk II boots, overlap-safe images through 34,560 bytes, size guards
 ```
 
@@ -165,6 +165,13 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 - **Disk gap:** DOS 3.3 / Quick-DOS and games that chain through an Applesoft auto-run
   greeting don't run — this clone's `$E000` BASIC is generic Microsoft BASIC, not Applesoft.
   Self-booting machine-code disks work.
+- **The Halley Project:** the owner-supplied `.dsk` runs after lossless conversion to
+  `.woz`, without game/ROM changes. Native PS/2/SNES and WASM flight controls work.
+  Browser **Boot Disk** / **Insert .woz** now finish ROM initialization and enter
+  `MON` before `C600G`, avoiding both the discarded first key and the DOS `EH?`
+  response. Until that browser fix is deployed, enter `MON` and `C600G` manually
+  after inserting the image. The game stays local; physical-board operation and a
+  full playthrough are unverified. See [`docs/porting-logs/halley-project.md`](../docs/porting-logs/halley-project.md).
 - **Archon compatibility candidate:** the owner-supplied disk needs a game-specific
   bank-safe input adapter; its menu/board otherwise hide the ROM NMI handler.
   `codegen\tools\patch-archon.mjs` creates a separate local WOZ without changing the

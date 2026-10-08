@@ -423,16 +423,26 @@ image), and the data registers at `$C0E0-$C0EF` route to `DriveEmulator` via
 filesystem and calls `WozDisk::InsertDisk(path)` (the loader reads through a
 `FILE*`, which MEMFS provides) — no changes to WozLib were needed. **Boot Disk**
 and **Insert .woz…** re-seed a clean machine, insert the image into drive 1, and
-type `C600G` (the monitor "Go" command) to jump to the boot ROM, just like
-booting on real hardware.
+let ROM initialization finish before typing `MON` and then `C600G` (the monitor
+"Go" command). Cold reset enters the DOS `>` shell, which does not understand
+`C600G`; typing before initialization also loses the first character. Source
+debugger context is cleared, and breakpoints are suspended during initialization
+and restored afterward. Boot commands still use the ordinary keyboard queue and
+the real Disk II boot PROM.
 
 This clone's `$E000` BASIC is a generic Microsoft BASIC (it prompts
 `MEMORY SIZE?`), **not** Applesoft, so disks whose boot auto-runs an Applesoft
 greeting — DOS 3.3 / Quick-DOS System Masters, and games that chain through them
 — load DOS but then trap to `$0000`. Self-booting machine-code game disks (the
 bundled demo and most of the WOZ test images) bring their own code and run fine.
-`test_disk.cjs` boots one through `C600G` and asserts it reaches a painted hi-res
-screen without trapping.
+`test_disk.cjs` executes the page's actual disk-startup functions with and without
+a mounted SD card, then delivers the queued keys at frame boundaries. It checks
+monitor entry, the hi-res title, invalid-image reporting and debugger restoration.
+
+The owner-supplied **Halley Project** disk runs after a lossless DOS-order
+`.dsk` to `.woz` conversion, without a game or ROM patch. The images are not
+distributed here; [conversion, loading instructions and coverage](../docs/porting-logs/halley-project.md)
+are documented separately.
 
 ## CPU clock speed
 
