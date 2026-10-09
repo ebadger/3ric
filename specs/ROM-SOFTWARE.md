@@ -87,6 +87,70 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     board or complete-playthrough certification. The implementation is an
     emulator-verified hardware-trial candidate; commands, fingerprints, coverage and
     remaining limits are recorded in [`docs/porting-logs/archon.md`](../docs/porting-logs/archon.md).
+- **Popeye disk-only port:** the owner-supplied 143,360-byte DOS-order disk has
+  SHA-256 `cf399cc69ea391774ea64057975b6402978569332e23951721fb1d618fe3366c`.
+  Its Applesoft programs supervise a separate machine-code game engine. A local
+  conversion replaces that BASIC/DOS control layer with original 65C02 code;
+  it does not add Applesoft to the machine or replace the game's engine/assets.
+  - **Lifecycle:** retain the supplied title, three playfields, animation engine,
+    scoring, lives, increasing difficulty, level cycling and game-over/restart flow.
+    Load the original binary files from the generated floppy through the real
+    Disk II interface, including later levels; a host-loaded first-level snapshot
+    is not the deliverable.
+  - **Machine:** keep upper ROM and its input/NMI handler visible, disable the
+    lower BASIC overlay while using game RAM, and preserve system state at
+    `$C800-$CFFF`. Adapt input to the real keyboard and onboard SNES interface;
+    use the supplied fixed-slot-4 Mockingboard sound path without probing the input VIA.
+    The ROM, VM, bridge, platform reference and hardware decode remain unchanged.
+    The supervisor occupies `$A000-$AEFF`; the bootstrap/callback uses `$0800`,
+    a sector buffer uses `$0900`, and the original binaries retain `$1300-$152C`
+    and `$1F70-$95FF`. File loading uses zero page `$06-$0B` without discarding
+    the game's score/counters at `$E0-$FF`.
+  - **Disk restart:** after the title or gameplay has stopped the disk motor,
+    restart it once and wait at least 1,573,438 CPU cycles before changing any
+    head phase. During that wait, periodically read the Disk II data latch so
+    the Pico interface advances its motor-start clock even before `IsRunning()`
+    becomes true. Once started, keep the motor enabled across a file/level
+    load rather than reissuing motor-on for each sector. The boot PROM has
+    already started the motor when the supervisor first gains control.
+    This works around the existing Pico's deferred head-settlement scheduling;
+    it does not change the firmware or emulator device model.
+  - **Compatibility edits:** each engine's paddle routine becomes digital axes,
+    its fire read polls actual SNES pins and keyboard input, and its Applesoft
+    random-byte calls use an original 16-bit LFSR. The original title music
+    driver is polled through its real VIA timer with IRQ masked, rather than
+    assuming Apple's IRQ stack convention. No pitch/clock correction is claimed.
+    D-pad moves, B/A/X punches, Start advances title/restart; WASD/arrows latch
+    movement, X stops, Space punches, Q/Esc returns to the monitor. Releasing a
+    controller stops it; opposite directions cancel. Keyboard has no host key-up
+    dependency, so the explicit stop key is intentional. The adapter masks unused
+    paddle-timer interrupts while running and restores the prior VIA interrupt
+    enables on exit.
+    This port selects the disk's Mockingboard game variant; absent sound hardware
+    is silent, not automatically switched to the separate speaker-only variant.
+    **Known candidate limitation:** the SNES latch is only eight CPU cycles
+    (about 5.1 microseconds), shorter than the documented 12-microsecond sequence,
+    with no deliberate post-latch delay. Emulator edge-only scans do not establish
+    physical-pad reliability. The owner deferred this timing correction.
+  - **Delivery:** validate the exact source disk and canonical ROM fingerprints,
+    generate a separate bootable WOZ2, and refuse existing output paths. The
+    source disk, extracted assets and playable derivative remain local; only
+    original adapter code, guarded conversion logic and tests belong in Git.
+    DOS-order sectors have no original flux/bitstream layout to preserve.
+  - **Acceptance:** cold-boot the generated disk, exercise actual gameplay input,
+    sound and all three level loads, and cover death/restart and input release
+    in the unchanged native/WASM core. Distinguish controlled lifecycle fixtures
+    from an unassisted playthrough; physical-board approval requires owner testing.
+    Artifact fingerprints, controls and executed coverage are recorded in
+    [`docs/porting-logs/popeye.md`](../docs/porting-logs/popeye.md).
+    Difficulty-floor coverage is also owner-deferred: current integration
+    reaches 30, not 1, and does not assert the applied engine byte `$FB`.
+    **2026-10-08 hardware report:** the original candidate reaches the title
+    and plays Mockingboard music on the board, but Start stops music and leaves
+    `LOADING POPEYE - RELEASE KEYS` indefinitely on the Pico disk interface.
+    The separate `popeye-3ric-spinup.woz` correction passes native/WASM
+    checks, including timed motor restarts, but still needs a board retry;
+    emulator-only results do not supersede that physical failure.
 - **Bouncing Ball (scottybe's community contribution):** the canonical source remains
   `web/programs/bouncing-ball.s`, loaded at `$0800` by the gallery, assembler, or
   `BRUN BOUNCE.PRG 0800`. Its 114-vertex, 128-face checkerboard sphere is transformed,
@@ -412,6 +476,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
+| Popeye disk-only control-layer port | Experimental / hardware retry pending | Initial image physically stalls after title; separate motor-spin-up candidate passes actual WOZ boot, three levels, keyboard/SNES controls, PCM, lifecycle and native PS/2/timed-restart checks. Revised physical-board and full-playthrough approval remain open. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |
 | 3RIC Groovebox | Shipped | Six-voice, 16-step Mockingboard sequencer; gamepad/keyboard editing and timer-driven stereo sound. `codegen/tools/groovebox.test.mjs` covers real stereo PCM, all controls, fractional tempo, clean exit, and a dense-step/input deadline below 6,556 cycles. |
