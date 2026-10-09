@@ -51,6 +51,35 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   `.s` files (`codegen/programs/hello.s`, `emulator/AICodeGen/<name>/<name>.s`); assembled
   `.prg` images are git-ignored (regenerated). Run on hardware/SD via `BRUN NAME.PRG <org>`,
   or in the browser via **Load .PRG** / **Assemble & Run**.
+- **The Halley Project compatibility:** the owner-supplied 143,360-byte DOS-order DSK,
+  SHA-256 `f86cc6ddb805077e1d41eec8274694a250bb619e297e3f35ca828fc54ade80a8`,
+  needs a disk-side compatibility correction; the initial conversion-only result
+  did not establish physical-hardware compatibility. The owner reported white
+  horizontal bands during ordinary flight and a lockup entering hyperspace.
+  - **Vertical blank:** 3RIC does not implement the Apple IIe `$C019` status
+    register. Remove all three checked `LDA $C019` / `BMI` polling loops from
+    this image, retaining the game's drawing, page flips and software delays.
+    Do not invent vertical-blank hardware or claim synchronized page flipping.
+    A high status read must not hang the port; zero-filled emulator memory is
+    not evidence that the original hardware-dependent loop is safe.
+  - **Hyperspace input:** both checked hyperspace-loop copies must call the
+    game's complete paddle/keyboard sampler, not its keyboard-only tail.
+    This refreshes 3RIC's SNES state through the existing `$C070` -> VIA/NMI ->
+    ROM path so a newly pressed primary button can leave hyperspace.
+  - **Delivery:** the patcher must fingerprint the original DSK, check every
+    replacement's exact preimage, use the existing WOZ encoder, and exclusively
+    create a separate output. Preserve every unrelated sector byte. Neither
+    game image is a repository asset; the firmware, VM, memory map, platform
+    reference and hardware decoder remain unchanged.
+  - **Acceptance:** boot the actual output, turn away from the comet using
+    normal controls, hold forward into hyperspace, continue across multiple
+    distance updates and exit using both fresh controller input and the keyboard.
+    Exercise high `$C019` reads and native PS/2 input. The reported white bands
+    remain an open hardware symptom until reproduced or confirmed fixed by
+    the owner; a hyperspace fix alone is not a claim to have repaired them.
+    Physical-board operation, landing, mission completion and saved progress
+    remain unverified. See
+  [`docs/porting-logs/halley-project.md`](../docs/porting-logs/halley-project.md).
 - **Archon compatibility experiment:** an image-specific, disk-only adapter for the
   owner-supplied WOZ2 with SHA-256
   `a7722abdfc42ef7372b5183283b6f55464c3817b1c855256186cb5c30e600c8d`.
@@ -411,6 +440,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Microsoft BASIC | Shipped | `$9000–$BFFF`; not Applesoft (known gap). |
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
+| The Halley Project | Revised disk candidate / emulator-verified | Five guarded edits remove unsupported `$C019` waits and restore full hyperspace input. Native PS/2/SNES and repeated WASM hyperspace/exit checks pass; the revised disk still needs physical confirmation, and white horizontal bands remain an open hardware report. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |

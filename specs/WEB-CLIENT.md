@@ -73,6 +73,15 @@ client-side so GitHub Pages can host it as static files.
   selection must not duplicate options; the loaded source/name remain the sharing and
   download identity. Sandbox tests execute the real page's selection code with the
   `Option` constructor and `select.add()` DOM surface represented.
+- **Disk startup:** **Boot Disk** and **Insert .woz** share the same cold-boot path.
+  Clear stale keyboard input and assembled-source debugger context, suspend breakpoints
+  during ROM initialization, and let the ROM reach its DOS keyboard loop before queuing
+  `MON` followed by `C600G`. Restore debugger breakpoints after initialization. Sending
+  a key immediately after reset loses it during ROM initialization; sending `C600G`
+  directly to the DOS `>` prompt produces `EH?`, not a disk boot. This sequence must
+  work with or without an already-mounted SD card. The ordinary strobe-aware keyboard
+  queue and Disk II boot PROM perform the launch; do not inject a PC or replace ROM code.
+  Reject an invalid WOZ with a visible status and no queued boot commands.
 - **Site identity:** the published web experience is branded **3RIC Studio** in page titles,
   visible page headers and footers, social metadata, the gallery manifest, and `llms.txt`.
   **3RIC** remains the name of the computer itself. Existing repository/Page URLs, the
@@ -403,7 +412,7 @@ on the emulator whether it succeeds, is blocked, or 404s.
 | Canvas video + keyboard | Shipped | text/lo-res/hi-res, `$C000` input. |
 | Mobile virtual keyboard | Shipped | Exact 1983 Apple IIe Figure 2-1 key order/widths below the canvas, minus Reset and both Apple keys; full emulator character set, one-shot Shift/Control, the same strobe-aware `$C000` queue as physical input, and viewport-fitting rows without phone-width horizontal scrolling. |
 | USB/Bluetooth gamepads | Shipped | Two stable player slots through the standard Gamepad API and shared SNES/VIA peripheral; covered by browser-mapping, serial-protocol, and ROM-table tests. |
-| Disk II WOZ boot + micro-SD DOS shell | Shipped | **Boot Disk** / **Mount SD** buttons. |
+| Disk II WOZ boot + micro-SD DOS shell | Shipped | **Boot Disk** / **Insert .woz** settle the cold ROM before queuing `MON` then `C600G`; `test_disk.cjs` executes the real page startup with/without mounted SD and checks invalid images, keyboard delivery, audio flushing and debugger restoration. **Mount SD** exposes the DOS shell. |
 | In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; built-in games, demos, and tutorials; `?src=`. Sample sources fetched with `cache:"no-cache"` (revalidate) so a new deploy isn't masked by the browser cache. |
 | Source debugger | Shipped | Browser-assembled source listing with bank-qualified instruction breakpoints/highlighting, pause/continue, bank-aware step into/over, register and raw-memory inspection, plus lazy ca65 ROM symbol/file:line correlation; covered by `test_debugger.cjs`. |
 | Program downloads (.PRG / .woz) | Shipped | **Download .PRG** (raw bytes) + **Download .woz** (bootable WOZ2 via `wozgen.mjs`, a port of `dsk2woz2`, with overlapping staging one page above the load address). Nine grouped cases in `web/test_woz_download.cjs` cover real Disk II boots, byte-perfect large/max-size images, page padding, alternate load/entry addresses and capacity rejection. Booting a 3RIC-specific program does not establish Apple II compatibility, speech intelligibility or physical-hardware validation. |

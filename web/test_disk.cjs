@@ -3,11 +3,11 @@
 // screen, exactly the way a user drives the machine ("C600G" from the monitor).
 //
 // Flow:
-//   1. Boot the ROM into the "*" monitor.
-//   2. insertDisk(0, <Dino Eggs .woz>)  -> drive 1 loaded.
-//   3. Type "C600G"+CR -> "G"o to $C600, the Disk II boot PROM, which spins the
-//      drive, reads track 0 over the $C0E0-$C0EF data registers (DriveEmulator)
-//      and chains the game's own loader.
+//   1. Execute the actual page's loadRom/typeString/bootDisk functions.
+//   2. Cold boot into DOS, queue MON then C600G, and deliver keys one per
+//      frame only when the keyboard strobe is clear.
+//   3. The Disk II boot PROM reads track 0 over $C0E0-$C0EF and chains the
+//      game's own loader, both without SD and with an already-mounted card.
 //
 // Proof points (disk-agnostic, so the assertion is robust):
 //   - The disk is present after insertDisk().
@@ -26,11 +26,21 @@
 
 const fs = require("fs");
 const path = require("path");
+const assert = require("node:assert/strict");
+const { runInNewContext } = require("node:vm");
 const createBadgerVM = require("./badger6502.js");
 
 const DATA = path.join(__dirname, "data");
 const rom = fs.readFileSync(path.join(DATA, "badger6502.bin"));
 const font = fs.readFileSync(path.join(DATA, "fontrom.dat"));
+const sd = fs.readFileSync(path.join(DATA, "sd.sparse"));
+const page = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
+function pageFunction(name) {
+  const match = page.match(new RegExp(`^    (?:async )?function ${name}\\([^\\n]*\\) \\{[\\s\\S]*?^    \\}`, "m"));
+  assert(match, `Missing page function ${name}`);
+  return match[0];
+}
+const diskStartup = ["typeString", "loadRom", "bootDisk"].map(pageFunction).join("\n");
 
 // Prefer the staged demo disk; fall back to the in-repo WOZ test image so the
 // test runs even before build.ps1 has staged data/disk.woz.
@@ -65,61 +75,92 @@ function litPixels(vm) {
   return n;
 }
 
-createBadgerVM().then((Module) => {
+async function testDisk(Module, withSD) {
   const vm = new Module.WebVM();
-  vm.loadData(0x0000, new Uint8Array(rom.subarray(0, 0x10000)));
-  vm.seedBasicRom();
-  vm.loadFont(new Uint8Array(font));
-  vm.reset();
-  for (let i = 0; i < 20; i++) vm.run(50000);
+  try {
+    if (withSD) assert(vm.loadSD(new Uint8Array(sd)), "SD card was not mounted");
+    if (withSD) assert(vm.enableAudio(48000), "Audio collection was not enabled");
+    const inputQueue = [0x58, 0x59, 0x5a];
+    const statusEl = { textContent: "" };
+    const events = [];
+    let suspended = false;
+    vm.addBreakpoint(0xe06f);
+    const bootDisk = runInNewContext(`${diskStartup}\nbootDisk;`, {
+      vm, inputQueue, statusEl, audioGenerating: withSD,
+      fetchBytes: async name => {
+        if (name === "data/badger6502.bin") return new Uint8Array(rom);
+        if (name === "data/fontrom.dat") return new Uint8Array(font);
+        throw new Error(`Unexpected asset ${name}`);
+      },
+      emulationClock: { reset() {} },
+      clearAudioQueue() {},
+      canvas: { focus() { events.push("focus"); } },
+      debuggerController: {
+        setProgram(source, listing) {
+          assert.equal(source, "");
+          assert.equal(listing.length, 0);
+          events.push("clear source");
+        },
+        beginProgramLoad() {
+          suspended = true;
+          vm.clearBreakpoints();
+          events.push("begin");
+        },
+        onMachineReset() {
+          assert(suspended, "ROM reset must not reinstate startup breakpoints");
+          events.push("reset");
+        },
+        endProgramLoad() {
+          suspended = false;
+          vm.addBreakpoint(0xe06f);
+          events.push("end");
+        },
+      },
+    });
+    await bootDisk(new Uint8Array(woz), path.basename(wozPath));
+    assert.deepEqual(events, ["clear source", "begin", "reset", "focus", "end"]);
+    assert(vm.hasBreakpoint(0xe06f), "User breakpoints were not restored");
+    assert(vm.diskPresent(0), "Disk was not inserted");
+    assert.equal(String.fromCharCode(...inputQueue), "MON\rC600G\r");
+    assert.match(statusEl.textContent, /^booting /);
+    assert.equal(vm.drainAudio().length, 0, "ROM warmup left stale audio queued");
 
-  const inserted = vm.insertDisk(0, new Uint8Array(woz));
-  const present = vm.diskPresent(0);
-
-  // Drive the real keyboard path: "C600G" + CR jumps to the Disk II boot ROM.
-  function type(s) {
-    for (const ch of s) {
-      for (let t = 0; t < 200 && (vm.peek(0xc000) & 0x80) !== 0; t++) vm.run(2000);
-      vm.keyDown(ch === "\r" ? 0x0d : ch.charCodeAt(0));
-      for (let t = 0; t < 20; t++) vm.run(4000);
-    }
-  }
-  type("C600G\r");
-
-  // Let the loader spin the disk and paint the title (~12M cycles), watching
-  // for a failed boot trapping into zero page.
-  let trappedToZero = false;
-  for (let chunk = 0; chunk < 120; chunk++) {
-    for (let i = 0; i < 50; i++) {
-      vm.run(2000);
+    let trappedToZero = false;
+    for (let frame = 0; frame < 2400; frame++) {
+      if (inputQueue.length && (vm.peek(0xc000) & 0x80) === 0)
+        vm.keyDown(inputQueue.shift());
+      vm.runCycles(frame === 0 ? 0 : 26224);
       if (vm.pc() < 0x0200) trappedToZero = true;
     }
+    const serial = vm.drainOutput();
+    assert.equal(inputQueue.length, 0, "Boot command was not consumed");
+    assert.match(serial, />MON\r/, "First queued key was lost during ROM initialization");
+    assert.match(serial, /\*C600G\r/, "Disk command did not reach the monitor");
+    assert.doesNotMatch(serial, /EH\?/, "Boot command was sent to DOS instead of the monitor");
+    assert(!trappedToZero, "Disk boot trapped into zero page");
+    assert.equal(vm.textMode(), 0);
+    assert.equal(vm.lores(), 0);
+    assert(litPixels(vm) > 5000, "Disk did not paint a hi-res screen");
+    assert.match(screenText(vm).replace(/\s+/g, ""), /PRESENTS/, "Dino Eggs title banner missing");
+    console.log(`PASS actual browser disk startup ${withSD ? "with" : "without"} mounted SD, keyboard queue and hi-res title`);
+
+    inputQueue.push(0x58);
+    events.length = 0;
+    await bootDisk(new Uint8Array(12), "invalid");
+    assert.equal(statusEl.textContent, "not a valid .woz image");
+    assert.equal(inputQueue.length, 0, "Invalid image queued boot commands");
+    assert.deepEqual(events, ["clear source", "begin", "reset", "end"]);
+    assert(vm.hasBreakpoint(0xe06f), "Invalid image left the debugger suspended");
+    console.log("PASS invalid disk status, cleared input and debugger restoration");
+  } finally {
+    vm.delete();
   }
+}
 
-  const mode = vm.textMode() ? "TEXT" : (vm.lores() ? "LORES" : "HIRES");
-  const lit = litPixels(vm);
-  const text = screenText(vm);
-
-  console.log("--- Disk II floppy test ---");
-  console.log("disk image          :", path.basename(wozPath));
-  console.log("inserted / present  :", inserted, "/", present);
-  console.log("display mode        :", mode);
-  console.log("lit framebuffer px  :", lit);
-  console.log("trapped to $0000    :", trappedToZero);
-  console.log("\n--- text overlay (non-blank rows) ---");
-  console.log(text.split("\n").filter((l) => l.trim()).join("\n"));
-
-  const hiresPainted = mode === "HIRES" && lit > 5000;
-  // The title is letter-spaced on screen ("P R E S E N T S"); collapse spaces.
-  const hasBanner = /PRESENTS/.test(text.replace(/\s+/g, ""));
-
-  console.log("\n--- checks ---");
-  console.log("disk inserted+present :", inserted && present);
-  console.log("booted (no $0000 trap):", !trappedToZero);
-  console.log("hi-res screen painted :", hiresPainted);
-  console.log("title banner visible  :", hasBanner);
-
-  const ok = inserted && present && !trappedToZero && hiresPainted && hasBanner;
-  console.log(ok ? "\nPASS" : "\nFAIL");
-  process.exit(ok ? 0 : 1);
+createBadgerVM().then(async Module => {
+  await testDisk(Module, false);
+  await testDisk(Module, true);
+}).catch(error => {
+  console.error(error);
+  process.exitCode = 1;
 });

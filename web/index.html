@@ -827,19 +827,26 @@
       debuggerController?.onMachineReset();
     }
 
-    // Boot a 5.25" floppy: re-seed a clean machine (back to the monitor), insert
-    // the .woz into drive 1, then type "C600G" to jump to the Disk II boot ROM at
-    // $C600 -- exactly how a user boots a disk on the real hardware.
+    // Cold reset enters DOS, not the monitor. Let ROM initialization finish
+    // before typing, or its keyboard setup discards the first queued character.
     async function bootDisk(bytes, label) {
       inputQueue.length = 0;
-      await loadRom();
-      if (!vm.insertDisk(0, bytes)) {
-        statusEl.textContent = "not a valid .woz image";
-        return;
+      debuggerController?.setProgram("", []);
+      debuggerController?.beginProgramLoad();
+      try {
+        await loadRom();
+        if (!vm.insertDisk(0, bytes)) {
+          statusEl.textContent = "not a valid .woz image";
+          return;
+        }
+        for (let i = 0; i < 25; i++) vm.run(50000);
+        if (audioGenerating) vm.drainAudio();
+        typeString("MON\rC600G\r");
+        statusEl.textContent = "booting " + (label || "disk") + "\u2026";
+        canvas.focus();
+      } finally {
+        debuggerController?.endProgramLoad();
       }
-      typeString("C600G\r");
-      statusEl.textContent = "booting " + (label || "disk") + "\u2026";
-      canvas.focus();
     }
 
     // Load a raw .PRG image at `org` and jump to it — the in-browser equivalent
