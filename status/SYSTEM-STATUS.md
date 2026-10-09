@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-01 — ebadger (via Copilot)_
+_Last updated: 2026-10-09 (UTC) — ebadger (via Copilot)_
 
 ---
 
@@ -165,13 +165,18 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 - **Disk gap:** DOS 3.3 / Quick-DOS and games that chain through an Applesoft auto-run
   greeting don't run — this clone's `$E000` BASIC is generic Microsoft BASIC, not Applesoft.
   Self-booting machine-code disks work.
-- **The Halley Project:** the owner-supplied `.dsk` runs after lossless conversion to
-  `.woz`, without game/ROM changes. Native PS/2/SNES and WASM flight controls work.
+- **The Halley Project:** the conversion-only image is superseded after an owner
+  report of white horizontal bands and a hyperspace lockup on physical 3RIC.
+  `codegen\tools\patch-halley.mjs` makes five guarded disk-side edits: remove
+  unsupported Apple IIe `$C019` waits and refresh SNES input during hyperspace.
+  The ROM and VM are unchanged. Native/WASM hyperspace and controller exit work
+  with `$C019` forced high; the reported white bands remain unresolved.
   Browser **Boot Disk** / **Insert .woz** now finish ROM initialization and enter
   `MON` before `C600G`, avoiding both the discarded first key and the DOS `EH?`
   response. Until that browser fix is deployed, enter `MON` and `C600G` manually
-  after inserting the image. The game stays local; physical-board operation and a
-  full playthrough are unverified. See [`docs/porting-logs/halley-project.md`](../docs/porting-logs/halley-project.md).
+  after inserting the image. The game stays local; this revised candidate needs
+  physical-board confirmation and is not a full-playthrough result. See
+  [`docs/porting-logs/halley-project.md`](../docs/porting-logs/halley-project.md).
 - **Archon compatibility candidate:** the owner-supplied disk needs a game-specific
   bank-safe input adapter; its menu/board otherwise hide the ROM NMI handler.
   `codegen\tools\patch-archon.mjs` creates a separate local WOZ without changing the

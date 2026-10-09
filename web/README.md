@@ -439,10 +439,11 @@ bundled demo and most of the WOZ test images) bring their own code and run fine.
 a mounted SD card, then delivers the queued keys at frame boundaries. It checks
 monitor entry, the hi-res title, invalid-image reporting and debugger restoration.
 
-The owner-supplied **Halley Project** disk runs after a lossless DOS-order
-`.dsk` to `.woz` conversion, without a game or ROM patch. The images are not
-distributed here; [conversion, loading instructions and coverage](../docs/porting-logs/halley-project.md)
-are documented separately.
+The owner-supplied **Halley Project** disk has a local DSK-to-WOZ patcher for
+unsupported vertical-blank polling and stale controller input in hyperspace.
+The initial conversion-only image was insufficient on physical hardware.
+The images are not distributed here; [patching, loading instructions and
+remaining limits](../docs/porting-logs/halley-project.md) are documented separately.
 
 ## CPU clock speed
 
