@@ -25,6 +25,8 @@ graphics / registers → produce a `.PRG` that also `BRUN`s on real hardware.
 | `run6502.mjs` | CLI: assemble/load → run → apply checks → emit `.PRG` + verdict (exit 0 only if it halted cleanly and every check passed). |
 | `gen_platform_ref.mjs` | Regenerates `platform/platform-ref.{md,json}` from `vm.h` + `badger6502.dbg`. |
 | `patch-archon.mjs` | Exact-image local WOZ compatibility patcher; see `ROM-SOFTWARE.md`. Contains only adapter code and guarded replacements, never downloads game assets, and refuses input overwrite or fingerprint/sector validation failure. |
+| `patch-visicalc.mjs` | Exact-image local DOS-order DSK to write-protected WOZ adapter; selects the existing 40-column mode and preserves worksheet files. Disk/ROM guards and exclusive output creation follow the Archon patcher contract. |
+| `banked-input.mjs` | Shared ROM fingerprint/checksum and assembly of the bank-safe PS/2 resident, with an optional guest post-decode hook for image-specific key normalization; no host-side input emulation. |
 | `wozedit.mjs` | Node-only checked WOZ2 sector reading/editing, reusing the dual-use `wozgen.mjs` CRC and 6-and-2 codec. Preserves non-edited bitstream and metadata bytes. |
 
 **Platform reference (`codegen/platform/`)** — the generator's machine/human contract:
@@ -87,6 +89,14 @@ screen (decode `$0400`, 40×24 interleaved), graphics (`renderFrame()` RGBA), CP
   checksums and exact preimages before changing data. Re-encode only changed sector
   data fields; do not rebuild a supplied disk into a different track layout. Synthetic
   fixtures must cover malformed input, round trips and unchanged surrounding bits.
+- VisiCalc DSK adaptation must allocate only checked-free sectors, keep its DOS
+  track/sector list, file sector count and free bitmap consistent, and leave every
+  existing worksheet byte unchanged. The output is a separately created WOZ2 with
+  write protection and a valid CRC; neither the supplied disk nor the application
+  is embedded in the tool or downloaded. Integration tests take an explicit local
+  `--dsk` input and report a skip when it is absent, rather than claiming a boot pass.
+  Extracting the shared input resident must leave the existing Archon payload
+  byte-identical.
 - **AI-contributor path.** The codegen guide is exposed for external AI tools: `web/llms.txt`
   (published at the site root, owned by `WEB-CLIENT.md`) is the machine-readable entry point
   that links `prompt-system.md` + `platform-ref.md`, and `prompt-system.md` closes the loop to
@@ -118,5 +128,6 @@ breakpoints and current-PC highlighting.
 | `harness` + `run6502` validation loop | Shipped | serial/text/gfx/register checks + `.PRG`. |
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Archon local WOZ patching | Experimental / emulator-verified | `patch-archon.test.mjs` covers synthetic editor fixtures and optional owner-supplied-disk gameplay; `patch-archon.test.ps1` covers native PS/2 timing and LED commands. Both game images stay outside the repository. |
+| VisiCalc local DSK adaptation | Experimental / emulator-verified | `patch-visicalc.test.mjs` covers guards, exact sector/worksheet preservation and optional real-disk WASM use; `patch-visicalc.test.ps1` covers native PS/2 commands and bank stress. Integration requires the owner-supplied disk; saving is explicitly excluded. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |
 | AI-contributor entry point | Shipped | `web/llms.txt` + `CONTRIBUTING.md`; `prompt-system.md` closes the loop to the gallery. |

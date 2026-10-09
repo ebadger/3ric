@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-01 — ebadger (via Copilot)_
+_Last updated: 2026-10-08 — ebadger (via Copilot)_
 
 ---
 
@@ -170,6 +170,14 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   `codegen\tools\patch-archon.mjs` creates a separate local WOZ without changing the
   ROM or VM. Native PS/2/LED and WASM board/combat checks pass; hardware confirmation
   remains open. See [`docs/porting-logs/archon.md`](../docs/porting-logs/archon.md).
+- **VisiCalc compatibility candidate:** `codegen\tools\patch-visicalc.mjs` converts
+  the exact owner-supplied `VISICALC.DSK` into a separate 40-column WOZ with a
+  bank-safe keyboard adapter and a local Shift+= correction. The ROM and VM are
+  unchanged. Native PS/2 and WASM coverage includes formulas, recalculation and
+  loading the supplied budget sheet. The output is **write-protected**; edits are
+  RAM-only because emulator floppy writes/export remain unimplemented.
+  Use **Insert .woz...**, then `MON` if at `>`, followed by `C600G`. Physical-board
+  approval remains open. See [`docs/porting-logs/visicalc.md`](../docs/porting-logs/visicalc.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**

@@ -45,6 +45,7 @@ only when the program halted cleanly and every check passed.
 | `tools/harness.cjs` | Boots the WASM emulator, loads a program, runs it, captures serial/text/registers, detects halt. |
 | `tools/run6502.mjs` | CLI: assemble/load → run → apply checks → emit `.PRG` + verdict. |
 | `tools/gen_platform_ref.mjs` | Regenerates `platform/platform-ref.{md,json}` from `vm.h` + `badger6502.dbg`. |
+| `tools/patch-visicalc.mjs` | Adapts the owner's exact DOS-order VisiCalc DSK into a separate, write-protected 40-column WOZ; see the [porting log](../docs/porting-logs/visicalc.md). No application assets are included. |
 
 ## Layout
 

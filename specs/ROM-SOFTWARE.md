@@ -87,6 +87,42 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     board or complete-playthrough certification. The implementation is an
     emulator-verified hardware-trial candidate; commands, fingerprints, coverage and
     remaining limits are recorded in [`docs/porting-logs/archon.md`](../docs/porting-logs/archon.md).
+- **VisiCalc 40-column compatibility candidate:** a disk-only adapter for the
+  owner-supplied 143,360-byte DOS-order `VISICALC.DSK`, SHA-256
+  `3805dbc99c4ebaf2f117c9e720f793dabbd10ef93f921eae7708853b2fd2a72e`,
+  targeting the same unchanged ROM fingerprint as the Archon adapter above.
+  The supplied application and generated WOZ remain local, not repository assets.
+  - **Boot and display:** append the installer to `VC/80 1` using verified free
+    DOS sectors, update its track/sector list, catalog size and allocation bitmap,
+    and enter the disk's existing 40-column path. No Videx/80-column hardware is
+    emulated or claimed. The second-stage loader and VisiCalc itself still execute
+    on the 65C02 through the real Disk II path.
+  - **Input and banking:** preserve both language-card banks and VisiCalc's full
+    available worksheet memory. A resident at `$C800-$C8FF` and `$CF00-$CFFF`
+    forwards input using the shared bank-safe PS/2 handler also used by Archon.
+    These reservations replace otherwise unused FAT32 workspace for this application;
+    keyboard state, tables and `$CAFE` remain intact. The NMI vector occupies
+    `$FFFA-$FFFB`, inside the top eight bytes already excluded by VisiCalc's
+    allocator. A bank-switch/state-store interrupt must restore the newly selected
+    bank, including at the instruction boundary between those operations.
+    The current ROM maps PS/2 Shift+= to `=`. After a completed make frame for
+    scan code `$55`, the VisiCalc-only adapter normalizes that latched character to
+    `+` when either Shift key is held. Unshifted `=`, releases, other keys and
+    browser-injected characters retain their existing behavior; no ROM table changes.
+  - **Delivery and limits:** validate the entire disk and ROM fingerprints, exact
+    patch preimages and DOS allocation metadata. Refuse an existing output path.
+    The installer checks the ROM input ABI before continuing. Convert the patched
+    sectors with the existing DOS-order WOZ encoder; preserve all worksheet files.
+    Set WOZ write protection so storage commands cannot appear to save successfully
+    on the existing read-only drive implementation. Emulator disk writing/export,
+    80-column display and printer support are outside this owner-approved scope.
+    No ROM, VM, web bridge, platform-reference or hardware-decoder changes are required.
+  - **Acceptance:** boot the generated image, edit labels/numbers/formulas, recalculate
+    dependencies, navigate and load an existing worksheet in native and WASM builds.
+    Native input must exercise PS/2 make/break frames and bank/register preservation,
+    not just host writes to `$C000`. Physical-board approval remains separate.
+    Commands, fingerprints, coverage and remaining limits are recorded in
+    [`docs/porting-logs/visicalc.md`](../docs/porting-logs/visicalc.md).
 - **Bouncing Ball (scottybe's community contribution):** the canonical source remains
   `web/programs/bouncing-ball.s`, loaded at `$0800` by the gallery, assembler, or
   `BRUN BOUNCE.PRG 0800`. Its 114-vertex, 128-face checkerboard sphere is transformed,
@@ -412,6 +448,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
+| VisiCalc disk-only compatibility adapter | Experimental / emulator-verified | Exact-image, 40-column, write-protected WOZ; native PS/2 and WASM editing, formulas, recalculation, worksheet loading and save rejection. ROM remains unchanged; physical-board approval is open. See the porting log. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |
 | 3RIC Groovebox | Shipped | Six-voice, 16-step Mockingboard sequencer; gamepad/keyboard editing and timer-driven stereo sound. `codegen/tools/groovebox.test.mjs` covers real stereo PCM, all controls, fractional tempo, clean exit, and a dense-step/input deadline below 6,556 cycles. |
