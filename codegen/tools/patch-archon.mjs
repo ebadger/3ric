@@ -2,31 +2,20 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { assemble } from "./asm6502.mjs";
+import { assembleBankedInput, bankedChecksum } from "./banked-input.mjs";
 import { patchWozSectors, readWozSectors, sha256 } from "./wozedit.mjs";
 
 export const INPUT_SHA256 = "a7722abdfc42ef7372b5183283b6f55464c3817b1c855256186cb5c30e600c8d";
-export const ROM_SHA256 = "fcea03683b77b7f113e6d8f0064ea8edbd6c75b04b472ec5c84de1c3a9f86435";
+export { ROM_SHA256, bankedChecksum } from "./banked-input.mjs";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const hex = value => `$${value.toString(16)}`;
 const byteList = bytes => Array.from(bytes, hex).join(",");
 const instruction = (opcode, address) => [opcode, address & 255, address >> 8];
 const physicalSector = logical => logical === 15 ? 15 : logical * 13 % 15;
 
-export function bankedChecksum(rom) {
-  let first = 0, second = 0;
-  for (const byte of rom.subarray(0xb500, 0xbe00)) {
-    let sum = first + byte;
-    first = (sum & 255) + (sum >> 8);
-    sum = second + first;
-    second = (sum & 255) + (sum >> 8);
-  }
-  return [first, second];
-}
-
 export function buildPayload(rom) {
-  if (sha256(rom) !== ROM_SHA256)
-    throw new Error(`Unsupported 3ric ROM; expected SHA-256 ${ROM_SHA256}`);
-  const resident = assemble(fs.readFileSync(path.join(root, "codegen", "patches", "archon-3ric.s"), "utf8"));
+  const resident = assembleBankedInput(
+    fs.readFileSync(path.join(root, "codegen", "patches", "archon-3ric.s"), "utf8"), rom);
   const s = resident.symbols;
   if (resident.org !== 0xcc00 || s.ADAPTER_END > 0xce00 || s.NMI_END > 0xd000)
     throw new Error("Archon resident exceeds its reserved RAM");

@@ -86,4 +86,5 @@ them headlessly on the same WASM core. The "why" lives in `docs/MISSION.md`.
 | WebAssembly browser build + in-browser assembler | Shipped |
 | Browser source debugger + ROM debug correlation | Shipped |
 | DOS 3.3 / Applesoft-dependent disks | Not supported (this clone's BASIC is generic MS-BASIC, not Applesoft) |
+| Owner-supplied VisiCalc disk | Experimental 40-column, write-protected compatibility image; see `ROM-SOFTWARE.md`. No general Applesoft support or emulator floppy saving. |
 | Hardware (KiCad/PCB/74-series logic) | Final build uses 74-series address decoding; development is documented in the build series |
