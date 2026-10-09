@@ -2,6 +2,57 @@
 
 using namespace port_test;
 
+namespace
+{
+    struct PadTiming
+    {
+        uint8_t previous = 0;
+        uint64_t latchRaised = 0, clockEdge = 0;
+        uint64_t minLatch = UINT64_MAX, minLow = UINT64_MAX, minHigh = UINT64_MAX;
+        unsigned bits = 0, scans = 0;
+        bool scanning = false;
+
+        void write(uint8_t pins, uint64_t cycles)
+        {
+            if ((pins & 0x40) && !(previous & 0x40))
+            {
+                require(!scanning, "SNES relatch interrupted a scan");
+                latchRaised = cycles;
+            }
+            if (!(pins & 0x40) && (previous & 0x40))
+            {
+                const uint64_t width = cycles - latchRaised;
+                require(width >= 19, "SNES latch pulse is shorter than 12 us at 3ric's clock");
+                minLatch = (std::min)(minLatch, width);
+                clockEdge = cycles;
+                bits = 0;
+                scanning = true;
+            }
+            if (scanning && ((pins ^ previous) & 0x80))
+            {
+                const uint64_t width = cycles - clockEdge;
+                require(width >= 10, "SNES clock phase is shorter than 6 us at 3ric's clock");
+                if (pins & 0x80)
+                {
+                    minLow = (std::min)(minLow, width);
+                    ++bits;
+                }
+                else
+                {
+                    minHigh = (std::min)(minHigh, width);
+                    if (bits == 16)
+                    {
+                        scanning = false;
+                        ++scans;
+                    }
+                }
+                clockEdge = cycles;
+            }
+            previous = pins;
+        }
+    };
+}
+
 int main(int argc, char** argv)
 {
     try
@@ -27,6 +78,16 @@ int main(int argc, char** argv)
         m.seek(frameInput, 30000000);
         require(!m.vm->IsROMVisible(0xfffa), "Gameplay did not select its RAM scenery cache");
         m.checking = true;
+        PadTiming padTiming;
+        const auto writeMemory = m.vm->CallbackWriteMemory;
+        m.vm->CallbackWriteMemory = [&](uint16_t address, uint8_t value) {
+            writeMemory(address, value);
+            if (address == 0xc200) padTiming.write(m.vm->GetVIA1()->GetPortBOutput(), m.cycles);
+        };
+        require(m.cpu->flags.bits.I, "Gameplay unmasked IRQ while its handler is hidden by scenery");
+        const uint8_t command = m.vm->ReadData(0xc102);
+        m.vm->WriteData(0xc102, (command | 1) & ~2);
+        require(m.vm->SimulateSerialKey('Q') && m.vm->IRQAsserted(), "Could not hold a real serial IRQ active");
         m.step();
         m.key(0x1e); // 2: two players
         m.seek(frameInput, 30000000);
@@ -77,12 +138,19 @@ int main(int argc, char** argv)
         m.lock(0x77, 0);
         m.seek(frameInput, 20000000);
         require(m.vm->PeekData(0xcafe) == 0 && m.frames.empty(), "An input interrupt remained active");
+        require(m.vm->IRQAsserted() && m.cpu->flags.bits.I, "Gameplay failed to retain its masked serial IRQ");
+        require(m.vm->ReadData(0xc100) == 'Q', "Masked serial input was silently discarded");
+        m.vm->WriteData(0xc102, command);
+        require(!m.vm->IRQAsserted(), "Acknowledging the serial byte did not release IRQ");
         require(m.checkedInterrupts > 5000, "Native input coverage did not exercise enough interrupts");
         require(m.transitionInterrupts > 0, "No interrupt exercised a bank-switch/state-store boundary");
+        require(padTiming.scans > 100, "Insufficient real-pin SNES timing coverage");
         std::cout << "PASS native PS/2 " << period << "/" << hold
             << ": actual disk boot/play, 176 mixed-input make/break pairs, eight LED exchanges, "
             << m.checkedInterrupts << " register/bank-preserving NMIs, "
-            << m.transitionInterrupts << " interrupted bank transitions, 16 interrupted scenery copies\n";
+            << m.transitionInterrupts << " interrupted bank transitions, 16 interrupted scenery copies, held serial IRQ\n";
+        std::cout << "PASS SNES pins: " << padTiming.scans << " full scans, minimum latch/low/high "
+            << padTiming.minLatch << "/" << padTiming.minLow << "/" << padTiming.minHigh << " cycles\n";
         return 0;
     }
     catch (const std::exception& error)

@@ -100,6 +100,168 @@ export function startGame(vm, players) {
   vm.step();
 }
 
+function testHardwareIRQ(vm) {
+  startGame(vm, 2);
+  seek(vm, symbols.FRAME_INPUT);
+  assert(vm.status() & 4, "Gameplay enabled IRQ while scenery hides the ROM IRQ handler");
+  vm.step();
+  for (const base of [0xc400, 0xc480]) {
+    vm.writeBus(base + 0x0b, 0);
+    vm.writeBus(base + 0x0e, 0xc0);
+    vm.writeBus(base + 0x04, 10);
+    vm.writeBus(base + 0x05, 0);
+    vm.runCycles(1000);
+    assert(vm.irqAsserted(), "The test did not assert a real device IRQ");
+    const position = vm.peek(0x75);
+    const timer = vm.peek(0x71);
+    vm.setGamepadState(0, 128);
+    vm.runCycles(10000000);
+    assert(vm.irqAsserted(), "The pending IRQ was unexpectedly discarded");
+    assert.notEqual(vm.peek(0x75), position, "Held IRQ froze controller movement");
+    assert.notEqual(vm.peek(0x71), timer, "Held IRQ froze the game timer");
+    assert(vm.status() & 4, "Gameplay unmasked the pending IRQ");
+    vm.setGamepadState(0, 0);
+    type(vm, "1");
+    seek(vm, symbols.FRAME_INPUT, 30000000);
+    assert.equal(vm.peek(0x51), 1, "Held IRQ blocked keyboard input");
+    assert.equal(vm.peek(0x52), 0);
+    assert(vm.status() & 4, "Restart/scenery copy unmasked the pending IRQ");
+    assert(vm.irqAsserted());
+    vm.step();
+    vm.writeBus(base + 0x0e, 0x40);
+    vm.writeBus(base + 0x0d, 0x40);
+    assert.equal(vm.irqAsserted(), false);
+  }
+  console.log("PASS game timer, SNES movement and keyboard restart with both device IRQs held active");
+}
+
+export async function testRandomChoices(woz) {
+  const vm = await bootGame(woz);
+  try {
+    vm.loadData(0xc900, Uint8Array.from([0xa2, 0x5a, 0xa0, 0xa5, 0xd8, 0x20, 0x76, 0x6d]));
+    assert(vm.addBreakpoint(0xc908));
+    const call = () => {
+      vm.setPC(0xc900);
+      vm.runCycles(500);
+      assert.equal(vm.pc(), 0xc908, "Random-byte routine did not return");
+      assert.equal(vm.regX(), 0x5a);
+      assert.equal(vm.regY(), 0xa5);
+    };
+    vm.poke(symbols.RANDOM_LO, 0xe1);
+    vm.poke(symbols.RANDOM_HI, 0xac);
+    const seen = new Uint8Array(65536);
+    const values = new Uint8Array(65535);
+    let state = 0xace1;
+    for (let i = 0; i < values.length; i++) {
+      call();
+      state = (state >>> 1) ^ (state & 1 ? 0xb400 : 0);
+      assert.equal(vm.peek(symbols.RANDOM_LO) | vm.peek(symbols.RANDOM_HI) << 8, state);
+      assert.notEqual(state, 0);
+      assert.equal(seen[state], 0, "Random generator repeated before its full period");
+      seen[state] = 1;
+      values[i] = vm.regA();
+      assert.equal(values[i], (state ^ (state >>> 8)) & 255);
+    }
+    assert.equal(state, 0xace1);
+    vm.poke(symbols.RANDOM_LO, 0);
+    vm.poke(symbols.RANDOM_HI, 0);
+    call();
+    assert.notEqual(vm.peek(symbols.RANDOM_LO) | vm.peek(symbols.RANDOM_HI) << 8, 0);
+    vm.removeBreakpoint(0xc908);
+    let longestRejection = 0;
+    for (let limit = 1; limit <= 32; limit++) {
+      let rejected = 0;
+      for (let i = 0; i < values.length * 2; i++) {
+        const value = values[i % values.length];
+        rejected = (value & 31) < limit || (value & 15) < limit ? 0 : rejected + 1;
+        longestRejection = Math.max(longestRejection, rejected);
+      }
+    }
+    assert(longestRejection < 256, "A bounded random choice can reject for too long");
+
+    vm.loadData(0xc900, Uint8Array.from([0xa2, 1, 0xa0, 0xa5, 0xa9, 0x42, 0x20, 0xe4, 0x86]));
+    assert(vm.addBreakpoint(0xc909));
+    for (let limit = 1; limit <= 32; limit++) {
+      vm.poke(0xc901, limit);
+      for (let bus = 0; bus < 256; bus++) {
+        vm.poke(0xc057, bus);
+        vm.poke(0x0359, 0);
+        vm.poke(symbols.RANDOM_LO, bus);
+        vm.poke(symbols.RANDOM_HI, 0xac);
+        const scratch = vm.peek(0x53);
+        vm.setPC(0xc900);
+        vm.runCycles(50000);
+        assert.equal(vm.pc(), 0xc909, `Random selector hung for limit ${limit}, static bus ${bus}`);
+        assert(vm.regX() < limit);
+        assert.equal(vm.regA(), 0x42);
+        assert.equal(vm.regY(), 0xa5);
+        assert.equal(vm.peek(0x53), scratch);
+      }
+    }
+    vm.removeBreakpoint(0xc909);
+    vm.loadData(0xc900, Uint8Array.from([0xa2, 1, 0xa0, 0xa5, 0xa9, 0x42, 0x38, 0x20, 0xe4, 0x86]));
+    assert(vm.addBreakpoint(0xc90a));
+    vm.poke(0xc057, 0);
+    vm.poke(0x0359, 0);
+    vm.poke(symbols.RANDOM_LO, 0);
+    vm.poke(symbols.RANDOM_HI, 0);
+    vm.setPC(0xc900);
+    vm.runCycles(50000);
+    assert.equal(vm.pc(), 0xc90a, "Revised sampler failed the exact static-bus/carry-set reproduction");
+    assert.equal(vm.regX(), 0);
+    // The original sampler cannot escape with the same initial carry, zero
+    // seed and static bus. Discard this VM immediately after the reproduction.
+    vm.loadData(0x6d76, Uint8Array.from([0xee, 0x59, 0x03]));
+    vm.poke(0x0359, 0);
+    vm.setPC(0xc900);
+    vm.runCycles(50000);
+    assert.equal(vm.breakpointHit(), false, "Original static-bus freeze was not reproduced");
+    assert((vm.pc() >= 0x6d76 && vm.pc() <= 0x6d8e) || (vm.pc() >= 0x86ea && vm.pc() <= 0x86f7),
+      "Original sampler failed outside the expected rejection loop");
+    console.log(`PASS 65,535-state PRNG period, zero recovery, X/Y preservation and 8,192 bounded choices; max rejection streak ${longestRejection}`);
+    console.log("PASS negative control reproduces the original sampler's static-bus freeze");
+  } finally {
+    vm.delete();
+  }
+}
+
+async function testExtendedPlay(woz) {
+  for (const players of [1, 2]) {
+    const vm = await bootGame(woz);
+    try {
+      startGame(vm, players);
+      vm.writeBus(0xc40b, 0);
+      vm.writeBus(0xc40e, 0xc0);
+      vm.writeBus(0xc404, 10);
+      vm.writeBus(0xc405, 0);
+      let seed = 121, timerChanges = 0, previousTimer = vm.peek(0x71);
+      const states = new Set();
+      for (let tick = 0; tick < 1800; tick++) {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        vm.setGamepadState(0, [0, 16, 32, 64, 128, 80, 144, 96, 160][seed % 9] | (seed & 256 ? 1 : 0));
+        if (players === 2)
+          vm.setGamepadState(1, [0, 16, 32, 64, 128][(seed >>> 16) % 5] | (seed & 512));
+        vm.runCycles(250000);
+        assert(vm.irqAsserted(), "Extended play did not retain the held device IRQ");
+        assert(vm.status() & 4, "Extended play unmasked IRQ");
+        assert.equal(vm.waiting(), false, "Extended play executed a stop/wait opcode");
+        assert.equal(vm.romVisible(0x9000), false, "Extended play lost its BASIC RAM mapping");
+        assert.equal(vm.peekMapped(0xfffa) | vm.peekMapped(0xfffb) << 8, symbols.NMI_ENTRY);
+        const timer = vm.peek(0x71);
+        if (timer !== previousTimer) timerChanges++;
+        previousTimer = timer;
+        states.add(vm.peek(0x5f));
+      }
+      assert(timerChanges > 100, `Extended play stopped: ${timerChanges} timer changes, states ${[...states]}, PC $${vm.pc().toString(16)}`);
+      assert(states.has(1) && states.has(3), "Extended play did not cover fights and natural round ends");
+      assert.equal(vm.drainOutput().includes("A="), false, "Extended play fell back into the monitor");
+      console.log(`PASS ${players}P: 450 million cycles of SNES-only play under held IRQ, ${timerChanges} timer changes, states ${[...states].sort()}`);
+    } finally {
+      vm.delete();
+    }
+  }
+}
+
 function samplePad(vm, player, mask) {
   seek(vm, player === 0 ? 0x6a2b : 0x6a35, 20000000);
   vm.setGamepadState(player, mask);
@@ -371,6 +533,7 @@ async function testImage(inputPath) {
     try {
       startGame(vm, 1);
       if (location === "A") {
+        testHardwareIRQ(vm);
         testControls(vm);
         testStart(vm);
         testAudio(vm);
@@ -380,6 +543,8 @@ async function testImage(inputPath) {
       vm.delete();
     }
   }
+  await testRandomChoices(result.woz);
+  await testExtendedPlay(result.woz);
   console.log("PASS actual output WOZ cold boots into both locations and single/two-player gameplay");
 }
 

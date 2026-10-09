@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-07 — ebadger (via Copilot)_
+_Last updated: 2026-10-08 — ebadger (via Copilot)_
 
 ---
 
@@ -172,13 +172,15 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   `codegen\tools\patch-archon.mjs` creates a separate local WOZ without changing the
   ROM or VM. Native PS/2/LED and WASM board/combat checks pass; hardware confirmation
   remains open. See [`docs/porting-logs/archon.md`](../docs/porting-logs/archon.md).
-- **World Karate Championship compatibility candidate:** the owner-supplied DSK now has
-  a disk-only WOZ adapter for the unchanged ROM/VM. It corrects the initial disk-head
-  record, preserves bank-safe keyboard interrupts across scenery copies and sounds, and
-  adapts the original joystick path to two SNES pads. Both starting locations, all eight
-  scenery reads, one/two-player controls, speaker PCM and native PS/2/LED traffic have
-  emulator coverage. The input/output game images remain local; physical-board and
-  complete-playthrough confirmation remain open. See
+- **World Karate Championship compatibility candidate:** revision 1 froze on hardware
+  during SNES-only gameplay. Revision 2 replaces the Apple II video-bus random sampler
+  (a constant bus reproducibly traps its rejection loop), keeps unused maskable IRQs
+  disabled while scenery covers their ROM handler, and lengthens the SNES latch to
+  the documented polling waveform. The disk-only adapter retains the unchanged ROM/VM.
+  Both locations, eight scenery reads, controls, speaker PCM, a full PRNG period,
+  two 450-million-cycle held-IRQ runs and native PS/2/LED/pad-pulse timing have emulator
+  coverage. The original and revised images remain local; revision 2 still needs
+  physical-board and complete-playthrough confirmation. See
   [`docs/porting-logs/wckarate.md`](../docs/porting-logs/wckarate.md) for generation and controls.
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.

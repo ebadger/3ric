@@ -120,6 +120,6 @@ breakpoints and current-PC highlighting.
 | `harness` + `run6502` validation loop | Shipped | serial/text/gfx/register checks + `.PRG`. |
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Archon local WOZ patching | Experimental / emulator-verified | `patch-archon.test.mjs` covers synthetic editor fixtures and optional owner-supplied-disk gameplay; `patch-archon.test.ps1` covers native PS/2 timing and LED commands. Both game images stay outside the repository. |
-| World Karate Championship local disk port | Experimental / emulator-verified | `patch-wckarate.test.mjs --dsk <original.dsk>` covers output-disk boot, input, speaker PCM, all eight scenery reads and vector-safe cache refills. `patch-wckarate.test.ps1` covers native PS/2/LED and bank preservation using the shared `port-input-test.h` host. Game images remain local. |
+| World Karate Championship local disk port | Revision 2 / hardware confirmation pending | `patch-wckarate.test.mjs --dsk <original.dsk>` covers disk boot/input/audio/scenery, full-period and static-bus random choices, and two 450-million-cycle SNES-only runs with held IRQ. `patch-wckarate.test.ps1` covers native PS/2/LED/bank preservation under held serial IRQ and measures actual VIA SNES pulse widths. Revision 1 failed on hardware; game images remain local. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |
 | AI-contributor entry point | Shipped | `web/llms.txt` + `CONTRIBUTING.md`; `prompt-system.md` closes the loop to the gallery. |

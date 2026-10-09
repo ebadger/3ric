@@ -35,6 +35,13 @@ scan_pads:
         stz $C200
         lda #$40
         sta $C200
+        ; Twenty cycles of latch-high at 1.5734375 MHz exceed the 12 us pulse.
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
         ldx #0
 scan_bit:
         lda #0
@@ -186,6 +193,28 @@ button1:
         pla
         bit $C061
         rts
+
+; The Apple II video bus used by the game is not a 3ric entropy source.
+random:
+        lda random_lo
+        ora random_hi
+        bne random_step
+        inc random_hi
+random_step:
+        lsr random_hi
+        ror random_lo
+        bcc random_done
+        lda random_hi
+        eor #$B4
+        sta random_hi
+random_done:
+        lda random_lo
+        eor random_hi
+        rts
+random_lo:
+        .byte $E1
+random_hi:
+        .byte $AC
 
 ; Match ROM WAIT without exposing its slower NMI receiver during a sound.
 wait:

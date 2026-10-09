@@ -1,6 +1,9 @@
 # World Karate Championship: a disk-only 3ric port
 
-**Experimental hardware-trial image; not yet confirmed on the physical board.**
+**Revision 2 hardware-trial image; not yet confirmed on the physical board.**
+The owner reported that revision 1 froze the picture and timer during SNES-only
+gameplay, without keyboard input. Do not use the first candidate as a working
+hardware port; retain its fingerprint below only for reproducing that failure.
 This adapts the owner's supplied Apple II disk, not a rewrite of the game.
 The repository contains the original adapter, guarded patcher and tests, not the
 commercial game or a download of it.
@@ -10,7 +13,8 @@ commercial game or a download of it.
 | Artifact | Bytes | SHA-256 |
 |----------|-------|---------|
 | Original `wckarate.dsk`, DOS sector order | 143,360 | `6d3892128898de49c24d8cebc975dd822b3880bb8536a26b8d688d321644a2ca` |
-| Generated `wckarate-3ric.woz` | 234,496 | `0d2843d9711fe2389cdf119c43f97109726892900181e925a620c7061dcac23a` |
+| Revision 1 `wckarate-3ric.woz` (failed hardware trial) | 234,496 | `0d2843d9711fe2389cdf119c43f97109726892900181e925a620c7061dcac23a` |
+| Revision 2 `wckarate-3ric-r2.woz` (current candidate) | 234,496 | `c5b95282ebe9c901b2c1326482034260c182f70dcde6d249089143f39f28ce11` |
 | Unchanged repository `badger6502.bin` | 524,288 | `fcea03683b77b7f113e6d8f0064ea8edbd6c75b04b472ec5c84de1c3a9f86435` |
 
 The patcher rejects other disk and ROM revisions. The installer also checks the
@@ -38,12 +42,38 @@ guard, not a cryptographic readback of the physical ROM.
    `$C800` and uses an instruction-identical, same-page RAM `WAIT` routine.
    Gameplay waits and sound no longer hide the fast RAM receiver. Speaker events
    and waveform contents remain game/ROM-owned, not host-generated audio.
+5. **The random sampler can loop forever without an Apple II video bus.** Extended
+   SNES-only execution stopped in `$6D76/$86EA`, with the fight timer frozen.
+   The original sampler chooses code bytes from `$6000-$60FF` and mixes three
+   `$C057` reads. On 3ric those reads are not a source of changing video data.
+   With `$0359=0`, constant `$C057=0`, carry set and bounded-selector limit X=1,
+   the original rejection loop never returns. Revision 2 redirects only the random-byte entry
+   to a nonzero 16-bit `$B400`-feedback LFSR, returning low XOR high and preserving
+   X/Y. The game still owns its choice tables, AI and selection rules; the random
+   sequence intentionally differs from the Apple II version.
+6. **A maskable IRQ can execute scenery instead of a handler.** The first port
+   kept the scenery copier's `CLI`, despite its copied IRQ vector targeting
+   `$FA86`, now picture data. Holding an actual emulated Mockingboard timer IRQ
+   active reproduces an instruction loop through that picture and a frozen timer.
+   Revision 2 retains `SEI` throughout play. The game does not use maskable IRQs;
+   keyboard NMI still works, and pending serial input is not discarded.
+7. **The initial SNES latch pulse was too short.** It lasted eight CPU cycles
+   (about 5 microseconds). The published SNES polling waveform uses a 12-microsecond
+   latch and 6-microsecond clock phases. Revision 2 holds latch for 20 cycles
+   (about 12.7 microseconds); native pin-level coverage checks the latch and both
+   clock levels, rather than relying on idealized controller state alone.
+   Protocol reference: [SNES controller waveform](https://github.com/llafuente/retropia/blob/master/nintendo/super-nintendo/controllers.md).
+
+The random-choice hang and hidden IRQ handler are reproducible defects, not a
+measurement of the physical board's stopped PC or IRQ source. The original short
+opening-game checks missed the random-choice loop. Hardware confirmation of this
+revised fingerprint is still required.
 
 ## Adapter and preservation
 
 The bootstrap uses `$5A00-$5E08`, after the startup graphics-copy source ending
 at `$59FF`. The title read later overwrites that staging area. The installed
-resident occupies `$CC00-$CD4A` and `$CF00-$CF9F`; whole pages
+resident occupies `$CC00-$CD74` and `$CF00-$CF9F`; whole pages
 `$CC00-$CDFF/$CF00-$CFFF` are reserved for this profile, along with the waveform
 page `$C800-$C8FF`. The keyboard tables, `$CAFE` nesting counter and controller
 tables remain intact. These are game-specific reservations, not general free RAM.
@@ -54,7 +84,7 @@ recover the selected mode from interrupted X when NMI lands between a switch and
 its state store. A scenery refill copies only through `$FFF7`; the eight unused
 hi-res holes containing the vectors remain valid throughout the copy.
 
-There are **23 guarded edits affecting 1,106 bytes in 15 DSK sectors**. The ProDOS
+There are **24 guarded edits affecting 1,113 bytes in 16 DSK sectors**. The ProDOS
 boot blocks, directory, allocation, title and all eight original scenery images
 are unchanged. Reversing the edits reproduces the original DSK byte for byte.
 The output is a newly encoded standard WOZ2 because the supplied DSK contains
@@ -69,7 +99,7 @@ after sharing the NMI source; the native PS/2/LED test host is shared too.
 With the exact original disk available locally:
 
 ```powershell
-node codegen\tools\patch-wckarate.mjs .\wckarate.dsk .\wckarate-3ric.woz
+node codegen\tools\patch-wckarate.mjs .\wckarate.dsk .\wckarate-3ric-r2.woz
 ```
 
 The output must not already exist. The original input is never overwritten.
@@ -104,7 +134,8 @@ character. The initial title/location selection still uses the keyboard.
 
 ## Executed coverage and limits
 
-The following commands passed with the fingerprints above:
+The game checks below passed for revision 2. The unchanged WASM build and the
+assembler/boot/WOZ regressions were also exercised for this port:
 
 ```powershell
 pwsh -NoProfile -File web\build.ps1
@@ -122,6 +153,19 @@ both SNES pads and keyboard grids, movement and attack selection, release/opposi
 directions, pause, sound and fresh/held Start. Gameplay produces real speaker PCM;
 Ctrl-S produces silence after the existing DC blocker settles.
 
+Revision 2 also exercises the actual 65C02 generator through its full 65,535-state
+period, all-zero recovery and X/Y preservation. The original bounded selector
+returns for all limits 1-32 and all 256 constant `$C057` backing values (8,192
+calls); the longest rejected run in the generator's complete wrapped period is
+173 draws. A negative control restoring the original sampler reproduces its
+static-bus hang.
+
+Separate one- and two-player runs each execute **450 million CPU cycles** of
+SNES-only gameplay with a device IRQ held active (about 286 emulated seconds per
+run). They cover natural round endings and retain timer progress: 106 and 146
+timer changes respectively. Focused checks also hold each Mockingboard IRQ active
+while exercising movement, the timer, keyboard restart and scenery replacement.
+
 Focused guest calls read **all eight scenery images from the disk** and refill
 the cache while preserving the vectors and image bytes. This is not a claim of
 winning every round to reach those scenes. Revision rejection, exclusive output
@@ -131,8 +175,16 @@ the DSK patches are covered too.
 Native gameplay input runs at 94-, 120- and 160-cycle PS/2 bit periods, advancing
 DATA after 80 cycles. Each case covers 176 mixed keyboard/pad make/break pairs,
 eight bidirectional Caps/Num Lock LED exchanges and 16 interrupted scenery copies.
-The cases checked 6,142 / 6,142 / 6,140 register/flags/stack/bank-preserving NMIs,
-including 156 / 182 / 164 at the bank-switch/state-store boundary. Initial monitor
+The revision-2 cases hold a real serial-receive IRQ active throughout gameplay,
+including the PS/2 and LED exchanges, then confirm the unconsumed serial byte is
+still available. They checked 6,142 / 6,143 / 6,140
+register/flags/stack/bank-preserving NMIs, including 174 / 138 / 144 at the
+bank-switch/state-store boundary. The actual VIA output pins completed
+109 / 112 / 103 full SNES scans, with minimum latch/clock-low/clock-high durations
+of 20 / 32 / 11 CPU cycles in each case. These are emulator bus timings, not an
+oscilloscope capture of the board.
+
+Initial monitor
 commands use latch injection; the title/location keys use PS/2 frames with full-period
 DATA hold, and gameplay uses the shorter hold above.
 

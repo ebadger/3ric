@@ -72,6 +72,18 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     Speaker waveform reads use a boot-time copy of the ROM's `$D000` page, and
     in-game waits use an instruction-equivalent RAM copy of `WAIT`; long beeps
     must not hide the fast RAM input handler by exposing ROM for their duration.
+    Gameplay does not use maskable interrupts: retain `SEI` after every scenery
+    copy while upper ROM is hidden. The copied IRQ vector still points at ROM
+    code replaced by scenery; an asserted serial/expansion IRQ must not execute
+    that data. PS/2 input remains NMI-driven and must work with IRQ held active.
+  - **Random choices:** replace the game's self-modifying `$6D76` sampler, which
+    assumes changing Apple II video-bus values at `$C057`, with an advancing
+    nonzero 16-bit software LFSR. Reuse the project's right-shift/`$B400` feedback
+    convention, return the XOR of both state bytes in A, preserve X/Y, and recover
+    from an all-zero state. Keep the game's AI, choice tables and bounded-selector
+    routine unchanged. Every positive selector limit 1-32 must terminate with
+    constant soft-switch backing bytes; verify the full 65,535-state generator
+    period and prolonged SNES-only fights, not only initial controller response.
   - **Controls:** retain 1/2 for single/two-player games, Esc pause, Ctrl-S sound,
     Ctrl-J/Ctrl-K for player one's joystick/keyboard modes, and the original two
     keyboard direction grids and attack modifiers. Replace analog paddle timing
@@ -80,6 +92,10 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     Player two may use its SNES pad or its original keyboard controls without
     stale pad motion after release. Start on pad 1/2 starts the respective mode
     on a fresh press and must not overwrite a pending keyboard character.
+    At 1.5734375 MHz, hold the shared SNES latch high for at least 19 cycles
+    (12 microseconds) and each clock level for at least 10 cycles (6 microseconds).
+    Verify the actual VIA pin transitions; the emulator's ideal shift registers
+    alone cannot establish physical-controller timing.
   - **Delivery and acceptance:** reject other disk/ROM revisions and existing output
     paths; convert the separately patched DSK sectors to a bootable WOZ2 using the
     existing codec. Guard the input ROM ABI on-machine before installing the adapter.
@@ -459,7 +475,7 @@ pins. Scenery copies and sound waits retain that interrupt path.
 | Microsoft BASIC | Shipped | `$9000–$BFFF`; not Applesoft (known gap). |
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
-| World Karate Championship disk-only port | Experimental / emulator-verified | Actual output-disk boot, both starting locations, all eight scenery reads/cache refills, one/two-player keyboard/SNES input, speaker PCM and native PS/2/LED/register/bank checks. Physical board and complete-playthrough approval remain open; see the porting log. |
+| World Karate Championship disk-only port | Revision 2 / hardware confirmation pending | Revision 1 froze on the board. Revision 2 replaces the reproducibly stuck Apple II video-bus random sampler, keeps IRQ masked while its ROM handler is hidden, and extends the SNES latch pulse. Full-period/constant-bus PRNG, extended held-IRQ gameplay and native PS/2/LED/pin-timing checks cover the changes; no physical-board approval claimed. See the porting log. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |

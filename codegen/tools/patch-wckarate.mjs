@@ -173,7 +173,7 @@ copy_tail:
         iny
         cpy #$F8
         bne copy_tail
-        cli
+        sei
         rts
 `);
   if (copyBackground.org + copyBackground.bytes.length > 0x8589)
@@ -230,6 +230,7 @@ export function patchWcKarate(input, rom) {
   edit(0x6232, [0xbd, 0x00, 0xd0], [0xbd, 0x00, 0xc8]);
   for (const address of [0x623c, 0x6ebf])
     edit(address, [0x20, 0xa8, 0xfc], instruction(0x20, s.WAIT));
+  edit(0x6d76, [0xee, 0x59, 0x03], instruction(0x4c, s.RANDOM));
   edit(0x6b3f, [0xad, 0x70, 0xc0], instruction(0x4c, s.PAD1));
   edit(0x6a35, [0x20, 0xeb, 0x6b], instruction(0x20, s.PAD2));
   edit(0x607c, [0x20, 0xbb, 0x6d], instruction(0x20, s.FRAME_INPUT));
