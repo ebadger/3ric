@@ -1,8 +1,10 @@
 # Popeye: replacing the Applesoft supervisor, not the game
 
-**2026-10-07. Playable in the unchanged native/WASM emulator; physical-board
-confirmation remains open.** The owner supplied `popeye.do.zip` and selected a
-disk-only port rather than a general Applesoft implementation.
+**2026-10-08 update.** The initial image reaches the title and plays music on the
+physical board, but stalls after Start. A motor-spin-up correction is
+emulator-verified and awaits another board trial. The owner supplied
+`popeye.do.zip` and selected a disk-only port rather than a general Applesoft
+implementation on 2026-10-07.
 
 ## Exact artifacts
 
@@ -13,7 +15,8 @@ assets or a downloadable game.
 | Artifact | Bytes | SHA-256 |
 |----------|-------|---------|
 | Owner-supplied `PopEye.do` | 143,360 | `cf399cc69ea391774ea64057975b6402978569332e23951721fb1d618fe3366c` |
-| `popeye-3ric.woz` candidate | 234,496 | `a397191f443df1ed90f4048f6db7c9c540555db170eaa784b577c3f468aa0330` |
+| Initial `popeye-3ric.woz` (physical post-title stall) | 234,496 | `a397191f443df1ed90f4048f6db7c9c540555db170eaa784b577c3f468aa0330` |
+| Revised `popeye-3ric-spinup.woz` candidate | 234,496 | `2f24f71c439d034299b0e84a2340c87d5a917a10b2cbdfef43aa541c24b7cd3e` |
 | Unchanged repository `badger6502.bin` | 524,288 | `fcea03683b77b7f113e6d8f0064ea8edbd6c75b04b472ec5c84de1c3a9f86435` |
 
 The ROM fingerprint is the canonical file, not a readback of the physical board.
@@ -47,7 +50,7 @@ using the existing `wozgen.mjs`. Reversing those edits reproduces every source
 byte outside the replaced boot track. All 560 output sectors are decoded and
 compared in the integration check.
 
-The 2,201-byte supervisor lives at `$A000-$A898`, loaded from nine boot-track
+The revised 2,249-byte supervisor lives at `$A000-$A8C8`, loaded from nine boot-track
 sectors. A callback at `$0801` re-enters it after the real `$C65C` reader finishes
 a sector; `$0900` is a temporary sector buffer. File descriptors point to the
 original DOS file sectors, strip the four-byte binary headers and support
@@ -89,12 +92,55 @@ performed. Sound is the disk's **fixed slot-4 Mockingboard variant**; there is
 no automatic speaker-only fallback. Pitch and speed remain tied to 3ric's
 native clock, with no Apple II clock compensation.
 
+## Physical post-title stall and motor restart
+
+On 2026-10-08 the owner confirmed the initial image boots on physical 3ric
+through the Pico disk interface. Start is recognized: the music stops and the
+screen changes to `LOADING POPEYE - RELEASE KEYS`, where it remains. This is
+not evidence that the deferred SNES timing issue caused the stall.
+
+The supervisor stops the motor while waiting at the title, then immediately
+seeks when loading the first game file. A trace of the initial image starts
+changing head phases only **35 CPU cycles after motor-on**.
+
+The checked-in Pico firmware has a different scheduling boundary from WozLib:
+
+- `core1()` in `emulator/picodisk/exe/picodisk.cpp`: disk-register
+  actions happen before accumulated `AddCycles`, and background clock service
+  runs only while `IsRunning()` is true.
+- `emulator/picodisk/exe/DriveEmulator.cpp` waits 1,023,000 internal cycles before
+  setting the motor running.
+- `emulator/picodisk/exe/WozDisk.cpp` defers head settlement by 1,000 cycles.
+  While the motor is starting, a later phase-off access can replace the pending
+  magnetic field before the elapsed seek delay is processed. WozLib rotates
+  immediately and therefore does not expose that dropped-step behavior.
+
+Replaying the actual old loader's disk operations against those scheduling
+rules ends at **track 23 while requesting track 27**. The ROM then keeps
+searching for an address field that never arrives. This is a source-based
+timing replay, not a capture from the owner's Pico or a full firmware simulation.
+
+The revised loader starts the motor once per loading session and performs
+twelve bounded ROM delays with data-latch reads between them, allowing the
+Pico's motor-start clock to advance before any phase changes. The first phase
+now occurs **2,387,248 emulated CPU cycles after motor-on**; the same replay
+reaches the requested track 27. The motor stays enabled across sectors and
+files, then stops at the same title/gameplay boundaries as before.
+
+The new native regression fails on the old supervisor with
+`Head phase changed before motor spin-up completed`. With the correction it
+checks at least 1,573,438 cycles before the first phase, periodic data-latch
+reads, no repeated motor-on while loading, and all three level restarts after
+a delayed title Start. The actual-image native and WASM gameplay/lifecycle
+checks pass. No ROM, Pico firmware, VM or controller-timing change is included.
+The revised disk still needs the owner's physical-board confirmation.
+
 ## Generate and play
 
 Extract the owner's archive locally, then:
 
 ```powershell
-node codegen\tools\patch-popeye.mjs .\PopEye.do .\popeye-3ric.woz
+node codegen\tools\patch-popeye.mjs .\PopEye.do .\popeye-3ric-spinup.woz
 ```
 
 The output must not already exist, even if it names the input. Wrong disk or ROM
@@ -131,7 +177,9 @@ node web\test_boot.cjs
 node web\test_woz_download.cjs
 ```
 
-All passed. The WASM check cold-boots the actual output, produces real title and
+The build and existing checks passed for the initial port; the actual-image
+native/WASM checks, assembler checks and ROM boot were rerun successfully for
+the 2026-10-08 correction. The WASM check cold-boots the actual output, produces real title and
 gameplay PCM, moves left/right, climbs/descends, punches, checks release/opposites
 and keyboard stop, loads all three levels repeatedly, covers both game-over
 routes and both restart input paths, retains high score, and executes a typed
@@ -173,7 +221,8 @@ re-review cycle:
   enough level transitions to reach and remain at 1, checking both supervisor
   and engine difficulty after each load.
 
-The candidate fingerprint above is unchanged by these documentation updates.
+Those two deferrals did not change the initial candidate's fingerprint.
+The later motor-restart correction is separate and leaves both limitations open.
 
 **Still open:** physical-board confirmation, a complete human playthrough,
 Caps/Num Lock LED-command exchanges, sound quality/clock tuning, and arbitrary

@@ -8,6 +8,8 @@ start:
         bit $C007
         lda $2B
         sta slot
+        lda #1
+        sta motor_enabled
         stz half_track
         lda #$4C
         sta $0801
@@ -676,7 +678,7 @@ read_sector:
         lda $C08A,x
         lda $C08E,x
         lda $C08C,x
-        lda $C089,x
+        jsr motor_on
         lda requested_track
         asl
         sta wanted_half
@@ -721,12 +723,34 @@ at_track:
         jmp $C65C
 sector_done:
         rts
+motor_on:
+        lda motor_enabled
+        bne motor_ready
+        ldx slot
+        lda $C089,x
+        lda #12
+        sta spinup_remaining
+spinup_wait:
+        lda #$FF
+        jsr $FCA8
+        ldx slot
+        ; The Pico does not tick in the background until its motor is running.
+        lda $C08C,x
+        dec spinup_remaining
+        bne spinup_wait
+        lda #1
+        sta motor_enabled
+motor_ready:
+        rts
 motor_off:
         ldx slot
         lda $C088,x
+        stz motor_enabled
         rts
 
 slot:             .byte 0
+motor_enabled:    .byte 0
+spinup_remaining: .byte 0
 half_track:       .byte 0
 wanted_half:      .byte 0
 requested_track:  .byte 0

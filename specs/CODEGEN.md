@@ -94,6 +94,11 @@ screen (decode `$0400`, 40×24 interleaved), graphics (`renderFrame()` RGBA), CP
   remain unchanged unless an explicit, checked compatibility edit is required.
   Synthetic tests run without the game; integration requires an explicit local
   source disk and must report a skip rather than claim gameplay coverage otherwise.
+  Native integration must also cover delayed Start after the title motor has
+  fully stopped. Timestamp actual guest disk accesses: each stopped-to-running
+  restart must precede the first head-phase access by at least 1,573,438 cycles,
+  include data-latch reads during spin-up, and avoid repeated motor-on commands
+  while loading. Exercise those invariants again on later level loads.
 - **AI-contributor path.** The codegen guide is exposed for external AI tools: `web/llms.txt`
   (published at the site root, owned by `WEB-CLIENT.md`) is the machine-readable entry point
   that links `prompt-system.md` + `platform-ref.md`, and `prompt-system.md` closes the loop to
@@ -125,6 +130,6 @@ breakpoints and current-PC highlighting.
 | `harness` + `run6502` validation loop | Shipped | serial/text/gfx/register checks + `.PRG`. |
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Archon local WOZ patching | Experimental / emulator-verified | `patch-archon.test.mjs` covers synthetic editor fixtures and optional owner-supplied-disk gameplay; `patch-archon.test.ps1` covers native PS/2 timing and LED commands. Both game images stay outside the repository. |
-| Popeye local disk conversion | Experimental / emulator-verified | `patch-popeye.test.mjs` covers synthetic DOS fixtures and optional actual-disk gameplay/lifecycle; `patch-popeye.test.ps1` covers native PS/2 and three-level disk boot. Original and converted game images stay local. |
+| Popeye local disk conversion | Experimental / emulator-verified | `patch-popeye.test.mjs` covers synthetic DOS fixtures and optional actual-disk gameplay/lifecycle; `patch-popeye.test.ps1` covers native PS/2, delayed Start and timed motor restarts on three levels. Revised disk awaits physical retry; original and converted images stay local. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |
 | AI-contributor entry point | Shipped | `web/llms.txt` + `CONTRIBUTING.md`; `prompt-system.md` closes the loop to the gallery. |

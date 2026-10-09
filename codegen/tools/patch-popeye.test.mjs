@@ -214,7 +214,7 @@ async function testGame(result) {
     assert.equal(vm.romVisible(0x9000), false);
     assert(vm.enableAudio(48000));
     vm.step();
-    run(vm, 2000000, audio);
+    run(vm, 5000000, audio);
     assert(peak > 0.01 && frames > 10000, "Original title music did not produce PCM");
     vm.setGamepadState(0, 1 << 3);
     seek(vm, s.GAME_CALL, 80000000, audio);
@@ -223,7 +223,7 @@ async function testGame(result) {
     assert.equal(vm.peek(s.LIVES_GLYPH), 17);
     assert.equal(vm.peek(0xea), 20);
     assert.equal(vm.mixed(), 0);
-    console.log("PASS actual WOZ cold boot, original title music, controller Start and first-level loading");
+    console.log("PASS actual WOZ cold boot, original title music, delayed controller Start and first-level loading");
     peak = 0;
     frames = 0;
 

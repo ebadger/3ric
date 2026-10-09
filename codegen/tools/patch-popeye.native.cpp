@@ -27,6 +27,9 @@ namespace
         uint16_t title, gameCall, gameEvent, readFire, inputReady, level, keyX, keyFire;
         bool checking = false;
         unsigned interrupts = 0, characters = 0;
+        bool motorEnabled = false, spinupPending = false;
+        uint64_t motorStarted = 0, lastSpinupRead = 0;
+        unsigned spinupReads = 0, checkedRestarts = 0;
         std::string serial;
         struct Frame
         {
@@ -49,6 +52,7 @@ namespace
             vm->CallbackSetSoftSwitches = [&](uint16_t address, bool, bool, bool, bool) {
                 if (address >= 0xc0e0 && address <= 0xc0ef)
                 {
+                    diskAccess(address & 15);
                     vm->GetDriveEmulator()->AddCycles(uint32_t(cycles - diskCycle));
                     diskCycle = cycles;
                 }
@@ -70,6 +74,42 @@ namespace
             ascii("MON\rC600G\r");
             seek(title, 80000000);
             checking = true;
+            run(5000000);
+            require(!motorEnabled, "Title should leave the disk motor switched off");
+        }
+
+        void diskAccess(uint8_t reg)
+        {
+            if (reg == 8)
+            {
+                motorEnabled = false;
+                spinupPending = false;
+            }
+            else if (reg == 9)
+            {
+                if (checking) require(!motorEnabled, "Loader reissued motor-on while already enabled");
+                motorEnabled = true;
+                motorStarted = lastSpinupRead = cycles;
+                spinupReads = 0;
+                spinupPending = checking;
+            }
+            else if (spinupPending && reg == 12)
+            {
+                require(cycles - lastSpinupRead <= 250000, "Pico motor-start clock was not serviced");
+                lastSpinupRead = cycles;
+                ++spinupReads;
+            }
+            else if (checking && reg < 8)
+            {
+                require(motorEnabled, "Loader changed head phase while motor was disabled");
+                if (spinupPending)
+                {
+                    require(cycles - motorStarted >= 1573438, "Head phase changed before motor spin-up completed");
+                    require(spinupReads >= 8, "Spin-up did not clock the Pico through data-latch reads");
+                    spinupPending = false;
+                    ++checkedRestarts;
+                }
+            }
         }
 
         void step()
@@ -238,9 +278,11 @@ int main(int argc, char** argv)
         }
         require(m.frames.empty() && m.vm->PeekData(0xcafe) == 0, "An NMI remained active");
         require(m.interrupts >= 2500, "Insufficient physical keyboard stress coverage");
+        require(m.checkedRestarts == 3, "Did not check disk restart timing on all three levels");
         std::cout << "PASS native PS/2 period " << m.bitPeriod << ", data hold 80: cold disk boot, "
             << "three levels, SNES movement/release, " << m.characters << " make/break characters, "
-            << m.interrupts << " register/flags/stack/bank-preserving NMIs\n";
+            << m.interrupts << " register/flags/stack/bank-preserving NMIs, "
+            << m.checkedRestarts << " timed/Pico-clocked motor restarts after delayed Start\n";
         return 0;
     }
     catch (const std::exception& error)

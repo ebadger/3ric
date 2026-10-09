@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-07 — ebadger (via Copilot)_
+_Last updated: 2026-10-08 — ebadger (via Copilot)_
 
 ---
 
@@ -175,7 +175,11 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   replaces its Applesoft/DOS lifecycle; the supplied graphics/gameplay and slot-4
   sound remain. WASM checks cover all three disk-loaded levels, keyboard/SNES
   controls, death/restart, high score and monitor exit; native checks cover real
-  PS/2 input. No ROM/emulator change or physical-board approval is claimed.
+  PS/2 input. The initial candidate physically boots to title/music but stalls
+  after Start on the Pico interface. The revised `popeye-3ric-spinup.woz`
+  waits and clocks the disk motor before seeking; actual-image native/WASM
+  checks and timed-restart regressions pass, with a board retry still pending.
+  No ROM, Pico firmware or emulator change is required.
   Owner-retained limitations: short SNES latch timing may affect physical pads;
   integration does not yet reach the difficulty floor. Prefer keyboard for the
   initial board trial.
