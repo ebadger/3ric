@@ -82,6 +82,7 @@ them headlessly on the same WASM core. The "why" lives in `docs/MISSION.md`.
 | System speaker (`$C030`) | Shipped |
 | Disk II 5.25″ WOZ boot (self-booting machine-code disks) | Shipped |
 | Disk-booted MS-BASIC (locally generated WOZ, RAM under `$9000–$BFFF`) | Implemented / emulator-verified |
+| Physical PS/2 input during picodisk activity | Known gap: READY stalls can misalign the ROM decoder until reset (see `ROM-SOFTWARE.md`) |
 | Micro-SD FAT32 + ROM DOS shell | Shipped |
 | Slot-4 dual-AY Mockingboard | Shipped |
 | WebAssembly browser build + in-browser assembler | Shipped |

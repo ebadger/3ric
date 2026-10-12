@@ -8,11 +8,12 @@ import { join } from "node:path";
 import harness from "./harness.cjs";
 import { readWozSectors } from "./wozedit.mjs";
 import {
-  BASIC_END, BASIC_PAGES, BASIC_START, GUARD_START, MISMATCH_TEXT,
+  BASIC_END, BASIC_PAGES, BASIC_START, GUARD_START, MISMATCH_TEXT, PS2_DECODER,
   buildMsBasicWoz, fletcher16, sectorForPage,
 } from "./msbasic-woz.mjs";
 
 const PRIMARY = 0, BASIC_ROM = 1; // MemoryReadMapping
+const PICODISK_SPINDOWN = 1_023_000; // cycles the picodisk keeps stalling after motor-off
 const rom = readFileSync(join(harness.DATA_DIR, "badger6502.bin"));
 const dbg = readFileSync(join(harness.DATA_DIR, "badger6502.dbg"), "utf8");
 const disk = buildMsBasicWoz(rom);
@@ -54,7 +55,8 @@ assert.ok(segments.length > 0);
 for (const seg of segments)
   assert.ok(seg.end <= disk.hooks.start, `${seg.name} ends before the hooks at $${disk.hooks.start.toString(16)}`);
 assert.deepEqual(disk.guard, fletcher16(rom.subarray(GUARD_START, 0x10000)));
-console.log("PASS image is the ROM's $9000-$BFFF plus two JSR hooks in unused bytes");
+assert.ok(disk.hooks.postload >= disk.hooks.start && disk.hooks.postload < disk.hooks.probePage);
+console.log("PASS image is the ROM's $9000-$BFFF plus two JSR hooks and start-up code in unused bytes");
 
 const coordinates = [{ track: 0, sector: 0 }, ...Array.from({ length: BASIC_PAGES }, (_, page) => sectorForPage(page))];
 const sectors = readWozSectors(Buffer.from(disk.woz), coordinates);
@@ -67,21 +69,28 @@ const variant = edit => { const copy = Buffer.from(rom); edit(copy); return copy
 assert.throws(() => buildMsBasicWoz(variant(r => { r[disk.patches[0].site] ^= 0xff; })), /MEMORY SIZE probe/);
 assert.throws(() => buildMsBasicWoz(variant(r => { r[BASIC_END - 1] = 0xea; })), /not unused/);
 assert.throws(() => buildMsBasicWoz(variant(r => { r[0xe002] = 0xd0; })), /outside BASIC/);
+const reset = rom[0xfffc] | (rom[0xfffd] << 8);
+const clearsKeyUp = rom.subarray(reset, reset + 0x100).findIndex((_, i, a) => a[i] === 0x8d && a[i + 1] === 0x04 && a[i + 2] === 0xce);
+assert.ok(clearsKeyUp >= 0, "the ROM reset handler clears KBKEYUP");
+assert.throws(() => buildMsBasicWoz(variant(r => { r[reset + clearsKeyUp + 1] = 0x05; })), /reset handler/);
 console.log("PASS unrecognized ROM layouts are refused");
 
 // --- booting it ---------------------------------------------------------------------
+let clock = 0; // emulated cycles, for timing assertions
 const screen = session => session.textScreen().join("\n");
 function type(vm, text) {
   for (const char of text) {
-    for (let t = 0; t < 200 && (vm.peek(0xc000) & 0x80); t++) vm.runCycles(2000);
+    for (let t = 0; t < 200 && (vm.peek(0xc000) & 0x80); t++) clock += vm.runCycles(2000);
     vm.keyDown(char === "\r" ? 13 : char.charCodeAt(0));
-    vm.runCycles(25_000);
+    clock += vm.runCycles(25_000);
   }
 }
 // Stops early, returning false, if an unexpected breakpoint halts the CPU.
 function runUntil(vm, done, budget = 60_000_000) {
   for (let used = 0; used < budget;) {
-    used += vm.runCycles(100_000) || 100_000;
+    const ran = vm.runCycles(100_000);
+    clock += ran;
+    used += ran || 100_000;
     if (done()) return true;
     if (vm.breakpointHit()) return false;
   }
@@ -123,18 +132,37 @@ async function answerMemorySize(answer, expectedFree, expectedTop) {
 const main = await bootDisk(disk.woz, { basicRomSelected: true });
 try {
   const { vm } = main;
+  const d = PS2_DECODER;
+  vm.addMappedBreakpoint(disk.loaderSymbols.LOADED, PRIMARY);
+  type(vm, "C600G\r");
+  assert.ok(runUntil(vm, () => vm.breakpointHit()), "the loader reads every page");
+  const motorOff = clock;
+  // Leave the ROM PS/2 decoder the way READY stalls during a physical boot can: mid-frame,
+  // with stale prefixes, Shift/Ctrl/Scroll Lock held and a misdecoded key pending.
+  for (const [address, value] of [
+    [d.KBSTATE, 3], [d.KBEXTEND, 0xe0], [d.KBKEYUP, 0xf0], [d.KBTOGGLE, 0x58], [d.KBMODIFIER, 0x12],
+    [d.KEYSTATE + 0x12, 1], [d.KEYSTATE + 0x14, 1], [d.KEYSTATE + 0x7e, 0x81], [0xc000, 0xc7],
+  ]) vm.poke(address, value);
+  vm.clearBreakpoints();
   vm.addMappedBreakpoint(disk.coldStart, PRIMARY);
   vm.addMappedBreakpoint(disk.coldStart, BASIC_ROM);
-  type(vm, "C600G\r");
   assert.ok(runUntil(vm, () => vm.breakpointHit()), "the loader reaches COLD_START");
   assert.equal(vm.pc(), disk.coldStart);
   assert.equal(vm.memoryMapping(disk.coldStart), PRIMARY, "BASIC cold-starts from overlay RAM, not ROM");
   assert.ok(imageInRam(vm), "all 48 pages were loaded from the disk");
+  assert.ok(clock - motorOff >= PICODISK_SPINDOWN, `BASIC starts ${clock - motorOff} cycles after motor-off`);
+  for (const address of [d.KBSTATE, d.KBEXTEND, d.KBKEYUP, d.KBTOGGLE, d.KBMODIFIER])
+    assert.equal(vm.peek(address), 0, `decoder variable $${address.toString(16)} is reset`);
+  for (let code = 0; code < 256; code++) assert.equal(vm.peek(d.KEYSTATE + code), 0, "no key is left held");
+  assert.equal(vm.peek(0xc000) & 0x80, 0, "the misdecoded key was dropped");
+  console.log(`PASS start-up waits ${clock - motorOff} cycles after motor-off and resets the PS/2 decoder`);
   vm.clearBreakpoints();
   // Any BASIC statement or prompt executed with the ROM overlay selected would stop here.
   for (const name of ["RESTART", "NEWSTT"]) vm.addMappedBreakpoint(symbol(name), BASIC_ROM);
 
   assert.ok(runUntil(vm, () => /MEMORY SIZE\?/.test(screen(main))), "disk BASIC prompts MEMORY SIZE?");
+  vm.runCycles(500_000);
+  assert.ok(!/MEMORY SIZE\?[^\n]*G/.test(screen(main)), "the misdecoded G never reaches the prompt");
   type(vm, "\r");
   assert.ok(runUntil(vm, () => /BYTES FREE/.test(screen(main))), "Return at MEMORY SIZE? completes the cold start");
   assert.match(screen(main), / 34815 BYTES FREE/);

@@ -68,6 +68,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_disk.cjs                # boot a WOZ floppy via C600G into a hi-res title
 & $node web/test_woz_download.cjs        # Disk II boots, overlap-safe images through 34,560 bytes, size guards
 & $node codegen\tools\msbasic-woz.test.mjs # disk-booted MS-BASIC on scrubbed overlay RAM, NMI coexistence, ROM guard
+pwsh codegen\tools\msbasic-woz.test.ps1 -Node $node # native PS/2 typing into that disk under picodisk READY stalls (MSVC)
 ```
 
 C++ CPU unit tests (`emulator/Badger6502VMTest`, MSTest): **Test → Run All Tests** in
@@ -174,7 +175,13 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   (`$D000–$FFFF`) differs from the one it was built from; pass `--rom` with the board's
   image. ROM `E000G` instead relies on the emulator's seeded copy of that RAM, where
   Return at `MEMORY SIZE?` overwrites the interpreter (type 36864 or less).
-  Emulator-verified; not yet booted on the physical board.
+  BASIC appears about a second after loading: the disk waits out the picodisk's
+  spin-down and resyncs the ROM's PS/2 decoder. The first physical boot garbled the
+  keyboard (Return echoed `GG`); the fixed disk is verified natively but not yet on
+  the board. If keys are garbled, Reset then `MON`/`E000G` restarts the loaded BASIC.
+- **Physical PS/2 after disk activity:** the picodisk stalls the CPU through READY
+  during disk access and for ~1,023,000 cycles after motor-off. That can misalign the
+  ROM's PS/2 decoder until reset, for any disk boot. Details: `specs/ROM-SOFTWARE.md`.
 - **Archon compatibility candidate:** the owner-supplied disk needs a game-specific
   bank-safe input adapter; its menu/board otherwise hide the ROM NMI handler.
   `codegen\tools\patch-archon.mjs` creates a separate local WOZ without changing the

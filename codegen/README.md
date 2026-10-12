@@ -46,6 +46,7 @@ only when the program halted cleanly and every check passed.
 | `tools/run6502.mjs` | CLI: assemble/load → run → apply checks → emit `.PRG` + verdict. |
 | `tools/gen_platform_ref.mjs` | Regenerates `platform/platform-ref.{md,json}` from `vm.h` + `badger6502.dbg`. |
 | `tools/msbasic-woz.mjs` | Writes a local WOZ that boots the ROM's Microsoft BASIC into the RAM under `$9000-$BFFF` (see below). |
+| `tools/msbasic-woz.test.ps1` | Native PS/2 + picodisk READY-stall check of that disk (Windows, MSVC). |
 
 ## MS-BASIC boot disk
 
@@ -58,8 +59,13 @@ Insert the disk, enter `MON` if the shell shows `>`, then `C600G`; press Return 
 `MEMORY SIZE?`. The disk refuses to load if the machine's upper ROM (`$D000-$FFFF`)
 differs from the ROM it was made from. It contains the ROM's third-party Microsoft
 BASIC, so keep it local (`codegen/out/` is git-ignored) rather than committing or
-sharing it (see `NOTICE`).
-`node codegen/tools/msbasic-woz.test.mjs` verifies it on the WASM build.
+sharing it (see `NOTICE`). BASIC appears about a second after loading: the disk waits
+out the picodisk's spin-down and resyncs the ROM's PS/2 decoder, which READY stalls
+during the boot can misalign. If keys are still garbled, Reset then `MON`/`E000G`
+restarts the loaded BASIC.
+`node codegen/tools/msbasic-woz.test.mjs` verifies it on the WASM build;
+`pwsh codegen/tools/msbasic-woz.test.ps1 [-Node <node>]` (Windows, MSVC) types into it
+through the ROM's real PS/2 decoder while modelling the picodisk's READY stalls.
 
 ## Layout
 

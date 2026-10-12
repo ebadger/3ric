@@ -1,7 +1,8 @@
 // msbasic-woz.mjs — build a bootable 5.25" WOZ that loads a 3ric ROM's own Microsoft
 // BASIC into the 12 KiB RAM under the $9000-$BFFF overlay and starts it, so BASIC runs
-// even when that RAM was never seeded (as at a physical power-on). Contract:
-// specs/ROM-SOFTWARE.md ("MS-BASIC boot disk").
+// even when that RAM was never seeded (as at a physical power-on). Before BASIC starts,
+// the disk waits out the picodisk's spin-down and resyncs the ROM's PS/2 decoder.
+// Contract: specs/ROM-SOFTWARE.md ("MS-BASIC boot disk").
 //
 // The output embeds the ROM's third-party BASIC interpreter. It is a local artifact for
 // your own machine, not a repository asset (see NOTICE); codegen/out/ is git-ignored.
@@ -50,6 +51,26 @@ export function sectorForPage(page) {
   return { track: 1 + ((page - 15) >> 4), sector: (page - 15) & 15 };
 }
 
+// The picodisk Disk II emulator freezes the CPU (READY) whenever 500 cycles pass without a
+// disk access while its drive model runs, which lasts 1,023,000 cycles after motor-off.
+// The ROM decodes PS/2 one clock edge per NMI, so a stall can misread or lose an edge and
+// leave its decoder misaligned until reset. Wait out the spin-down (8 x WAIT($FF), about
+// 1.33M cycles), then put the decoder back at a frame boundary.
+export const SPINDOWN_WAITS = 8;
+export const PS2_DECODER = {
+  KBSTATE: 0xce00, // frame state; 0 waits for a start bit
+  KBEXTEND: 0xce03, // $E0 prefix seen
+  KBKEYUP: 0xce04, // $F0 prefix seen
+  KBTOGGLE: 0xce18, // lock key waiting for its release
+  KBMODIFIER: 0xce19, // frame was Shift/Ctrl
+  KEYSTATE: 0xcb00, // per-scan-code key-down flags
+};
+// The ROM's reset handler clears those variables; the resync repeats that subset.
+const RESET_CLEARS = [
+  [0x8d, 0x00, 0xce], [0x8d, 0x03, 0xce], [0x8d, 0x04, 0xce], // STA KBSTATE/KBEXTEND/KBKEYUP
+  [0x9d, 0x00, 0xcb], [0x9d, 0x00, 0xce], [0x8d, 0x00, 0xc0], // STA KEYSTATE,X / $CE00,X / KBD
+];
+
 // Fletcher-16 with end-around carry (sums modulo 255), exactly as the loader computes it.
 export function fletcher16(bytes) {
   let first = 0, second = 0;
@@ -72,13 +93,68 @@ function findPattern(bytes, pattern) {
   return hits;
 }
 
-function hookSource(org, setTop) {
+function residentSource(org, setTop) {
+  const d = PS2_DECODER;
   return `
 LINNUM  = ${hex(LINNUM, 2)}
 TOPHI   = ${hex(BASIC_START >> 8, 2)}       ; the interpreter starts at $9000
 SETTOP  = ${hex(setTop)}     ; L40FA: store MEMSIZ/FRETOP
+BASICGO = ${hex(BASIC_ENTRY)}     ; ROM BASIC entry: JMP COLD_START
+WAIT    = $FCA8       ; monitor delay; preserves X and Y
+SPINDOWN = ${SPINDOWN_WAITS}
+VIAPA   = $C20F       ; VIA1 port A without handshake: no flag side effects
+PS2CLK  = $40         ; keyboard clock on PA6
+KBD     = $C000
+KBSTATE = ${hex(d.KBSTATE)}
+KBEXTEND = ${hex(d.KBEXTEND)}
+KBKEYUP = ${hex(d.KBKEYUP)}
+KBTOGGLE = ${hex(d.KBTOGGLE)}
+KBMODIFIER = ${hex(d.KBMODIFIER)}
+KEYSTATE = ${hex(d.KEYSTATE)}
 
         .org ${hex(org)}
+; The loader jumps here once every page is in RAM and the drive motor is off.
+postload:
+        ldx #SPINDOWN       ; let the picodisk's drive model stop and its READY stalls end
+spinwait:
+        lda #$FF
+        jsr WAIT
+        dex
+        bne spinwait
+resync:
+        jsr quiet           ; no PS/2 frame in flight
+        stz KBSTATE         ; restart the ROM decoder at a frame boundary
+        stz KBEXTEND
+        stz KBKEYUP
+        stz KBTOGGLE
+        stz KBMODIFIER
+        ldx #0
+release:
+        stz KEYSTATE,x      ; no key (or Shift/Ctrl) held
+        inx
+        bne release
+        stz KBD             ; drop a key misdecoded during the boot
+        jsr quiet
+        lda KBSTATE         ; a frame that overlapped the reset leaves these set
+        ora KBEXTEND
+        ora KBKEYUP
+        bne resync
+        jmp BASICGO
+
+; Return once the PS/2 clock has read high for 512 consecutive samples (about 4 ms).
+quiet:
+        ldy #2
+        ldx #0
+quietloop:
+        lda VIAPA
+        and #PS2CLK
+        beq quiet
+        dex
+        bne quietloop
+        dey
+        bne quietloop
+        rts
+
 ; Called in place of "BNE L40DD / INC LINNUM+1"; JSR preserves INC LINNUM's Z flag.
 probepage:
         bne probeok
@@ -104,7 +180,7 @@ clampok:
 `;
 }
 
-function loaderSource(guard) {
+function loaderSource(guard, postload) {
   return `
 NPAGES  = ${BASIC_PAGES}
 LOADHI  = ${hex(BASIC_START >> 8, 2)}
@@ -113,7 +189,7 @@ WAIT    = $FCA8       ; monitor delay; preserves X and Y
 COUT    = $FDED
 ROMREAD = $C082       ; language card: read upper ROM, no write
 RAM9000 = $C007       ; expose RAM at $9000-$BFFF (BASIC ROM overlay off)
-BASICGO = ${hex(BASIC_ENTRY)}       ; ROM BASIC entry: JMP COLD_START
+POSTLOAD = ${hex(postload)}     ; spin-down wait + PS/2 resync, then BASIC (in the image)
 SUMONE  = ${hex(guard[0], 2)}
 SUMTWO  = ${hex(guard[1], 2)}
 
@@ -219,7 +295,7 @@ resume:
 loaded:
         ldx $2b
         lda $C088,x         ; drive motor off
-        jmp BASICGO
+        jmp POSTLOAD
 
 ; Move the head in one track: two half-steps, one phase energised at a time.
 stepin:
@@ -273,9 +349,14 @@ export function buildMsBasicWoz(romBytes) {
   if (branchTarget(probe + 19) !== setTop || findPattern(image.subarray(setTop, setTop + 4), SET_TOP)[0] !== 0)
     throw new Error("unrecognized MEMORY SIZE exit (L40FA)");
 
-  const draft = assemble(hookSource(BASIC_END - 0x100, BASIC_START + setTop));
+  const reset = rom[0xfffc] | (rom[0xfffd] << 8);
+  const resetCode = rom.subarray(reset, Math.min(reset + 0x100, 0x10000));
+  if (RESET_CLEARS.some(store => findPattern(resetCode, store).length === 0))
+    throw new Error(`the reset handler at ${hex(reset)} does not clear the PS/2 decoder state this disk resyncs`);
+
+  const draft = assemble(residentSource(BASIC_END - 0x100, BASIC_START + setTop));
   const hooksOrg = BASIC_END - draft.bytes.length;
-  const hooks = assemble(hookSource(hooksOrg, BASIC_START + setTop));
+  const hooks = assemble(residentSource(hooksOrg, BASIC_START + setTop));
   if (hooks.bytes.length !== draft.bytes.length) throw new Error("hook size changed with its origin");
   const hookAt = hooksOrg - BASIC_START;
   if (image.subarray(hookAt).some(byte => byte !== 0))
@@ -291,7 +372,7 @@ export function buildMsBasicWoz(romBytes) {
   image.set(jsrNop(hooks.symbols.CLAMPTOP), topSite - BASIC_START);
 
   const guard = fletcher16(rom.subarray(GUARD_START, 0x10000));
-  const loaded = assemble(loaderSource(guard), { org: 0x0800 });
+  const loaded = assemble(loaderSource(guard, hooks.symbols.POSTLOAD), { org: 0x0800 });
   if (loaded.bytes.length > 256) throw new Error(`boot loader is ${loaded.bytes.length} bytes (> 256)`);
   const loader = new Uint8Array(256);
   loader.set(loaded.bytes);
@@ -303,6 +384,7 @@ export function buildMsBasicWoz(romBytes) {
     placeSector(dsk, track, sector, image.subarray(page * 256, (page + 1) * 256));
   }
 
+  const s = hooks.symbols;
   return {
     woz: buildWozFromDsk(dsk),
     image,
@@ -310,10 +392,13 @@ export function buildMsBasicWoz(romBytes) {
     loaderSymbols: loaded.symbols,
     coldStart,
     guard,
-    hooks: { start: hooksOrg, end: BASIC_END, probePage: hooks.symbols.PROBEPAGE, clampTop: hooks.symbols.CLAMPTOP },
+    hooks: {
+      start: hooksOrg, end: BASIC_END, postload: s.POSTLOAD, resync: s.RESYNC, quiet: s.QUIET,
+      probePage: s.PROBEPAGE, clampTop: s.CLAMPTOP,
+    },
     patches: [
-      { site: probeSite, before: [0xd0, 0x02, 0xe6, LINNUM + 1], after: jsrNop(hooks.symbols.PROBEPAGE) },
-      { site: topSite, before: SET_TOP, after: jsrNop(hooks.symbols.CLAMPTOP) },
+      { site: probeSite, before: [0xd0, 0x02, 0xe6, LINNUM + 1], after: jsrNop(s.PROBEPAGE) },
+      { site: topSite, before: SET_TOP, after: jsrNop(s.CLAMPTOP) },
     ],
   };
 }
@@ -341,7 +426,7 @@ function main(args) {
   console.log([
     `Created ${output}`,
     `ROM ${path.resolve(romPath)} (SHA-256 ${sha256(rom)})`,
-    `BASIC ${hex(BASIC_START)}-${hex(BASIC_END - 1)}, COLD_START ${hex(disk.coldStart)}, probe hooks ${hex(disk.hooks.start)}-${hex(BASIC_END - 1)}`,
+    `BASIC ${hex(BASIC_START)}-${hex(BASIC_END - 1)}, COLD_START ${hex(disk.coldStart)}, resident start-up and probe code ${hex(disk.hooks.start)}-${hex(BASIC_END - 1)}`,
     `Disk SHA-256 ${sha256(disk.woz)}`,
     "Contains the ROM's Microsoft BASIC: keep it local (see NOTICE).",
     'Boot on the machine running that ROM: MON (if the shell shows ">"), C600G, Return at MEMORY SIZE?',
