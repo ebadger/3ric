@@ -139,9 +139,13 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     down (the decoder's key states at `$CB12`/`$CB59`). Line input, `INPUT` and `GET`
     read through `RDKEY`, so Shift+= types `+`; `PEEK(49152)` still sees `=`. An `=`
     typed ahead while a program is busy becomes `+` only if Shift is still down when
-    BASIC reads it. Reset restores `KEYIN` until BASIC's next prompt. The generator
-    finds `RESTART` (by its bytes and `QT_OK` operand) and `RDKEY`/`KEYIN` by their
-    bytes, and refuses a ROM that lacks either.
+    BASIC reads it. Reset restores `KEYIN` until BASIC's next prompt. Known limitation:
+    between prompts `KSW` stays pointed into the overlay RAM, so selecting BASIC ROM
+    (`$C006`), for example `PEEK(49158)` in BASIC or `C006` in the monitor, sends the next
+    key read into zero-filled ROM and `BRK`s. In the emulator the monitor's own input
+    then `BRK`s in a loop until Reset; Reset restores `KEYIN`, and `MON` then `E000G`
+    restarts the loaded BASIC. The generator finds `RESTART` (by its bytes and `QT_OK`
+    operand) and `RDKEY`/`KEYIN` by their bytes, and refuses a ROM that lacks either.
   - **Interrupts:** the ROM NMI proxy (`$F1BB`) still banks BASIC ROM in for its
     handler and exposes RAM again on exit, so keyboard and gamepad NMIs return into
     the RAM interpreter, which survives later resets until overwritten or power-off.
