@@ -1,7 +1,8 @@
 // msbasic-woz.mjs — build a bootable 5.25" WOZ that loads a 3ric ROM's own Microsoft
 // BASIC into the 12 KiB RAM under the $9000-$BFFF overlay and starts it, so BASIC runs
 // even when that RAM was never seeded (as at a physical power-on). Before BASIC starts,
-// the disk waits out the picodisk's spin-down and resyncs the ROM's PS/2 decoder.
+// the disk waits out the picodisk's spin-down and resyncs the ROM's PS/2 decoder. The copy
+// also repairs the line breaks in BASIC's messages, so its prompt is a bare "]".
 // Contract: specs/ROM-SOFTWARE.md ("MS-BASIC boot disk").
 //
 // The output embeds the ROM's third-party BASIC interpreter. It is a local artifact for
@@ -44,6 +45,21 @@ const PROBE = [
 const PROBE_PAGE_STEP = 2; // "BNE L40DD / INC LINNUM+1": 4 bytes, replaced by JSR + NOP
 // L40FA starts "LDA LINNUM / LDY LINNUM+1", then stores MEMSIZ and FRETOP.
 const SET_TOP = [0xa5, LINNUM, 0xa4, LINNUM + 1];
+
+// The messages BASIC prints, as the shipped ROM assembles them. message.s and init.s name
+// CR and LF, which resolve to the merged Apple monitor's labels CR ($FC62) and LF ($FC66),
+// so the strings hold $62/$66. OUTDO calls the monitor's CR for $62 and then prints the
+// byte too: the stray character before every "]". $0D is a newline through COUT; $80 is
+// the null CRDO sends after each newline (CRLF_2).
+const ascii = text => [...text].map(char => char.charCodeAt(0));
+const MESSAGE_FIXES = [
+  { name: "QT_OK", bytes: [0x62, 0x00, 0x00, 0x4b, 0x62, 0x66, 0x00], offset: 0, after: [0x0d] },
+  { name: "QT_BREAK", bytes: [0x62, 0x66, ...ascii("BREAK"), 0x00], offset: 0, after: [0x0d, 0x80] },
+  { // the credit "A" prints at MEMORY SIZE?, in high-bit ASCII
+    name: "QT_WRITTEN_BY", bytes: [...ascii("COPYRIGHT 1977 BY MICROSOFT CO").map(c => c | 0x80), 0x62, 0x00],
+    offset: 30, after: [0x0d],
+  },
+];
 
 // Disk position of payload page i: T0 S1-15 follow the loader, then whole tracks.
 export function sectorForPage(page) {
@@ -348,6 +364,11 @@ export function buildMsBasicWoz(romBytes) {
   const setTop = branchTarget(probe + 12);
   if (branchTarget(probe + 19) !== setTop || findPattern(image.subarray(setTop, setTop + 4), SET_TOP)[0] !== 0)
     throw new Error("unrecognized MEMORY SIZE exit (L40FA)");
+  const messages = MESSAGE_FIXES.map(({ name, bytes, offset, after }) => {
+    const hits = findPattern(image, bytes);
+    if (hits.length !== 1) throw new Error(`expected one ${name} message in BASIC, found ${hits.length}`);
+    return { name, site: BASIC_START + hits[0] + offset, before: bytes.slice(offset, offset + after.length), after };
+  });
 
   const reset = rom[0xfffc] | (rom[0xfffd] << 8);
   const resetCode = rom.subarray(reset, Math.min(reset + 0x100, 0x10000));
@@ -370,6 +391,7 @@ export function buildMsBasicWoz(romBytes) {
   image.set(hooks.bytes, hookAt);
   image.set(jsrNop(hooks.symbols.PROBEPAGE), probeSite - BASIC_START);
   image.set(jsrNop(hooks.symbols.CLAMPTOP), topSite - BASIC_START);
+  for (const { site, after } of messages) image.set(after, site - BASIC_START);
 
   const guard = fletcher16(rom.subarray(GUARD_START, 0x10000));
   const loaded = assemble(loaderSource(guard, hooks.symbols.POSTLOAD), { org: 0x0800 });
@@ -399,6 +421,7 @@ export function buildMsBasicWoz(romBytes) {
     patches: [
       { site: probeSite, before: [0xd0, 0x02, 0xe6, LINNUM + 1], after: jsrNop(s.PROBEPAGE) },
       { site: topSite, before: SET_TOP, after: jsrNop(s.CLAMPTOP) },
+      ...messages,
     ],
   };
 }

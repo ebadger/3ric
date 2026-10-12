@@ -171,10 +171,12 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   a local WOZ that loads the ROM's own Microsoft BASIC into the RAM under `$9000–$BFFF`;
   keep it out of the repo (`codegen/out/` is ignored; the disk carries that third-party
   interpreter). Boot with `MON` (if the shell shows `>`), `C600G`, then Return at
-  `MEMORY SIZE?` for 34,815 bytes free. A disk refuses to load if the upper ROM
-  (`$D000–$FFFF`) differs from the one it was built from; pass `--rom` with the board's
-  image. ROM `E000G` instead relies on the emulator's seeded copy of that RAM, where
-  Return at `MEMORY SIZE?` overwrites the interpreter (type 36864 or less).
+  `MEMORY SIZE?` for 34,815 bytes free and a bare `]` prompt. ROM BASIC shows `"]`
+  because its message line breaks are mis-assembled; the disk repairs its own copy. A
+  disk refuses to load if the upper ROM (`$D000–$FFFF`) differs from the one it was
+  built from; pass `--rom` with the board's image. ROM `E000G` instead relies on the
+  emulator's seeded copy of that RAM, where Return at `MEMORY SIZE?` overwrites the
+  interpreter (type 36864 or less).
   BASIC appears about a second after loading: the disk waits out the picodisk's
   spin-down and resyncs the ROM's PS/2 decoder. The first physical boot garbled the
   keyboard (Return echoed `GG`); the fixed disk is verified natively but not yet on

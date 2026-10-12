@@ -33,12 +33,17 @@ const segmentStart = name => {
 assert.equal(disk.coldStart, symbol("COLD_START"));
 assert.equal(disk.patches[0].site, symbol("L40D7") + 2, "probe hook replaces BNE/INC after INC LINNUM");
 assert.equal(disk.patches[1].site, symbol("L40FA"), "top-of-memory hook is the probe's exit");
+assert.deepEqual(
+  Object.fromEntries(disk.patches.slice(2).map(({ name, site }) => [name, site])),
+  { QT_OK: symbol("QT_OK"), QT_BREAK: symbol("QT_BREAK"), QT_WRITTEN_BY: symbol("QT_WRITTEN_BY") + 30 },
+  "line breaks are restored in the three messages BASIC prints");
 const changed = new Set();
 for (const { site, before, after } of disk.patches) {
   const at = site - BASIC_START;
-  assert.deepEqual([...original.subarray(at, at + 4)], before);
-  assert.deepEqual([...disk.image.subarray(at, at + 4)], after);
-  for (let i = 0; i < 4; i++) changed.add(site + i);
+  assert.equal(before.length, after.length);
+  assert.deepEqual([...original.subarray(at, at + before.length)], before);
+  assert.deepEqual([...disk.image.subarray(at, at + after.length)], after);
+  for (let i = 0; i < after.length; i++) changed.add(site + i);
 }
 for (let address = disk.hooks.start; address < BASIC_END; address++) {
   assert.equal(original[address - BASIC_START], 0, "hooks use zero-filled ROM bytes");
@@ -56,7 +61,7 @@ for (const seg of segments)
   assert.ok(seg.end <= disk.hooks.start, `${seg.name} ends before the hooks at $${disk.hooks.start.toString(16)}`);
 assert.deepEqual(disk.guard, fletcher16(rom.subarray(GUARD_START, 0x10000)));
 assert.ok(disk.hooks.postload >= disk.hooks.start && disk.hooks.postload < disk.hooks.probePage);
-console.log("PASS image is the ROM's $9000-$BFFF plus two JSR hooks and start-up code in unused bytes");
+console.log("PASS image is the ROM's $9000-$BFFF plus two JSR hooks, three message line breaks and start-up code in unused bytes");
 
 const coordinates = [{ track: 0, sector: 0 }, ...Array.from({ length: BASIC_PAGES }, (_, page) => sectorForPage(page))];
 const sectors = readWozSectors(Buffer.from(disk.woz), coordinates);
@@ -69,6 +74,7 @@ const variant = edit => { const copy = Buffer.from(rom); edit(copy); return copy
 assert.throws(() => buildMsBasicWoz(variant(r => { r[disk.patches[0].site] ^= 0xff; })), /MEMORY SIZE probe/);
 assert.throws(() => buildMsBasicWoz(variant(r => { r[BASIC_END - 1] = 0xea; })), /not unused/);
 assert.throws(() => buildMsBasicWoz(variant(r => { r[0xe002] = 0xd0; })), /outside BASIC/);
+assert.throws(() => buildMsBasicWoz(variant(r => { r[symbol("QT_BREAK") + 1] = 0x0a; })), /QT_BREAK/);
 const reset = rom[0xfffc] | (rom[0xfffd] << 8);
 const clearsKeyUp = rom.subarray(reset, reset + 0x100).findIndex((_, i, a) => a[i] === 0x8d && a[i + 1] === 0x04 && a[i + 2] === 0xce);
 assert.ok(clearsKeyUp >= 0, "the ROM reset handler clears KBKEYUP");
@@ -166,6 +172,7 @@ try {
   type(vm, "\r");
   assert.ok(runUntil(vm, () => /BYTES FREE/.test(screen(main))), "Return at MEMORY SIZE? completes the cold start");
   assert.match(screen(main), / 34815 BYTES FREE/);
+  assert.ok(runUntil(vm, () => /^ 34815 BYTES FREE *\n\]/m.test(screen(main)), 5_000_000), "the prompt is a bare ] on the next line");
   assert.equal(vm.peek(0x76) | (vm.peek(0x77) << 8), 0x9000, "MEMSIZ stops at the interpreter");
   assert.equal(vm.peek(0x72) | (vm.peek(0x73) << 8), 0x9000, "FRETOP stops at the interpreter");
   assert.ok(imageInRam(vm), "Return at MEMORY SIZE? leaves the interpreter intact");
@@ -182,7 +189,8 @@ try {
   ]) type(vm, `${line}\r`);
   assert.ok(runUntil(vm, () => /\b1414\b/.test(screen(main)), 20_000_000), "the program runs");
   assert.match(screen(main), /2870\s+15\s+3RIC DISK BASIC/);
-  console.log("PASS arrays, loops, strings and floating point run in disk BASIC");
+  assert.ok(runUntil(vm, () => /^ 1414 *\n *\n\]/m.test(screen(main)), 5_000_000), "one line break, as in Applesoft II, then a bare ]");
+  console.log("PASS arrays, loops, strings and floating point run in disk BASIC; prompts are a bare ]");
 
   const nmiHandler = segmentStart("NMI");
   vm.addMappedBreakpoint(nmiHandler, BASIC_ROM);
@@ -201,6 +209,14 @@ try {
   assert.ok(imageInRam(vm), "the RAM interpreter is unchanged");
   console.log("PASS ROM NMI services bank in and return to the RAM interpreter");
 
+  // The ROM's own bytes print "b]p / IN 10" here: its CR scrolls the screen and clobbers Y.
+  for (const line of ["NEW", "10 PRINT \"HI\":GOTO 10", "RUN"]) type(vm, `${line}\r`);
+  vm.runCycles(3_000_000);
+  type(vm, "\x03"); // Ctrl-C
+  assert.ok(runUntil(vm, () => /^HI *\n *\nBREAK IN +10 *\n\]/m.test(screen(main)), 5_000_000), "BREAK survives a scroll");
+  assert.ok(!/[^\n]\]/.test(screen(main)), "no prompt shows a stray character");
+  console.log("PASS Ctrl-C prints BREAK IN 10 intact after scrolling output");
+
   vm.clearBreakpoints();
   vm.reset();
   vm.runCycles(3_000_000);
@@ -209,11 +225,14 @@ try {
   vm.addMappedBreakpoint(disk.coldStart, BASIC_ROM);
   type(vm, "E000G\r");
   assert.ok(runUntil(vm, () => /MEMORY SIZE\?/.test(screen(main))), "E000G re-enters the RAM interpreter after reset");
+  type(vm, "A\r");
+  assert.ok(runUntil(vm, () => /^COPYRIGHT 1977 BY MICROSOFT CO *\n *\nMEMORY SIZE\?/m.test(screen(main)), 5_000_000),
+    "A at MEMORY SIZE? prints the credit and a line break, then asks again");
   type(vm, "\r");
   assert.ok(runUntil(vm, () => /BYTES FREE/.test(screen(main))), "the restarted cold start completes");
   assert.match(screen(main), / 34815 BYTES FREE/);
   assert.ok(imageInRam(vm), "the interpreter survives reset and a second cold start");
-  console.log("PASS the loaded interpreter survives reset; MON then E000G restarts it");
+  console.log("PASS the loaded interpreter survives reset; MON then E000G restarts it, and its credit line breaks cleanly");
 } finally {
   main.vm.delete();
 }
