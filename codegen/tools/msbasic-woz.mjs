@@ -1,0 +1,355 @@
+// msbasic-woz.mjs — build a bootable 5.25" WOZ that loads a 3ric ROM's own Microsoft
+// BASIC into the 12 KiB RAM under the $9000-$BFFF overlay and starts it, so BASIC runs
+// even when that RAM was never seeded (as at a physical power-on). Contract:
+// specs/ROM-SOFTWARE.md ("MS-BASIC boot disk").
+//
+// The output embeds the ROM's third-party BASIC interpreter. It is a local artifact for
+// your own machine, not a repository asset (see NOTICE); codegen/out/ is git-ignored.
+//
+// Usage: node codegen/tools/msbasic-woz.mjs codegen/out/basic.woz [--rom <badger6502.bin>]
+// Then on 3ric: MON (if the DOS shell shows ">"), C600G, and Return at MEMORY SIZE?
+
+import fs from "node:fs";
+import path from "node:path";
+import { createHash } from "node:crypto";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { assemble } from "./asm6502.mjs";
+import { buildWozFromDsk, placeSector } from "./wozgen.mjs";
+
+export const BASIC_START = 0x9000;
+export const BASIC_END = 0xc000;
+export const BASIC_PAGES = (BASIC_END - BASIC_START) >> 8;
+export const BASIC_ENTRY = 0xe000; // ROM vector: JMP COLD_START
+export const GUARD_START = 0xd000; // upper ROM that must match the generating ROM
+export const MISMATCH_TEXT = "BASIC DISK/ROM MISMATCH";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+export const DEFAULT_ROM = path.join(root, "emulator", "Data", "badger6502.bin");
+
+const hex = (value, digits = 4) => "$" + value.toString(16).toUpperCase().padStart(digits, "0");
+const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
+
+// BASIC's MEMORY SIZE probe from generic msbasic init.s (CONFIG_2), at label L40D7:
+//   INC LINNUM / BNE L40DD / INC LINNUM+1 / L40DD: LDA #$55 / STA (LINNUM),Y /
+//   CMP (LINNUM),Y / BNE L40FA / ASL A / STA (LINNUM),Y / CMP (LINNUM),Y / BNE L40FA /
+//   BEQ L40D7
+// It writes test patterns upward until a write fails. With the interpreter in RAM at
+// $9000, nothing fails until the I/O page, so the probe would overwrite BASIC itself.
+const LINNUM = 0x53;
+const PROBE = [
+  0xe6, LINNUM, 0xd0, 0x02, 0xe6, LINNUM + 1, 0xa9, 0x55, 0x91, LINNUM, 0xd1, LINNUM,
+  0xd0, null, 0x0a, 0x91, LINNUM, 0xd1, LINNUM, 0xd0, null, 0xf0, 0xe9,
+];
+const PROBE_PAGE_STEP = 2; // "BNE L40DD / INC LINNUM+1": 4 bytes, replaced by JSR + NOP
+// L40FA starts "LDA LINNUM / LDY LINNUM+1", then stores MEMSIZ and FRETOP.
+const SET_TOP = [0xa5, LINNUM, 0xa4, LINNUM + 1];
+
+// Disk position of payload page i: T0 S1-15 follow the loader, then whole tracks.
+export function sectorForPage(page) {
+  if (page < 15) return { track: 0, sector: page + 1 };
+  return { track: 1 + ((page - 15) >> 4), sector: (page - 15) & 15 };
+}
+
+// Fletcher-16 with end-around carry (sums modulo 255), exactly as the loader computes it.
+export function fletcher16(bytes) {
+  let first = 0, second = 0;
+  for (const byte of bytes) {
+    let sum = first + byte;
+    first = (sum & 255) + (sum >> 8);
+    sum = second + first;
+    second = (sum & 255) + (sum >> 8);
+  }
+  return [first, second];
+}
+
+function findPattern(bytes, pattern) {
+  const hits = [];
+  next: for (let i = 0; i + pattern.length <= bytes.length; i++) {
+    for (let j = 0; j < pattern.length; j++)
+      if (pattern[j] !== null && bytes[i + j] !== pattern[j]) continue next;
+    hits.push(i);
+  }
+  return hits;
+}
+
+function hookSource(org, setTop) {
+  return `
+LINNUM  = ${hex(LINNUM, 2)}
+TOPHI   = ${hex(BASIC_START >> 8, 2)}       ; the interpreter starts at $9000
+SETTOP  = ${hex(setTop)}     ; L40FA: store MEMSIZ/FRETOP
+
+        .org ${hex(org)}
+; Called in place of "BNE L40DD / INC LINNUM+1"; JSR preserves INC LINNUM's Z flag.
+probepage:
+        bne probeok
+        inc LINNUM+1
+        lda LINNUM+1
+        cmp #TOPHI
+        bcc probeok
+        pla                 ; stop probing at $9000: drop our return address
+        pla
+        jmp SETTOP
+probeok:
+        rts
+; Called in place of "LDA LINNUM / LDY LINNUM+1"; returns min(LINNUM, $9000) in A/Y.
+clamptop:
+        lda LINNUM
+        ldy LINNUM+1
+        cpy #TOPHI
+        bcc clampok
+        lda #0
+        ldy #TOPHI
+clampok:
+        rts
+`;
+}
+
+function loaderSource(guard) {
+  return `
+NPAGES  = ${BASIC_PAGES}
+LOADHI  = ${hex(BASIC_START >> 8, 2)}
+READSEC = $C65C       ; Disk II PROM ReadSector, re-entered once per batch
+WAIT    = $FCA8       ; monitor delay; preserves X and Y
+COUT    = $FDED
+ROMREAD = $C082       ; language card: read upper ROM, no write
+RAM9000 = $C007       ; expose RAM at $9000-$BFFF (BASIC ROM overlay off)
+BASICGO = ${hex(BASIC_ENTRY)}       ; ROM BASIC entry: JMP COLD_START
+SUMONE  = ${hex(guard[0], 2)}
+SUMTWO  = ${hex(guard[1], 2)}
+
+        .org $0800
+count:  .byte 1             ; the PROM reads sectors below this number, then JMP $0801
+        jmp start           ; operand becomes "resume" before the first batch
+
+; The RAM interpreter and the ROM's OS/NMI code call each other at fixed addresses,
+; so refuse to load unless upper ROM matches the ROM this disk was built from.
+start:
+        lda ROMREAD
+        stz $06
+        lda #>${hex(GUARD_START)}
+        sta $07
+        stz $08
+        stz $09
+        ldy #0
+sumloop:
+        lda ($06),y
+        clc
+        adc $08
+        adc #0
+        sta $08
+        clc
+        adc $09
+        adc #0
+        sta $09
+        iny
+        bne sumloop
+        inc $07
+        bne sumloop
+        lda $08
+        cmp #SUMONE
+        bne mismatch
+        lda $09
+        cmp #SUMTWO
+        beq romok
+mismatch:
+        ldx $2b
+        lda $C088,x         ; drive motor off
+        ldx #0
+msgloop:
+        lda message,x
+        beq msgdone
+        ora #$80
+        jsr COUT
+        inx
+        bne msgloop
+msgdone:
+        brk
+
+romok:
+        lda RAM9000         ; writes to $9000-$BFFF now reach RAM
+        lda #<resume
+        sta $0802
+        lda #>resume
+        sta $0803
+        lda #NPAGES
+        sta $06             ; pages left
+        lda #LOADHI
+        sta $07             ; destination page
+        stz $08             ; track
+        stz $0b             ; head position in half-tracks
+        lda #1
+        sta $09             ; next sector; sector 0 is this loader
+batch:
+        sec
+        lda #16
+        sbc $09             ; sectors left on this track
+        cmp $06
+        bcc batchsize
+        lda $06
+batchsize:
+        sta $0a
+        clc
+        adc $09
+        sta count
+        lda $09
+        sta $3d             ; PROM: first sector
+        stz $26             ; PROM: destination
+        lda $07
+        sta $27
+        lda $08
+        sta $41             ; PROM: track
+        ldx $2b             ; PROM: slot * 16
+        jmp READSEC         ; reads the batch straight into place, then JMP $0801
+
+resume:
+        sec
+        lda $06
+        sbc $0a
+        sta $06
+        beq loaded
+        clc
+        lda $07
+        adc $0a
+        sta $07
+        inc $08
+        stz $09
+        jsr stepin
+        jmp batch
+
+loaded:
+        ldx $2b
+        lda $C088,x         ; drive motor off
+        jmp BASICGO
+
+; Move the head in one track: two half-steps, one phase energised at a time.
+stepin:
+        ldx #2
+halfstep:
+        lda $0b
+        and #3
+        asl
+        ora $2b
+        tay
+        lda $C080,y         ; current phase off
+        inc $0b
+        lda $0b
+        and #3
+        asl
+        ora #1
+        ora $2b
+        tay
+        lda $C080,y         ; next phase on
+        lda #$FF
+        jsr WAIT
+        dex
+        bne halfstep
+        rts
+
+message:
+        .byte $0D, "${MISMATCH_TEXT}", $0D, 0
+`;
+}
+
+/**
+ * Build the MS-BASIC boot disk from a 3ric ROM image (the first 64 KiB is the mapped
+ * address space). Throws if the ROM's BASIC layout is not the one this tool adapts.
+ */
+export function buildMsBasicWoz(romBytes) {
+  const rom = Uint8Array.from(romBytes);
+  if (rom.length < 0x10000) throw new Error("ROM image must contain the 64 KiB mapped address space");
+
+  if (rom[BASIC_ENTRY] !== 0x4c) throw new Error(`no JMP COLD_START at ${hex(BASIC_ENTRY)}`);
+  const coldStart = rom[BASIC_ENTRY + 1] | (rom[BASIC_ENTRY + 2] << 8);
+  if (coldStart < BASIC_START || coldStart >= BASIC_END)
+    throw new Error(`${hex(BASIC_ENTRY)} jumps to ${hex(coldStart)}, outside BASIC ${hex(BASIC_START)}-${hex(BASIC_END - 1)}`);
+
+  const image = rom.slice(BASIC_START, BASIC_END);
+  const probes = findPattern(image, PROBE);
+  if (probes.length !== 1)
+    throw new Error(`expected one MEMORY SIZE probe in BASIC, found ${probes.length}`);
+  const probe = probes[0];
+  const branchTarget = at => at + 2 + ((image[at + 1] << 24) >> 24);
+  const setTop = branchTarget(probe + 12);
+  if (branchTarget(probe + 19) !== setTop || findPattern(image.subarray(setTop, setTop + 4), SET_TOP)[0] !== 0)
+    throw new Error("unrecognized MEMORY SIZE exit (L40FA)");
+
+  const draft = assemble(hookSource(BASIC_END - 0x100, BASIC_START + setTop));
+  const hooksOrg = BASIC_END - draft.bytes.length;
+  const hooks = assemble(hookSource(hooksOrg, BASIC_START + setTop));
+  if (hooks.bytes.length !== draft.bytes.length) throw new Error("hook size changed with its origin");
+  const hookAt = hooksOrg - BASIC_START;
+  if (image.subarray(hookAt).some(byte => byte !== 0))
+    throw new Error(`${hex(hooksOrg)}-${hex(BASIC_END - 1)} is not unused (zero-filled) in this ROM`);
+  if (hookAt <= Math.max(probe + PROBE.length, setTop + SET_TOP.length))
+    throw new Error("hooks would overlap the patched code");
+
+  const jsrNop = target => [0x20, target & 0xff, target >> 8, 0xea];
+  const probeSite = BASIC_START + probe + PROBE_PAGE_STEP;
+  const topSite = BASIC_START + setTop;
+  image.set(hooks.bytes, hookAt);
+  image.set(jsrNop(hooks.symbols.PROBEPAGE), probeSite - BASIC_START);
+  image.set(jsrNop(hooks.symbols.CLAMPTOP), topSite - BASIC_START);
+
+  const guard = fletcher16(rom.subarray(GUARD_START, 0x10000));
+  const loaded = assemble(loaderSource(guard), { org: 0x0800 });
+  if (loaded.bytes.length > 256) throw new Error(`boot loader is ${loaded.bytes.length} bytes (> 256)`);
+  const loader = new Uint8Array(256);
+  loader.set(loaded.bytes);
+
+  const dsk = new Uint8Array(35 * 16 * 256);
+  placeSector(dsk, 0, 0, loader);
+  for (let page = 0; page < BASIC_PAGES; page++) {
+    const { track, sector } = sectorForPage(page);
+    placeSector(dsk, track, sector, image.subarray(page * 256, (page + 1) * 256));
+  }
+
+  return {
+    woz: buildWozFromDsk(dsk),
+    image,
+    loader,
+    loaderSymbols: loaded.symbols,
+    coldStart,
+    guard,
+    hooks: { start: hooksOrg, end: BASIC_END, probePage: hooks.symbols.PROBEPAGE, clampTop: hooks.symbols.CLAMPTOP },
+    patches: [
+      { site: probeSite, before: [0xd0, 0x02, 0xe6, LINNUM + 1], after: jsrNop(hooks.symbols.PROBEPAGE) },
+      { site: topSite, before: SET_TOP, after: jsrNop(hooks.symbols.CLAMPTOP) },
+    ],
+  };
+}
+
+function main(args) {
+  const usage = "Usage: node codegen/tools/msbasic-woz.mjs <output.woz> [--rom <badger6502.bin>]";
+  let romPath = DEFAULT_ROM, output = null;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--rom" && i + 1 < args.length) romPath = args[++i];
+    else if (output === null && !args[i].startsWith("--")) output = args[i];
+    else throw new Error(usage);
+  }
+  if (output === null) throw new Error(usage);
+  output = path.resolve(output);
+
+  const rom = fs.readFileSync(romPath);
+  const disk = buildMsBasicWoz(rom);
+  fs.mkdirSync(path.dirname(output), { recursive: true });
+  try {
+    fs.writeFileSync(output, disk.woz, { flag: "wx" });
+  } catch (error) {
+    if (error.code === "EEXIST") throw new Error(`${output} already exists; delete it or choose another name`);
+    throw error;
+  }
+  console.log([
+    `Created ${output}`,
+    `ROM ${path.resolve(romPath)} (SHA-256 ${sha256(rom)})`,
+    `BASIC ${hex(BASIC_START)}-${hex(BASIC_END - 1)}, COLD_START ${hex(disk.coldStart)}, probe hooks ${hex(disk.hooks.start)}-${hex(BASIC_END - 1)}`,
+    `Disk SHA-256 ${sha256(disk.woz)}`,
+    "Contains the ROM's Microsoft BASIC: keep it local (see NOTICE).",
+    'Boot on the machine running that ROM: MON (if the shell shows ">"), C600G, Return at MEMORY SIZE?',
+  ].join("\n"));
+}
+
+if (typeof process !== "undefined" && process.argv[1]
+    && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
+  try { main(process.argv.slice(2)); }
+  catch (error) { console.error(`msbasic-woz: ${error.message}`); process.exitCode = 1; }
+}

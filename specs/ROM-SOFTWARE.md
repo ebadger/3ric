@@ -87,6 +87,33 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     board or complete-playthrough certification. The implementation is an
     emulator-verified hardware-trial candidate; commands, fingerprints, coverage and
     remaining limits are recorded in [`docs/porting-logs/archon.md`](../docs/porting-logs/archon.md).
+- **MS-BASIC boot disk:** `codegen/tools/msbasic-woz.mjs` turns a ROM image into a
+  5.25″ WOZ2 that boots with `C600G` and runs that ROM's own Microsoft BASIC from the
+  12 KiB RAM under the `$9000–$BFFF` overlay. BASIC therefore starts even when that
+  RAM was never seeded, as at a physical power-on. The disk embeds the third-party
+  interpreter, so it is a generated local output, never a repository asset (`NOTICE`).
+  - **Image:** the generating ROM's `$9000–$BFFF` (48 pages) occupies T0 S1–15,
+    T1–T2 and T3 S0; the boot loader is T0 S0.
+  - **Loader:** select upper ROM (`$C082`) and compare a Fletcher-16 (mod 255)
+    checksum of `$D000–$FFFF` with the generating ROM. On mismatch, stop the drive,
+    print `BASIC DISK/ROM MISMATCH` and `BRK` before touching the overlay RAM: the RAM
+    interpreter and the ROM's OS/NMI code call each other at fixed addresses. Then
+    expose RAM (`$C007`), stream the pages straight to `$9000–$BFFF` with the PROM's
+    `ReadSector` (`$C65C`), stop the drive motor and `JMP $E000` (`JMP COLD_START`).
+  - **RAM-resident adaptation:** `MEMORY SIZE?` probes upward until a write fails,
+    which would overwrite a RAM interpreter. Two `JSR` hooks in the image's unused,
+    zero-filled top bytes stop the probe at `$9000` and clamp a typed size to `$9000`;
+    Return reports `34815 BYTES FREE`. No other interpreter byte changes. The
+    generator locates the generic probe code by its bytes and refuses unrecognized
+    images. ROM, VM, memory map and platform reference are unchanged.
+  - **Interrupts:** the ROM NMI proxy (`$F1BB`) still banks BASIC ROM in for its
+    handler and exposes RAM again on exit, so keyboard and gamepad NMIs return into
+    the RAM interpreter, which survives later resets until overwritten or power-off.
+  - **Limits:** a disk refuses to load unless the machine's upper ROM (`$D000–$FFFF`)
+    matches the ROM that generated it (`--rom` selects the board's image); the BASIC ROM
+    bank only runs the machine's own NMI handler and is not fingerprinted. `LOAD`/`SAVE`
+    behave as in ROM BASIC; there is no Disk II file system. Emulator-verified; a
+    physical-board boot is not yet confirmed.
 - **Bouncing Ball (scottybe's community contribution):** the canonical source remains
   `web/programs/bouncing-ball.s`, loaded at `$0800` by the gallery, assembler, or
   `BRUN BOUNCE.PRG 0800`. Its 114-vertex, 128-face checkerboard sphere is transformed,
@@ -334,6 +361,14 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   `MEMORY SIZE?`). Disks whose boot auto-runs an Applesoft greeting (DOS 3.3 / Quick-DOS
   System Masters and games chaining through them) load DOS but then trap. Self-booting
   machine-code disks run fine. Treat this as a documented gap, not a bug to paper over.
+- **Known gap — ROM BASIC startup relies on seeded RAM.** Reset exposes RAM at
+  `$9000–$BFFF` (`$C007`) and the NMI proxy re-exposes it after every interrupt, so
+  `E000G` runs `COLD_START` (`$B234`) from that RAM. The emulator's load recipe seeds it
+  from the ROM image; no ROM code copies BASIC there. With that RAM scrubbed, as at a
+  physical power-on, `E000G` executes garbage and `BRK`s. In the seeded emulator, pressing
+  Return at `MEMORY SIZE?` probes into `$9000+` and overwrites the interpreter; type
+  `36864` or less. The MS-BASIC boot disk loads a probe-safe RAM copy instead. Both
+  observations are emulator reproductions; the ROM is unchanged.
 - **The ROM defines the memory-map contract in practice.** ROM routines assume the `MM_*`
   layout in `vm.h`; a memory-map change means rebuilding/re-verifying the ROM and
   regenerating `platform-ref.*`.
@@ -349,6 +384,12 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
 
 `badger6502.bin → mapped $D000–$FFFF + banks; reset → monitor → (Disk II C600G | DOS EC5CG |
 BRUN) → user program runs → COUT/screen/serial output`.
+
+For the MS-BASIC boot disk:
+`ROM $9000–$BFFF + probe hooks → msbasic-woz.mjs → local WOZ → C600G → PROM loads T0 S0 →
+upper-ROM guard → $C007 → 48 ReadSector pages into $9000–$BFFF → motor off → JMP $E000 →
+COLD_START in RAM → MEMORY SIZE? (capped at $9000) → BASIC prompt`; NMIs bank the ROM
+handler in and return to RAM.
 
 For Matrix Rain:
 `gallery/sample source → assembler → $0800 program → $C000/$C010 pause/quit input +
@@ -411,6 +452,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Microsoft BASIC | Shipped | `$9000–$BFFF`; not Applesoft (known gap). |
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
+| MS-BASIC boot disk | Implemented / emulator-verified | `msbasic-woz.mjs` local generator. `msbasic-woz.test.mjs` round-trips the WOZ sectors and boots with scrubbed overlay RAM, even with BASIC ROM left selected: `COLD_START` runs only from RAM, Return gives `34815 BYTES FREE`, the image survives the probe, programs and a gamepad NMI work, a reset then `MON`/`E000G` restarts it, sizes clamp, and a mismatched ROM stops before loading. Physical-board boot pending. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |

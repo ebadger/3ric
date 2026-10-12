@@ -45,6 +45,21 @@ only when the program halted cleanly and every check passed.
 | `tools/harness.cjs` | Boots the WASM emulator, loads a program, runs it, captures serial/text/registers, detects halt. |
 | `tools/run6502.mjs` | CLI: assemble/load → run → apply checks → emit `.PRG` + verdict. |
 | `tools/gen_platform_ref.mjs` | Regenerates `platform/platform-ref.{md,json}` from `vm.h` + `badger6502.dbg`. |
+| `tools/msbasic-woz.mjs` | Writes a local WOZ that boots the ROM's Microsoft BASIC into the RAM under `$9000-$BFFF` (see below). |
+
+## MS-BASIC boot disk
+
+```sh
+node codegen/tools/msbasic-woz.mjs codegen/out/basic.woz   # from emulator/Data/badger6502.bin
+node codegen/tools/msbasic-woz.mjs codegen/out/basic.woz --rom my-board.bin
+```
+
+Insert the disk, enter `MON` if the shell shows `>`, then `C600G`; press Return at
+`MEMORY SIZE?`. The disk refuses to load if the machine's upper ROM (`$D000-$FFFF`)
+differs from the ROM it was made from. It contains the ROM's third-party Microsoft
+BASIC, so keep it local (`codegen/out/` is git-ignored) rather than committing or
+sharing it (see `NOTICE`).
+`node codegen/tools/msbasic-woz.test.mjs` verifies it on the WASM build.
 
 ## Layout
 
