@@ -8,7 +8,7 @@ import { join } from "node:path";
 import harness from "./harness.cjs";
 import { readWozSectors } from "./wozedit.mjs";
 import {
-  BASIC_END, BASIC_PAGES, BASIC_START, GUARD_START, MISMATCH_TEXT, PS2_DECODER,
+  BASIC_END, BASIC_PAGES, BASIC_START, GUARD_START, MISMATCH_TEXT, PS2_DECODER, SHIFT_KEYS,
   buildMsBasicWoz, fletcher16, sectorForPage,
 } from "./msbasic-woz.mjs";
 
@@ -31,12 +31,16 @@ const segmentStart = name => {
 
 // --- the disk image -----------------------------------------------------------------
 assert.equal(disk.coldStart, symbol("COLD_START"));
-assert.equal(disk.patches[0].site, symbol("L40D7") + 2, "probe hook replaces BNE/INC after INC LINNUM");
-assert.equal(disk.patches[1].site, symbol("L40FA"), "top-of-memory hook is the probe's exit");
 assert.deepEqual(
-  Object.fromEntries(disk.patches.slice(2).map(({ name, site }) => [name, site])),
-  { QT_OK: symbol("QT_OK"), QT_BREAK: symbol("QT_BREAK"), QT_WRITTEN_BY: symbol("QT_WRITTEN_BY") + 30 },
-  "line breaks are restored in the three messages BASIC prints");
+  Object.fromEntries(disk.patches.map(({ name, site }) => [name, site])),
+  {
+    probe: symbol("L40D7") + 2, // replaces BNE/INC after INC LINNUM
+    top: symbol("L40FA"), // the probe's exit
+    RESTART: symbol("RESTART"), // runs before every prompt
+    QT_OK: symbol("QT_OK"), QT_BREAK: symbol("QT_BREAK"), QT_WRITTEN_BY: symbol("QT_WRITTEN_BY") + 30,
+  },
+  "hooks at the probe, its exit and RESTART; line breaks in the three messages BASIC prints");
+assert.equal(disk.hooks.keyIn, symbol("KEYIN"), "the Shift+= reader wraps the monitor's KEYIN");
 const changed = new Set();
 for (const { site, before, after } of disk.patches) {
   const at = site - BASIC_START;
@@ -61,7 +65,7 @@ for (const seg of segments)
   assert.ok(seg.end <= disk.hooks.start, `${seg.name} ends before the hooks at $${disk.hooks.start.toString(16)}`);
 assert.deepEqual(disk.guard, fletcher16(rom.subarray(GUARD_START, 0x10000)));
 assert.ok(disk.hooks.postload >= disk.hooks.start && disk.hooks.postload < disk.hooks.probePage);
-console.log("PASS image is the ROM's $9000-$BFFF plus two JSR hooks, three message line breaks and start-up code in unused bytes");
+console.log("PASS image is the ROM's $9000-$BFFF plus three JSR hooks, three message line breaks and resident code in unused bytes");
 
 const coordinates = [{ track: 0, sector: 0 }, ...Array.from({ length: BASIC_PAGES }, (_, page) => sectorForPage(page))];
 const sectors = readWozSectors(Buffer.from(disk.woz), coordinates);
@@ -75,6 +79,8 @@ assert.throws(() => buildMsBasicWoz(variant(r => { r[disk.patches[0].site] ^= 0x
 assert.throws(() => buildMsBasicWoz(variant(r => { r[BASIC_END - 1] = 0xea; })), /not unused/);
 assert.throws(() => buildMsBasicWoz(variant(r => { r[0xe002] = 0xd0; })), /outside BASIC/);
 assert.throws(() => buildMsBasicWoz(variant(r => { r[symbol("QT_BREAK") + 1] = 0x0a; })), /QT_BREAK/);
+assert.throws(() => buildMsBasicWoz(variant(r => { r[symbol("RESTART") + 1] = 0x18; })), /RESTART/);
+assert.throws(() => buildMsBasicWoz(variant(r => { r[symbol("KEYIN") + 16] = 0x2c; })), /KEYIN/);
 const reset = rom[0xfffc] | (rom[0xfffd] << 8);
 const clearsKeyUp = rom.subarray(reset, reset + 0x100).findIndex((_, i, a) => a[i] === 0x8d && a[i + 1] === 0x04 && a[i + 2] === 0xce);
 assert.ok(clearsKeyUp >= 0, "the ROM reset handler clears KBKEYUP");
@@ -139,6 +145,7 @@ const main = await bootDisk(disk.woz, { basicRomSelected: true });
 try {
   const { vm } = main;
   const d = PS2_DECODER;
+  const ksw = () => vm.peek(0x38) | (vm.peek(0x39) << 8); // RDKEY's input routine
   vm.addMappedBreakpoint(disk.loaderSymbols.LOADED, PRIMARY);
   type(vm, "C600G\r");
   assert.ok(runUntil(vm, () => vm.breakpointHit()), "the loader reads every page");
@@ -177,6 +184,25 @@ try {
   assert.equal(vm.peek(0x72) | (vm.peek(0x73) << 8), 0x9000, "FRETOP stops at the interpreter");
   assert.ok(imageInRam(vm), "Return at MEMORY SIZE? leaves the interpreter intact");
   console.log("PASS boots from scrubbed RAM; COLD_START runs from the loaded copy; Return gives 34815 BYTES FREE");
+
+  assert.equal(ksw(), disk.hooks.shiftKey, "the first prompt points KSW at the Shift+= reader");
+  // keyDown bypasses PS/2, so hold Shift in the ROM decoder's key states while typing "=".
+  const withShift = (scanCode, text) => {
+    vm.poke(d.KEYSTATE + scanCode, 1);
+    type(vm, text);
+    vm.poke(d.KEYSTATE + scanCode, 0);
+  };
+  type(vm, "PRINT 2");
+  withShift(SHIFT_KEYS[0], "=");
+  type(vm, "2\r");
+  assert.ok(runUntil(vm, () => /^\]PRINT 2\+2 *\n 4 *$/m.test(screen(main)), 5_000_000), "left Shift+= types +");
+  type(vm, "PRINT 3");
+  withShift(SHIFT_KEYS[1], "=");
+  type(vm, "3\r");
+  assert.ok(runUntil(vm, () => /^\]PRINT 3\+3 *\n 6 *$/m.test(screen(main)), 5_000_000), "right Shift+= types +");
+  type(vm, "PRINT 2=2\r");
+  assert.ok(runUntil(vm, () => /^\]PRINT 2=2 *\n-1 *$/m.test(screen(main)), 5_000_000), "= without Shift stays =");
+  console.log("PASS Shift+= types + at the prompt and = alone stays =");
 
   for (const line of [
     "10 DIM A(20)",
@@ -217,10 +243,20 @@ try {
   assert.ok(!/[^\n]\]/.test(screen(main)), "no prompt shows a stray character");
   console.log("PASS Ctrl-C prints BREAK IN 10 intact after scrolling output");
 
+  const other = 0x300; // another input routine: JMP KEYIN
+  [0x4c, disk.hooks.keyIn & 0xff, disk.hooks.keyIn >> 8].forEach((byte, i) => vm.poke(other + i, byte));
+  vm.poke(0x38, other & 0xff);
+  vm.poke(0x39, other >> 8);
+  type(vm, "PRINT 7*6\r");
+  assert.ok(runUntil(vm, () => /^ 42 *$/m.test(screen(main)), 5_000_000), "BASIC reads through the other routine");
+  assert.equal(ksw(), other, "a prompt leaves another input routine in KSW");
+  console.log("PASS a prompt replaces only the ROM's KEYIN in KSW");
+
   vm.clearBreakpoints();
   vm.reset();
   vm.runCycles(3_000_000);
   assert.ok(!/BYTES FREE/.test(screen(main)), "reset cleared the screen");
+  assert.equal(ksw(), disk.hooks.keyIn, "reset restores the ROM's KEYIN");
   type(vm, "MON\r");
   vm.addMappedBreakpoint(disk.coldStart, BASIC_ROM);
   type(vm, "E000G\r");
@@ -232,6 +268,7 @@ try {
   assert.ok(runUntil(vm, () => /BYTES FREE/.test(screen(main))), "the restarted cold start completes");
   assert.match(screen(main), / 34815 BYTES FREE/);
   assert.ok(imageInRam(vm), "the interpreter survives reset and a second cold start");
+  assert.ok(runUntil(vm, () => ksw() === disk.hooks.shiftKey, 5_000_000), "the next prompt reinstalls the Shift+= reader");
   console.log("PASS the loaded interpreter survives reset; MON then E000G restarts it, and its credit line breaks cleanly");
 } finally {
   main.vm.delete();

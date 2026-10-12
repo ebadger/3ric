@@ -63,7 +63,8 @@ sharing it (see `NOTICE`). BASIC appears about a second after loading: the disk 
 out the picodisk's spin-down and resyncs the ROM's PS/2 decoder, which READY stalls
 during the boot can misalign. If keys are still garbled, Reset then `MON`/`E000G`
 restarts the loaded BASIC. Its prompt is a bare `]`. ROM BASIC shows `"]` because its
-message line breaks are mis-assembled; the disk repairs its own copy.
+message line breaks are mis-assembled; the disk repairs its own copy. Shift+= types `+`,
+which the ROM's PS/2 decoder never produces; `PEEK(49152)` still sees `=`.
 `node codegen/tools/msbasic-woz.test.mjs` verifies it on the WASM build;
 `pwsh codegen/tools/msbasic-woz.test.ps1 [-Node <node>]` (Windows, MSVC) types into it
 through the ROM's real PS/2 decoder while modelling the picodisk's READY stalls.

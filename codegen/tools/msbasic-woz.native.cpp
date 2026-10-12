@@ -6,7 +6,10 @@
 // picodisk Disk II emulator is modelled too: while its drive model runs (from 1,023,000
 // cycles after motor-on until 1,023,000 cycles after motor-off) it freezes the CPU through
 // READY, for `stall` cycles, whenever 500 cycles pass without a disk access. The VIA keeps
-// counting meanwhile. Typing C600G releases Enter mid-boot, inside those stalls.
+// counting meanwhile. Typing C600G releases Enter mid-boot, inside those stalls. At the
+// BASIC prompt, left Shift+= must type "+" (the ROM decoder itself gives "="). Right Shift
+// is left to the WASM test: at a 94-cycle bit period it races the ROM decoder (see
+// specs/ROM-SOFTWARE.md, fast PS/2 keyboards).
 //
 // Usage: msbasic-native <rom> <woz> <period> <hold> <stall> <release-delay>
 #include "SDCard.h"
@@ -166,9 +169,11 @@ namespace
         void releaseKey(uint8_t code) { scan(0xf0); scan(code); run(20000); }
         void key(uint8_t code) { press(code); releaseKey(code); }
         void keys(const std::vector<uint8_t>& codes) { for (uint8_t code : codes) key(code); }
+        void shifted(uint8_t shift, uint8_t code) { press(shift); key(code); releaseKey(shift); }
     };
 
-    const uint8_t kEnter = 0x5a;
+    const uint8_t kEnter = 0x5a, kLeftShift = 0x12, kEquals = 0x55;
+    const std::vector<uint8_t> kPrint = {0x4d, 0x2d, 0x43, 0x31, 0x2c, 0x29}; // "PRINT "
 }
 
 int main(int argc, char** argv)
@@ -199,6 +204,14 @@ int main(int argc, char** argv)
         require(m.waitFor(" 34815 BYTES FREE", 5000000), "Return at MEMORY SIZE? was not accepted");
         m.keys({0x4d, 0x2d, 0x43, 0x31, 0x2c, 0x29, 0x3d, 0x4e, 0x1e, kEnter}); // PRINT 7-2
         require(m.waitFor(" 5", 5000000, true), "PRINT 7-2 did not print 5");
+        m.keys(kPrint);
+        m.key(0x1e);
+        m.shifted(kLeftShift, kEquals); // the ROM decoder gives "=", disk BASIC reads "+"
+        m.keys({0x1e, kEnter});         // PRINT 2+2
+        require(m.waitFor(" 4", 5000000, true), "Shift+= did not type + (PRINT 2+2)");
+        m.keys(kPrint);
+        m.keys({0x1e, kEquals, 0x1e, kEnter}); // PRINT 2=2
+        require(m.waitFor("-1", 5000000, true), "= without Shift did not stay = (PRINT 2=2)");
         std::cout << "PASS period " << period << " hold " << hold << " stall " << stall
                   << " release +" << releaseDelay << " (" << m.stalls << " READY stalls)\n";
         return 0;

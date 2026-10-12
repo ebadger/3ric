@@ -172,7 +172,8 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   keep it out of the repo (`codegen/out/` is ignored; the disk carries that third-party
   interpreter). Boot with `MON` (if the shell shows `>`), `C600G`, then Return at
   `MEMORY SIZE?` for 34,815 bytes free and a bare `]` prompt. ROM BASIC shows `"]`
-  because its message line breaks are mis-assembled; the disk repairs its own copy. A
+  because its message line breaks are mis-assembled; the disk repairs its own copy.
+  Shift+= types `+` there, which no key produces through the ROM's PS/2 decoder. A
   disk refuses to load if the upper ROM (`$D000–$FFFF`) differs from the one it was
   built from; pass `--rom` with the board's image. ROM `E000G` instead relies on the
   emulator's seeded copy of that RAM, where Return at `MEMORY SIZE?` overwrites the
@@ -184,6 +185,10 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 - **Physical PS/2 after disk activity:** the picodisk stalls the CPU through READY
   during disk access and for ~1,023,000 cycles after motor-off. That can misalign the
   ROM's PS/2 decoder until reset, for any disk boot. Details: `specs/ROM-SOFTWARE.md`.
+- **Physical PS/2 key gaps:** the ROM decoder's tables have no `+` (Shift+= gives `=`;
+  only the MS-BASIC disk reads it as `+`). In the native model, keyboards with a bit
+  period under 98 CPU cycles also race its Shift/Ctrl handling, which drops the next
+  key. Details: `specs/ROM-SOFTWARE.md`.
 - **Archon compatibility candidate:** the owner-supplied disk needs a game-specific
   bank-safe input adapter; its menu/board otherwise hide the ROM NMI handler.
   `codegen\tools\patch-archon.mjs` creates a separate local WOZ without changing the

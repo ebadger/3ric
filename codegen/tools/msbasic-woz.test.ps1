@@ -48,7 +48,7 @@ try {
             }
         }
     }
-    Write-Output 'PASS PS/2 typing reaches disk BASIC across bit periods, READY stalls and mid-boot releases'
+    Write-Output 'PASS PS/2 typing, Shift+= as +, reaches disk BASIC across bit periods, READY stalls and mid-boot releases'
 } finally {
     if (Test-Path -LiteralPath $woz) { Remove-Item -LiteralPath $woz }
 }

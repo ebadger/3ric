@@ -2,7 +2,8 @@
 // BASIC into the 12 KiB RAM under the $9000-$BFFF overlay and starts it, so BASIC runs
 // even when that RAM was never seeded (as at a physical power-on). Before BASIC starts,
 // the disk waits out the picodisk's spin-down and resyncs the ROM's PS/2 decoder. The copy
-// also repairs the line breaks in BASIC's messages, so its prompt is a bare "]".
+// also repairs the line breaks in BASIC's messages, so its prompt is a bare "]", and reads
+// Shift+= as "+", which the ROM's PS/2 decoder never produces.
 // Contract: specs/ROM-SOFTWARE.md ("MS-BASIC boot disk").
 //
 // The output embeds the ROM's third-party BASIC interpreter. It is a local artifact for
@@ -61,6 +62,22 @@ const MESSAGE_FIXES = [
   },
 ];
 
+// RESTART, which runs before every prompt: LSR Z14 / LDA #<QT_OK / LDY #>QT_OK /
+// JSR GOSTROUT / JSR INLIN. Its first four bytes become JSR KEYHOOK + NOP.
+const Z14 = 0x17, GOSTROUT = 0x03;
+const restartCode = qtOk => [0x46, Z14, 0xa9, qtOk & 0xff, 0xa0, qtOk >> 8, 0x20, GOSTROUT, 0x00, 0x20, null, null];
+const RESTART_STEP = 4;
+// The monitor's RDKEY ends "JMP (KSWL)"; KEYIN follows, the routine reset's SETKBD puts in
+// KSW. It expects RDKEY's A (character under the cursor) and Y (CH), and returns the key.
+const KSWL = 0x38;
+const RDKEY_KEYIN = [
+  0x6c, KSWL, 0x00, 0xe6, 0x4e, 0xd0, 0x02, 0xe6, 0x4f, 0x2c, 0x00, 0xc0, 0x10, 0xf5, 0x91, 0x28,
+  0xad, 0x00, 0xc0, 0x9c, 0x00, 0xc0, 0x60,
+];
+// The ROM's shifted PS/2 table gives "=" for Shift+= and no key gives "+". Disk BASIC reads
+// "=" as "+" while either Shift key (scan code) is down in the decoder's key states.
+export const SHIFT_KEYS = [0x12, 0x59];
+
 // Disk position of payload page i: T0 S1-15 follow the loader, then whole tracks.
 export function sectorForPage(page) {
   if (page < 15) return { track: 0, sector: page + 1 };
@@ -109,7 +126,7 @@ function findPattern(bytes, pattern) {
   return hits;
 }
 
-function residentSource(org, setTop) {
+function residentSource(org, { setTop, qtOk, keyIn }) {
   const d = PS2_DECODER;
   return `
 LINNUM  = ${hex(LINNUM, 2)}
@@ -127,6 +144,14 @@ KBKEYUP = ${hex(d.KBKEYUP)}
 KBTOGGLE = ${hex(d.KBTOGGLE)}
 KBMODIFIER = ${hex(d.KBMODIFIER)}
 KEYSTATE = ${hex(d.KEYSTATE)}
+SHIFTL  = ${hex(d.KEYSTATE + SHIFT_KEYS[0])}       ; left Shift down
+SHIFTR  = ${hex(d.KEYSTATE + SHIFT_KEYS[1])}       ; right Shift down
+KEYIN   = ${hex(keyIn)}       ; monitor KEYIN
+KSWL    = ${hex(KSWL, 2)}         ; KSW: RDKEY's input routine
+Z14     = ${hex(Z14, 2)}         ; BASIC's output-suppress flag
+OKLO    = ${hex(qtOk & 0xff, 2)}         ; low byte of QT_OK
+EQUALSKEY = $BD
+PLUSKEY = $AB
 
         .org ${hex(org)}
 ; The loader jumps here once every page is in RAM and the drive motor is off.
@@ -192,6 +217,39 @@ clamptop:
         lda #0
         ldy #TOPHI
 clampok:
+        rts
+
+; Called in place of RESTART's "LSR Z14 / LDA #<QT_OK", so before every prompt. While KSW
+; is the ROM's KEYIN, point it at shiftkey; leave any other input routine alone. Then run
+; the replaced instructions, which also leave the flags as they did.
+keyhook:
+        lda KSWL+1
+        cmp #>KEYIN
+        bne keyhookdone
+        lda KSWL
+        cmp #<KEYIN
+        bne keyhookdone
+        lda #<shiftkey
+        sta KSWL
+        lda #>shiftkey
+        sta KSWL+1
+keyhookdone:
+        lsr Z14
+        lda #OKLO
+        rts
+; RDKEY input routine: KEYIN, except that "=" read while a Shift key is down is "+".
+shiftkey:
+        jsr KEYIN           ; with RDKEY's A and Y
+        cmp #EQUALSKEY
+        bne shiftdone
+        lda SHIFTL
+        ora SHIFTR
+        beq shiftnone
+        lda #PLUSKEY
+        rts
+shiftnone:
+        lda #EQUALSKEY
+shiftdone:
         rts
 `;
 }
@@ -369,20 +427,28 @@ export function buildMsBasicWoz(romBytes) {
     if (hits.length !== 1) throw new Error(`expected one ${name} message in BASIC, found ${hits.length}`);
     return { name, site: BASIC_START + hits[0] + offset, before: bytes.slice(offset, offset + after.length), after };
   });
+  const qtOk = messages.find(({ name }) => name === "QT_OK").site;
+  const restarts = findPattern(image, restartCode(qtOk));
+  if (restarts.length !== 1) throw new Error(`expected one RESTART prompt loop in BASIC, found ${restarts.length}`);
+  const restart = restarts[0];
+  const rdkeys = findPattern(rom.subarray(GUARD_START, 0x10000), RDKEY_KEYIN);
+  if (rdkeys.length !== 1) throw new Error(`expected one monitor RDKEY/KEYIN in upper ROM, found ${rdkeys.length}`);
+  const keyIn = GUARD_START + rdkeys[0] + 3;
 
   const reset = rom[0xfffc] | (rom[0xfffd] << 8);
   const resetCode = rom.subarray(reset, Math.min(reset + 0x100, 0x10000));
   if (RESET_CLEARS.some(store => findPattern(resetCode, store).length === 0))
     throw new Error(`the reset handler at ${hex(reset)} does not clear the PS/2 decoder state this disk resyncs`);
 
-  const draft = assemble(residentSource(BASIC_END - 0x100, BASIC_START + setTop));
+  const resident = { setTop: BASIC_START + setTop, qtOk, keyIn };
+  const draft = assemble(residentSource(BASIC_END - 0x100, resident));
   const hooksOrg = BASIC_END - draft.bytes.length;
-  const hooks = assemble(residentSource(hooksOrg, BASIC_START + setTop));
+  const hooks = assemble(residentSource(hooksOrg, resident));
   if (hooks.bytes.length !== draft.bytes.length) throw new Error("hook size changed with its origin");
   const hookAt = hooksOrg - BASIC_START;
   if (image.subarray(hookAt).some(byte => byte !== 0))
     throw new Error(`${hex(hooksOrg)}-${hex(BASIC_END - 1)} is not unused (zero-filled) in this ROM`);
-  if (hookAt <= Math.max(probe + PROBE.length, setTop + SET_TOP.length))
+  if (hookAt <= Math.max(probe + PROBE.length, setTop + SET_TOP.length, restart + RESTART_STEP))
     throw new Error("hooks would overlap the patched code");
 
   const jsrNop = target => [0x20, target & 0xff, target >> 8, 0xea];
@@ -391,6 +457,7 @@ export function buildMsBasicWoz(romBytes) {
   image.set(hooks.bytes, hookAt);
   image.set(jsrNop(hooks.symbols.PROBEPAGE), probeSite - BASIC_START);
   image.set(jsrNop(hooks.symbols.CLAMPTOP), topSite - BASIC_START);
+  image.set(jsrNop(hooks.symbols.KEYHOOK), restart);
   for (const { site, after } of messages) image.set(after, site - BASIC_START);
 
   const guard = fletcher16(rom.subarray(GUARD_START, 0x10000));
@@ -416,11 +483,15 @@ export function buildMsBasicWoz(romBytes) {
     guard,
     hooks: {
       start: hooksOrg, end: BASIC_END, postload: s.POSTLOAD, resync: s.RESYNC, quiet: s.QUIET,
-      probePage: s.PROBEPAGE, clampTop: s.CLAMPTOP,
+      probePage: s.PROBEPAGE, clampTop: s.CLAMPTOP, keyHook: s.KEYHOOK, shiftKey: s.SHIFTKEY, keyIn,
     },
     patches: [
-      { site: probeSite, before: [0xd0, 0x02, 0xe6, LINNUM + 1], after: jsrNop(s.PROBEPAGE) },
-      { site: topSite, before: SET_TOP, after: jsrNop(s.CLAMPTOP) },
+      { name: "probe", site: probeSite, before: [0xd0, 0x02, 0xe6, LINNUM + 1], after: jsrNop(s.PROBEPAGE) },
+      { name: "top", site: topSite, before: SET_TOP, after: jsrNop(s.CLAMPTOP) },
+      {
+        name: "RESTART", site: BASIC_START + restart, before: restartCode(qtOk).slice(0, RESTART_STEP),
+        after: jsrNop(s.KEYHOOK),
+      },
       ...messages,
     ],
   };
@@ -449,7 +520,7 @@ function main(args) {
   console.log([
     `Created ${output}`,
     `ROM ${path.resolve(romPath)} (SHA-256 ${sha256(rom)})`,
-    `BASIC ${hex(BASIC_START)}-${hex(BASIC_END - 1)}, COLD_START ${hex(disk.coldStart)}, resident start-up and probe code ${hex(disk.hooks.start)}-${hex(BASIC_END - 1)}`,
+    `BASIC ${hex(BASIC_START)}-${hex(BASIC_END - 1)}, COLD_START ${hex(disk.coldStart)}, resident start-up, probe and key code ${hex(disk.hooks.start)}-${hex(BASIC_END - 1)}`,
     `Disk SHA-256 ${sha256(disk.woz)}`,
     "Contains the ROM's Microsoft BASIC: keep it local (see NOTICE).",
     'Boot on the machine running that ROM: MON (if the shell shows ">"), C600G, Return at MEMORY SIZE?',
