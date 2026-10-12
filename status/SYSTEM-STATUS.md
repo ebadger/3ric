@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-01 — ebadger (via Copilot)_
+_Last updated: 2026-10-12 — ebadger (via Copilot)_
 
 ---
 
@@ -67,6 +67,8 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_sd.cjs                  # mount SD + DIR lists the FAT32 root
 & $node web/test_disk.cjs                # boot a WOZ floppy via C600G into a hi-res title
 & $node web/test_woz_download.cjs        # Disk II boots, overlap-safe images through 34,560 bytes, size guards
+& $node codegen\tools\msbasic-woz.test.mjs # disk-booted MS-BASIC on scrubbed overlay RAM, NMI coexistence, ROM guard
+pwsh codegen\tools\msbasic-woz.test.ps1 -Node $node # native PS/2 typing into that disk under picodisk READY stalls (MSVC)
 ```
 
 C++ CPU unit tests (`emulator/Badger6502VMTest`, MSTest): **Test → Run All Tests** in
@@ -165,6 +167,29 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 - **Disk gap:** DOS 3.3 / Quick-DOS and games that chain through an Applesoft auto-run
   greeting don't run — this clone's `$E000` BASIC is generic Microsoft BASIC, not Applesoft.
   Self-booting machine-code disks work.
+- **MS-BASIC boot disk:** `node codegen\tools\msbasic-woz.mjs codegen\out\basic.woz` writes
+  a local WOZ that loads the ROM's own Microsoft BASIC into the RAM under `$9000–$BFFF`;
+  keep it out of the repo (`codegen/out/` is ignored; the disk carries that third-party
+  interpreter). Boot with `MON` (if the shell shows `>`), `C600G`, then Return at
+  `MEMORY SIZE?` for 34,815 bytes free and a bare `]` prompt. ROM BASIC shows `"]`
+  because its message line breaks are mis-assembled; the disk repairs its own copy.
+  Shift+= types `+` there, which no key produces through the ROM's PS/2 decoder.
+  Selecting BASIC ROM (`$C006`, e.g. `PEEK(49158)`) from disk BASIC or the monitor then
+  breaks key input until Reset. A disk refuses to load if the upper ROM
+  (`$D000–$FFFF`) differs from the one it was built from; pass `--rom` with the board's
+  image. ROM `E000G` instead relies on the emulator's seeded copy of that RAM, where
+  Return at `MEMORY SIZE?` overwrites the interpreter (type 36864 or less).
+  BASIC appears about a second after loading: the disk waits out the picodisk's
+  spin-down and resyncs the ROM's PS/2 decoder. The first physical boot garbled the
+  keyboard (Return echoed `GG`); the fixed disk is verified natively but not yet on
+  the board. If keys are garbled, Reset then `MON`/`E000G` restarts the loaded BASIC.
+- **Physical PS/2 after disk activity:** the picodisk stalls the CPU through READY
+  during disk access and for ~1,023,000 cycles after motor-off. That can misalign the
+  ROM's PS/2 decoder until reset, for any disk boot. Details: `specs/ROM-SOFTWARE.md`.
+- **Physical PS/2 key gaps:** the ROM decoder's tables have no `+` (Shift+= gives `=`;
+  only the MS-BASIC disk reads it as `+`). In the native model, keyboards with a bit
+  period under 98 CPU cycles also race its Shift/Ctrl handling, which drops the next
+  key. Details: `specs/ROM-SOFTWARE.md`.
 - **Archon compatibility candidate:** the owner-supplied disk needs a game-specific
   bank-safe input adapter; its menu/board otherwise hide the ROM NMI handler.
   `codegen\tools\patch-archon.mjs` creates a separate local WOZ without changing the

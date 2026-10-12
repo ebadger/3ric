@@ -26,6 +26,8 @@ graphics / registers → produce a `.PRG` that also `BRUN`s on real hardware.
 | `gen_platform_ref.mjs` | Regenerates `platform/platform-ref.{md,json}` from `vm.h` + `badger6502.dbg`. |
 | `patch-archon.mjs` | Exact-image local WOZ compatibility patcher; see `ROM-SOFTWARE.md`. Contains only adapter code and guarded replacements, never downloads game assets, and refuses input overwrite or fingerprint/sector validation failure. |
 | `wozedit.mjs` | Node-only checked WOZ2 sector reading/editing, reusing the dual-use `wozgen.mjs` CRC and 6-and-2 codec. Preserves non-edited bitstream and metadata bytes. |
+| `msbasic-woz.mjs` | Node-only generator of a local WOZ that boots a ROM image's Microsoft BASIC into the RAM under `$9000–$BFFF`; see `ROM-SOFTWARE.md`. Reuses `wozgen.mjs` (`buildWozFromDsk`, `placeSector` interleave) and `asm6502.mjs`; refuses unrecognized ROM layouts and existing outputs. |
+| `msbasic-woz.test.ps1` + `msbasic-woz.native.cpp` | Windows/MSVC native check of that disk through the ROM's real PS/2 NMI decoder, with a model of the picodisk's READY stalls (`-Node` selects the Node used to write the disk). |
 
 **Platform reference (`codegen/platform/`)** — the generator's machine/human contract:
 `prompt-system.md` (assembler dialect, entry/exit conventions), `platform-ref.md` +
@@ -118,5 +120,6 @@ breakpoints and current-PC highlighting.
 | `harness` + `run6502` validation loop | Shipped | serial/text/gfx/register checks + `.PRG`. |
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Archon local WOZ patching | Experimental / emulator-verified | `patch-archon.test.mjs` covers synthetic editor fixtures and optional owner-supplied-disk gameplay; `patch-archon.test.ps1` covers native PS/2 timing and LED commands. Both game images stay outside the repository. |
+| MS-BASIC boot-disk generator | Implemented / emulator-verified | `msbasic-woz.test.mjs` (needs the WASM build) and `msbasic-woz.test.ps1` (native PS/2 + READY stalls); generated disks stay outside the repository. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |
 | AI-contributor entry point | Shipped | `web/llms.txt` + `CONTRIBUTING.md`; `prompt-system.md` closes the loop to the gallery. |

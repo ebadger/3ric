@@ -420,4 +420,4 @@ export function buildBootableWoz(programBytes, loadAddr, entryAddr = loadAddr) {
   return buildWozFromDsk(dsk);
 }
 
-export { buildWozFromDsk, assembleLoader, crc32, encode6and2, decode6and2 };
+export { buildWozFromDsk, assembleLoader, crc32, encode6and2, decode6and2, placeSector };

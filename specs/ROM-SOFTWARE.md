@@ -87,6 +87,75 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     board or complete-playthrough certification. The implementation is an
     emulator-verified hardware-trial candidate; commands, fingerprints, coverage and
     remaining limits are recorded in [`docs/porting-logs/archon.md`](../docs/porting-logs/archon.md).
+- **MS-BASIC boot disk:** `codegen/tools/msbasic-woz.mjs` turns a ROM image into a
+  5.25″ WOZ2 that boots with `C600G` and runs that ROM's own Microsoft BASIC from the
+  12 KiB RAM under the `$9000–$BFFF` overlay. BASIC therefore starts even when that
+  RAM was never seeded, as at a physical power-on. The disk embeds the third-party
+  interpreter, so it is a generated local output, never a repository asset (`NOTICE`).
+  - **Image:** the generating ROM's `$9000–$BFFF` (48 pages) occupies T0 S1–15,
+    T1–T2 and T3 S0; the boot loader is T0 S0.
+  - **Loader:** select upper ROM (`$C082`) and compare a Fletcher-16 (mod 255)
+    checksum of `$D000–$FFFF` with the generating ROM. On mismatch, stop the drive,
+    print `BASIC DISK/ROM MISMATCH` and `BRK` before touching the overlay RAM: the RAM
+    interpreter and the ROM's OS/NMI code call each other at fixed addresses. Then
+    expose RAM (`$C007`), stream the pages straight to `$9000–$BFFF` with the PROM's
+    `ReadSector` (`$C65C`), stop the drive motor and jump to the image's start-up code.
+  - **Start-up (physical keyboard):** the picodisk Disk II emulator freezes the CPU
+    through READY while its drive model runs, which continues 1,023,000 cycles after
+    motor-off. Wait 8 × `WAIT($FF)` (~1.33M cycles) so no stall reaches BASIC's input.
+    Then, once the PS/2 clock (VIA1 PA6, read via `$C20F`) has stayed high for 512
+    samples, reset the ROM decoder's frame state and prefix, lock-toggle and modifier
+    flags (`$CE00`, `$CE03`, `$CE04`, `$CE18`, `$CE19`), the `$CB00` key-state page and
+    `$C000`. These are among the variables the ROM's reset handler clears. Repeat if
+    a frame overlapped the reset, then `JMP $E000` (`JMP COLD_START`). The generator
+    refuses a ROM whose reset handler does not clear them.
+  - **RAM-resident adaptation:** `MEMORY SIZE?` probes upward until a write fails,
+    which would overwrite a RAM interpreter. Two `JSR` hooks in the image's unused,
+    zero-filled top bytes stop the probe at `$9000` and clamp a typed size to `$9000`;
+    Return reports `34815 BYTES FREE`. The start-up code and the `+` key reader below
+    share those bytes (`$BF6B–$BFFF` for the shipped ROM). Apart from them, the message
+    bytes and the `RESTART` hook below, no interpreter byte changes. The generator
+    locates the generic probe code by its bytes and refuses unrecognized images. ROM,
+    VM, memory map and platform reference are unchanged.
+  - **Message line breaks:** in the shipped ROM, the `CR`/`LF` in BASIC's messages
+    assemble as `$62`/`$66`, the low bytes of the Apple monitor's `CR`/`LF` labels.
+    `OUTDO` special-cases `$62`: it calls the monitor's `CR` directly, then prints the
+    byte anyway. That byte is the `"` (`b` in the emulator) before every `]` prompt.
+    When that call scrolls, it also clobbers `Y` and garbles `BREAK`. The disk patches
+    the three strings BASIC prints: `QT_OK` `$62`→`$0D`, `QT_BREAK` `$62 $66`→`$0D $80`,
+    and the `$62` ending `QT_WRITTEN_BY` (the `A` credit at `MEMORY SIZE?`)→`$0D`. `$0D`
+    takes `OUTDO`'s control-character path, a newline through `COUT`, which preserves
+    `Y`. `$80` is the null `CRDO` sends after each newline (`CRLF_2`). The prompt is then
+    a bare `]` laid out as in Applesoft II: `RESTART` prints one newline first, so output
+    is followed by a blank line. The `$62` special case stays, so a printed lowercase `b`
+    still becomes a newline, as in ROM BASIC. The generator finds each string by its
+    exact bytes and refuses an image that lacks one.
+  - **`+` from a PS/2 keyboard:** the ROM's PS/2 decoder has no `+` (see Behaviour /
+    Rules). A `JSR` replaces `RESTART`'s first two instructions (`LSR Z14` /
+    `LDA #<QT_OK`), so before every prompt the disk points `KSW` (`$38`) at a resident
+    input routine. It does so only while `KSW` holds the monitor's `KEYIN`, which reset's
+    `SETKBD` installs, and leaves any other input routine alone. The routine calls
+    `KEYIN` and returns `+` (`$AB`) for an `=` (`$BD`) read while either Shift key is
+    down (the decoder's key states at `$CB12`/`$CB59`). Line input, `INPUT` and `GET`
+    read through `RDKEY`, so Shift+= types `+`; `PEEK(49152)` still sees `=`. An `=`
+    typed ahead while a program is busy becomes `+` only if Shift is still down when
+    BASIC reads it. Reset restores `KEYIN` until BASIC's next prompt. Known limitation:
+    between prompts `KSW` stays pointed into the overlay RAM, so selecting BASIC ROM
+    (`$C006`), for example `PEEK(49158)` in BASIC or `C006` in the monitor, sends the next
+    key read into zero-filled ROM and `BRK`s. In the emulator the monitor's own input
+    then `BRK`s in a loop until Reset; Reset restores `KEYIN`, and `MON` then `E000G`
+    restarts the loaded BASIC. The generator finds `RESTART` (by its bytes and `QT_OK`
+    operand) and `RDKEY`/`KEYIN` by their bytes, and refuses a ROM that lacks either.
+  - **Interrupts:** the ROM NMI proxy (`$F1BB`) still banks BASIC ROM in for its
+    handler and exposes RAM again on exit, so keyboard and gamepad NMIs return into
+    the RAM interpreter, which survives later resets until overwritten or power-off.
+  - **Limits:** a disk refuses to load unless the machine's upper ROM (`$D000–$FFFF`)
+    matches the ROM that generated it (`--rom` selects the board's image); the BASIC ROM
+    bank only runs the machine's own NMI handler and is not fingerprinted. `LOAD`/`SAVE`
+    behave as in ROM BASIC; there is no Disk II file system. BASIC appears about one
+    second after loading ends. The first physical boot garbled keys at `MEMORY SIZE?`
+    (Return echoed `GG`); the start-up resync addresses the cause reproduced natively.
+    A fixed physical-board boot is not yet confirmed.
 - **Bouncing Ball (scottybe's community contribution):** the canonical source remains
   `web/programs/bouncing-ball.s`, loaded at `$0800` by the gallery, assembler, or
   `BRUN BOUNCE.PRG 0800`. Its 114-vertex, 128-face checkerboard sphere is transformed,
@@ -334,6 +403,50 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   `MEMORY SIZE?`). Disks whose boot auto-runs an Applesoft greeting (DOS 3.3 / Quick-DOS
   System Masters and games chaining through them) load DOS but then trap. Self-booting
   machine-code disks run fine. Treat this as a documented gap, not a bug to paper over.
+- **Known gap — ROM BASIC startup relies on seeded RAM.** Reset exposes RAM at
+  `$9000–$BFFF` (`$C007`) and the NMI proxy re-exposes it after every interrupt, so
+  `E000G` runs `COLD_START` (`$B234`) from that RAM. The emulator's load recipe seeds it
+  from the ROM image; no ROM code copies BASIC there. With that RAM scrubbed, as at a
+  physical power-on, `E000G` executes garbage and `BRK`s. In the seeded emulator, pressing
+  Return at `MEMORY SIZE?` probes into `$9000+` and overwrites the interpreter; type
+  `36864` or less. The MS-BASIC boot disk loads a probe-safe RAM copy instead. Both
+  observations are emulator reproductions; the ROM is unchanged.
+- **Known gap — ROM BASIC message line breaks.** The shipped ROM's BASIC prints a stray
+  `"` (`b` in the emulator) before each `]` prompt, and its `BREAK` message is garbled
+  when the screen scrolls. In `message.s`/`init.s`, `CR`/`LF` resolve to the Apple
+  monitor's labels (`$FC62`/`$FC66`), and `OUTDO`'s `$62` workaround calls the
+  monitor's `CR`, then still prints the byte. The MS-BASIC boot disk corrects its own
+  copy. The source fix belongs in the msbasic repository, followed by a ROM rebuild:
+  emit the intended bytes in those strings and drop the workaround.
+- **Known gap — no `+` from a PS/2 keyboard.** The ROM decoder's `ps2_ascii_shifted`
+  table maps Shift+= (scan code `$55`) to `=` (`$BD`), keypad `+` (`$79`) is unmapped,
+  and Ctrl+= stores `+` without bit 7, which `KEYIN` ignores. This affects the board and
+  the Windows emulator app, which feeds host keys through that decoder; the browser
+  build's `keyDown` bypasses PS/2. The MS-BASIC boot disk reads Shift+= as `+`.
+  Everywhere else needs the ROM fix, `$AB` at `ps2_ascii_shifted+$55` (`$B5FE`) in
+  `badger6502_extra.s`, then a reflash. No published msbasic branch matches the shipped
+  ROM's sources, so the edit belongs in the tree that ROM was built from.
+- **Known gap — disk activity can desynchronise physical PS/2 input.** The ROM decodes
+  each PS/2 clock edge in an NMI that must sample VIA1 PA7 within about 70 cycles. The
+  picodisk freezes the CPU through READY on disk accesses and, while its drive model
+  runs, whenever 500 cycles pass without one. That lasts until 1,023,000 cycles after
+  motor-off. A stalled edge can be misread or lost, and nothing in the decoder
+  resynchronises: every later key decodes shifted until reset (Return becomes `GG`).
+  Keys pressed or released during any disk boot are exposed; the Spy vs Spy keyboard
+  wedge may be another instance. The VM does not model READY stalls, and browser
+  `keyDown` bypasses PS/2; `codegen/tools/msbasic-woz.native.cpp` models both.
+  Boot disks can wait out the spin-down and resync the decoder (MS-BASIC disk does).
+  A general fix belongs in the ROM decoder (resync after an inter-frame gap) or the
+  picodisk firmware.
+- **Known gap — fast PS/2 keyboards race the decoder's Shift/Ctrl handling.** At a
+  frame's parity edge the decoder compares the received code with `$12`, `$59` and `$14`
+  and flags a modifier in `$CE19`. When the stop-edge NMI nests before that store, the
+  key-down is handled unflagged: a Shift decodes as `$80`, a NUL that ends an input
+  line, and Ctrl stores `$00`. The late flag then swallows the next key-down. In the
+  `msbasic-woz.native.cpp` model, this happens at bit periods of 84–88 CPU cycles for
+  left Shift, 84–94 for right Shift and 84–96 for Ctrl; at 80 or fewer, even typing
+  `MON` fails. It has not been observed on the board. A fix belongs in the ROM decoder:
+  flag modifiers when the key is processed, not at the parity edge.
 - **The ROM defines the memory-map contract in practice.** ROM routines assume the `MM_*`
   layout in `vm.h`; a memory-map change means rebuilding/re-verifying the ROM and
   regenerating `platform-ref.*`.
@@ -349,6 +462,12 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
 
 `badger6502.bin → mapped $D000–$FFFF + banks; reset → monitor → (Disk II C600G | DOS EC5CG |
 BRUN) → user program runs → COUT/screen/serial output`.
+
+For the MS-BASIC boot disk:
+`ROM $9000–$BFFF + probe and prompt hooks + message line breaks → msbasic-woz.mjs → local WOZ → C600G →
+PROM loads T0 S0 → upper-ROM guard → $C007 → 48 ReadSector pages into $9000–$BFFF → motor off →
+spin-down wait → PS/2 decoder resync → JMP $E000 → COLD_START in RAM → MEMORY SIZE? (capped at
+$9000) → BASIC prompt`; NMIs bank the ROM handler in and return to RAM.
 
 For Matrix Rain:
 `gallery/sample source → assembler → $0800 program → $C000/$C010 pause/quit input +
@@ -411,6 +530,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Microsoft BASIC | Shipped | `$9000–$BFFF`; not Applesoft (known gap). |
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
+| MS-BASIC boot disk | Implemented / emulator-verified | `msbasic-woz.mjs` local generator. `msbasic-woz.test.mjs` round-trips the WOZ sectors and boots with scrubbed overlay RAM, even with BASIC ROM left selected. `COLD_START` runs only from RAM, at least 1,023,000 cycles after motor-off and with a poisoned PS/2 decoder reset. Return gives `34815 BYTES FREE`, the image survives the probe, programs and a gamepad NMI work, reset then `MON`/`E000G` restarts it, sizes clamp, and a mismatched ROM stops before loading. Every prompt is a bare `]` at the start of a line. `BREAK IN 10` survives a scroll, and the `A` credit line has no stray byte. Shift+= types `+` through the real PS/2 decoder (native, left Shift) and with either Shift simulated (WASM), plain `=` stays `=`, the reader returns after reset and `E000G`, and another `KSW` routine is left alone. `msbasic-woz.test.ps1` (native, MSVC) types through the real PS/2 decoder across 18 bit-period/READY-stall/Enter-release cases. The first physical boot garbled keys; the fixed disk is not yet confirmed on the board. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |
