@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <array>
 #include <vector>
 #include <mutex>
 #include "WozErrors.h"
@@ -85,6 +86,8 @@ typedef struct InfoChunkData
 class WozFile
 {
 public:
+	static constexpr uint32_t MaxFileSize = 8 * 1024 * 1024;
+
 	WozFile();
 	~WozFile();
 
@@ -98,27 +101,20 @@ public:
 
 private:
 
-	uint32_t ReadFileHeader();
-	uint32_t ReadChunks();
+	uint32_t ValidateImage();
+	uint32_t RejectImage(uint32_t error);
+	void ClearImage();
 
+	std::vector<uint8_t> _fileData;
 	std::vector<uint8_t> _trackData;
-	std::vector<Chunk *> _vecChunks;
 	std::vector<uint8_t> _bitData;
 
 	std::mutex _mutex;
 
-	Chunk* _InfoChunk = nullptr;
-	Chunk* _MetaChunk = nullptr;
-	Chunk* _TrksChunk = nullptr;
-	Chunk* _TmapChunk = nullptr;
-
-	TRK* _Trk = nullptr;
-	uint8_t* _Tmap = nullptr;
-
-	uint32_t _crc = 0;
-	uint32_t _fileEnd = 0;
-
-	FILE * _wozFile = nullptr;
+	InfoChunkData _info = {};
+	std::array<TRK, 160> _tracks = {};
+	std::array<uint8_t, 160> _tmap = {};
+	bool _loaded = false;
 	int16_t _track = -1;
 
 	uint32_t _readPosition = 0;

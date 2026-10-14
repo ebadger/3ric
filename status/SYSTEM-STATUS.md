@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-01 — ebadger (via Copilot)_
+_Last updated: 2026-10-13 — ebadger (via Copilot)_
 
 ---
 
@@ -48,6 +48,8 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node codegen/tools/hackaday.test.mjs # Built from Bits scenes, music, timing, controls, WOZ boot
 & $node web/test_hackaday_page.cjs      # showcase page, source links, and committed preview
 & $node web/test_boot.cjs                # ROM boots, sane PC, video RAM written
+& $node web\test_embed.cjs              # iframe player, real URL disk boot/restart, fullscreen state, errors
+& $node web\test_woz_validation.cjs     # native-parser bounds/CRC/formats, 8 MiB boundary, safe recovery
 & $node web/test_render.cjs              # framebuffer has lit pixels
 & $node web/test_keyboard.cjs            # monitor echoes typed commands
 & $node web/test_virtual_keyboard.cjs    # touch layout covers symbols/modifiers/key codes
@@ -72,6 +74,14 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 C++ CPU unit tests (`emulator/Badger6502VMTest`, MSTest): **Test → Run All Tests** in
 Visual Studio. Expected: a booted ROM sits at the monitor `*` prompt; the smoke tests all
 print `PASS` / exit 0.
+
+For the focused native WOZ regressions, use a Visual Studio Developer PowerShell
+(restore the project's existing NuGet packages first if CppWinRT is missing):
+
+```powershell
+msbuild emulator\Badger6502VM.sln /t:Badger6502VMTest /p:Configuration=Debug /p:Platform=x64 /m
+& "$env:VSINSTALLDIR\Common7\IDE\Extensions\TestPlatform\vstest.console.exe" emulator\x64\Debug\Badger6502VMTest.dll /TestCaseFilter:FullyQualifiedName~WozFileTests
+```
 
 ## Credentials & secrets
 
@@ -147,6 +157,18 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   USB/Bluetooth controllers through the SNES/VIA path. Shared VM core runs identically on
   Windows and in the browser. VIA timers count after reset release without being programmed;
   warm reset retains timer storage but disarms timeout interrupts and PB7 events.
+- **Embedded player:** `index.html?embed=1&woz=<encoded-disk-url>` fills an iframe
+  with a 4:3 display and compact restart/sound/fullscreen/touch-keyboard controls.
+  WOZ URLs auto-boot using the real Disk II path, including `MON` before `C600G`
+  because the current ROM starts in DOS. Disk bytes are retained for **Restart**.
+  Cross-origin images require CORS and HTTPS pages require HTTPS disk URLs.
+  Single-sided 5.25-inch WOZ2 bitstreams only; WOZ1, 3.5-inch, flux, malformed,
+  or over-8-MiB images are rejected safely by the shared native/WASM parser.
+  Data/program/source fetches time out after 30 seconds, including stalled bodies;
+  controls recover, and an embedded **Restart** retries a failed disk URL.
+  Fullscreen and sound still need a visitor gesture; the iframe must delegate
+  fullscreen/autoplay/gamepad permissions. Copyable embed/full-viewport examples
+  are in `web/README.md`. Without `embed=1`, the normal workbench remains available.
 - **In-browser assembler:** assembles 65C02 source client-side with the project's own
   `asm6502.mjs` and runs it like `BRUN`; ships ~11 sample programs; deep-linkable via `?src=`.
   Exports the assembled program as a raw **.PRG** or a bootable **.woz** disk image

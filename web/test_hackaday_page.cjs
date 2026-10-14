@@ -213,16 +213,18 @@ console.log("PASS: Hackaday page metadata, real-demo links, framebuffer still, c
 
 async function testInitialEditorFocus() {
   const index = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
-  const start = index.indexOf("wireEditor().then(");
-  const end = index.indexOf("// Deep-link loader:", start);
+  const start = index.indexOf("// Embeds only initialize the hidden editor");
+  const end = index.indexOf("\n      } finally {", start);
   assert(start !== -1 && end > start, "initial editor focus must be wired after editor initialization");
-  const bootstrap = index.slice(start, end);
+  const bootstrap = "(async () => {" + index.slice(start, end) + "})()";
   for (const hash of ["#ide", "", "#screen"]) {
     const actions = [];
     let initialized;
     const ready = new Promise(resolve => { initialized = resolve; });
     const done = runInNewContext(bootstrap, {
       location: { hash },
+      embedded: false,
+      launchParams: new URLSearchParams(),
       wireEditor: () => ready,
       document: {
         getElementById(id) {

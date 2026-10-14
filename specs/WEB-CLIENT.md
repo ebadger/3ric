@@ -30,7 +30,8 @@ client-side so GitHub Pages can host it as static files.
   Entrants commit independent directories/PRs; only maintainer-merged entries are staged.
   Each entry uses a unique flat `programs/tts-v1-<id>.s` launch path, preserving workbench
   sharing and download identity. Build/PCM checks are not listening or hardware approval.
-  Fullscreen, embedding, public PR previews and voting are outside this first release.
+  Public PR previews and voting are outside this first challenge release.
+  Entries use the shared player's embedding/fullscreen support described below.
   Links remain relative under the `/3ric/` project root. Navigation, `llms.txt`, sitemap,
   build staging and Pages triggers expose the same challenge.
 - **Local serving:** `serve.ps1` delegates to `serve.py`, preserving the existing
@@ -55,6 +56,7 @@ client-side so GitHub Pages can host it as static files.
   `enableAudio(sampleRate)`, `disableAudio()`, `drainAudio()` (interleaved Float32 stereo PCM:
   centered system speaker summed with hard-panned Mockingboard AY channels),
   `renderFrame()` (RGBA framebuffer), `pc/sp/regA/regX/regY/status`, `sdReadCount()`.
+  `MAX_WOZ_FILE_SIZE` exports the shared parser's 8 MiB image limit.
 - **Compat shims (`web_compat.h`):** map MSVC-isms (`OutputDebugString`, `sprintf_s`,
   `fopen_s`, `_ASSERT`, …) onto Emscripten so `WozLib`/`MockMicroSD` compile unchanged.
 - **UI (`index.html`):** `requestAnimationFrame` driver, physical/virtual keyboard and gamepad
@@ -73,6 +75,51 @@ client-side so GitHub Pages can host it as static files.
   selection must not duplicate options; the loaded source/name remain the sharing and
   download identity. Sandbox tests execute the real page's selection code with the
   `Option` constructor and `select.add()` DOM surface represented.
+- **Embeddable player (`index.html?embed=1`):** the same page and VM provide a minimal
+  iframe player, without site navigation, editor, debugger, or footer. The display fills
+  the available space while preserving its 4:3 CRT aspect ratio and pixelated rendering;
+  unused space is letterboxed, never cropped. Compact reset, sound, fullscreen, virtual
+  keyboard, and visible loading/error status controls remain inside the player.
+  An expanded touch keyboard can shrink and scroll in short frames so wrapped
+  controls and error messages are not clipped below the viewport.
+  The ordinary workbench remains the default when `embed=1` is absent.
+  An embed does not restore/save editor storage, load the default editor sample, warm
+  the SD image, or take keyboard focus from its host during automatic startup.
+  Existing explicit `?src=`, `?code=`, and `?prg=` launch links also work in player mode;
+  `#ide` only reveals/focuses source in the ordinary workbench.
+- **Automatic WOZ boot (`?woz=<url>`):** an encoded HTTP(S) URL, or a path relative to
+  the emulator page, fetches a visitor-supplied disk directly in the browser. This works
+  in both embedded and ordinary views and is independent of `?assets=`. After loading
+  the ROM/font, the player lets ROM initialization finish, inserts drive 1, leaves
+  the current ROM's DOS shell with `MON`, and boots through the existing `$C600`
+  Disk II ROM and strobe-aware `C600G` keyboard path, without a Boot Disk click.
+  Only one launch target runs: `woz` takes precedence over `prg`, then `code`, then `src`.
+  Failed downloads, invalid images, and unsupported URL schemes are visible errors,
+  never a silent fallback to the bundled demo. Cross-origin disk servers must permit
+  CORS; HTTPS pages need HTTPS disks. No upload service, proxy, parent-page scripting
+  API, or new VM/ROM contract is introduced. A successful disk is retained in memory;
+  the embedded **Restart** control reboots it without downloading it again. The normal
+  workbench's **Reset** still resets to the ROM, and disk compatibility is unchanged:
+  self-booting machine-code disks work, not arbitrary Applesoft/DOS 3.3 software.
+  Only single-sided 5.25-inch WOZ2 bitstream images are supported; WOZ1, 3.5-inch,
+  and flux-stream images are explicitly rejected. The shared native/WASM parser
+  validates the whole container before activating it (see `EMULATOR.md`).
+  WOZ downloads count decoded stream bytes against the shared **8 MiB** limit,
+  including when Content-Length is absent or inaccurate; their accumulator stays
+  bounded regardless of network chunk fragmentation. Local picks check file
+  size before reading. Fetch-based data/program/source transfers have a **30-second**
+  deadline covering headers and the entire response body. Over-limit and timed-out
+  downloads are aborted, reported visibly, and startup controls are released in
+  cleanup so a failed launch can be reset or replaced without a page reload.
+  An embedded **Restart** retries the configured WOZ URL when no disk has loaded.
+- **Fullscreen:** the fullscreen button requests the entire player, including its
+  controls, through the browser Fullscreen API. Entry requires a user gesture; it is
+  not attempted automatically. Exit (button or browser Escape) restores the prior
+  layout and button state without resetting the VM. Unsupported/blocked fullscreen
+  is explained on the control or in the visible status. Iframe examples delegate
+  `fullscreen`, `autoplay`, and `gamepad` permissions and include `allowfullscreen`.
+  Browser autoplay rules still require an interaction for sound. The iframe can fill
+  its host's viewport using CSS even without browser fullscreen permission.
 - **Site identity:** the published web experience is branded **3RIC Studio** in page titles,
   visible page headers and footers, social metadata, the gallery manifest, and `llms.txt`.
   **3RIC** remains the name of the computer itself. Existing repository/Page URLs, the
@@ -356,7 +403,13 @@ renderFrame()→canvas, drainOutput()→log, `$C030` + AYs→VM mixer→drainAud
 speakers; canvas keydown or
 virtual-keyboard button→shared input queue→strobe-clear frame→keyDown()→$C000;
 Boot Disk/Mount SD →
-insertDisk()/loadSD() → C600G / EC5CG`.
+insertDisk()/loadSD() → MON + C600G / EC5CG`.
+
+Embedding: `host iframe URL -> embed presentation + selected launch target -> browser
+fetch of WOZ (normal CORS) -> bootDisk/loadRom/insertDisk -> queued MON then C600G ->
+shared Disk II/65C02 -> framebuffer/audio -> aspect-preserving player`. Fullscreen:
+`user click -> iframe permission + Fullscreen API -> resize player -> same running VM`;
+keyboard input starts only after interaction with the player.
 
 Debugger: `asm6502 listing metadata → source/address rows + loaded read-mapping identity →
 user source breakpoint set → WebVM instruction-readiness + mapping check → cooperative pause
@@ -404,6 +457,7 @@ on the emulator whether it succeeds, is blocked, or 404s.
 | Mobile virtual keyboard | Shipped | Exact 1983 Apple IIe Figure 2-1 key order/widths below the canvas, minus Reset and both Apple keys; full emulator character set, one-shot Shift/Control, the same strobe-aware `$C000` queue as physical input, and viewport-fitting rows without phone-width horizontal scrolling. |
 | USB/Bluetooth gamepads | Shipped | Two stable player slots through the standard Gamepad API and shared SNES/VIA peripheral; covered by browser-mapping, serial-protocol, and ROM-table tests. |
 | Disk II WOZ boot + micro-SD DOS shell | Shipped | **Boot Disk** / **Mount SD** buttons. |
+| Embeddable/fullscreen player + automatic WOZ boot | Implemented | `?embed=1` minimal viewport-fitting player; `?woz=` direct disk fetch and real `MON`/`C600G` Disk II boot; shared WOZ2 validation, 8 MiB/30-second limits, cached restart/failed-download retry, and actual markup/CSS assertions alongside real-WASM page tests. |
 | In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; built-in games, demos, and tutorials; `?src=`. Sample sources fetched with `cache:"no-cache"` (revalidate) so a new deploy isn't masked by the browser cache. |
 | Source debugger | Shipped | Browser-assembled source listing with bank-qualified instruction breakpoints/highlighting, pause/continue, bank-aware step into/over, register and raw-memory inspection, plus lazy ca65 ROM symbol/file:line correlation; covered by `test_debugger.cjs`. |
 | Program downloads (.PRG / .woz) | Shipped | **Download .PRG** (raw bytes) + **Download .woz** (bootable WOZ2 via `wozgen.mjs`, a port of `dsk2woz2`, with overlapping staging one page above the load address). Nine grouped cases in `web/test_woz_download.cjs` cover real Disk II boots, byte-perfect large/max-size images, page padding, alternate load/entry addresses and capacity rejection. Booting a 3RIC-specific program does not establish Apple II compatibility, speech intelligibility or physical-hardware validation. |

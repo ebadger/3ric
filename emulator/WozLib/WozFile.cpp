@@ -1,4 +1,7 @@
 #include "WozFile.h"
+#include <cstdio>
+#include <cstring>
+#include <memory>
 #if defined(__EMSCRIPTEN__)
 #include "web_compat.h"
 #else
@@ -6,17 +9,39 @@
 #include <debugapi.h>
 #endif
 
-const char* c_WOZ2Header = "WOZ2";
-const char* c_WOZ1Header = "WOZ1";
+uint32_t Chunk::INFO_CHUNK_ID = 0x4F464E49;
+uint32_t Chunk::TMAP_CHUNK_ID = 0x50414D54;
+uint32_t Chunk::TRKS_CHUNK_ID = 0x534B5254;
+uint32_t Chunk::WRIT_CHUNK_ID = 0x54495257;
+uint32_t Chunk::META_CHUNK_ID = 0x4154454D;
+uint32_t Chunk::FLUX_CHUNK_ID = 0x58554C46;
 
-// statics
-uint32_t Chunk::INFO_CHUNK_ID = *(uint32_t*)"INFO";
-uint32_t Chunk::TMAP_CHUNK_ID = *(uint32_t*)"TMAP";
-uint32_t Chunk::TRKS_CHUNK_ID = *(uint32_t*)"TRKS";
-uint32_t Chunk::WRIT_CHUNK_ID = *(uint32_t*)"WRIT";
-uint32_t Chunk::META_CHUNK_ID = *(uint32_t*)"META";
-uint32_t Chunk::FLUX_CHUNK_ID = *(uint32_t*)"FLUX";
+namespace
+{
+	uint16_t Read16(const uint8_t* bytes)
+	{
+		return uint16_t(bytes[0]) | (uint16_t(bytes[1]) << 8);
+	}
 
+	uint32_t Read32(const uint8_t* bytes)
+	{
+		return uint32_t(Read16(bytes)) | (uint32_t(Read16(bytes + 2)) << 16);
+	}
+
+	uint32_t Crc32(const uint8_t* bytes, size_t size)
+	{
+		uint32_t crc = 0xFFFFFFFF;
+		for (size_t i = 0; i < size; ++i)
+		{
+			crc ^= bytes[i];
+			for (int bit = 0; bit < 8; ++bit)
+			{
+				crc = (crc >> 1) ^ ((crc & 1) ? 0xEDB88320 : 0);
+			}
+		}
+		return ~crc;
+	}
+}
 
 WozFile::WozFile()
 {
@@ -27,333 +52,202 @@ WozFile::~WozFile()
 	CloseFile();
 }
 
+void WozFile::ClearImage()
+{
+	_loaded = false;
+	_track = -1;
+	_readPosition = 0;
+	_bitCount = 0;
+	_fileData.clear();
+	_trackData.clear();
+	_bitData.clear();
+	_info = {};
+	_tracks = {};
+	_tmap.fill(0xFF);
+}
+
 void WozFile::CloseFile()
 {
 	std::lock_guard<std::mutex> guard(_mutex);
-
-	_track = -1;
-
-	_vecChunks.clear();
-	_trackData.clear();
-	_bitData.clear();
-
-	if (_wozFile != nullptr)
-	{
-		fclose(_wozFile);
-		_wozFile = nullptr;
-	}
-
-	_InfoChunk = nullptr;
-	_MetaChunk = nullptr;
-	_TrksChunk = nullptr;
-	_TmapChunk = nullptr;
-	_Trk = nullptr;
-	_Tmap = nullptr;
+	ClearImage();
 }
 
 bool WozFile::IsFileLoaded()
 {
-	return _wozFile != nullptr;
+	std::lock_guard<std::mutex> guard(_mutex);
+	return _loaded;
 }
 
-uint32_t WozFile::OpenFile(const char * szFileName)
+uint32_t WozFile::RejectImage(uint32_t error)
+{
+	ClearImage();
+	char message[80];
+	sprintf_s(message, sizeof(message), "WOZ image rejected (0x%08X)\r\n", error);
+	OutputDebugStringA(message);
+	return error;
+}
+
+uint32_t WozFile::OpenFile(const char* szFileName)
 {
 	std::lock_guard<std::mutex> guard(_mutex);
+	ClearImage();
+	if (!szFileName || !*szFileName) return RejectImage(INVALID_WOZ_FILE);
 
-	errno_t err = fopen_s(&_wozFile, szFileName, "rb");
-
-	if (err != 0 || nullptr == _wozFile)
+	FILE* rawFile = nullptr;
+	if (fopen_s(&rawFile, szFileName, "rb") != 0 || !rawFile)
 	{
-		goto exit;
+		return RejectImage(INVALID_WOZ_FILE);
 	}
+	std::unique_ptr<FILE, decltype(&fclose)> file(rawFile, fclose);
+	if (fseek(file.get(), 0, SEEK_END) != 0) return RejectImage(INVALID_WOZ_FILE);
+	const long size = ftell(file.get());
+	if (size < 12 || size > MaxFileSize) return RejectImage(INVALID_WOZ_SIZE);
+	if (fseek(file.get(), 0, SEEK_SET) != 0) return RejectImage(INVALID_WOZ_FILE);
 
-	err = ReadFileHeader();
-	if (err != 0 || nullptr == _wozFile)
+	// Keep the validated bytes, not an open file that could change between tracks.
+	_fileData.resize(static_cast<size_t>(size));
+	if (fread(_fileData.data(), 1, _fileData.size(), file.get()) != _fileData.size())
 	{
-		goto exit;
+		return RejectImage(INVALID_WOZ_FILE);
 	}
-
-	while (err == 0)
-	{
-		err = ReadChunks();
-	}
-
-exit:
-	return err;
+	file.reset();
+	const uint32_t error = ValidateImage();
+	if (error != 0) return RejectImage(error);
+	_loaded = true;
+	return END_OF_WOZFILE;
 }
 
-uint32_t WozFile::ReadFileHeader()
+uint32_t WozFile::ValidateImage()
 {
-	char buffer[12];
+	const uint8_t magic[] = { 'W', 'O', 'Z', '2', 0xFF, 0x0A, 0x0D, 0x0A };
+	const uint8_t* data = _fileData.data();
+	if (memcmp(data, magic, sizeof(magic)) != 0) return UNSUPPORTED_WOZ_FORMAT;
+	const uint32_t crc = Read32(data + 8);
+	if (crc != 0 && crc != Crc32(data + 12, _fileData.size() - 12)) return INVALID_WOZ_CRC;
 
-	if (!_wozFile)
+	size_t infoOffset = 0, tmapOffset = 0, trksOffset = 0, trksSize = 0;
+	for (size_t at = 12; at < _fileData.size();)
 	{
-		return INVALID_WOZ_FILE;
-	}
-
-	fseek(_wozFile, 0L, SEEK_END);
-	_fileEnd = ftell(_wozFile);
-	fseek(_wozFile, 0L, SEEK_SET); // Reset to the beginning
-
-	// read the header
-	size_t read = fread_s(buffer, sizeof(buffer), sizeof(buffer), 1, _wozFile);
-	_ASSERT(read == 1);
-	if (read != 1) {
-		perror("Error reading data");
-		fclose(_wozFile);
-		_wozFile = nullptr;
-		return 1;
-	}
-
-	// validate the header
-	// for now only support Woz2.x format
-	if (strncmp(c_WOZ2Header, buffer, 4) != 0)
-	{
-		if (strncmp(c_WOZ1Header, buffer, 4) != 0)
+		if (_fileData.size() - at < 8) return INVALID_WOZ_FILE;
+		const uint32_t id = Read32(data + at);
+		const uint32_t size = Read32(data + at + 4);
+		at += 8;
+		if (size > _fileData.size() - at) return INVALID_WOZ_FILE;
+		if (id == Chunk::INFO_CHUNK_ID)
 		{
-			// header mismatch
-			// not a valid WOZ file
-			return INVALID_WOZ_FILE;
+			if (infoOffset || size != 60) return INVALID_INFO_SIZE;
+			infoOffset = at;
+		}
+		else if (id == Chunk::TMAP_CHUNK_ID)
+		{
+			if (tmapOffset || size != _tmap.size()) return INVALID_TMAP_CHUNK_DATA;
+			tmapOffset = at;
+		}
+		else if (id == Chunk::TRKS_CHUNK_ID)
+		{
+			if (trksOffset || size < _tracks.size() * 8) return INVALID_TRKS_CHUNK_DATA;
+			trksOffset = at;
+			trksSize = size;
+		}
+		else if (id == Chunk::FLUX_CHUNK_ID)
+		{
+			return UNSUPPORTED_WOZ_FORMAT;
+		}
+		at += size;
+	}
+	if (!infoOffset) return INVALID_INFO_CHUNK;
+	if (!tmapOffset) return INVALID_TMAP_CHUNK_DATA;
+	if (!trksOffset) return INVALID_TRKS_CHUNK_DATA;
+
+	const uint8_t* info = data + infoOffset;
+	_info.Version = info[0];
+	_info.DiskType = info[1];
+	_info.WriteProtected = info[2];
+	_info.Synchronized = info[3];
+	_info.Cleaned = info[4];
+	memcpy(_info.Creator, info + 5, sizeof(_info.Creator));
+	_info.Sides = info[37];
+	_info.BootSectorFormat = info[38];
+	_info.OptimalBitTiming = info[39];
+	_info.CompatibleHardware = Read16(info + 40);
+	_info.RequiredRAM = Read16(info + 42);
+	_info.LargestTrack = Read16(info + 44);
+	if (_info.Version < 2 || _info.DiskType != InfoChunkData::FiveAndAQuarter || _info.Sides != 1)
+	{
+		return UNSUPPORTED_WOZ_FORMAT;
+	}
+	if (_info.Version >= 3)
+	{
+		_info.FLUXBlock = Read16(info + 46);
+		_info.LargestFluxTrack = Read16(info + 48);
+		if (_info.FLUXBlock || _info.LargestFluxTrack) return UNSUPPORTED_WOZ_FORMAT;
+	}
+	if (_info.LargestTrack > MaxFileSize / 512) return INVALID_INFO_CHUNK_DATA;
+
+	for (size_t index = 0; index < _tracks.size(); ++index)
+	{
+		const uint8_t* descriptor = data + trksOffset + index * 8;
+		TRK& track = _tracks[index];
+		track.StartingBlock = Read16(descriptor);
+		track.BlockCount = Read16(descriptor + 2);
+		track.BitCount = Read32(descriptor + 4);
+		if (!track.StartingBlock && !track.BlockCount && !track.BitCount) continue;
+		const size_t start = size_t(track.StartingBlock) * 512;
+		const size_t bytes = size_t(track.BlockCount) * 512;
+		const size_t end = trksOffset + trksSize;
+		if (!track.BlockCount || !track.BitCount || track.BlockCount > _info.LargestTrack ||
+			start < trksOffset + _tracks.size() * 8 || start > end || bytes > end - start ||
+			track.BitCount > bytes * 8)
+		{
+			return INVALID_TRKS_CHUNK_DATA;
 		}
 	}
-
-	if (buffer[4] != (char)0xFF)
+	for (size_t index = 0; index < _tmap.size(); ++index)
 	{
-		return INVALID_WOZ_FILE;
-	}
-
-	_crc = *(uint32_t*)&buffer[8];
-
-	
-	return 0;
-}
-
-uint32_t WozFile::ReadChunks()
-{
-
-	if (nullptr == _wozFile)
-	{
-		return INVALID_WOZ_FILE;
-	}
-
-	Chunk *pChunk = new Chunk();
-	pChunk->FileOffset = ftell(_wozFile) + 8;
-
-	size_t read = fread_s(pChunk->ChunkID.text, sizeof(pChunk->ChunkID.text), sizeof(pChunk->ChunkID.text), 1, _wozFile);
-	_ASSERT(read == 1);
-	if (read != 1) {
-		fclose(_wozFile);
-		_wozFile = nullptr;
-		return INVALID_INFO_CHUNK;
-	}
-
-
-	read = fread_s(&pChunk->ChunkSize, sizeof(pChunk->ChunkSize), sizeof(pChunk->ChunkSize), 1, _wozFile);
-	_ASSERT(read == 1);
-	if (read != 1) {
-		fclose(_wozFile);
-		_wozFile = nullptr;
-		return INVALID_INFO_CHUNK;
-	}
-
-	if (pChunk->ChunkID.value == Chunk::INFO_CHUNK_ID)
-	{
-		_InfoChunk = pChunk;
-		_InfoChunk->ChunkData.resize(_InfoChunk->ChunkSize, 0);
-
-		read = fread_s(_InfoChunk->ChunkData.data(),
-			_InfoChunk->ChunkData.size(),
-			_InfoChunk->ChunkData.size(),
-			1,
-			_wozFile);
-
-		_ASSERT(read == 1);
-
-		if (read != 1) {
-			fclose(_wozFile);
-			_wozFile = nullptr;
-			return INVALID_INFO_CHUNK_DATA;
-		}
-	} 
-	else if (pChunk->ChunkID.value == Chunk::META_CHUNK_ID)
-	{
-		_MetaChunk = pChunk;
-	}
-	else if (pChunk->ChunkID.value == Chunk::TMAP_CHUNK_ID)
-	{
-		_TmapChunk = pChunk;
-		_TmapChunk->ChunkData.resize(_TmapChunk->ChunkSize, 0);
-
-		read = fread_s(_TmapChunk->ChunkData.data(),
-			_TmapChunk->ChunkData.size(),
-			_TmapChunk->ChunkData.size(),
-			1,
-			_wozFile);
-
-		_ASSERT(read == 1);
-
-		if (read != 1) {
-			fclose(_wozFile);
-			_wozFile = nullptr;
+		const uint8_t track = data[tmapOffset + index];
+		if (track != 0xFF && (track >= _tracks.size() || _tracks[track].BitCount == 0))
+		{
 			return INVALID_TMAP_CHUNK_DATA;
 		}
-
-		_Tmap = _TmapChunk->ChunkData.data();
+		_tmap[index] = track;
 	}
-	else if (pChunk->ChunkID.value == Chunk::TRKS_CHUNK_ID)
-	{
-		_TrksChunk = pChunk;
-
-		if (160 * sizeof(TRK) > _TrksChunk->ChunkSize)
-		{
-			fclose(_wozFile);
-			_wozFile = nullptr;
-			return INVALID_TRKS_CHUNK_DATA;
-		}
-
-		uint32_t TrksSize = 160 * sizeof(TRK);
-		_TrksChunk->ChunkData.resize(TrksSize, 0);
-
-		read = fread_s(_TrksChunk->ChunkData.data(),
-			TrksSize,
-			TrksSize,
-			1,
-			_wozFile);
-
-		_ASSERT(read == 1);
-
-		if (read != 1) {
-			fclose(_wozFile);
-			_wozFile = nullptr;
-			return INVALID_TRKS_CHUNK_DATA;
-		}
-
-		_Trk = (TRK*)_TrksChunk->ChunkData.data();
-
-		// advance past the track bits
-		fseek(_wozFile, pChunk->ChunkSize - TrksSize, SEEK_CUR);
-
-	}
-	else if (pChunk->ChunkID.value == Chunk::WRIT_CHUNK_ID)
-	{
-
-	}
-	else if (pChunk->ChunkID.value == Chunk::FLUX_CHUNK_ID)
-	{
-
-	}
-	else
-	{
-		_ASSERT(false);
-		printf("Unknown chunk: %s\r\n", pChunk->ChunkID.text);
-	}
-
-	_vecChunks.push_back(pChunk);
-
-	if (pChunk->ChunkData.size() == 0)
-	{
-		// chunk is not loaded, skip the data to get to the next chunk
-		fseek(_wozFile, pChunk->ChunkSize, SEEK_CUR);
-	}
-
-	if (ftell(_wozFile) == _fileEnd)
-	{
-		return END_OF_WOZFILE;
-	}
-
 	return 0;
 }
-
 
 InfoChunkData* WozFile::GetInfoChunkData()
 {
-	if (nullptr == _wozFile || !_InfoChunk)
-	{
-		return nullptr;
-	}
-
-	return (InfoChunkData*)_InfoChunk->ChunkData.data();
+	return _loaded ? &_info : nullptr;
 }
 
 void WozFile::SetTrack(int16_t track)
 {
 	std::lock_guard<std::mutex> guard(_mutex);
-	size_t read = 0;
-
-	_ASSERT(track < 160);
-	_ASSERT(_wozFile != nullptr);
-
-	if (_wozFile == nullptr)
+	if (track < 0 || track >= static_cast<int16_t>(_tmap.size()))
 	{
+		OutputDebugStringA("Invalid WOZ track index\r\n");
 		return;
 	}
-
-	if (track > 159 || _track == track)
-	{
-		return;
-	}
-
+	if (!_loaded || _track == track) return;
 	_track = track;
-
-	char buf[255];
-	sprintf_s(buf, 255, "TrackIndex: %d\r\n", _track);
-	OutputDebugStringA(buf);
-
-	uint8_t trkIndex = _Tmap[track];
-	if (trkIndex > 159)
+	const uint8_t index = _tmap[track];
+	if (index == 0xFF)
 	{
 		_bitCount = 0;
+		_trackData.clear();
+		_bitData.clear();
 		return;
 	}
 
-	sprintf_s(buf, 255, "Logical Track: %d\r\n", trkIndex);
-	OutputDebugStringA(buf);
-
-	_bitCount = _Trk[trkIndex].BitCount;
-	uint32_t offset = _Trk[trkIndex].StartingBlock << 9;
-	uint16_t blocks = _Trk[trkIndex].BlockCount;
-	uint16_t largest = GetInfoChunkData()->LargestTrack;
-
-	_ASSERT(offset != 0 && blocks != 0);
-
-	_trackData.resize(largest << 9, 0);
-	_bitData.resize(largest << 12, 0);
-
-	// read the track
-
-	fseek(_wozFile, offset, SEEK_SET);
-
-	read = fread_s(_trackData.data(),
-		blocks << 9,
-		blocks << 9,
-		1,
-		_wozFile);
-
-	_ASSERT(read == 1);
-
-	if (read != 1) {
-		fclose(_wozFile);
-		_wozFile = nullptr;
-		return;
-	}
-
-	int bitcount = 0;
-	for (int n = 0; n < _trackData.size(); n++)
+	const TRK& descriptor = _tracks[index];
+	const size_t start = size_t(descriptor.StartingBlock) * 512;
+	const size_t bytes = size_t(descriptor.BlockCount) * 512;
+	_trackData.assign(_fileData.begin() + start, _fileData.begin() + start + bytes);
+	_bitData.resize(descriptor.BitCount);
+	for (size_t bit = 0; bit < _bitData.size(); ++bit)
 	{
-		uint8_t b = _trackData[n];
-
-		for (int i = 7; i >= 0; i--)
-		{
-			_bitData[bitcount++] = (b >> i) & 1;
-		}
-
+		_bitData[bit] = (_trackData[bit >> 3] >> (7 - (bit & 7))) & 1;
 	}
-
-	sprintf_s(buf, _countof(buf), "_trackData[0]=$%02x, %d %d %d %d %d %d %d %d\r\n",
-		_trackData[0],
-		_bitData[0], _bitData[1], _bitData[2], _bitData[3], _bitData[4],
-		_bitData[5], _bitData[6], _bitData[7]);
-	OutputDebugStringA(buf);
+	_bitCount = descriptor.BitCount;
 }
 
 bool WozFile::GetNextBit2()
@@ -364,13 +258,11 @@ bool WozFile::GetNextBit2()
 	{
 		return rand() % 2;
 	}
-
 	if (_readPosition >= _bitCount)
 	{
 		_readPosition = 0;
 	}
-
-	return _bitData[_readPosition++] > 0 ? true : false;
+	return _bitData[_readPosition++] > 0;
 }
 
 bool WozFile::GetNextBit()
@@ -381,31 +273,8 @@ bool WozFile::GetNextBit()
 	{
 		return rand() % 2;
 	}
-
 	_readPosition++;
-
-	int32_t bitPos = _readPosition % _bitCount;
-	int32_t byteIndex = bitPos >> 3;
-	uint8_t bitInByte = bitPos - (byteIndex << 3);
-
-#if 0
-	if (bitPos == 0)
-	{
-		OutputDebugStringA("****** bitpos == 0 ******");
-	}
-#endif
-
-
-	uint8_t b = _trackData.data()[byteIndex];
-
-#if 0
-	char buf[255];
-	sprintf_s(buf, 255, "%d\r\n", byteIndex);
-	OutputDebugStringA(buf);
-#endif
-
-
-	b = b << bitInByte;
- 
-	return (b & 0x80);
+	const uint32_t bitPos = _readPosition % _bitCount;
+	const uint8_t byte = _trackData[bitPos >> 3];
+	return (byte << (bitPos & 7)) & 0x80;
 }

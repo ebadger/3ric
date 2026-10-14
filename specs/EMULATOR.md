@@ -74,6 +74,35 @@ These are existing mappings, not a new memory expansion.
   release host-reported controllers. The peripheral is attached only to the onboard VIA1,
   not either slot-4 Mockingboard VIA.
 
+**WOZ image input contract (shared native/WASM `WozLib`):**
+
+- Accept single-sided 5.25-inch **WOZ2 bitstream** images up to **8 MiB**, inclusive.
+  WOZ1's different track layout, 3.5-inch disks, and flux-stream images are unsupported
+  and rejected, not interpreted as WOZ2 bitstreams.
+- Validate the complete header, nonzero CRC32 (zero means omitted per the format),
+  every chunk's bounds, and exactly one correctly sized INFO/TMAP/TRKS descriptor table
+  before reporting a loaded disk. INFO version 2 or later must provide the existing
+  bitstream fields; unknown optional chunks are skipped within their verified bounds.
+- Validate all 160 descriptors and map entries: unused descriptors are zero, mapped
+  entries point to a present descriptor, bit counts fit their allocated blocks, and
+  all track blocks lie inside the TRKS data region. Largest Track must accommodate
+  every track without exceeding the file-size bound. Never allocate from an unchecked
+  chunk size or read more bytes than the actual track buffer holds.
+- Load one bounded, immutable file snapshot and close the host file before activation,
+  so later track switches cannot read externally changed, unvalidated bytes. Failure
+  clears the snapshot, parsed tables, bit buffers, and read state; repeated
+  invalid/valid insertions remain usable without leaking chunks. Invalid track indexes
+  and truncated files cannot access stale/out-of-range storage. Valid disk bit ordering
+  and drive timing remain unchanged.
+- The bridge exports the shared `MAX_WOZ_FILE_SIZE` constant and rejects oversized
+  input before copying it into native storage. Browser download/file-picker checks
+  use that same limit; the shared parser remains the authority for format validation,
+  including direct native or embind callers. No ROM, memory-map, or GAL change is made.
+- Native WOZ regressions are enabled in the x64 and ARM64 test configurations,
+  in both Debug and Release; each configuration supplies the WozLib include/link
+  dependency. The legacy Win32 test configuration is outside this added coverage.
+- Format basis: [WOZ 2.x reference](https://applesaucefdc.com/woz/reference2/).
+
 ## Behaviour / Rules
 
 - CPU is driven **cooperatively**: hosts call `VM::Step()` per instruction. The VM samples
@@ -203,3 +232,4 @@ left/right AY) + framebuffer + serial + register state → host (native window o
 | `$C030` system speaker + VM audio mixer | Shipped | Any read/write toggles the mono latch; centered PCM mixes with both AY channels; covered by native and WASM tests. |
 | Slot-4 dual-AY Mockingboard | Shipped | Exact 3RIC `$C400/$C480`, 1.5734375 MHz, VIA IRQ, and hard-panned stereo; covered by native and WASM tests. |
 | Disk II 5.25″ floppy (WozLib) | Shipped | `$C600` boot PROM + `$C0E0–$C0EF`. |
+| Bounded, validated WOZ2 input | Implemented | Shared snapshot-based parser validation and cleanup, 8 MiB limit, and explicit unsupported-format rejection. `WozFileTests` covers the native reader; `web/test_woz_validation.cjs` exercises malformed containers and recovery through the actual WASM bridge. |

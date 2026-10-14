@@ -84,6 +84,7 @@ them headlessly on the same WASM core. The "why" lives in `docs/MISSION.md`.
 | Micro-SD FAT32 + ROM DOS shell | Shipped |
 | Slot-4 dual-AY Mockingboard | Shipped |
 | WebAssembly browser build + in-browser assembler | Shipped |
+| Embeddable/fullscreen web player + WOZ URL auto-boot | Implemented |
 | Browser source debugger + ROM debug correlation | Shipped |
 | DOS 3.3 / Applesoft-dependent disks | Not supported (this clone's BASIC is generic MS-BASIC, not Applesoft) |
 | Hardware (KiCad/PCB/74-series logic) | Final build uses 74-series address decoding; development is documented in the build series |
