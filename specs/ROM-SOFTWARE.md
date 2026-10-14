@@ -87,6 +87,51 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     board or complete-playthrough certification. The implementation is an
     emulator-verified hardware-trial candidate; commands, fingerprints, coverage and
     remaining limits are recorded in [`docs/porting-logs/archon.md`](../docs/porting-logs/archon.md).
+- **Silent Service compatibility experiment:** a disk-only adapter for the owner-supplied
+  143,360-byte, DOS-sector-order `SilentService.dsk`, SHA-256
+  `2f159310ef2ea2107f4d9ac66ed2025de0f4a5e75ff702da2df127e499da8b6f`.
+  The original and generated game images remain local, never repository assets.
+  - **Startup:** retain the disk's DOS, compiled game and disk-loading path. Adapt the
+    Applesoft-dependent startup calls with original adapter code, rather than replacing
+    3ric's firmware or installing an Apple II ROM.
+  - **Banking and input:** preserve the game's language-card use and 3ric's physical
+    PS/2 input path. `SEI` does not make hiding the ROM NMI handler safe. Browser
+    latch injection alone is not physical-keyboard acceptance.
+    Reserve `$C800-$C9FF`, `$CC00-$CDFF`, `$CF00-$CFFF` and the shared RAM
+    NMI vector for this exact game/ROM pair. Reuse Archon's bank-safe PS/2 handler;
+    install the RAM vector before exposing either language-card bank and preserve
+    interrupted registers, flags, stack and bank selection. DOS's self-modifying
+    `$81/$83/$8B` bank operands must remain functional, including later overlay loads.
+    Adapt the game's paddle routine to poll the real SNES latch/clock/data pins
+    directly, using the shared Archon scanner. Preserve neutral and signed digital
+    axes and B/X selection; avoid paddle-timer NMIs whose firmware acknowledgements
+    can discard a simultaneous PS/2 edge.
+    Interactive interpreter loops retain RAM visibility so keyboard NMIs use the
+    fast adapter rather than the slower firmware proxy. Explicit firmware-call
+    wrappers temporarily expose ROM and restore RAM on return; blocking keyboard
+    waits run in the adapter, not in the hidden monitor.
+    The compiled interpreter's `NEXT` must inspect its live FOR frame without
+    temporarily popping and reusing it: NMI stack pushes otherwise destroy the
+    return link and loop bounds even when every register is preserved. Capture
+    startup return-address probes while their stack frames are still live too.
+  - **Delivery:** validate the exact disk and supported repository ROM before patching;
+    check replacement preimages and reserved space; refuse input overwrite or existing
+    output. Convert the patched DOS-order sectors with the existing WOZ encoder, keeping
+    all unrelated sector contents. No VM, bridge, memory-map, platform-reference or
+    hardware-decoder change is part of this experiment.
+    The existing DOS RWTS loads the installer from previously free track-4 sectors
+    into temporary `$6000` RAM; their VTOC bits become allocated. Check disk-read
+    errors and the running ROM input ABI before installing the adapter. Preserve
+    the original compiled game, graphics, sound driver, menus and scenario data.
+  - **Acceptance:** boot the generated disk through `$C600` in native and WASM builds,
+    advance beyond the title and menus into an interactive scenario, and exercise
+    keyboard controls and subsequent disk loads. Emulator coverage is not a complete
+    playthrough or physical-board approval. Native PS/2 checks pass at 120- and
+    160-cycle bit periods with DATA changing after 80 cycles. The 94-cycle case can
+    still nest interrupts and corrupt state while the unmodified ROM is visible.
+    The owner chose the disk-only candidate with that limitation documented, rather
+    than extending the port into a firmware update. Commands, coverage and remaining
+    limits are in [`docs/porting-logs/silent-service.md`](../docs/porting-logs/silent-service.md).
 - **Bouncing Ball (scottybe's community contribution):** the canonical source remains
   `web/programs/bouncing-ball.s`, loaded at `$0800` by the gallery, assembler, or
   `BRUN BOUNCE.PRG 0800`. Its 114-vertex, 128-face checkerboard sphere is transformed,
@@ -412,6 +457,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
+| Silent Service disk-only compatibility adapter | Experimental / emulator-verified | Exact-image DSK/WOZ patcher; native keyboard/LED checks, WASM practice/convoy/patrol loading, controls and audio. Fastest PS/2 timing during ROM calls remains limited; physical board and full-playthrough approval are open. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |
 | 3RIC Groovebox | Shipped | Six-voice, 16-step Mockingboard sequencer; gamepad/keyboard editing and timer-driven stereo sound. `codegen/tools/groovebox.test.mjs` covers real stereo PCM, all controls, fractional tempo, clean exit, and a dense-step/input deadline below 6,556 cycles. |
