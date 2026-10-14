@@ -22,6 +22,10 @@ on:
       - 'emulator/AICodeGen/**'
       - 'codegen/tools/asm6502.mjs'
       - 'codegen/tools/wozgen.mjs'
+      - 'codegen/tools/wozedit.mjs'
+      - 'codegen/patches/karateka-music.s'
+      - 'codegen/tools/patch-karateka.mjs'
+      - 'codegen/tools/patch-karateka.test.mjs'
       - 'codegen/tools/bouncing-ball.test.mjs'
       - 'codegen/tools/fixtures/bouncing-ball-baseline.json'
       - 'codegen/tools/groovebox.test.mjs'
@@ -93,6 +97,7 @@ jobs:
           node web/test_audio_worklet.cjs
           node web/test_audio_pacing.cjs
           node web/test_mockingboard.cjs
+          node codegen/tools/patch-karateka.test.mjs
           node web/test_gamepad.cjs
           node codegen/tools/groovebox.test.mjs
           node web/test_virtual_keyboard.cjs

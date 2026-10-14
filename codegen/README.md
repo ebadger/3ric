@@ -45,6 +45,54 @@ only when the program halted cleanly and every check passed.
 | `tools/harness.cjs` | Boots the WASM emulator, loads a program, runs it, captures serial/text/registers, detects halt. |
 | `tools/run6502.mjs` | CLI: assemble/load → run → apply checks → emit `.PRG` + verdict. |
 | `tools/gen_platform_ref.mjs` | Regenerates `platform/platform-ref.{md,json}` from `vm.h` + `badger6502.dbg`. |
+| `tools/patch-karateka.mjs` | Adds an original Mockingboard gameplay score to one exact owner-supplied Karateka DSK; creates a separate local DSK or WOZ. |
+
+## Local Karateka soundtrack patch
+
+This patch targets **3ric's slot-4 Mockingboard**, not an unmodified Apple II.
+It accepts only the 143,360-byte DOS-order image with SHA-256
+`4399db1c5469299f6a519abd890456ba1bbba70596d72096f1db4a84e5669370`.
+The original six-voice, 16-bar **Cliffside Resolve** score is in
+[`patches/karateka-music.s`](./patches/karateka-music.s). No game image, game
+source, or transcription of Karateka's original music is distributed here.
+
+Run from the repository root, substituting your own local paths:
+
+```powershell
+node codegen\tools\patch-karateka.mjs "C:\Games\Karateka.dsk" "C:\Games\Karateka-Mockingboard-3ric.woz"
+node codegen\tools\patch-karateka.mjs "C:\Games\Karateka.dsk" "C:\Games\Karateka-Mockingboard-3ric.dsk"
+```
+
+Both commands refuse an existing output file, input overwrite, or another disk
+revision. Keep both game images local; do not add them to Git or the gallery.
+Choose **Insert .woz...** in the browser emulator to boot the WOZ, run at **1x**,
+and click the emulator to enable audio. Space starts a game from attract mode;
+**K** selects keyboard controls, arrows move, Space changes stance, and Q/A/Z
+and W/S/X perform high/middle/low attacks. **Escape** pauses until another key;
+**Control-S** cycles music and effects / effects only / all off. **Control-R**
+retains the game's restart behavior.
+
+The score uses actual AY registers, not browser audio playback. It advances on a
+polled timer during rendering, with its clock suspended across blocking speaker
+effects so their pitch/timing is unchanged. Original musical cues, pauses, loads
+and restarts silence the added score. A loop is approximately 40 seconds of
+rendering time. The hardware map and emulator are unchanged.
+
+After `pwsh web\build.ps1`, run the player checks without a game, or include your
+disk for actual boot, gameplay, controls and speaker comparisons:
+
+```powershell
+node codegen\tools\patch-karateka.test.mjs
+node codegen\tools\patch-karateka.test.mjs --disk "C:\Games\Karateka.dsk"
+```
+
+The asset-free command also runs in PR/Pages CI and in the local pre-push gate
+when a WASM build is already present.
+
+`--capture-dir <directory>` additionally writes a stereo WAV captured from the
+game's real mixed PCM. Automated coverage is not a complete playthrough or
+physical-board certification; the shared-routine copies for later disk segments
+are patched and checked, but later-level gameplay still needs a playthrough.
 
 ## Layout
 

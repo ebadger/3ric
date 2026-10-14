@@ -3,9 +3,10 @@
 #
 # Fast, cross-platform checks that need no WASM build: the 65C02 assembler encoding tests.
 # If a WASM build is already present (web/badger6502.js), also run the emulator boot smoke
-# test. The heavier web/test_*.cjs and codegen program tests need a full `web/build.ps1`
-# build and Emscripten, so they run manually / in CI, not here. The C++ Badger6502VMTest
-# suite runs in Visual Studio. This gate fails OPEN when no Node runtime is found.
+# test and asset-free Karateka player checks. The other web/test_*.cjs and codegen
+# program tests need a full `web/build.ps1` build and Emscripten, so they run manually /
+# in CI, not here. The C++ Badger6502VMTest suite runs in Visual Studio.
+# This gate fails OPEN when no Node runtime is found.
 #
 # Escape hatch (routine skip): SKIP_TEST_GUARD=1 git push ...
 set -eu
@@ -39,6 +40,8 @@ echo "pre-push-tests: running 65C02 assembler encoding tests..." >&2
 if [ -f "$REPO_ROOT/web/badger6502.js" ]; then
   echo "pre-push-tests: WASM build present -- running emulator boot smoke test..." >&2
   "$NODE" "$REPO_ROOT/web/test_boot.cjs" || exit 1
+  echo "pre-push-tests: running asset-free Karateka player checks..." >&2
+  "$NODE" "$REPO_ROOT/codegen/tools/patch-karateka.test.mjs" || exit 1
 fi
 
 echo "pre-push-tests: OK." >&2

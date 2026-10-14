@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-01 — ebadger (via Copilot)_
+_Last updated: 2026-10-13 — ebadger (via Copilot)_
 
 ---
 
@@ -58,6 +58,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_audio_worklet.cjs       # prebuffer + bounded PCM queue
 & $node web/test_mockingboard.cjs        # slot-4 mirrors, stereo PCM, 3RIC clock, VIA IRQ
 & $node web/test_system_speaker.cjs     # $C030 read/write toggles + mixed speaker/AY PCM
+& $node codegen\tools\patch-karateka.test.mjs # original soundtrack; --disk <owner.dsk> adds game checks
 & $node web/test_gamepad.cjs             # browser mapping, VIA serial pads, ROM tables
 & $node codegen\tools\groovebox.test.mjs  # sequencer, real AY audio, gamepad editing, timing
 & $node codegen\tools\spacewar.test.mjs   # STAR DUEL gravity, wrap, shots, collisions, pads
@@ -90,6 +91,7 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 | `web/serve.ps1` | Local static server for the browser build (port 8011). |
 | `codegen/tools/run6502.mjs` | Assemble → run → check a 6502 program; emit a card-ready `.PRG`. |
 | `codegen/tools/gen_platform_ref.mjs` | Regenerate `codegen/platform/platform-ref.*` from `vm.h` + `badger6502.dbg`. |
+| `codegen/tools/patch-karateka.mjs` | Add an original slot-4 Mockingboard score to the exact owner-supplied Karateka DSK; emit a separate local DSK or WOZ. |
 
 ## Current state / known gaps
 
@@ -170,8 +172,17 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   `codegen\tools\patch-archon.mjs` creates a separate local WOZ without changing the
   ROM or VM. Native PS/2/LED and WASM board/combat checks pass; hardware confirmation
   remains open. See [`docs/porting-logs/archon.md`](../docs/porting-logs/archon.md).
+- **Karateka soundtrack:** `codegen\tools\patch-karateka.mjs` adds an original six-voice,
+  16-bar Mockingboard gameplay score without replacing the speaker effects or changing
+  the ROM/VM. The exact-image patch emits a separate local DSK or WOZ; no game assets
+  are published. Use **Insert .woz...**, native 1x, Space to start, and K for keyboard
+  controls. Escape and the three Control-S sound modes are preserved. Actual WASM
+  movement/contact-combat, stereo sound and restart are covered; later-level playthrough
+  and physical-board approval remain open. See [`codegen/README.md`](../codegen/README.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
-  that touches the emulator/web/codegen sources it lists.
+  that touches the emulator/web/codegen sources it lists. Existing PR and Pages builds
+  also run the asset-free Karateka player/cadence checks; the local pre-push gate runs
+  them when WASM is present. Owner-disk gameplay checks remain manual.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**
   counter (`//gc.zgo.at/count.js` → `https://3ric.goatcounter.com/count`); no cookies, no PII,
   no server, and the site is unaffected if it is blocked. Totals live on the owner dashboard at
