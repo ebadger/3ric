@@ -180,7 +180,9 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   movement/contact-combat, stereo sound and restart are covered; later-level playthrough
   and physical-board approval remain open. See [`codegen/README.md`](../codegen/README.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
-  that touches the emulator/web/codegen sources it lists.
+  that touches the emulator/web/codegen sources it lists. Existing PR and Pages builds
+  also run the asset-free Karateka player/cadence checks; the local pre-push gate runs
+  them when WASM is present. Owner-disk gameplay checks remain manual.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**
   counter (`//gc.zgo.at/count.js` → `https://3ric.goatcounter.com/count`); no cookies, no PII,
   no server, and the site is unaffected if it is blocked. Totals live on the owner dashboard at

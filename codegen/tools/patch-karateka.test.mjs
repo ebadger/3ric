@@ -189,6 +189,97 @@ function testPlayer() {
   }
 }
 
+function testTransportCadence() {
+  for (const withEffects of [false, true]) {
+    const vm = new module.WebVM();
+    try {
+      vm.loadData(payload.player.org, payload.player.bytes);
+      vm.poke(0x86, 1);
+      vm.poke(0x4f, 1);
+      const caller = assemble(`
+        .org $0800
+        ldx #$FF
+        txs
+        cld
+        jsr ${hex(s.MUSIC_INIT)}
+        jsr ${hex(s.MUSIC_ARM)}
+ready:
+        nop
+next_frame:
+        jsr rendering_work
+        jsr ${hex(s.MUSIC_POLL)}
+        jsr rendering_work
+        jsr ${hex(s.MUSIC_ARM)}
+        ${withEffects ? `jsr ${hex(s.EFFECT_1)}` : ""}
+        inc frame_count
+        lda frame_count
+        cmp #64
+        bne next_frame
+        jsr ${hex(s.MUSIC_POLL)}
+finished:
+        nop
+rendering_work:
+        ldx #200
+render_outer:
+        ldy #4
+render_inner:
+        dey
+        bne render_inner
+        dex
+        bne render_outer
+        rts
+frame_count:
+        .byte 0
+        .org $0C55
+effect_begin:
+        ldx #180
+effect_outer:
+        ldy #255
+effect_inner:
+        dey
+        bne effect_inner
+        dex
+        bne effect_outer
+effect_end:
+        rts
+`);
+      const c = caller.symbols;
+      vm.loadData(caller.org, caller.bytes);
+      vm.setPC(caller.org);
+      seek(vm, c.READY, 100000);
+      for (const address of [c.EFFECT_BEGIN, c.EFFECT_END, c.FINISHED]) vm.addBreakpoint(address);
+      let cycles = 0, blocked = 0, effectStart = null, effects = 0;
+      while (vm.pc() !== c.FINISHED && cycles < 50000000) {
+        cycles += vm.runCycles(50000000 - cycles);
+        assert(vm.breakpointHit(), "Synthetic cadence run must complete within its budget");
+        if (vm.pc() === c.EFFECT_BEGIN) {
+          effectStart = cycles;
+        } else if (vm.pc() === c.EFFECT_END) {
+          assert.notEqual(effectStart, null);
+          const rtsCycles = vm.step();
+          blocked += cycles - effectStart + rtsCycles;
+          cycles += rtsCycles;
+          effectStart = null;
+          effects++;
+          continue;
+        } else {
+          break;
+        }
+        cycles += vm.step();
+      }
+      assert.equal(vm.pc(), c.FINISHED);
+      assert.equal(effects, withEffects ? 64 : 0);
+      const expected = Math.floor((cycles - blocked) / TICK_CYCLES);
+      const actual = vm.peek(s.MUSIC_ROW) * 20 + vm.peek(s.MUSIC_PHASE);
+      assert(Math.abs(actual - expected) <= 1,
+        `Frame/effect cadence: expected ${expected} ticks, got ${actual} (effects=${withEffects})`);
+    } finally {
+      vm.delete();
+    }
+  }
+  console.log("PASS active-frame cadence and pre-effect time accounting across multi-wrap blocking effects");
+}
+
 async function bootDisk(woz) {
   // Each module owns its MEMFS: two VMs in one module both read /disk0.woz.
   const isolated = await require(path.join(root, "web", "badger6502.js"))();
@@ -239,7 +330,7 @@ function testPolling(vm) {
       }
       last = cycles;
       polls++;
-    } else {
+    } else if (vm.pc() !== s.MUSIC_ARM || !vm.peek(s.MUSIC_ACTIVE)) {
       last = null;
     }
     cycles += vm.step();
@@ -438,5 +529,6 @@ for (let i = 2; i < process.argv.length; i += 2) {
   else captureDir = value;
 }
 testPlayer();
+testTransportCadence();
 if (disk) await testImage(fs.readFileSync(disk), captureDir);
 else console.log("SKIP owner-supplied disk boot/gameplay checks (pass --disk); no game assets are bundled.");

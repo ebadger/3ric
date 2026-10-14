@@ -94,6 +94,9 @@ screen (decode `$0400`, 40×24 interleaved), graphics (`renderFrame()` RGBA), CP
   payload and the existing `buildWozFromDsk` converter for optional WOZ delivery.
   Synthetic player/guard checks run without the game; owner-supplied-image checks
   must boot the real output, not inject the player directly as a substitute.
+  The asset-free command runs after the WASM build in existing PR and Pages CI,
+  and in the local pre-push gate when a WASM build is present. No owner game
+  image is required, generated, uploaded or published by those automated checks.
 - **AI-contributor path.** The codegen guide is exposed for external AI tools: `web/llms.txt`
   (published at the site root, owned by `WEB-CLIENT.md`) is the machine-readable entry point
   that links `prompt-system.md` + `platform-ref.md`, and `prompt-system.md` closes the loop to

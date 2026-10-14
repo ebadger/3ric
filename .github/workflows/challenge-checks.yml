@@ -48,6 +48,7 @@ jobs:
           node codegen/tools/tts-entry.test.mjs --runtime
           node web/test_boot.cjs
           node web/test_mockingboard.cjs
+          node codegen/tools/patch-karateka.test.mjs
           python web/test_serve.py
           node codegen/tools/check-tts.mjs --all
       - name: Check staged publication

@@ -388,6 +388,9 @@ on the emulator whether it succeeds, is blocked, or 404s.
   + `story.html` + `hackaday.html` + `media/` + `llms.txt` + `robots.txt` + `sitemap.xml`
   (alongside `index.html` and `programs/`) into `_site/`; the public users of the demo, and AI coding tools that fetch
   `llms.txt`.
+  The existing PR and Pages builds run the asset-free Karateka player regression
+  after compiling WASM. Pages triggers include the patcher, player, test and shared
+  WOZ helper; neither pipeline stages or uploads the owner's game disks.
 - **External (analytics):** GoatCounter — the `//gc.zgo.at/count.js` script and the
   `https://3ric.goatcounter.com/count` endpoint. A privacy-friendly, third-party hit counter
   loaded by every staged HTML page; best-effort and non-essential — the site behaves
@@ -422,6 +425,6 @@ on the emulator whether it succeeds, is blocked, or 404s.
 | Adjustable CPU clock | Shipped | frontend-only pacing; native **1× ≈ 1.57 MHz** (25.175 MHz VGA dot clock ÷ 16) default. |
 | `$C030` system speaker audio | Shipped | Centered mono output shares the VM PCM clock and browser sound control with the Mockingboard; covered by `test_system_speaker.cjs`. |
 | Slot-4 Mockingboard audio | Shipped | User-gesture AudioWorklet sink for the combined speaker/dual-AY stereo PCM; defaults enabled, unlocks on the first pointer/keyboard interaction, and generates sound only at 1x. |
-| Headless smoke tests | Shipped | `web/test_*.cjs` (boot/render/input/audio/screen/sd/disk). |
+| Headless smoke tests | Shipped | `web/test_*.cjs` (boot/render/input/audio/screen/sd/disk), plus asset-free Karateka player/cadence checks in PR and Pages builds; no owner disk is required or published. |
 | GitHub Pages CI deploy | Shipped | on push to `main` touching emulator/web/codegen sources. |
 | Usage analytics (GoatCounter) | Shipped | Cookieless, privacy-first hit counter on all staged pages (`index`/`gallery`/`tutorials`/`story`/`hackaday`); async `//gc.zgo.at/count.js` → `3ric.goatcounter.com`; no cookies/PII, no server, no CSP change. Owner dashboard `https://3ric.goatcounter.com` (register the `3ric` code once to claim it). |

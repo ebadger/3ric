@@ -68,13 +68,13 @@ MUSIC_ARM:
         and #1
         beq arm_quiet
         lda music_active
-        bne arm_clock
+        bne music_restore
         lda #1
         sta music_active
         jsr music_notes
         jsr music_volumes
 arm_clock:
-        ; Blocking original effects are outside the rendering-time transport.
+        ; Resuming must not charge time spent paused.
         lda $C405
         sta timer_last
         jmp music_restore
@@ -371,24 +371,31 @@ NEXT_GAME:
         jsr MUSIC_STOP
         jmp $0237
 EFFECT_1:
+        jsr MUSIC_POLL
         jsr $0C55
         jmp MUSIC_REBASE
 EFFECT_2:
+        jsr MUSIC_POLL
         jsr $0C64
         jmp MUSIC_REBASE
 EFFECT_3:
+        jsr MUSIC_POLL
         jsr $0C74
         jmp MUSIC_REBASE
 EFFECT_4:
+        jsr MUSIC_POLL
         jsr $0C84
         jmp MUSIC_REBASE
 EFFECT_5:
+        jsr MUSIC_POLL
         jsr $0C92
         jmp MUSIC_REBASE
 EFFECT_6:
+        jsr MUSIC_POLL
         jsr $0CA0
         jmp MUSIC_REBASE
 EFFECT_7:
+        jsr MUSIC_POLL
         jsr $0CB0
         jmp MUSIC_REBASE
 

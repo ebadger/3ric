@@ -86,6 +86,9 @@ node codegen\tools\patch-karateka.test.mjs
 node codegen\tools\patch-karateka.test.mjs --disk "C:\Games\Karateka.dsk"
 ```
 
+The asset-free command also runs in PR/Pages CI and in the local pre-push gate
+when a WASM build is already present.
+
 `--capture-dir <directory>` additionally writes a stereo WAV captured from the
 game's real mixed PCM. Automated coverage is not a complete playthrough or
 physical-board certification; the shared-routine copies for later disk segments
