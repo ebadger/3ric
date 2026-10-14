@@ -205,6 +205,8 @@ public:
     {
         if (drive < 0 || drive > 1) return false;
 
+        const unsigned int length = bytes["length"].as<unsigned int>();
+        if (length == 0 || length > WozFile::MaxFileSize) return false;
         std::vector<uint8_t> v = convertJSArrayToNumberVector<uint8_t>(bytes);
         if (v.empty()) return false;
 
@@ -657,6 +659,7 @@ private:
 
 EMSCRIPTEN_BINDINGS(badger6502)
 {
+    constant("MAX_WOZ_FILE_SIZE", WozFile::MaxFileSize);
     class_<WebVM>("WebVM")
         .constructor<>()
         .function("reset",        &WebVM::reset)

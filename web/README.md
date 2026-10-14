@@ -50,6 +50,9 @@ identically. Browser-only presentation code stays in the bridge and JavaScript.
   pause/continue, step into/over, live registers, arbitrary-address breakpoints, and
   raw-memory inspection. PCs in the ROM are correlated to ca65 symbol and
   source-file/line metadata from `badger6502.dbg`.
+- **Embeddable player**: `?embed=1` hides the workbench, fits a 4:3 screen to an
+  iframe, and keeps compact sound, restart, fullscreen, and touch-keyboard controls.
+  `?woz=` automatically downloads and boots your own disk.
 
 ## Layout
 
@@ -155,6 +158,90 @@ autoplay rules delay it until the first pointer or keyboard interaction; press
 **Disable Sound** to opt out. Sound is intentionally generated only at native 1×.
 
 > Port 8011 is used because 8000 is taken on this machine.
+
+## Embed a player and auto-boot your own WOZ
+
+Host a bootable `.woz` at a public URL, then point an iframe at the existing player.
+For example, replace the encoded disk URL below with your own:
+
+```html
+<iframe
+  title="My 3RIC game"
+  src="https://ebadger.github.io/3ric/index.html?embed=1&amp;woz=https%3A%2F%2Fexample.com%2Fmy-game.woz"
+  width="800" height="660"
+  style="width: 100%; border: 0;"
+  allow="fullscreen; autoplay; gamepad"
+  allowfullscreen>
+</iframe>
+```
+
+The disk boots automatically; no file picker or **Boot Disk** click is required.
+The player uses the same WASM VM and Disk II ROM as the workbench, automatically
+entering `MON` from the current ROM's DOS shell before `C600G`. **Restart**
+reboots the loaded disk from its in-memory copy without another download.
+Loading and error messages remain visible inside the iframe.
+
+| Parameter | Meaning |
+| --- | --- |
+| `embed=1` | Minimal player instead of the editor/workbench. |
+| `woz=<url>` | Auto-boot a single-sided 5.25-inch WOZ2 bitstream disk from an HTTP(S) URL. Encode the complete URL with `encodeURIComponent`, especially any `&`, `#`, `+`, or spaces. |
+| `src`, `code`, `prg`, `org` | Existing program links also work with `embed=1`. If targets are combined, startup chooses `woz`, then `prg`, then `code`, then `src`. |
+| `assets=<url>` | Optional CDN for the emulator's own assets; it does not change where `woz` or `prg` URLs resolve. |
+
+A relative disk path such as `?embed=1&woz=data/disk.woz` is relative to the
+**emulator page**, not the embedding website. You can also omit `embed=1` to
+auto-boot a WOZ in the normal workbench; its **Reset** still returns to the ROM.
+Embeds do not restore or save the editor's local storage, fetch the default
+editor sample or SD image, or steal keyboard focus from the host page.
+
+**Disk hosting:** the browser fetches the disk directly, with no upload/proxy
+service. A cross-origin disk server must send `Access-Control-Allow-Origin: *`
+for a public disk, or allow the emulator origin (`https://ebadger.github.io`
+for the hosted player). Use HTTPS disks on HTTPS pages and a direct file URL,
+not a file-sharing preview page. Failed fetches or invalid images show an error;
+they never silently boot the bundled demo. Only distribute disks you have the
+right to share. **Download .woz** in the assembler creates a bootable image of
+your own source; the existing Applesoft/DOS 3.3 compatibility limits still apply.
+
+**Limits and validation:** WOZ images are limited to **8 MiB**, including decoded
+download bytes when Content-Length is absent or wrong. Local file picks use the
+same limit before reading, and the shared native/WASM parser independently enforces
+it. Only WOZ2 bitstreams are supported: WOZ1, 3.5-inch, and flux-stream images are
+rejected explicitly. The parser checks chunk/table/track bounds and any nonzero
+CRC32 before activating the disk; an omitted (zero) CRC is allowed by the format.
+The native reader retains a bounded snapshot, so later file edits cannot replace
+validated track data. Rejected images do not leave the parser partially loaded.
+
+Fetch-based data/program/source downloads have a **30-second deadline** covering
+the entire response body, not just the headers. Size or timeout failures abort the
+transfer, show an error, and release the controls. In an embed, **Restart** retries
+a failed WOZ URL; after a successful load it reuses the cached image. In the normal
+workbench, **Reset** and the file controls remain available for recovery.
+
+**Fullscreen:** click **Fullscreen** to enlarge the entire player, including
+its controls; click **Exit Fullscreen** or press Escape to return. The iframe
+must allow fullscreen, as above, and any parent Permissions Policy must also
+permit it. Browsers require a user gesture for true fullscreen and for sound:
+neither is forced automatically, even with `allow="autoplay"`. Click the screen
+for keyboard input and sound, or expand **Virtual Keyboard** on a touchscreen.
+The display preserves its 4:3 CRT shape at any size, letterboxing rather than
+cropping or stretching.
+
+To fill the embedding website's viewport immediately (without requesting
+browser fullscreen), replace the iframe's `style` with:
+
+```html
+style="position: fixed; inset: 0; width: 100%; height: 100%; border: 0;"
+```
+
+No new build or SDK is required to embed the hosted player. For a self-hosted
+copy, build/serve this folder normally and change the iframe's player URL.
+After building locally, `node web\test_embed.cjs` exercises the actual page
+markup/CSS, startup and Disk II boot, restart/retry, fullscreen state, download
+limits/timeouts, errors, and existing program links against the real WASM core.
+`node web\test_woz_validation.cjs` covers malformed containers, checksums, formats,
+and the exact size boundary directly through the shared parser. Native equivalents
+are in `Badger6502VMTest`'s `WozFileTests` class.
 
 ## Browser gamepads
 
