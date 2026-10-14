@@ -25,6 +25,7 @@ graphics / registers → produce a `.PRG` that also `BRUN`s on real hardware.
 | `run6502.mjs` | CLI: assemble/load → run → apply checks → emit `.PRG` + verdict (exit 0 only if it halted cleanly and every check passed). |
 | `gen_platform_ref.mjs` | Regenerates `platform/platform-ref.{md,json}` from `vm.h` + `badger6502.dbg`. |
 | `patch-archon.mjs` | Exact-image local WOZ compatibility patcher; see `ROM-SOFTWARE.md`. Contains only adapter code and guarded replacements, never downloads game assets, and refuses input overwrite or fingerprint/sector validation failure. |
+| `patch-karateka.mjs` | Exact-image local DOS-order DSK soundtrack patcher; see `ROM-SOFTWARE.md`. Assembles only original player/score code and emits a separate DSK or WOZ without downloading or committing game assets. |
 | `wozedit.mjs` | Node-only checked WOZ2 sector reading/editing, reusing the dual-use `wozgen.mjs` CRC and 6-and-2 codec. Preserves non-edited bitstream and metadata bytes. |
 
 **Platform reference (`codegen/platform/`)** — the generator's machine/human contract:
@@ -87,6 +88,12 @@ screen (decode `$0400`, 40×24 interleaved), graphics (`renderFrame()` RGBA), CP
   checksums and exact preimages before changing data. Re-encode only changed sector
   data fields; do not rebuild a supplied disk into a different track layout. Synthetic
   fixtures must cover malformed input, round trips and unchanged surrounding bits.
+- Karateka DSK patching requires the exact 35-track input fingerprint and expected
+  bytes/counts at every hook. Preserve sector ordering, size and every byte outside
+  the declared patches. Use only verified unused sectors for the new bootstrap
+  payload and the existing `buildWozFromDsk` converter for optional WOZ delivery.
+  Synthetic player/guard checks run without the game; owner-supplied-image checks
+  must boot the real output, not inject the player directly as a substitute.
 - **AI-contributor path.** The codegen guide is exposed for external AI tools: `web/llms.txt`
   (published at the site root, owned by `WEB-CLIENT.md`) is the machine-readable entry point
   that links `prompt-system.md` + `platform-ref.md`, and `prompt-system.md` closes the loop to
@@ -118,5 +125,6 @@ breakpoints and current-PC highlighting.
 | `harness` + `run6502` validation loop | Shipped | serial/text/gfx/register checks + `.PRG`. |
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Archon local WOZ patching | Experimental / emulator-verified | `patch-archon.test.mjs` covers synthetic editor fixtures and optional owner-supplied-disk gameplay; `patch-archon.test.ps1` covers native PS/2 timing and LED commands. Both game images stay outside the repository. |
+| Karateka local DSK soundtrack patching | Implemented / WASM-verified | `patch-karateka.test.mjs` checks the original player independently, plus optional owner-disk boot, reversible edits, all 560 converted sectors, separate-MEMFS differential gameplay, speaker timing and controls. The CLI exclusively creates a new DSK or WOZ; game assets remain local. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |
 | AI-contributor entry point | Shipped | `web/llms.txt` + `CONTRIBUTING.md`; `prompt-system.md` closes the loop to the gallery. |
