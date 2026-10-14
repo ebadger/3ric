@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-13 — ebadger (via Copilot)_
+_Last updated: 2026-10-14 — ebadger (via Copilot)_
 
 ---
 
@@ -173,11 +173,13 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   ROM or VM. Native PS/2/LED and WASM board/combat checks pass; hardware confirmation
   remains open. See [`docs/porting-logs/archon.md`](../docs/porting-logs/archon.md).
 - **Karateka soundtrack:** `codegen\tools\patch-karateka.mjs` adds an original six-voice,
-  16-bar Mockingboard gameplay score without replacing the speaker effects or changing
+  16-bar Mockingboard gameplay score at the owner's requested half tempo (about 48 BPM),
+  without changing pitch, replacing the speaker effects or changing
   the ROM/VM. The exact-image patch emits a separate local DSK or WOZ; no game assets
   are published. Use **Insert .woz...**, native 1x, Space to start, and K for keyboard
-  controls. Escape and the three Control-S sound modes are preserved. Actual WASM
-  movement/contact-combat, stereo sound and restart are covered; later-level playthrough
+  controls. Later loads retain the selected J/K input mode instead of resetting it.
+  Escape and the three Control-S sound modes are preserved. Actual WASM
+  movement/contact-combat, stereo sound, restart and an assisted building-entry run are covered; full playthrough
   and physical-board approval remain open. See [`codegen/README.md`](../codegen/README.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists. Existing PR and Pages builds

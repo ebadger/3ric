@@ -71,12 +71,17 @@ and click the emulator to enable audio. Space starts a game from attract mode;
 and W/S/X perform high/middle/low attacks. **Escape** pauses until another key;
 **Control-S** cycles music and effects / effects only / all off. **Control-R**
 retains the game's restart behavior.
+The chosen **J/K** input mode now survives later level loads, including entry
+into the building; those loads no longer silently return keyboard players to
+joystick mode.
 
 The score uses actual AY registers, not browser audio playback. It advances on a
 polled timer during rendering, with its clock suspended across blocking speaker
 effects so their pitch/timing is unchanged. Original musical cues, pauses, loads
-and restarts silence the added score. A loop is approximately 40 seconds of
-rendering time. The hardware map and emulator are unchanged.
+and restarts silence the added score. The owner-requested half-speed arrangement
+is approximately **48 BPM**, with an 80-second loop of rendering time. Only the
+music tempo changes: note pitch, original speaker effects, and game speed stay
+the same. The hardware map and emulator are unchanged.
 
 After `pwsh web\build.ps1`, run the player checks without a game, or include your
 disk for actual boot, gameplay, controls and speaker comparisons:
@@ -91,8 +96,10 @@ when a WASM build is already present.
 
 `--capture-dir <directory>` additionally writes a stereo WAV captured from the
 game's real mixed PCM. Automated coverage is not a complete playthrough or
-physical-board certification; the shared-routine copies for later disk segments
-are patched and checked, but later-level gameplay still needs a playthrough.
+physical-board certification. An assisted run walks from the exterior into the
+building and exercises keyboard movement without reselecting K; all five later
+segment loaders retain both J/K modes. The remaining gameplay still needs a
+complete playthrough.
 
 ## Layout
 

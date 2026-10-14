@@ -128,6 +128,6 @@ breakpoints and current-PC highlighting.
 | `harness` + `run6502` validation loop | Shipped | serial/text/gfx/register checks + `.PRG`. |
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Archon local WOZ patching | Experimental / emulator-verified | `patch-archon.test.mjs` covers synthetic editor fixtures and optional owner-supplied-disk gameplay; `patch-archon.test.ps1` covers native PS/2 timing and LED commands. Both game images stay outside the repository. |
-| Karateka local DSK soundtrack patching | Implemented / WASM-verified | `patch-karateka.test.mjs` checks the original player independently, plus optional owner-disk boot, reversible edits, all 560 converted sectors, separate-MEMFS differential gameplay, speaker timing and controls. The CLI exclusively creates a new DSK or WOZ; game assets remain local. |
+| Karateka local DSK soundtrack patching | Implemented / WASM-verified | `patch-karateka.test.mjs` checks the half-speed player and input-mode helper independently, plus optional owner-disk boot, reversible edits, all 560 converted sectors, separate-MEMFS differential gameplay, speaker timing, controls, all five later input-mode loaders and an assisted building transition. The CLI exclusively creates a new DSK or WOZ; game assets remain local. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |
 | AI-contributor entry point | Shipped | `web/llms.txt` + `CONTRIBUTING.md`; `prompt-system.md` closes the loop to the gallery. |

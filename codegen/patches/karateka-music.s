@@ -1,8 +1,9 @@
 ; Original "Cliffside Resolve" score and disk-resident player for 3ric.
 ; No game assets or original Karateka music are included here.
 ; Timer 1 is polled: no IRQs may disturb the game's speaker or disk loops.
-; 96 * 256 PHI2 cycles per tick, 20 ticks/eighth: approximately 96 BPM.
+; 192 * 256 PHI2 cycles per tick, 20 ticks/eighth: approximately 48 BPM.
 
+TICK_QUANTA = 192
         .org $C800
 MUSIC_POLL:
         php
@@ -37,12 +38,12 @@ poll_tick:
         lda tick_carry
         bne poll_due
         lda tick_pending
-        cmp #96
+        cmp #TICK_QUANTA
         bcc poll_done
 poll_due:
         lda tick_pending
         sec
-        sbc #96
+        sbc #TICK_QUANTA
         sta tick_pending
         lda tick_carry
         sbc #0
@@ -428,4 +429,10 @@ init_mixer:
         sta $C404
         sta $C405
         jmp MUSIC_STOP
+KEEP_INPUT_MODE:
+        ; Later loaders replace zero page; retain J/K selection in the new image.
+        lda $C4
+        sta $A0C4
+        lda $C057
+        rts
 ADAPTER_END:

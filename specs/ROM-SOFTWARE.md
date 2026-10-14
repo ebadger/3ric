@@ -62,6 +62,10 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     calls rather than install an IRQ: the original speaker loops, ROM IRQ workspace
     and cycle-sensitive Disk II reader must remain undisturbed. Music timing follows
     elapsed rendering time, suspending the transport across blocking speaker effects.
+    The owner-requested half-speed score uses 49,152 PHI2 cycles per envelope tick
+    and 20 ticks per eighth note (approximately 48 BPM, an 80-second loop of
+    rendering time). Keep the AY note periods, original speaker effects and
+    gameplay execution speed unchanged; do not slow the CPU or transpose notes.
     Re-arming an already-active frame must retain elapsed time. Poll immediately
     before each blocking effect and rebase afterward, so pre-effect rendering is
     counted while the effect itself is excluded.
@@ -76,6 +80,11 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     `$CE00-$CEFF`, including the firmware banking and keyboard/controller state.
     Patch each on-disk copy of affected shared routines so later level loads do not
     silently remove the music or its stop hooks.
+    The five later segment loaders must retain the current J/K input selection
+    (`$C4`) when copying their new zero-page image from `$A000`. Carry that byte
+    into the incoming image before the existing copy; keep the first boot's
+    default and manual J/K switching unchanged. Do not reset to joystick or
+    force keyboard at building entry.
   - **Delivery/acceptance:** reject unsupported or already-patched input and existing
     output files. Emit a separate DSK or a WOZ made with the existing DOS-order
     converter, never overwrite the input or distribute the game in Git/Pages.
@@ -450,7 +459,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Microsoft BASIC | Shipped | `$9000–$BFFF`; not Applesoft (known gap). |
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
-| Karateka original gameplay soundtrack | Implemented / WASM-verified | `patch-karateka.mjs` adds the original six-voice, 16-bar score. Actual output boot, 46 pixel/state-identical movement/combat frames including guard damage, frame/effect cadence, real stereo PCM, all seven unchanged speaker edge traces, pause, three sound modes and restart pass. Covered gameplay overhead is 11.7%; the longest observed active timer-poll gap is 13,881 of the allowed 65,536 cycles. Later-level playthrough and physical-board approval remain open; see `codegen/README.md`. |
+| Karateka original gameplay soundtrack | Implemented / WASM-verified | `patch-karateka.mjs` adds the original six-voice, 16-bar score at the requested half-speed tempo (about 48 BPM), without changing pitch or game speed. Actual output boot, 46 pixel/state-identical movement/combat frames including guard damage, frame/effect cadence, stereo PCM, all seven unchanged speaker edge traces, pause, sound modes and restart pass. An assisted exterior-to-building run verifies retained keyboard movement; all five later loaders preserve both J/K modes. Covered gameplay overhead is 10.9%; the longest observed active timer-poll gap is 14,009 of the allowed 65,536 cycles. Full playthrough and physical-board approval remain open; see `codegen/README.md`. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |

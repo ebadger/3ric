@@ -118,6 +118,8 @@ export function patchKarateka(input) {
     [...instruction(0x20, payload.stub.org), 0xea, 0xea], "bootstrap entry");
   edit(0x76, input.subarray(0x76, 0x76 + payload.stub.bytes.length), payload.stub.bytes, "bootstrap");
   edit(33 * 4096, Buffer.alloc(payload.pages.length), payload.pages, "original player and score");
+  for (const offset of [0xd909, 0x12909, 0x17906, 0x18617, 0x19303])
+    edit(offset, [0xad, 0x57, 0xc0], instruction(0x20, s.KEEP_INPUT_MODE), "retain input mode");
 
   copies("4c0f194c421a4c4b1a4c5b1c4c641c", 6, offset => {
     for (const [delta, address, target] of [

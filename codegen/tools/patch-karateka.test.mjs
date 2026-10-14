@@ -15,7 +15,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const require = createRequire(import.meta.url);
 const payload = buildPayload();
 const s = payload.player.symbols;
-const TICK_CYCLES = 24576;
+const TICK_CYCLES = 49152;
 const SAMPLE_RATE = 48000;
 const rom = fs.readFileSync(path.join(root, "emulator", "Data", "badger6502.bin"));
 const font = fs.readFileSync(path.join(root, "emulator", "Data", "fontrom.dat"));
@@ -125,6 +125,7 @@ function assertSilentAY(vm) {
 }
 
 function testPlayer() {
+  assert.equal(s.TICK_QUANTA * 256, TICK_CYCLES, "Half-speed music doubles the former 24576-cycle tick");
   assert(payload.player.org === 0xc800 && s.PLAYER_END <= 0xca00);
   assert(s.SCORE_END <= 0xce00 && s.ADAPTER_END <= 0xd000);
   assert.equal(payload.pages.length, 1536);
@@ -173,11 +174,11 @@ function testPlayer() {
     assert(Math.abs(ticks - 5) <= 1, `Full 128-row loop kept timer cadence: ${ticks}`);
     audio.assertStereo();
     vm.poke(s.MUSIC_ACTIVE, 1);
-    vm.poke(s.TICK_PENDING, 95);
+    vm.poke(s.TICK_PENDING, s.TICK_QUANTA - 1);
     vm.poke(s.TIMER_LAST, (vm.readBus(0xc405) + 250) & 255);
     call(vm, s.MUSIC_POLL);
     assert.deepEqual(registers(vm), [0xd3, 0x56, 0xa9, 0x89, 0xff], "Due ticks preserve decimal/carry/registers");
-    assert(vm.peek(s.TICK_PENDING) < 96, "Timer-byte carry is fully drained");
+    assert(vm.peek(s.TICK_PENDING) < s.TICK_QUANTA, "Timer-byte carry is fully drained");
     assert.deepEqual(memory(vm, 0, 256), zp);
     vm.poke(0x4f, 0);
     call(vm, s.MUSIC_POLL);
@@ -280,6 +281,54 @@ effect_end:
   console.log("PASS active-frame cadence and pre-effect time accounting across multi-wrap blocking effects");
 }
 
+function testInputMode() {
+  for (const mode of [0, 1]) {
+    const vm = new module.WebVM();
+    try {
+      vm.loadData(payload.player.org, payload.player.bytes);
+      vm.writeBus(0xc007, 0);
+      const incoming = Buffer.from(Array.from({ length: 256 }, (_, i) => (i * 13 + 7) & 255));
+      incoming[0xc4] = mode ^ 1;
+      vm.loadData(0xa000, incoming);
+      vm.poke(0xc4, mode);
+      call(vm, s.KEEP_INPUT_MODE);
+      incoming[0xc4] = mode;
+      assert.deepEqual(memory(vm, 0xa000, 256), incoming, "Only the incoming J/K selection is changed");
+      assert.equal(vm.regX(), 0x56);
+      assert.equal(vm.regY(), 0xa9);
+      assert.equal(vm.sp(), 0xff);
+      assert.equal(vm.status() & 0x4d, 9, "Input hook preserves carry, decimal and interrupt flags");
+      assert.equal(vm.lores(), 0, "Displaced HIRES access still executes");
+    } finally {
+      vm.delete();
+    }
+  }
+  console.log("PASS input reset removal retains both J and K choices without forcing a control mode");
+}
+
+function testSegmentLoaders(result) {
+  for (const offset of [0xd900, 0x12900, 0x17900, 0x18600, 0x19300]) {
+    for (const mode of [0, 1]) {
+      const vm = new module.WebVM();
+      try {
+        vm.loadData(payload.player.org, payload.player.bytes);
+        vm.writeBus(0xc007, 0);
+        const image = result.dsk.subarray(offset - 256, offset + 0x700);
+        vm.loadData(0xa000, image);
+        vm.poke(0xc4, mode);
+        vm.setPC(0xa100);
+        seek(vm, offset === 0x18600 ? 0xa138 : 0xa124, 200000);
+        const expected = Buffer.from(image.subarray(0, 256));
+        expected[0xc4] = mode;
+        assert.deepEqual(memory(vm, 0, 256), expected, `Real segment loader ${hex(offset)}, mode ${mode}`);
+      } finally {
+        vm.delete();
+      }
+    }
+  }
+  console.log("PASS all five real later-segment zero-page loaders retain both input modes");
+}
+
 async function bootDisk(woz) {
   // Each module owns its MEMFS: two VMs in one module both read /disk0.woz.
   const isolated = await require(path.join(root, "web", "badger6502.js"))();
@@ -314,6 +363,66 @@ function frame(vm, key, audio = null) {
   if (key !== undefined) vm.keyDown(key);
   const first = vm.step();
   return first + seek(vm, 0x7600, 50000000, audio);
+}
+
+async function testBuilding(woz) {
+  const vm = await bootDisk(woz);
+  try {
+    startGame(vm);
+    frame(vm, 75);
+    assert.equal(vm.peek(0xc4), 1);
+    vm.addBreakpoint(0x0200);
+    vm.addBreakpoint(0x7600);
+    for (let i = 0; i < 800 && vm.pc() !== 0x0200; i++) {
+      // Test-only combat assistance; movement, game transitions and Disk II loading stay game-owned.
+      vm.poke(0xb6, 14);
+      let key;
+      if (vm.peek(0x72) < 40 && vm.peek(0x5e)) {
+        vm.poke(0xb7, 1);
+        key = vm.peek(0x6f) === 0xff ? 32 : 87;
+      } else {
+        key = vm.peek(0x6f) !== 0xff ? 32 : 21;
+      }
+      vm.keyDown(key);
+      vm.step();
+      vm.runCycles(50000000);
+      assert(vm.breakpointHit(), "Exterior play must reach a frame or level-load boundary");
+    }
+    vm.removeBreakpoint(0x0200);
+    vm.removeBreakpoint(0x7600);
+    assert.equal(vm.pc(), 0x0200, "Walk through the exterior into the game-owned building load");
+    assert.equal(vm.peek(0xd0), 2);
+    assert.equal(vm.peek(0xd2), 1);
+    assert.equal(vm.peek(0xc4), 1);
+    vm.step();
+    seek(vm, s.KEEP_INPUT_MODE);
+    assert.equal(vm.peek(0xc4), 1);
+    assert.equal(vm.peek(0xa0c4), 0, "The original incoming segment would reset to joystick mode");
+    vm.step();
+    seek(vm, 0x7600);
+    assert.equal(vm.peek(0xd0), 2);
+    assert.equal(vm.peek(0xd2), 2);
+    assert.equal(vm.peek(0xc4), 1, "Building entry retains K without pressing it again");
+    const positions = new Set([vm.peek(0x62)]);
+    for (let i = 0; i < 12; i++) {
+      frame(vm, 21);
+      positions.add(vm.peek(0x62));
+    }
+    assert(positions.size > 1, "Keyboard movement works inside the building without reselecting K");
+    vm.keyDown(27);
+    vm.step();
+    seek(vm, 0x7791);
+    assertSilentAY(vm);
+    vm.keyDown(32);
+    seek(vm, 0x7600);
+    frame(vm, 74);
+    assert.equal(vm.peek(0xc4), 0, "J can still select joystick mode");
+    frame(vm, 75);
+    assert.equal(vm.peek(0xc4), 1, "K can still select keyboard mode");
+    console.log("PASS game-owned building transition, retained keyboard movement/pause, and J/K switching");
+  } finally {
+    vm.delete();
+  }
 }
 
 function testPolling(vm) {
@@ -405,6 +514,7 @@ async function testImage(input, captureDir) {
     assert.deepEqual(data, result.dsk.subarray(offset, offset + 256));
   }
   testCli(input, result.dsk, woz);
+  testSegmentLoaders(result);
   console.log("PASS exact-image guards, reversible patches, all 560 WOZ sectors, and exclusive CLI outputs");
 
   const original = await bootDisk(buildWozFromDsk(input));
@@ -444,7 +554,7 @@ async function testImage(input, captureDir) {
     assert.equal(patched.peek(0xc4), 1, "K selected keyboard controls");
     assert(positions.size >= 4, "Right arrow moved the actual player");
     assert(patched.peek(0xb7) < 14, "A natural attack hit the guard and reduced his health");
-    assert(rows.size >= 8, "Score progresses during movement and attacks");
+    assert(rows.size >= 4, "Half-speed score progresses during movement and attacks");
     assert(patchedCycles < originalCycles * 1.2, "Music overhead must stay below 20% on the covered gameplay sequence");
     audio.assertStereo();
     console.log(`PASS actual game: 46 pixel/state-identical movement/combat frames including a hit, stereo PCM, `
@@ -493,6 +603,7 @@ async function testImage(input, captureDir) {
     original.delete();
     patched.delete();
   }
+  await testBuilding(woz);
 }
 
 function testCli(input, dsk, woz) {
@@ -530,5 +641,6 @@ for (let i = 2; i < process.argv.length; i += 2) {
 }
 testPlayer();
 testTransportCadence();
+testInputMode();
 if (disk) await testImage(fs.readFileSync(disk), captureDir);
 else console.log("SKIP owner-supplied disk boot/gameplay checks (pass --disk); no game assets are bundled.");
