@@ -17,10 +17,15 @@
 ; Return: carry clear and A=0 on success, carry set and A=ProDOS-style error
 ; otherwise. Load+run jumps to the load address. Each disk is a directory
 ; under the folder the loader ran from; ProDOS names become 8-character keys
-; (dots removed). The disk's blocks are also exported as RAW00-RAW22 (eight
-; blocks, 4 KB, each), so a block read becomes
-; FLOAD RAWnn D600 start end - the ROM's FLOAD takes an inclusive end offset
-; and skips to the start byte by byte, so small chunks keep reads fast.
+; (dots removed) and are looked up only among the current disk's files, so
+; a missing file fails here exactly as it did on the floppy (the ROM's
+; OWRITE would otherwise fall back to BSAVE code in the BASIC ROM bank).
+; Loads use FLOAD name addr 0000 eof-1: FLOAD's end operand is inclusive,
+; and BLOAD stores one byte past EOF. The disk's blocks are exported as
+; RAW00-RAW22 (eight blocks, 4 KB, each); a block read becomes
+; FLOAD RAWnn D600 start end. FLOAD skips to its start byte by byte, so
+; small chunks keep reads short, and a one-block cache absorbs the game's
+; habit of reading every block twice (once per 256-byte half).
 ;
 ; Uses only DINKEYDOS's zero page ($52-$55, $60-$7F).
 
@@ -93,10 +98,12 @@ file_op:
         jsr take_params
         jsr make_key
         jsr find_file
+        bcc fo_found
+        jmp no_file             ; not on this disk: DINKEYDOS fails as well
+fo_found:
         lda ZP_ADDR
         ora ZP_ADDR+1
         bne have_addr
-        bcs no_file             ; need the aux type but the file is unknown
         ldy #8
         lda (ZP_ENT),y
         sta ZP_ADDR
@@ -108,12 +115,25 @@ have_addr:
         sta ZP_LOADADR
         lda ZP_ADDR+1
         sta ZP_LOADADR+1
+        ldy #10
+        lda (ZP_ENT),y
+        sta ZP_EOF
+        iny
+        lda (ZP_ENT),y
+        sta ZP_EOF+1
         lda ZP_FLAGS
         and #F_WRITE
         bne do_write
+        ; The ROM's BLOAD stores one byte past EOF, so load exactly
+        ; [0, eof-1] with FLOAD (its end operand is inclusive).
+        lda ZP_EOF
+        bne fo_dec
+        dec ZP_EOF+1
+fo_dec:
+        dec ZP_EOF
         jsr cmd_start
-        ldx #<s_bload
-        ldy #>s_bload
+        ldx #<s_fload
+        ldy #>s_fload
         jsr cmd_str
         jsr cmd_key
         jsr cmd_space
@@ -121,20 +141,20 @@ have_addr:
         jsr cmd_hex
         lda ZP_ADDR
         jsr cmd_hex
+        ldx #<s_zero
+        ldy #>s_zero
+        jsr cmd_str
+        lda ZP_EOF+1
+        jsr cmd_hex
+        lda ZP_EOF
+        jsr cmd_hex
         jsr cmd_run
         lda ZP_FLAGS
         and #F_RUN
         beq ok
         jmp (ZP_LOADADR)
 
-do_write:
-        bcs no_file             ; length comes from the table
-        ldy #10
-        lda (ZP_ENT),y
-        sta ZP_EOF
-        iny
-        lda (ZP_ENT),y
-        sta ZP_EOF+1
+do_write:                       ; OWRITE writes whole sectors in place
         jsr cmd_start
         ldx #<s_owrite
         ldy #>s_owrite
@@ -266,8 +286,14 @@ mk_pad:
         bne mk_pad
         rts
 
-; Find key in filetab. Carry clear and ZP_ENT set if found.
+; Find key in filetab among files on the current disk. Carry clear and
+; ZP_ENT set if found.
 find_file:
+        ldx curvol
+        cpx #8
+        bcs ff_missing          ; still in the loader folder
+        lda volbit,x
+        sta ZP_TMP
         lda #<filetab
         sta ZP_ENT
         lda #>filetab
@@ -283,12 +309,16 @@ ff_cmp:
         iny
         cpy #8
         bne ff_cmp
+        ldy #12
+        lda (ZP_ENT),y
+        and ZP_TMP
+        beq ff_skip
         clc
         rts
 ff_skip:
         clc
         lda ZP_ENT
-        adc #12
+        adc #13
         sta ZP_ENT
         bcc ff_next
         inc ZP_ENT+1
@@ -296,6 +326,8 @@ ff_skip:
 ff_missing:
         sec
         rts
+
+volbit:     .byte $01,$02,$04,$08,$10,$20,$40,$80
 
 ; ---------------------------------------------------------------------------
 ; Volume selection: "/NAME" (optionally "/NAME/") -> CD into its directory.
@@ -386,6 +418,8 @@ vol_go:
         jsr cmd_run
         lda ZP_TMP
         sta curvol
+        lda #$FF                ; block numbers are per disk: drop the cache
+        sta lastblk+1
 vol_ok:
         lda #0
         clc
@@ -404,9 +438,30 @@ e_rdblk:
         iny
         lda (ZP_NAME),y         ; block high
         sta ZP_TMP+1
+        ; TEMP.SUBS reads each block twice in a row (once per 256-byte half).
+        ; Reuse $D600 when it still holds that block and is unmodified.
+        lda ZP_TMP
+        cmp lastblk
+        bne rb_miss
+        lda ZP_TMP+1
+        cmp lastblk+1
+        bne rb_miss
+        jsr buf_sum
+        cpx lastsum
+        bne rb_miss
+        cpy lastsum+1
+        bne rb_miss
+        lda #0
+        clc
+        rts
+rb_miss:
+        lda ZP_TMP
+        sta lastblk
+        lda ZP_TMP+1
+        sta lastblk+1
         jsr cmd_start
-        ldx #<s_fload
-        ldy #>s_fload
+        ldx #<s_fraw
+        ldy #>s_fraw
         jsr cmd_str
         lda ZP_TMP+1            ; file = RAW(block / 8), two hex digits
         asl
@@ -439,9 +494,46 @@ e_rdblk:
         ldy #>s_ff
         jsr cmd_str
         jsr cmd_run
+        jsr buf_sum
+        stx lastsum
+        sty lastsum+1
         lda #0
         clc
         rts
+
+; Fletcher-16 of $D600-$D7FF -> X (sum), Y (sum of sums).
+buf_sum:
+        lda #<$D600
+        sta ZP_RET
+        lda #>$D600
+        sta ZP_RET+1
+        ldx #0
+        stx ZP_EOF
+        stx ZP_EOF+1
+bs_page:
+        ldy #0
+bs_loop:
+        lda (ZP_RET),y
+        clc
+        adc ZP_EOF
+        adc #0
+        sta ZP_EOF
+        clc
+        adc ZP_EOF+1
+        adc #0
+        sta ZP_EOF+1
+        iny
+        bne bs_loop
+        inc ZP_RET+1
+        inx
+        cpx #2
+        bne bs_page
+        ldx ZP_EOF
+        ldy ZP_EOF+1
+        rts
+
+lastblk:    .word $FFFF
+lastsum:    .word 0
 
 e_wrblk:
         lda #F_PTR
@@ -512,9 +604,10 @@ cmd_run:
         jsr cmd_char
         jmp ROM_CMD
 
-s_bload:    .asciiz "BLOAD "
+s_fload:    .asciiz "FLOAD "
+s_zero:     .asciiz " 0000 "
 s_owrite:   .asciiz "OWRITE "
-s_fload:    .asciiz "FLOAD RAW"
+s_fraw:     .asciiz "FLOAD RAW"
 s_d600:     .asciiz " D600 "
 s_00:       .asciiz "00 "
 s_ff:       .asciiz "FF"
@@ -524,7 +617,7 @@ key:        .res 8
 code_end:
 
 ; $D600-$D7FF is the block buffer (callers copy from it). The tool appends
-; filetab (12-byte entries: key[8], aux, eof) and voltab (19-byte entries:
-; volume name NUL-padded to 11, directory space-padded to 8) at $D800, and
-; stores BANKSIG_VALUE at $DFFF for the resident NMI bank test.
+; filetab (13-byte entries: key[8], aux, eof, volume mask) and voltab
+; (19-byte entries: volume name NUL-padded to 11, directory space-padded to
+; 8) at $D800, and stores BANKSIG_VALUE at $DFFF for the resident NMI test.
         .org $D800

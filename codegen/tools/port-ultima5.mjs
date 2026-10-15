@@ -25,8 +25,6 @@ export const VOLUMES = [
   ["TOWNE", "TOWNE"], ["DWELLING", "DWELLING"], ["CASTLE", "CASTLE"],
   ["KEEP", "KEEP"], ["DUNGEON", "DUNGEON"],
 ];
-// Files the game writes back (save game, roster, temporary lists, music setup).
-const WRITABLE = ["TLIST", "LIST", "SLIST", "ROSTER", "PRTY.DATA", "MUPARMS"];
 export const BANKSIG_VALUE = 0xa5;
 const RAW_BLOCKS = 8;                // RAW00-RAW22: 8 ProDOS blocks (4 KB) each
 const LOADER_ORG = 0x0800, RES_SRC = 0x0b00, SHIM_SRC = 0x0c00;
@@ -62,7 +60,7 @@ function loadVolumes(diskDir) {
   return found;
 }
 
-function applyPatches(volumes) {
+export function applyPatches(volumes) {
   for (const p of PATCHES) {
     const file = volumes.get(p.volume).files.find((f) => f.name === p.file);
     if (!file) throw new Error(`patch target ${p.volume}/${p.file} not found`);
@@ -77,19 +75,22 @@ function applyPatches(volumes) {
 }
 
 function fileTable(volumes) {
+  // One entry per distinct (key, aux, eof); volmask bit n = present on VOLUMES[n].
   const table = new Map();
-  for (const image of volumes.values()) {
-    for (const f of image.files) {
+  VOLUMES.forEach(([volume], index) => {
+    for (const f of volumes.get(volume).files) {
       const key = sdKey(f.name);
-      const prev = table.get(key);
-      const writable = WRITABLE.includes(f.name);
-      if (!prev) { table.set(key, { name: f.name, aux: f.aux, eof: writable ? f.eof : 0 }); continue; }
-      if (prev.name !== f.name) throw new Error(`SD key ${key} is shared by ${prev.name} and ${f.name}`);
-      if (prev.aux !== f.aux) throw new Error(`${f.name} has different load addresses on different disks`);
-      if (writable && prev.eof !== f.eof) throw new Error(`${f.name} has different sizes on different disks`);
+      for (const other of volumes.get(volume).files)
+        if (other !== f && sdKey(other.name) === key) throw new Error(`/${volume}: ${f.name} and ${other.name} share SD key ${key}`);
+      const id = `${key}/${f.aux}/${f.eof}`;
+      const prev = table.get(id);
+      if (prev && prev.name !== f.name) throw new Error(`SD key ${key} is shared by ${prev.name} and ${f.name}`);
+      if (f.eof === 0 || f.eof > 0xffff) throw new Error(`${f.name}: unsupported size ${f.eof}`);
+      if (prev) prev.volmask |= 1 << index;
+      else table.set(id, { key, name: f.name, aux: f.aux, eof: f.eof, volmask: 1 << index });
     }
-  }
-  return table;
+  });
+  return [...table.values()];
 }
 
 function asmText(bytes) {
@@ -106,8 +107,8 @@ export function buildLoader(table) {
   if (resident.org !== 0xcf00 || resident.bytes.length > 0x100) throw new Error("resident exceeds $CF00-$CFFF");
 
   const tab = [];
-  for (const [key, e] of [...table].sort()) {
-    tab.push(...Buffer.from(key.padEnd(8, " "), "ascii"), e.aux & 255, e.aux >> 8, e.eof & 255, e.eof >> 8);
+  for (const e of [...table].sort((a, b) => a.key.localeCompare(b.key) || a.volmask - b.volmask)) {
+    tab.push(...Buffer.from(e.key.padEnd(8, " "), "ascii"), e.aux & 255, e.aux >> 8, e.eof & 255, e.eof >> 8, e.volmask);
   }
   tab.push(0);
   const vol = [];
@@ -139,15 +140,22 @@ export function buildLoader(table) {
   return { prg, resident, shim, loader };
 }
 
-/** Produce { "U5.PRG": bytes, ULTIMA5: { KEY: bytes, RAW0: ... }, ... }. */
+/** Produce { "U5.PRG": bytes, ULTIMA5: { KEY: bytes, RAW00: ... }, ... }. */
 export function buildTree(diskDir) {
   const volumes = loadVolumes(diskDir);
   applyPatches(volumes);
+  return buildFromVolumes(volumes);
+}
+
+/** volumes: Map of volume name -> { files: [{ name, aux, eof, data }], blocks }.
+ *  info (optional) receives the resident's NMI entry for tests. */
+export function buildFromVolumes(volumes, info = {}) {
   const htxt = volumes.get("ULTIMA5").files.find((f) => f.name === "HTXT");
   if (!htxt || htxt.eof !== 2048 || htxt.data[0x7ff] === BANKSIG_VALUE)
     throw new Error("HTXT (copied to bank 2 $D800-$DFFF) would match the bank-1 signature");
   const table = fileTable(volumes);
-  const { prg } = buildLoader(table);
+  const { prg, resident } = buildLoader(table);
+  info.nmiEntry = resident.symbols.NMI_ENTRY;
   const tree = { "U5.PRG": prg };
   for (const [name, dir] of VOLUMES) {
     const image = volumes.get(name);

@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-13 — ebadger (via Copilot)_
+_Last updated: 2026-10-15 — ebadger (via Copilot)_
 
 ---
 
@@ -69,6 +69,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_sd.cjs                  # mount SD + DIR lists the FAT32 root
 & $node web/test_disk.cjs                # boot a WOZ floppy via C600G into a hi-res title
 & $node web/test_woz_download.cjs        # Disk II boots, overlap-safe images through 34,560 bytes, size guards
+& $node codegen\tools\port-ultima5.test.mjs # Ultima V shim on ROM DOS (set U5_DISKS to also boot the real disks)
 ```
 
 C++ CPU unit tests (`emulator/Badger6502VMTest`, MSTest): **Test → Run All Tests** in
@@ -192,6 +193,14 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   `codegen\tools\patch-archon.mjs` creates a separate local WOZ without changing the
   ROM or VM. Native PS/2/LED and WASM board/combat checks pass; hardware confirmation
   remains open. See [`docs/porting-logs/archon.md`](../docs/porting-logs/archon.md).
+- **Ultima V (SD-card port, experimental):** `node codegen\tools\port-ultima5.mjs <disks> <out>`
+  converts the owner's eight ProDOS disk sides into a `U5\` folder; copy it to the
+  card, then `CD U5` and `BRUN U5.PRG 0800`. Game data stays local. A shim replaces
+  Origin's DINKEYDOS loader with ROM DOS commands, and a `$CF00` resident forwards
+  NMIs taken while language-card RAM is mapped. WASM play reached character creation,
+  save, the overworld, combat and a towne; dialogue, dungeons, the board and music
+  (128 KB only) are unverified. New overworld blocks cost ~1.1 s each through `FLOAD`.
+  See [`docs/porting-logs/ultima-v.md`](../docs/porting-logs/ultima-v.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**
