@@ -1,0 +1,328 @@
+// Run after web/build.ps1: node codegen/tools/port-ultima2.test.mjs
+//
+// Proves the Ultima II SD-card glue (loader + resident DOS 3.3 command
+// translator) on the real ROM DOS and SPI SD emulation using synthetic disks -
+// no copyrighted game data. Set U2_DISKS to a folder holding the three
+// original disk images to also play the real game: title, character
+// creation and save, the overworld, and both patched space disk swaps.
+import assert from "node:assert/strict";
+import { assemble } from "./asm6502.mjs";
+import harness from "./harness.cjs";
+import { readDos33Image } from "./ultima2/dos33.mjs";
+import { buildSparseFat32 } from "./ultima5/fat32.mjs";
+import { DISKS, PATCHES, applyPatches, buildFromDisks, buildTree, sdKey } from "./port-ultima2.mjs";
+
+// ---------------------------------------------------------------------------
+// DOS 3.3 reader on a synthetic image with an Origin-style ($FF) VTOC.
+
+function dos33Image(files) {
+  const image = new Uint8Array(143360);
+  const sec = (t, s) => image.subarray((t * 16 + s) * 256, (t * 16 + s + 1) * 256);
+  sec(17, 0).fill(0xff);
+  sec(17, 0).set([0x04, 17, 15], 0);
+  let next = 3 * 16;                                   // free sectors from track 3
+  const alloc = () => { const n = next++; return [n >> 4, n & 15]; };
+  const cat = sec(17, 15);
+  files.forEach((f, i) => {
+    const body = new Uint8Array([f.addr & 255, f.addr >> 8, f.data.length & 255, f.data.length >> 8, ...f.data]);
+    const [lt, ls] = alloc();
+    const list = sec(lt, ls);
+    for (let o = 0, k = 0; o < body.length; o += 256, k++) {
+      const [dt, ds] = alloc();
+      sec(dt, ds).set(body.subarray(o, o + 256));
+      list[0x0c + 2 * k] = dt; list[0x0d + 2 * k] = ds;
+    }
+    const e = cat.subarray(0x0b + i * 35);
+    e[0] = lt; e[1] = ls; e[2] = 0x84;
+    e.set(Array.from(f.name.padEnd(30, " "), (c) => c.charCodeAt(0) | 0x80), 3);
+  });
+  return image;
+}
+
+{
+  const big = Uint8Array.from({ length: 600 }, (_, i) => (i * 3) & 255);
+  const v = readDos33Image(dos33Image([{ name: "MAP 00", addr: 0x1000, data: big }, { name: "TINY", addr: 0x0240, data: [1, 2, 3] }]));
+  assert.deepEqual(v.files.map((f) => [f.name, f.type, f.locked, f.addr, f.len]), [["MAP 00", 4, true, 0x1000, 600], ["TINY", 4, true, 0x240, 3]]);
+  assert.equal(v.files[0].data[599], big[599]);
+  assert.throws(() => readDos33Image(new Uint8Array(1000)), /140 KB/);
+  assert.equal(sdKey("ULTIMA II.OBJ"), "ULTIMAII");
+  assert.equal(sdKey("MAP 21"), "MAP21");
+  assert.equal(sdKey("TABLES.903C.OBJ"), "TABLES90");
+  assert.equal(sdKey("MONSTERS!"), "MONSTERS");
+  console.log("PASS DOS 3.3 reader ($FF VTOC) and SD key mapping");
+}
+
+// ---------------------------------------------------------------------------
+// Disk-prompt patches: exact, idempotent, guarded.
+
+{
+  const disks = new Map(DISKS.map((d) => [d.n, { files: [] }]));
+  const files = new Map();
+  for (const p of PATCHES) {
+    const id = `${p.disk}/${p.file}`;
+    if (!files.has(id)) {
+      const f = { name: p.file, addr: p.address & 0xf000, data: new Uint8Array(0x1100) };
+      files.set(id, f);
+      disks.get(p.disk).files.push(f);
+    }
+    files.get(id).data.set(p.before, p.address - files.get(id).addr);
+  }
+  applyPatches(disks);
+  for (const p of PATCHES) {
+    const f = files.get(`${p.disk}/${p.file}`);
+    assert.deepEqual(Array.from(f.data.subarray(p.address - f.addr, p.address - f.addr + p.after.length)), p.after, p.why);
+  }
+  const main = files.get("1/ULTIMA II.OBJ");
+  assert.equal(main.data[0x00d], 0x04, "prompt starts with Ctrl-D");
+  assert.equal(String.fromCharCode(...main.data.subarray(0x00e, 0x014)), "DISK 2");
+  assert.equal(main.data[0x020], 0x0d, "and ends with CR before the NUL");
+  assert.equal(PATCHES.length, 14, "seven prompt sites (STARS.OBJ on two disks), each with its ESC wait");
+  applyPatches(disks); // idempotent
+  main.data[0x02a] = 0x00;
+  assert.throws(() => applyPatches(disks), /unexpected bytes/);
+  console.log("PASS disk-prompt patches are exact and guarded");
+}
+
+// ---------------------------------------------------------------------------
+// Translator end to end on the ROM DOS with synthetic disks.
+
+const RES = 0x0300;
+const prelude = `
+COUT = $FDED
+RES = $${RES.toString(16)}
+        .org $6000
+        jmp start
+pr:     pla                     ; inline string printer, like Ultima II's
+        sta $FE
+        pla
+        sta $FF
+pr_l:   inc $FE
+        bne pr_c
+        inc $FF
+pr_c:   ldy #0
+        lda ($FE),y
+        beq pr_done
+        ora #$80
+        jsr COUT
+        bra pr_l
+pr_done:
+        lda $FF
+        pha
+        lda $FE
+        pha
+        rts
+start:
+`;
+const mainSrc = prelude + `
+        jsr pr
+        .byte "PORT TEST",$0D,0
+        jsr pr
+        .byte $04,"NOMON I,O,C",$0D,0
+        ldx #$5A                ; registers survive COUT
+        ldy #$A5
+        lda #$C1
+        jsr COUT
+        sta RES+5
+        stx RES+6
+        sty RES+7
+        lda #$EE
+        sta $312C
+        jsr pr
+        .byte $04,"BLOAD DATA ONE",$0D,0
+        lda $312C
+        sta RES+0
+        jsr pr
+        .byte $04,"BLOAD DATA ONE,A$3400",$0D,0
+        jsr pr
+        .byte $04,"DISK 2",$0D,0
+        jsr pr
+        .byte $04,"BLOAD MAP 00",$0D,0
+        lda $1000
+        sta RES+1
+        jsr pr
+        .byte $04,"DISK 3",$0D,0
+        jsr pr
+        .byte $04,"BLOAD MAP 00",$0D,0
+        lda $1000
+        sta RES+2
+        jsr pr
+        .byte $04,"DISK 2",$0D,0
+        ldx #63
+fill:   txa
+        eor #$5A
+        sta $3800,x
+        dex
+        bpl fill
+        jsr pr
+        .byte $04,"BSAVE SAVE,A$3800,L$40",$0D,0
+        jsr pr
+        .byte $04,"BLOAD SAVE,A$3900",$0D,0
+        ldx #63
+        ldy #0
+cmp1:   lda $3800,x
+        cmp $3900,x
+        beq cmp1ok
+        iny
+cmp1ok: dex
+        bpl cmp1
+        sty RES+3
+        lda #$3C                ; BASIC ROM stays off: $9500 is RAM
+        sta $9500
+        lda $9500
+        sta RES+4
+        jsr pr
+        .byte $04,"BRUN FINISH",$0D,0
+        lda #$FF
+        sta RES+31
+hang:   jmp hang
+`;
+const finishSrc = `
+        .org $5000
+        lda #$AA
+        sta $${(RES + 30).toString(16)}
+done:   jmp done
+`;
+const errSrc = (cmds) => prelude + cmds.map((c) => `        jsr pr\n        .byte $04,"${c}",$0D,0\n`).join("") + `
+        lda #$FF
+        sta RES+31
+hang:   jmp hang
+`;
+
+function synthDisks(helloSrc) {
+  const file = (name, addr, bytes) => ({ name, type: 4, addr, len: bytes.length, data: new Uint8Array(bytes) });
+  const data = Uint8Array.from({ length: 300 }, (_, i) => (i * 7) & 255);
+  const disks = new Map([
+    [1, { files: [file("HELLO", 0x6000, assemble(helloSrc).bytes), file("DATA ONE", 0x3000, data)] }],
+    [2, { files: [file("MAP 00", 0x1000, new Uint8Array(16).fill(0x22)), file("SAVE", 0x3800, new Uint8Array(64)),
+      file("FINISH", 0x5000, assemble(finishSrc).bytes)] }],
+    [3, { files: [file("MAP 00", 0x1000, new Uint8Array(16).fill(0x33))] }],
+  ]);
+  return { disks, data };
+}
+
+async function bootGame(tree) {
+  const s = await harness.boot({ sd: buildSparseFat32({ U2: tree }, { label: "3RIC U2" }) });
+  const vm = s.vm;
+  for (const line of ["CD U2\r", "BRUN U2.PRG 0800\r"]) {
+    for (const ch of line) {
+      vm.keyDown(ch === "\r" ? 13 : ch.charCodeAt(0));
+      for (let i = 0; i < 8; i++) vm.run(20000);
+    }
+    for (let i = 0; i < 40; i++) vm.run(50000);
+  }
+  return s;
+}
+
+{
+  const { disks, data } = synthDisks(mainSrc);
+  const info = {};
+  const tree = buildFromDisks(disks, info);
+  assert.deepEqual(Object.keys(tree), ["U2.PRG", "PROGRAM", "PLAYER", "GALACTIC"]);
+  assert.deepEqual(Object.keys(tree.PROGRAM), ["HELLO", "DATAONE"]);
+  assert.notEqual(tree.PLAYER.MAP00[0], tree.GALACTIC.MAP00[0]);
+  const s = await bootGame(tree);
+  const vm = s.vm;
+  let serial = "";
+  for (let i = 0; i < 4000 && vm.peek(RES + 30) !== 0xaa && vm.peek(RES + 31) !== 0xff; i++) { vm.run(20000); serial += vm.drainOutput(); }
+  serial += vm.drainOutput();
+  const r = (n) => vm.peek(RES + n);
+  assert.equal(r(30), 0xaa, `BRUN FINISH ran (results ${Array.from({ length: 8 }, (_, i) => r(i).toString(16))}, serial ${JSON.stringify(serial.slice(-300))})`);
+  assert.equal(r(0), 0xee, "BLOAD stops exactly at EOF");
+  for (let i = 0; i < 300; i++) assert.equal(vm.peek(0x3000 + i), data[i]);
+  assert.equal(vm.peek(0x3400 + 299), data[299], ",A$ overrides the file's address");
+  assert.equal(r(1), 0x22, "DISK 2: the player disk's MAP 00");
+  assert.equal(r(2), 0x33, "DISK 3: the galactic disk's own MAP 00");
+  assert.equal(r(3), 0, "BSAVE wrote the file in place and it reads back");
+  assert.equal(r(4), 0x3c, "BASIC ROM overlay stays off");
+  assert.deepEqual([r(5), r(6), r(7)], [0xc1, 0x5a, 0xa5], "COUT keeps A, X and Y");
+  const screen = s.textScreen();
+  const at = screen.findIndex((l) => l.startsWith("PORT TEST"));
+  assert.ok(at >= 0 && screen[at + 1].startsWith("A"), `ordinary text reaches the screen: ${screen.join("|")}`);
+  assert.ok(!screen.some((l) => /BLOAD|FLOAD|NOMON/.test(l)), "commands are not echoed");
+  const R = info.resident.symbols;
+  for (let a = R.FILETAB; a < 0x9600 + info.resident.bytes.length; a++) assert.equal(vm.peek(a), info.resident.bytes[a - 0x9600]);
+  for (const cmd of ["CD PROGRAM\r", "FLOAD HELLO 6000 0000 ", "FLOAD DATAONE 3000 0000 012B\r", "FLOAD DATAONE 3400 0000 012B\r",
+    "CD ..\rOK\rCD PLAYER\r", "FLOAD MAP00 1000 0000 000F\r", "CD GALACTIC\r", "OWRITE SAVE 3800 0040\r", "FLOAD SAVE 3900 0000 003F\r", "FLOAD FINISH 5000 0000 "])
+    assert.ok(serial.includes(cmd), `ROM DOS saw ${JSON.stringify(cmd)}`);
+  assert.doesNotMatch(serial, /NOMON|BLOAD|BSAVE|NOFIND|ERR\r/, "only ROM DOS verbs reach the ROM, and none failed");
+  console.log("PASS translator on ROM DOS: BLOAD/BRUN/BSAVE, disk folders, exact lengths, text passthrough");
+}
+
+for (const [cmds, message] of [
+  [["DISK 2", "BLOAD DATA ONE"], "FILE NOT ON THIS DISK"],
+  [["DISK 2", "BSAVE SAVE,A$3800,L$20"], "BSAVE NOT A WHOLE FILE"],
+  [["CATALOG"], "UNKNOWN DOS COMMAND"],
+]) {
+  const { disks } = synthDisks(errSrc(cmds));
+  const s = await bootGame(buildFromDisks(disks));
+  const vm = s.vm;
+  let serial = "";
+  for (let i = 0; i < 1500 && !harness.MONITOR_DUMP.test(serial) && vm.peek(RES + 31) !== 0xff; i++) { vm.run(20000); serial += vm.drainOutput(); }
+  assert.notEqual(vm.peek(RES + 31), 0xff, `${cmds.at(-1)} must not succeed`);
+  assert.match(serial, harness.MONITOR_DUMP, "stops in the monitor");
+  assert.ok(s.textScreen().some((l) => l.includes(message)), `screen says ${message}: ${s.textScreen().join("|")}`);
+  assert.ok(vm.textMode(), "text mode for the message");
+  assert.doesNotMatch(serial, /OWRITE|FLOAD DATAONE/, "the ROM never saw the bad command");
+}
+console.log("PASS missing file, partial BSAVE and unknown commands stop in the monitor with a message");
+
+{
+  const { disks } = synthDisks(errSrc([]));
+  const tree = buildFromDisks(disks);
+  delete tree.PROGRAM.HELLO;                       // an incomplete card
+  const s = await bootGame(tree);
+  for (let i = 0; i < 200; i++) s.vm.run(20000);
+  const m = s.textScreen().join("\n").match(harness.MONITOR_DUMP);   // CSW is still the translator: screen only
+  assert.ok(m, `a HELLO that did not load stops in the monitor: ${s.textScreen().join("|")}`);
+  assert.equal(parseInt(m[1], 16) & 0xfff0, 0x6000, `BRK at $6000, not stale code (${m[0]})`);
+  console.log("PASS a card without HELLO stops at $6000 instead of running stale memory");
+}
+
+// ---------------------------------------------------------------------------
+// Optional: the real game.
+
+if (process.env.U2_DISKS) {
+  const info = {};
+  const tree = buildTree(process.env.U2_DISKS, info);
+  const s = await bootGame(tree);
+  const vm = s.vm;
+  let serial = "";
+  const run = (n) => { for (let i = 0; i < n; i++) { vm.run(50000); serial += vm.drainOutput(); } };
+  const type = (str) => { for (const ch of str) { vm.keyDown(ch === "\r" ? 13 : ch.charCodeAt(0)); run(4); } };
+  const until = (addr) => {
+    vm.addBreakpoint(addr);
+    let hit = false;
+    for (let i = 0; i < 4000 && !hit; i++) { vm.run(5000); serial += vm.drainOutput(); hit = vm.breakpointHit(); }
+    vm.removeBreakpoint(addr);
+    return hit;
+  };
+  const same = (a, bytes) => bytes.every((b, i) => vm.peek(a + i) === b);
+  run(900);
+  assert.ok(s.textScreen().some((l) => l.includes("PLAY A GAME OF ULTIMA")), "title sequence reaches the menu");
+  type("C"); run(300);
+  type("15\r15\r15\r15\r15\r15\r"); type("M"); type("1"); type("1"); type("IOLO\r"); run(20);
+  type("Y"); run(700);
+  assert.match(serial, /CD PLAYER\rOK\rFLOAD PLAYER 4E00 0000 00FF\r[^]*OWRITE PLAYER 4E00 0100\r[^]*CD PROGRAM\r/, "creation saves on the player disk and returns");
+  type("P"); run(500);
+  assert.ok(!vm.textMode() && vm.mixed(), "overworld in mixed hi-res");
+  assert.match(serial, /FLOAD ULTIMAII 5000 0000 38CE\r[^]*FLOAD MAP20 1000 0000 0FFF\r/, "game loads its first map");
+  assert.equal(String.fromCharCode(...[0, 1, 2, 3].map((i) => vm.peek(0x4e00 + i) & 0x7f)), "IOLO");
+  // The space-travel disk swaps, run in place in the patched STARS.OBJ.
+  vm.loadData(0x8900, tree.PLAYER.STARSOBJ);
+  vm.poke(0x4e37, 3);
+  vm.setPC(0x9002);
+  assert.ok(until(0x9032), "galactic swap returns without waiting for ESC");
+  vm.setPC(0x6706);
+  assert.ok(until(0x673e));
+  assert.ok(same(0x1000, tree.GALACTIC.MAP30) && !same(0x1000, tree.PLAYER.MAP30), "planet map comes from the galactic disk");
+  vm.setPC(0x8fd4);
+  assert.ok(until(0x9001), "player swap returns without waiting for ESC");
+  vm.poke(0x4e37, 0);
+  vm.setPC(0x6706);
+  assert.ok(until(0x673e));
+  assert.ok(same(0x1000, tree.PLAYER.MAP40), "Earth map comes from the player disk");
+  assert.doesNotMatch(serial, /NOFIND|ERR\r|ULTIMA II PORT/);
+  console.log("PASS original Ultima II: title, creation + save, overworld, galactic/player disk swaps");
+} else {
+  console.log("SKIP real-disk play (set U2_DISKS to the folder with the three images)");
+}
