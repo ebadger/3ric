@@ -114,6 +114,30 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     not `$06`. `STARTUP`'s unconditional IIe aux/RamWorks writes are removed by one
     byte-verified patch. No ROM, VM, web bridge or hardware change is part of the port.
   - **Acceptance and limits:** see [`docs/porting-logs/ultima-v.md`](../docs/porting-logs/ultima-v.md).
+- **Ultima II SD-card port:** `codegen/tools/port-ultima2.mjs` converts the three
+  owner-supplied DOS 3.3 disks (program, player master, galactic) into a `U2/`
+  folder for the micro-SD card (`CD U2`, `BRUN U2.PRG 0800`). The game data stays
+  local; the repository holds the converter and glue (`codegen/patches/ultima2/`).
+  - **Translator contract:** Ultima II uses DOS 3.3 only through Ctrl-D text
+    commands printed via `COUT`, so the loader turns the BASIC overlay off (`$CAFE`
+    nest count 0; the game uses RAM to `$95FF`) and installs a resident at
+    `$9600-$AFFF` (DOS 3.3's old region) as `CSW`. Ordinary characters go to
+    `COUT1`; `BLOAD name[,A$]` becomes `FLOAD key addr 0000 len-1`, `BRUN` adds a
+    jump, `BSAVE name,A$,L$` becomes `OWRITE key addr len` and must rewrite an
+    existing whole file, `NOMON/MON/MAXFILES` are ignored. Each disk is a folder
+    (`PROGRAM`, `PLAYER`, `GALACTIC`); keys are a name's first eight letters/digits,
+    looked up among the current disk's files in a generated table (address,
+    length). A port-only `DISK n` command switches folders (`CD ..`, `CD dir`).
+    ROM commands run through the ROM's own collector (from the `$03EA` hook) with
+    echo muted, saving `$B0-$BF` and `CSW`; A/X/Y are preserved. An unknown
+    command, a file not on the current disk or a partial `BSAVE` stops in the
+    monitor with a message before reaching the ROM.
+  - **Patches:** seven byte-verified "insert disk" prompts (main program, `CREATE`
+    twice, `STARS.OBJ` twice on each of two disks) become `DISK n` commands with
+    the ESC wait removed. No other game byte, ROM, VM, web bridge or hardware
+    change. The ROM stays mapped (no language-card use), so keyboard NMIs reach the
+    unmodified ROM handler. `$9600-$AFFF` is reserved for this profile only.
+  - **Acceptance and limits:** see [`docs/porting-logs/ultima-ii.md`](../docs/porting-logs/ultima-ii.md).
 - **ROM DOS load/write semantics (observed, unchanged):** `FLOAD name addr start end`
   takes an inclusive end offset and skips to `start` byte by byte; `BLOAD` stores one
   byte past EOF; `OWRITE` writes whole sectors in place and, for a missing file, falls
@@ -444,6 +468,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | Ultima V SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima5.test.mjs` drives the real loader/resident/shim on the ROM DOS with synthetic volumes (and boots the original disks to the title with `U5_DISKS`); `port-ultima5.native.ps1` decodes real PS/2 frames at 94-160-cycle periods with language-card RAM mapped, including Caps Lock LED exchanges and a `` strobe on a stop-bit edge. Manual WASM play covered creation, save, overworld, combat, towne entry. First board trial: title shown, keyboard failed (fixed since, re-trial pending). Dialogue, dungeons, endgame and music (needs 128 KB) are open; ROM DOS command failures are not detected (card contents trusted); block reads cost ~1.7 M cycles. |
+| Ultima II SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima2.test.mjs` drives the real loader and DOS 3.3 translator on the ROM DOS with synthetic disks (BLOAD/BRUN/BSAVE, folder switches, exact lengths, register preservation, fail-loud errors); with `U2_DISKS` it plays the original disks through title, character creation and save, the overworld and both patched space disk swaps. Manual WASM play also covered movement, Z-stats, quit-save, dungeon entry, reloading a saved character and the demo slideshow. No physical-board trial yet; towns/dialogue, combat depth, space flight and the endgame were not played through; the game runs ~1.54x faster than on a 1.02 MHz Apple II. |
 | ROM `BLOAD` stores one byte past EOF | Known gap (ROM) | Observed in `fat32_file_read`; programs loading below live data must use `FLOAD 0000 eof-1`. ROM source is not in this repository. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |

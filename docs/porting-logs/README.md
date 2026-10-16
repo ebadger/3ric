@@ -19,6 +19,7 @@ below as working on the physical machine.
 |-------|-------------|-------------------|
 | [Archon](archon.md) (2026-10-05) | Preserve input interrupts across both language-card banks, and avoid paddle-timer traffic in a digital-controller adapter | Reproducible disk patcher with native PS/2 and WASM board/combat coverage; physical-board confirmation remains open |
 | [Ultima V](ultima-v.md) (2026-10-15) | Replace a game's own disk loader under unmodified binaries; decode PS/2 bits before any bank work; read the ROM DOS's exact load/write semantics | Converter, glue, synthetic-volume and native PS/2 tests; WASM play through creation, overworld, combat, towne entry and save; first board trial failed on keyboard (fixed, re-trial pending) |
+| [Ultima II](ultima-ii.md) (2026-10-15) | A game that only speaks DOS 3.3 through Ctrl-D text needs a command translator on `CSW`, not a loader rewrite; patch "insert disk" prompts into folder switches | Converter, translator and patch tests on synthetic disks; real-disk WASM play through creation, save, overworld, dungeon entry, reload and both space disk swaps; no board trial yet |
 
 ## Scope and evidence
 
@@ -34,7 +35,7 @@ are included or offered for download here. Short instruction changes describe th
 engineering intervention, not a redistribution of the games.
 
 Historical patchers and runbooks named in the four September logs are **not present
-in this checkout**. The newer Archon and Ultima V experiments include their own
+in this checkout**. The newer Archon, Ultima V and Ultima II experiments include their own
 converters and tests, but none of the original or converted game data. Local commit IDs identify retained development history;
 they may not be reachable from `origin` or available in a fresh clone. They are
 intentionally not GitHub commit links. The offsets, transformations, hashes, and
