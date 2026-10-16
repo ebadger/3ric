@@ -19,6 +19,7 @@ below as working on the physical machine.
 |-------|-------------|-------------------|
 | [Archon](archon.md) (2026-10-05) | Preserve input interrupts across both language-card banks, and avoid paddle-timer traffic in a digital-controller adapter | Reproducible disk patcher with native PS/2 and WASM board/combat coverage; physical-board confirmation remains open |
 | [Ultima V](ultima-v.md) (2026-10-15) | Replace a game's own disk loader under unmodified binaries; decode PS/2 bits before any bank work; read the ROM DOS's exact load/write semantics | Converter, glue, synthetic-volume and native PS/2 tests; WASM play through creation, overworld, combat, towne entry and save; first board trial failed on keyboard (fixed, re-trial pending) |
+| [Ultima I](ultima-i.md) (2026-10-15) | Replace only ProDOS (global page + MLI) under an unmodified ProDOS game; the ROM DOS reuses `$B0-$BF`, so keep scratch across each command; test the parameter block, not just the loaded bytes | Converter and synthetic stand-in tests on the ROM DOS; scripted WASM play of the original disk through creation, save/continue, town, castle, combat and a dungeon; no board trial yet |
 
 ## Scope and evidence
 
@@ -34,7 +35,7 @@ are included or offered for download here. Short instruction changes describe th
 engineering intervention, not a redistribution of the games.
 
 Historical patchers and runbooks named in the four September logs are **not present
-in this checkout**. The newer Archon and Ultima V experiments include their own
+in this checkout**. The newer Archon, Ultima V and Ultima I experiments include their own
 converters and tests, but none of the original or converted game data. Local commit IDs identify retained development history;
 they may not be reachable from `origin` or available in a fresh clone. They are
 intentionally not GitHub commit links. The offsets, transformations, hashes, and
