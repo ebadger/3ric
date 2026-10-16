@@ -272,6 +272,13 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   the board are unverified. Loads run
   ~2 KB/s in the emulator. Card contents are trusted: copy the whole folder.
   See [`docs/porting-logs/ultima-iii.md`](../docs/porting-logs/ultima-iii.md).
+- **Adventure compatibility candidate:** the owner-supplied 1980 A Bit Better Associates
+  *Adventure* DOS 3.3 disk (`adventure.dsk`) chains two Applesoft programs through machine-code
+  `CHAIN` at `$0208`. `codegen\tools\patch-adventure.mjs` creates a bootable local WOZ2
+  image by relocating 3ric's ROM MSBASIC to Language Card RAM (`$D000-$F0FF`), patching
+  DOS 3.3 + `CHAIN` + Applesoft runtime hooks + the 1977 KIM-1 `FMULT` `ROR RESULT+2` bug,
+  and retokenizing both BASIC programs without changing `badger6502.bin` or the VM. See
+  [`docs/porting-logs/adventure.md`](../docs/porting-logs/adventure.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**
