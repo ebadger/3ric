@@ -54,8 +54,8 @@ fs.writeFileSync(path.join(out, "resident.bin"), resident.bytes);
 const s = resident.symbols;
 const program = assemble(`
         .org $0800
-        bit $C007               ; BASIC overlay off, as the game runs
         stz $CAFE
+        bit $C007               ; BASIC overlay off, as the game runs
         lda $C089               ; read ROM, write bank 1 + high RAM
         lda $C089
         lda #$${BANKSIG_VALUE.toString(16)}
@@ -87,6 +87,8 @@ wait:   lda $C000
         sta $0300,x
         bit $C010
         inx
+        cpx #7
+        beq idle                ; stop polling: the stop-bit strobe check follows
         txa
         and #1
         beq use2
@@ -105,6 +107,8 @@ use2:   lda $C083
 fail:   lda #$EE
         sta $03FE
         jmp fail
+idle:   ldy #$77
+        bra idle
 `);
 fs.writeFileSync(path.join(out, "program.bin"), program.bytes);
 console.log(s.NMI_ENTRY.toString(16));

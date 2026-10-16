@@ -3,7 +3,8 @@
 //
 // A small 6502 program keeps language-card RAM mapped (like Ultima V), points
 // the RAM NMI/IRQ vectors at the resident, alternates bank 1/bank 2 between
-// keystrokes and collects $C000 characters. Scan codes arrive as real PS/2
+// keystrokes and collects $C000 characters. Caps Lock must complete the ROM's
+// LED command exchange, and a $C010 strobe on a stop-bit edge must not be lost. Scan codes arrive as real PS/2
 // frames on VIA1 CA2/PA7 at a given bit period with DATA changing a given
 // number of cycles after each falling clock edge. Every NMI must return with
 // A/X/Y, flags, stack, language-card bank and BASIC overlay unchanged.
@@ -36,6 +37,7 @@ namespace
         uint64_t next = 0;
         unsigned bitIndex = 0;
         std::array<uint8_t, 11> bits{};
+        std::vector<uint8_t> commands;
         bool clockHigh = true;
 
         void pins(bool data, bool clock)
@@ -63,6 +65,18 @@ namespace
             case Phase::TxLow:
                 pins(true, false);
                 bits[bitIndex++] = (vm.GetVIA1()->GetPortAOutput() >> 7) & 1;
+                if (bitIndex == bits.size())
+                {
+                    require(bits[0] == 0 && bits[10] == 1, "Bad PS/2 host command frame");
+                    uint8_t value = 0, parity = bits[9];
+                    for (int i = 0; i < 8; ++i)
+                    {
+                        value |= bits[i + 1] << i;
+                        parity ^= bits[i + 1];
+                    }
+                    require(parity == 1, "Bad PS/2 host command parity");
+                    commands.push_back(value);
+                }
                 phase = bitIndex == bits.size() ? Phase::HostRelease : Phase::TxHigh;
                 next += 80;
                 break;
@@ -156,7 +170,7 @@ namespace
             while (cycles < end) step();
         }
 
-        void scan(uint8_t code)
+        void scan(uint8_t code, bool strobeAtStop = false)
         {
             std::array<uint8_t, 12> bits{};
             uint8_t parity = 1;
@@ -174,6 +188,7 @@ namespace
                 while (cycles < edge) step();
                 vm->GetVIA1()->SetPortAInputBits(0xc0, bits[i] << 7);
                 vm->SignalVIA1Pin(VIA::CA2);
+                if (strobeAtStop && i == 10) vm->SignalVIA1Pin(VIA::CB1); // $C010 on the same edge
                 while (cycles < edge + period / 2) step();
                 vm->GetVIA1()->SetPortAInputBits(0x40, 0x40);
                 while (cycles < edge + hold) step();
@@ -213,6 +228,28 @@ int main(int argc, char** argv)
         m.run(200000);
         require(m.vm->PeekData(0x03fd) == 1, "Test program did not reach its key loop");
         m.checking = true;
+        // Caps Lock: the ROM answers with an LED command (ED <mask>) that the
+        // keyboard clocks back in, all while language-card RAM stays mapped.
+        m.key(0x58);
+        for (uint64_t end = m.cycles + 400000;
+             m.keyboard.phase != KeyboardPeer::Phase::Idle || !m.frames.empty()
+             || m.keyboard.commands.size() < 2; )
+        {
+            if (m.cycles >= end)
+            {
+                std::string s;
+                for (auto c : m.keyboard.commands) s += " " + std::to_string(c);
+                throw std::runtime_error("Caps Lock LED exchange timed out: phase " + std::to_string(int(m.keyboard.phase))
+                    + " frames " + std::to_string(m.frames.size()) + " cmds" + s + " PC " + std::to_string(m.cpu->PC)
+                    + " KBSTATE " + std::to_string(m.vm->PeekData(0xce00)) + " LEDS " + std::to_string(m.vm->PeekData(0xce18)));
+            }
+            m.step();
+        }
+        const auto& cmd = m.keyboard.commands;
+        bool ledsOn = false;
+        for (size_t i = 0; i + 1 < cmd.size(); ++i) ledsOn |= cmd[i] == 0xed && (cmd[i + 1] & 0x04);
+        require(ledsOn, "Caps Lock did not produce an ED command with the Caps LED bit");
+        m.run(100000);
         // U L T I M A 5
         const std::array<uint8_t, 7> codes{0x3c, 0x4b, 0x2c, 0x43, 0x3a, 0x1c, 0x2e};
         const std::string expected = "ULTIMA5";
@@ -227,8 +264,17 @@ int main(int argc, char** argv)
         require(m.vm->PeekData(0x03fe) != 0xee, "Language-card bank marker changed after a keystroke");
         require(got == expected, "Typed ULTIMA5 but the program received '" + got + "'");
         require(m.checkedInterrupts > 200, "Too few NMIs were checked");
-        std::cout << "PASS native PS/2 " << period << "/" << hold << ": " << got << ", "
-                  << m.checkedInterrupts << " NMIs preserved registers, flags, bank and overlay\n";
+        // The program has stopped polling. A $C010 strobe that lands on a
+        // stop-bit edge must still clear $C000 (the ROM's exit writes $7F to IFR).
+        m.vm->WriteData(0xc000, 0xc1);
+        m.scan(0xf0, true);
+        m.run(20000);
+        require(!(m.vm->PeekData(0xc000) & 0x80), "A $C010 strobe on a PS/2 stop bit was lost");
+        m.scan(0x1c);
+        m.run(40000);
+        std::cout << "PASS native PS/2 " << period << "/" << hold << ": Caps Lock LEDs, " << got
+                  << ", strobe on stop bit, " << m.checkedInterrupts
+                  << " NMIs preserved registers, flags, bank and overlay\n";
         return 0;
     }
     catch (const std::exception& e)

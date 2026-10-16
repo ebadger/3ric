@@ -50,8 +50,8 @@ br_done:
         brk                     ; BRUN enters with JMP: no return address
 
 rom_ok:
+        stz $CAFE               ; ROM NMI nest count 0, so its exit keeps BASIC off
         bit $C007               ; BASIC ROM off: $9000-$BFFF is RAM
-        stz $CAFE               ; ROM NMI nesting count (0 = leave it off)
         ldx #0
 copy_res:
         lda RES_SRC,x

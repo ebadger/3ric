@@ -46,18 +46,14 @@ nmi_dispatch:
         bcs ps2_edge
         and #$08                ; CB1: a $C010 strobe clear
         beq nmi_rom
-        lda $C000
-        and #$7F
-        sta $C000
-        lda #$10
-        bra nmi_ack
+        bra cb1_clear
 ps2_edge:
         lda KBSTATE
         beq ps2_start
         dec a
         beq ps2_data
         dec a
-        bne nmi_rom             ; stop bit: let the ROM decode the scan code
+        bne ps2_stop            ; state 3: stop bit
         inc KBSTATE             ; parity -> stop
         lda KBTEMP
         cmp #$12                ; left shift
@@ -82,6 +78,19 @@ ps2_next:
         inc KBSTATE
 ps2_done:
         lda #$01
+        bra nmi_ack
+ps2_stop:
+        ; The ROM decodes the scan code, then leaves through $F1C6, which
+        ; writes $7F to IFR. Service a pending $C010 strobe (CB1) first so
+        ; that write cannot discard it; CA2 stays pending and returns here.
+        lda VIA_IFR
+        and #$10
+        beq nmi_rom
+cb1_clear:
+        lda $C000
+        and #$7F
+        sta $C000
+        lda #$10
 nmi_ack:
         sta VIA_IFR
 nmi_more:

@@ -38,7 +38,7 @@ ZP_FLAGS    = $70
 ZP_ENT      = $72               ; table entry pointer
 ZP_EOF      = $74               ; write length
 ZP_TMP      = $76
-ZP_CMD      = $7F               ; cmdbuf index
+ZP_CMD      = $71               ; cmdbuf index ($7F stays DINKEYDOS's slot byte)
 
 F_PTR       = $01
 F_ADDR      = $02

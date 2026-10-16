@@ -77,14 +77,15 @@ export function applyPatches(volumes) {
 function fileTable(volumes) {
   // One entry per distinct (key, aux, eof); volmask bit n = present on VOLUMES[n].
   const table = new Map();
+  const keyNames = new Map();
   VOLUMES.forEach(([volume], index) => {
     for (const f of volumes.get(volume).files) {
       const key = sdKey(f.name);
-      for (const other of volumes.get(volume).files)
-        if (other !== f && sdKey(other.name) === key) throw new Error(`/${volume}: ${f.name} and ${other.name} share SD key ${key}`);
+      if (keyNames.has(key) && keyNames.get(key) !== f.name)
+        throw new Error(`SD key ${key} is shared by ${keyNames.get(key)} and ${f.name}`);
+      keyNames.set(key, f.name);
       const id = `${key}/${f.aux}/${f.eof}`;
       const prev = table.get(id);
-      if (prev && prev.name !== f.name) throw new Error(`SD key ${key} is shared by ${prev.name} and ${f.name}`);
       if (f.eof === 0 || f.eof > 0xffff) throw new Error(`${f.name}: unsupported size ${f.eof}`);
       if (prev) prev.volmask |= 1 << index;
       else table.set(id, { key, name: f.name, aux: f.aux, eof: f.eof, volmask: 1 << index });

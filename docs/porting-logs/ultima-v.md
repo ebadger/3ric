@@ -69,7 +69,9 @@ loader points both RAM vectors here.
   strobe (CB1) are serviced directly, mirroring the ROM's receiver state
   (`KBSTATE $CE00`, `KBTEMP $CE01`, `KBD_NONPRINT $CE19`). DATA is read through
   `PORTA`'s no-handshake alias `$C20F` about 30 cycles after the edge; only the
-  serviced IFR bit is acknowledged, and IFR is re-checked before `RTI`.
+  serviced IFR bit is acknowledged, and IFR is re-checked before `RTI`. A pending
+  strobe is serviced before a stop bit is forwarded: the ROM's exit writes `$7F`
+  to IFR and would otherwise discard it, leaving the key strobed.
 - **ROM path:** the stop bit (scan-code decode), ACIA, paddles and timers go to the
   ROM handler. The entry saves X/Y (the ROM restores only A/X), reads a signature
   byte at `$DFFF` (bank 1 holds `$A5`, bank 2 holds the game's font, checked at
@@ -137,7 +139,10 @@ exactly as DINKEYDOS would.
 shared VM natively and types `ULTIMA5` as real PS/2 frames (bit periods 94/120/160
 cycles, DATA held 80) while a program keeps language-card RAM mapped and swaps
 banks between keys. Every NMI must return with A/X/Y, flags, stack, bank and BASIC
-overlay unchanged (238 per run). The pre-fix resident fails all three cases.
+overlay unchanged (293 per run), a Caps Lock press must produce the ROM's ED LED command with the
+Caps bit and the keyboard's FA replies, and a $C010 strobe landing on a stop-bit
+edge must still clear $C000. The first resident garbles the typing; the second
+fails only the stop-bit strobe case.
 
 Manual emulator sessions on the original disks (scripted keys, screenshots):
 title and intro animation; character creation through the gypsy's questions,
@@ -151,8 +156,8 @@ respond (fixed above, not yet re-tried on the board) and there was no music
 (expected: see below).
 
 **Not yet shown:** a conversation (the `TALK` overlay loads; no scripted dialogue
-completed), dungeons, keeps/castle, the endgame, Caps/Num Lock LED exchanges
-through the fast path, and performance on a real card's cluster size.
+completed), dungeons, keeps/castle, the endgame, and performance on a real card's
+cluster size.
 
 ## Known limits
 
