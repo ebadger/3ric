@@ -88,7 +88,7 @@ export function bootDos(img) {
   const count = b1[0xe0], top = b1[0xe7];
   const mem = new Uint8Array(0x10000);
   for (let i = 0, page = top - 1; i < count; i++, page--) {
-    if (t > 34 || page < 0) return null;
+    if (t < 0 || t > 34 || s < 0 || s > 15 || page < 0) return null;
     mem.set(sector(img, t, s), page * 256);
     if (--s < 0) { s = 15; t--; }
   }
@@ -122,6 +122,7 @@ export function fileTable(mem) {
 export function readFile(img, e) {
   const data = new Uint8Array(e.length);
   let t = e.track, s = e.sector;
+  if (t > 34 || s > 15) throw new Error(`${e.name}: track/sector ${t}/${s} out of range`);
   if (e.part) data.set(sector(img, t, s).subarray(0, e.part), e.pages * 256);
   for (let p = e.pages - 1; p >= 0; p--) {
     if (--s < 0) { s = 15; t--; }

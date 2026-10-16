@@ -47,6 +47,7 @@ CR          = $8D
 rwts:
         php
         sei
+        cld                     ; the game uses decimal mode; PLP restores it
         lda ENT                 ; a later sector of this command?
         cmp #<IOB
         bne first

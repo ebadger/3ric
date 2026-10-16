@@ -80,6 +80,7 @@ copy:
         ldx #0
 run_test:
         lda cmd_test,x          ; Ctrl-D BRUN TEST: the DOS loads and jumps
+        beq br_done             ; (only reached if the DOS returned)
         ora #$80                ; (the DOS parses high-bit ASCII)
         jsr COUT
         inx
@@ -90,5 +91,5 @@ msg_rom:    .byte $8D
             .byte $8D,0
 cmd_test:   .byte $8D,$84
             .text "BRUN TEST"
-            .byte $8D
+            .byte $8D,0
 loader_end:
