@@ -213,7 +213,9 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   became folder switches. WASM play reached the title, demo, character creation and
   save, the overworld, a dungeon and a saved-game reload; the space disk swaps were run
   in place. No board trial yet; towns, space flight and the endgame are unplayed, and
-  the game runs ~1.54x faster than an Apple II. Card contents are trusted.
+  the game runs ~1.54x faster than an Apple II. Card contents are trusted. Known issue
+  (owner decision): each 4 KB map save writes one extra SD sector past the file, and
+  saves need a 512-byte-cluster card.
   See [`docs/porting-logs/ultima-ii.md`](../docs/porting-logs/ultima-ii.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.

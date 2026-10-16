@@ -133,6 +133,32 @@ native PS/2-frame test was run for this port.
 
 ## Known limits
 
+- **Map saves write one sector too many (known issue, shipped by owner decision).**
+  The ROM's `OWRITE` sizes a write as ⌊len/512⌋+1 sectors (`fat32_bytes_to_clusters`
+  ORs the whole-sector count into its round-up test at `$EB07`). The translator passes
+  the file length, so 256-byte `PLAYER`/`MON` saves are exact but every 4 KB `MAP`
+  save writes a ninth 512-byte sector (from `$2000`) past the end of the file's
+  cluster chain, onto a location derived from the end-of-chain marker - most
+  likely in the second FAT copy. The game keeps working; the card may need
+  `chkdsk` on a PC. Fix when wanted: pass `len-1` (as `FLOAD` already does) and add a
+  4 KB save round-trip test. Found by the review panel; not yet observed on a card.
+- **512-byte clusters only for saves.** The ROM's write loop advances to the next
+  cluster on every sector (`$E53C` → `$E3EB`), unlike reads. Multi-sector saves are
+  only correct on cards formatted with one sector per cluster, as the repository's
+  shipped card image is. On a card with larger clusters, map saves lose all but their
+  first 512 bytes and write the rest elsewhere.
+- **Unvalidated converter inputs (known issue).** The tool does not reject one image
+  that matches two disk roles, files that would load over the translator at `$9600`,
+  or DOS 3.3 files whose header length exceeds their allocated sectors (trailing
+  track/sector-list slots are read as zeros). The owner's three disks convert
+  correctly; other or damaged images may not be caught.
+- **Over-long commands are truncated, not rejected.** A Ctrl-D line over 96
+  characters is cut and still executed. Ultima II's longest command is 26.
+- **`BRUN` leaves its four bytes of call frames on the stack**, as reviewers noted.
+  Kept deliberately: a `BRUN` routine that ends in `RTS` returns to its caller as
+  under DOS 3.3, no Ultima II `BRUN` target returns or checks the stack, the game
+  keeps no data in page 1, and abandoned frames on the circular stack are never
+  popped.
 - **Speed.** 3RIC runs at 1.573 MHz, so the game and its speaker sounds run about
   1.54x faster than on a 1.02 MHz Apple II, including the idle timer that makes
   the party "PASS".
