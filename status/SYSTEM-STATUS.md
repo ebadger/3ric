@@ -71,6 +71,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_woz_download.cjs        # Disk II boots, overlap-safe images through 34,560 bytes, size guards
 & $node codegen\tools\port-ultima5.test.mjs # Ultima V shim on ROM DOS (set U5_DISKS to also boot the real disks)
 pwsh codegen\tools\port-ultima5.native.ps1  # Ultima V resident: real PS/2 frames with language-card RAM mapped (MSVC)
+& $node codegen\tools\port-ultima1.test.mjs # Ultima I ProDOS stand-in on ROM DOS (set U1_DISK to also play the real disk)
 ```
 
 C++ CPU unit tests (`emulator/Badger6502VMTest`, MSTest): **Test → Run All Tests** in
@@ -204,6 +205,18 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   dungeons and music (128 KB only) are unverified. Card contents are trusted: copy
   the whole folder. New overworld blocks cost ~1.1 s each through `FLOAD`.
   See [`docs/porting-logs/ultima-v.md`](../docs/porting-logs/ultima-v.md).
+- **Ultima I (SD-card port, experimental):** `node codegen\tools\port-ultima1.mjs <u1.dsk> <out>`
+  converts the owner's ProDOS disk (`/U1`) into a `U1\` folder; copy it to the card,
+  then `CD U1` and `BRUN U1.PRG 0800`. Game data stays local. Only ProDOS is replaced:
+  a stand-in global page and MLI at `$BB00-$BFFF` turn file reads/writes into
+  `FLOAD`/`OWRITE`; `U1.SYSTEM`, Origin's file layer and the game run unmodified (one
+  patch skips the mouse-card probe). The language card is never mapped, so the ROM's
+  own keyboard NMI path serves the game. WASM play covered the intro, character
+  creation and save, continue, quick-save, a town, a castle, overworld combat and a
+  dungeon; space, the time machine and the endgame are unverified, and there is no
+  board trial yet. Loads cost ~0.45 s/KB (startup ~22 s, a town ~8 s). The save is
+  `U1\U1VARS` (the converter keeps an existing one). Card contents are trusted.
+  See [`docs/porting-logs/ultima-i.md`](../docs/porting-logs/ultima-i.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**
