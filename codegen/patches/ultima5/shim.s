@@ -48,6 +48,7 @@ F_WRITE     = $10
 
 CTRL_D      = $84
 CR          = $8D
+MUTE_OUTPUT = $CE09             ; ROM: suppress screen echo of DOS output
 
         .org $D000
 
@@ -602,7 +603,37 @@ cn_store:
 cmd_run:
         lda #CR
         jsr cmd_char
-        jmp ROM_CMD
+        ldx #$0F
+cr_save:
+        lda $B0,x               ; ROM DOS / FAT32 zero page
+        sta zsave,x
+        dex
+        bpl cr_save
+        lda $36
+        sta zsave+16
+        lda $37
+        sta zsave+17
+        lda romcsw              ; COUT -> ROM DOS command collector
+        sta $36
+        lda romcsw+1
+        sta $37
+        lda #$80
+        sta MUTE_OUTPUT
+        jsr ROM_SEND
+        lda zsave+16
+        sta $36
+        lda zsave+17
+        sta $37
+        ldx #$0F
+cr_restore:
+        lda zsave,x
+        sta $B0,x
+        dex
+        bpl cr_restore
+        rts
+
+romcsw:     .word 0             ; captured by the loader from the $03EA hook
+zsave:      .res 18
 
 s_fload:    .asciiz "FLOAD "
 s_zero:     .asciiz " 0000 "

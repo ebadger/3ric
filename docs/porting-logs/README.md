@@ -18,7 +18,7 @@ below as working on the physical machine.
 | Title | Main lesson | Evidence boundary |
 |-------|-------------|-------------------|
 | [Archon](archon.md) (2026-10-05) | Preserve input interrupts across both language-card banks, and avoid paddle-timer traffic in a digital-controller adapter | Reproducible disk patcher with native PS/2 and WASM board/combat coverage; physical-board confirmation remains open |
-| [Ultima V](ultima-v.md) (2026-10-15) | Replace a game's own disk loader under unmodified binaries; forward NMIs from language-card RAM; read the ROM DOS's exact load/write semantics | Converter, glue and synthetic-volume tests; original disks played in the WASM emulator through creation, overworld, combat, towne entry and save; no board run |
+| [Ultima V](ultima-v.md) (2026-10-15) | Replace a game's own disk loader under unmodified binaries; decode PS/2 bits before any bank work; read the ROM DOS's exact load/write semantics | Converter, glue, synthetic-volume and native PS/2 tests; WASM play through creation, overworld, combat, towne entry and save; first board trial failed on keyboard (fixed, re-trial pending) |
 
 ## Scope and evidence
 

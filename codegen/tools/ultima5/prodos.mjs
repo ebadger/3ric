@@ -45,6 +45,7 @@ export function readProdosImage(image) {
   const owned = new Set([0, 1, header.bitmap]);
   const files = [];
   for (let dirBlock = 2, first = true; dirBlock; first = false) {
+    if (owned.has(dirBlock) && !first) throw new Error(`${header.name}: directory chain revisits block ${dirBlock}`);
     owned.add(dirBlock);
     const b = read(dirBlock);
     for (let i = first ? 1 : 0; i < 13; i++) {

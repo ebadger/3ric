@@ -1,6 +1,6 @@
 # Ultima V: an SD-card port in the Ultima IV style
 
-**2026-10-15. Emulator-verified; not yet run on the physical board.**
+**2026-10-15. Emulator-verified; first board trial booted but the keyboard failed (fixed, re-trial pending).**
 The owner supplied the eight Apple II disk sides and asked for a port like the
 [Ultima IV one](https://github.com/ebadger/u4remastereda2) (`fixed` branch), which
 put each disk in its own SD-card folder and replaced DOS 3.3 disk reads with
@@ -60,28 +60,47 @@ mask) and loaded with `FLOAD key addr 0000 eof-1`; a write becomes
 bank 1. A missing file or volume fails without reaching the ROM, as it did on the
 floppy.
 
-**Resident** (`resident.s`, `$CF00-$CFDD`): the game keeps language-card RAM
+**Resident** (`resident.s`, `$CF00-$CFFF`): the game keeps language-card RAM
 mapped, so the CPU takes NMI and IRQ vectors from the game's `$FFFA/$FFFE`. Every
-PS/2 bit, `$C010` strobe and `$C070` paddle trigger is an NMI on 3RIC. The loader
-points both RAM vectors here; the entry reads a signature byte at `$DFFF` (bank 1
-holds `$A5`, bank 2 holds the game's font, checked at build time), pushes the mode
-to restore, selects the ROM, and enters the ROM handler with a fake RTI frame whose
-status byte has B clear (the ROM IRQ handler tests it). The handler returns to the
-resident, which re-selects `$C083` or `$C08B` with two reads. Ultima V only maps
-the language card read/write, so those two modes are its complete state.
-The resident also runs ROM DOS commands: it saves `$B0-$BF` and `$36/$37`, points
-`CSW` at the ROM's command collector captured from `$03EA` at load time, selects
-"read ROM, write bank 1" (so loads can land in `$D600` and `$E000-$FFFF`), sends
-the Ctrl-D command through `COUT`, and restores everything.
+PS/2 clock edge, `$C010` strobe and `$C070` paddle trigger is an NMI on 3RIC. The
+loader points both RAM vectors here.
 
-**Loader** (`loader.s`): checks that `COUT` is `JMP ($0036)` and the `$03EA` hook
-exists, turns the BASIC overlay off and zeroes the ROM NMI nest counter (`$CAFE`),
+- **Fast path, no bank work:** PS/2 start, data and parity edges and the `$C010`
+  strobe (CB1) are serviced directly, mirroring the ROM's receiver state
+  (`KBSTATE $CE00`, `KBTEMP $CE01`, `KBD_NONPRINT $CE19`). DATA is read through
+  `PORTA`'s no-handshake alias `$C20F` about 30 cycles after the edge; only the
+  serviced IFR bit is acknowledged, and IFR is re-checked before `RTI`.
+- **ROM path:** the stop bit (scan-code decode), ACIA, paddles and timers go to the
+  ROM handler. The entry saves X/Y (the ROM restores only A/X), reads a signature
+  byte at `$DFFF` (bank 1 holds `$A5`, bank 2 holds the game's font, checked at
+  build time), pushes the mode to restore, selects the ROM and enters its handler
+  with a fake RTI frame (status B clear). The handler returns to the resident,
+  which re-selects `$C083` or `$C08B` with two reads. Ultima V only maps the
+  language card read/write, so those two modes are its complete state.
+
+The shim runs ROM DOS commands: it saves `$B0-$BF` and `$36/$37`, points `CSW` at
+the ROM's command collector captured from `$03EA` at load time, and calls the
+resident, which selects "read ROM, write bank 1" (so loads can land in `$D600`
+and `$E000-$FFFF`) while the Ctrl-D command goes through `COUT`.
+
+**Loader** (`loader.s`): checks that `COUT` is `JMP ($0036)`, the `$03EA` hook
+exists and the ROM NMI proxy `$F1BB-$F1C5` matches the one whose receiver state the
+fast path shares (otherwise it prints a message and stops in the monitor), turns
+the BASIC overlay off and zeroes the ROM NMI nest counter (`$CAFE`),
 installs the resident, copies the shim into bank 1 and clears bank 2/high RAM
 while the ROM is still selected for reads (an NMI during setup always sees ROM
 vectors), installs the RAM vectors, then selects `/ULTIMA5` and runs `STARTUP`
 exactly as DINKEYDOS would.
 
 ## What went wrong on the way
+
+- **The keyboard did not work on the board** (first hardware trial). The first
+  resident sent every NMI through ~42 cycles of bank selection before the ROM
+  handler, so the ROM sampled PS/2 DATA after the keyboard had already moved to
+  the next bit. The browser injects `$C000` directly and never showed it. A native
+  harness that clocks real PS/2 frames reproduced it (`ULTIMA5` arrived as
+  `SS EC`); the fast path above, the same approach the A2Robots and Archon ports
+  needed, decodes it at 94-200-cycle bit periods with DATA held for half a bit.
 
 - **`FLOAD`'s last operand is an inclusive end, not a length.** The first block
   reads asked for `0200` bytes from offsets past `0200` and loaded nothing; the
@@ -114,6 +133,12 @@ exactly as DINKEYDOS would.
   bank 1 mapped (bank, write-enable and BASIC-overlay state preserved), load-and-run.
 - With `U5_DISKS=<folder>`: the original disks boot to the animated title.
 
+`pwsh codegen\tools\port-ultima5.native.ps1` (Visual Studio C++ tools): builds the
+shared VM natively and types `ULTIMA5` as real PS/2 frames (bit periods 94/120/160
+cycles, DATA held 80) while a program keeps language-card RAM mapped and swaps
+banks between keys. Every NMI must return with A/X/Y, flags, stack, bank and BASIC
+overlay unchanged (238 per run). The pre-fix resident fails all three cases.
+
 Manual emulator sessions on the original disks (scripted keys, screenshots):
 title and intro animation; character creation through the gypsy's questions,
 with the save written to `UNDRWRLD`/`BRITANIA`; *Journey Onward* into Iolo's hut;
@@ -121,11 +146,28 @@ walking out to Britannia (overworld chunks streamed from `BRITANIA/RAWnn`); a
 wandering-monster fight (`PRECOM` → `MAIN.COMBAT` → back to `MAIN.OUT`); entering
 Yew (`TOWNE` disk, towne map blocks); Z-stats overlay; Quit & Save.
 
+**Physical board:** the first trial booted to the title; the keyboard did not
+respond (fixed above, not yet re-tried on the board) and there was no music
+(expected: see below).
+
 **Not yet shown:** a conversation (the `TALK` overlay loads; no scripted dialogue
-completed), dungeons, keeps/castle, the endgame, music (needs 128 KB; disabled by
-the game itself), the physical board, real PS/2 keyboard traffic (the browser
-injects `$C000`, though `$C010` strobe NMIs do exercise the forwarder), and
-performance on a real card's cluster size.
+completed), dungeons, keeps/castle, the endgame, Caps/Num Lock LED exchanges
+through the fast path, and performance on a real card's cluster size.
+
+## Known limits
+
+- **No music.** Ultima V's Apple II music needs 128 KB; `STARTUP` sees no
+  auxiliary memory on 3RIC and disables it, exactly as on a 64 KB Apple II.
+- **The card's contents are trusted.** The ROM DOS reports a failed command only
+  as text (`NOFIND`, `ERR`), which the shim does not read, so every command is
+  assumed to succeed. With the tool's complete `U5` folder that always holds. If a
+  file or folder is missing or renamed, a load runs on stale memory and a save
+  crashes (the ROM's `OWRITE` fallback runs `$ACFD`), where the floppy version
+  would have reported an error. Copy the whole folder. (Owner decision, after the
+  review raised it as a blocker.)
+- **Interrupts other than NMI:** the IRQ forwarder always presents a hardware IRQ
+  to the ROM (status B clear). Ultima V enables no IRQ source on 3RIC (its music is
+  off), so a `BRK` while language-card RAM is mapped would not reach the monitor.
 
 ## Next steps worth discussing
 

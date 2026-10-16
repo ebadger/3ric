@@ -70,6 +70,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_disk.cjs                # boot a WOZ floppy via C600G into a hi-res title
 & $node web/test_woz_download.cjs        # Disk II boots, overlap-safe images through 34,560 bytes, size guards
 & $node codegen\tools\port-ultima5.test.mjs # Ultima V shim on ROM DOS (set U5_DISKS to also boot the real disks)
+pwsh codegen\tools\port-ultima5.native.ps1  # Ultima V resident: real PS/2 frames with language-card RAM mapped (MSVC)
 ```
 
 C++ CPU unit tests (`emulator/Badger6502VMTest`, MSTest): **Test → Run All Tests** in
@@ -196,10 +197,12 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 - **Ultima V (SD-card port, experimental):** `node codegen\tools\port-ultima5.mjs <disks> <out>`
   converts the owner's eight ProDOS disk sides into a `U5\` folder; copy it to the
   card, then `CD U5` and `BRUN U5.PRG 0800`. Game data stays local. A shim replaces
-  Origin's DINKEYDOS loader with ROM DOS commands, and a `$CF00` resident forwards
-  NMIs taken while language-card RAM is mapped. WASM play reached character creation,
-  save, the overworld, combat and a towne; dialogue, dungeons, the board and music
-  (128 KB only) are unverified. New overworld blocks cost ~1.1 s each through `FLOAD`.
+  Origin's DINKEYDOS loader with ROM DOS commands, and a `$CF00` resident decodes
+  PS/2 bits itself while language-card RAM is mapped (the first board trial's
+  keyboard failure; fixed and native-tested, board re-trial pending). WASM play
+  reached character creation, save, the overworld, combat and a towne; dialogue,
+  dungeons and music (128 KB only) are unverified. Card contents are trusted: copy
+  the whole folder. New overworld blocks cost ~1.1 s each through `FLOAD`.
   See [`docs/porting-logs/ultima-v.md`](../docs/porting-logs/ultima-v.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.

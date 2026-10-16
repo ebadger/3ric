@@ -29,6 +29,13 @@ SHIM_SRC    = $0C00             ; shim image (4 KB) in U5.PRG
         lda DOS_HOOK            ; and the ROM DOS hook installed
         cmp #$20
         bne bad_rom
+        ldx #10                 ; ROM NMI proxy the PS/2 fast path shares
+nmi_chk:                        ; state ($CE00/$CE01/$CE19) with
+        lda $F1BB,x
+        cmp nmi_proxy,x
+        bne bad_rom
+        dex
+        bpl nmi_chk
         bra rom_ok
 bad_rom:
         ldx #0
@@ -40,7 +47,7 @@ br_loop:
         inx
         bne br_loop
 br_done:
-        rts
+        brk                     ; BRUN enters with JMP: no return address
 
 rom_ok:
         bit $C007               ; BASIC ROM off: $9000-$BFFF is RAM
@@ -53,9 +60,9 @@ copy_res:
         bne copy_res
         jsr DOS_HOOK            ; CSW = ROM DOS command collector, muted
         lda $36
-        sta ROMCSW
+        sta ROMCSW_SRC          ; into the shim image before it is copied
         lda $37
-        sta ROMCSW+1
+        sta ROMCSW_SRC+1
 
         lda $C089               ; read ROM, write bank 1
         lda $C089
@@ -141,6 +148,7 @@ bf_done:
 msg_rom:    .byte $8D
             .text "U5.PRG NEEDS THE 3RIC ROM DOS"
             .byte $8D,0
+nmi_proxy:  .byte $EE,$FE,$CA,$2C,$06,$C0,$48,$DA,$4C,$A9,$B6
 msg_boot:   .byte $8D
             .text "U5: ULTIMA5/STARTUP NOT FOUND"
             .byte $8D,0

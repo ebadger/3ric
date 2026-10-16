@@ -99,11 +99,17 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     on existing files only, block `n` is bytes `(n&7)*512` of `RAWnn` (`n/8`, hex).
   - **Banking and interrupts:** the game runs with the BASIC overlay off (`$CAFE`
     nest count 0) and language-card RAM read/write in bank 1 or 2. The loader points
-    the RAM `$FFFA/$FFFE` vectors at a resident in `$CF00-$CFFF` that records the
-    bank from a `$DFFF` signature, enters the ROM handler through a fake RTI frame,
-    and restores `$C083`/`$C08B`. ROM DOS commands run from the same page with ROM
-    reads and bank-1 writes; `$B0-$BF` and `$36/$37` are preserved. `$CF00-$CFFF` is
+    the RAM `$FFFA/$FFFE` vectors at a resident in `$CF00-$CFFF`. PS/2 start/data/
+    parity edges and the `$C010` strobe (CB1) are serviced there without bank work,
+    sharing the ROM receiver state `$CE00/$CE01/$CE19` and reading DATA via `$C20F`;
+    the bank switch would otherwise delay the DATA sample past the next bit. Other
+    sources record the bank from a `$DFFF` signature, enter the ROM handler through
+    a fake RTI frame, and restore `$C083`/`$C08B` and X/Y. The loader refuses a ROM
+    whose NMI proxy `$F1BB-$F1C5` differs. ROM DOS commands run with ROM reads and
+    bank-1 writes; `$B0-$BF` and `$36/$37` are preserved. `$CF00-$CFFF` is
     reserved for this profile, not a general free-RAM declaration.
+  - **Trust:** ROM DOS command failures are not detected (the ROM reports them only
+    as text); the generated card contents are assumed complete.
   - **Machine:** 64 KB play; the game's 128 KB music path stays off because `$FBB3` is
     not `$06`. `STARTUP`'s unconditional IIe aux/RamWorks writes are removed by one
     byte-verified patch. No ROM, VM, web bridge or hardware change is part of the port.
@@ -437,7 +443,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
-| Ultima V SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima5.test.mjs` drives the real loader/resident/shim on the ROM DOS with synthetic volumes (and boots the original disks to the title with `U5_DISKS`). Manual WASM play covered creation, save, overworld, combat, towne entry. Dialogue, dungeons, endgame, board, real PS/2 and music (needs 128 KB) are open; block reads cost ~1.7 M cycles. |
+| Ultima V SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima5.test.mjs` drives the real loader/resident/shim on the ROM DOS with synthetic volumes (and boots the original disks to the title with `U5_DISKS`); `port-ultima5.native.ps1` decodes real PS/2 frames at 94-160-cycle periods with language-card RAM mapped. Manual WASM play covered creation, save, overworld, combat, towne entry. First board trial: title shown, keyboard failed (fixed since, re-trial pending). Dialogue, dungeons, endgame and music (needs 128 KB) are open; ROM DOS command failures are not detected (card contents trusted); block reads cost ~1.7 M cycles. |
 | ROM `BLOAD` stores one byte past EOF | Known gap (ROM) | Observed in `fat32_file_read`; programs loading below live data must use `FLOAD 0000 eof-1`. ROM source is not in this repository. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |

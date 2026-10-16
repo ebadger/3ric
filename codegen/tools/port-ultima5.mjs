@@ -117,7 +117,7 @@ export function buildLoader(table) {
     vol.push(...n, ...Buffer.from(dir.padEnd(8, " "), "ascii"));
   }
   vol.push(0);
-  const shimSrc = `ROM_CMD = $${r.ROM_CMD.toString(16)}\nCMDBUF = $${r.CMDBUF.toString(16)}\n`
+  const shimSrc = `ROM_SEND = $${r.ROM_SEND.toString(16)}\nCMDBUF = $${r.CMDBUF.toString(16)}\n`
     + fs.readFileSync(path.join(patchDir, "shim.s"), "utf8")
     + `\nfiletab:\n${asmText(tab)}\nvoltab:\n${asmText(vol)}\nshim_end:\n`;
   const shim = assemble(shimSrc);
@@ -128,8 +128,9 @@ export function buildLoader(table) {
   shimImage.set(shim.bytes);
   shimImage[0xfff] = BANKSIG_VALUE;
 
-  const loader = assemble(`RES_ORG = $${resident.org.toString(16)}\nROMCSW = $${r.ROMCSW.toString(16)}\n`
+  const loader = assemble(`ROMCSW_SRC = $${(SHIM_SRC + s.ROMCSW - 0xd000).toString(16)}\n`
     + `NMI_ENTRY = $${r.NMI_ENTRY.toString(16)}\nIRQ_ENTRY = $${r.IRQ_ENTRY.toString(16)}\n`
+    + `RES_ORG = $${resident.org.toString(16)}\n`
     + fs.readFileSync(path.join(patchDir, "loader.s"), "utf8"));
   if (loader.org !== LOADER_ORG || loader.org + loader.bytes.length > RES_SRC) throw new Error("loader overlaps its payload");
 
