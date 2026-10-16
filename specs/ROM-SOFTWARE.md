@@ -114,6 +114,31 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     not `$06`. `STARTUP`'s unconditional IIe aux/RamWorks writes are removed by one
     byte-verified patch. No ROM, VM, web bridge or hardware change is part of the port.
   - **Acceptance and limits:** see [`docs/porting-logs/ultima-v.md`](../docs/porting-logs/ultima-v.md).
+- **Ultima III SD-card port:** `codegen/tools/port-ultima3.mjs` converts the two
+  owner-supplied DOS-order disk images of the supported release (side 1 boots a memory
+  image carrying the game's own resident DOS; side 2 is the player disk) into a `U3/`
+  folder (`CD U3`, `BRUN U3.PRG 0800`). The game data stays local; the repository holds
+  the converter and glue (`codegen/patches/ultima3/`).
+  - **Loader contract:** the game prints `Ctrl-D BLOAD/BRUN/BSAVE NAME` through `COUT`
+    to its own DOS (`CSW = $B44A`), which finds the name in a 96-entry track/sector
+    table at `$AF80`. That DOS (`$AF80-$BFFF`, SHA-256-checked) is kept byte for byte,
+    because the game checksums `$B42D-$B4AD`, `$B5A8-$B628`, `$B610-$B690` and
+    `$B731-$B74C`, reads `$B44A`/`$B766-$B76F` and needs `$03F1 = $B7`. Only its
+    DOS 3.3 RWTS is replaced: `$BD00` jumps to a shim at `$BE40-$BFFF` (clear of the
+    `$BE3D` byte count and the `$B8E7-$BB28` nibble tables the DOS still writes). The
+    first RWTS call of a command (`$48/$49` still at the table entry) moves the whole
+    file with `FLOAD NAME addr 0000 len-1` or `OWRITE NAME addr len`; later sector
+    calls return at once (`$48/$49` left at the IOB, as RWTS leaves them). All 96
+    files share one folder under their own names; side and drive arguments no longer
+    matter. `ROST PLRS PRTY SOSA SOSM` must exist for `OWRITE`.
+  - **Machine:** 48 KB play, BASIC overlay off (`$CAFE = 0`), no language card, so the
+    ROM's NMI/IRQ vectors stay in effect (IRQ → `$03FE` for the Mockingboard driver).
+    ROM commands run under `SEI` with `$B0-$BF` and `CSW` restored: the music driver
+    keeps its pointers in the FAT32 zero page. `MBS` is the one modified game file:
+    its VIA T1 latch (`$411A` → `$6429`) and 96 AY note periods are scaled by
+    `1.538472` so tempo and pitch match the Apple; other speaker/delay-loop timing
+    runs ~1.54x faster. No ROM, VM, web bridge or hardware change is part of the port.
+  - **Acceptance and limits:** see [`docs/porting-logs/ultima-iii.md`](../docs/porting-logs/ultima-iii.md).
 - **ROM DOS load/write semantics (observed, unchanged):** `FLOAD name addr start end`
   takes an inclusive end offset and skips to `start` byte by byte; `BLOAD` stores one
   byte past EOF; `OWRITE` writes whole sectors in place and, for a missing file, falls
@@ -444,6 +469,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | Ultima V SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima5.test.mjs` drives the real loader/resident/shim on the ROM DOS with synthetic volumes (and boots the original disks to the title with `U5_DISKS`); `port-ultima5.native.ps1` decodes real PS/2 frames at 94-160-cycle periods with language-card RAM mapped, including Caps Lock LED exchanges and a `` strobe on a stop-bit edge. Manual WASM play covered creation, save, overworld, combat, towne entry. First board trial: title shown, keyboard failed (fixed since, re-trial pending). Dialogue, dungeons, endgame and music (needs 128 KB) are open; ROM DOS command failures are not detected (card contents trusted); block reads cost ~1.7 M cycles. |
+| Ultima III SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima3.test.mjs` reconstructs a synthetic boot image and drives the real loader/RWTS shim on the ROM DOS (whole-file loads, zero-page load, write and read-back, IOB/flag state); with `U3_DISKS` it plays the original disks through Mockingboard set-up, title, character creation, party, world, Lord British's castle, a dungeon and an autosave resume after reset, and checks the 61.5 Hz music IRQ. Talking, shops, Moongates, the endgame and the physical board are open; ROM DOS command failures are not detected (card contents trusted); loads run ~2 KB/s in the emulator (boot ~30 s). |
 | ROM `BLOAD` stores one byte past EOF | Known gap (ROM) | Observed in `fat32_file_read`; programs loading below live data must use `FLOAD 0000 eof-1`. ROM source is not in this repository. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |

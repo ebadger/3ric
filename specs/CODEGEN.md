@@ -26,6 +26,7 @@ graphics / registers → produce a `.PRG` that also `BRUN`s on real hardware.
 | `gen_platform_ref.mjs` | Regenerates `platform/platform-ref.{md,json}` from `vm.h` + `badger6502.dbg`. |
 | `patch-archon.mjs` | Exact-image local WOZ compatibility patcher; see `ROM-SOFTWARE.md`. Contains only adapter code and guarded replacements, never downloads game assets, and refuses input overwrite or fingerprint/sector validation failure. |
 | `port-ultima5.mjs` | Converts the eight Ultima V ProDOS disk sides into a micro-SD `U5/` folder (`U5.PRG` + one folder per disk); see `ROM-SOFTWARE.md`. Uses `ultima5/prodos.mjs` (read-only ProDOS reader) and, for tests, `ultima5/fat32.mjs` (builds a sparse FAT32 card for the WASM SD mock). Game data never enters the repository. |
+| `port-ultima3.mjs` | Converts the two Ultima III DOS-order disk images into a micro-SD `U3/` folder (`U3.PRG` + the 96 game files); rebuilds side 1's boot memory image, checks the game DOS's SHA-256, reads files top-down from its track/sector table and rescales the Mockingboard score's timer and note periods; see `ROM-SOFTWARE.md`. Game data never enters the repository. |
 | `wozedit.mjs` | Node-only checked WOZ2 sector reading/editing, reusing the dual-use `wozgen.mjs` CRC and 6-and-2 codec. Preserves non-edited bitstream and metadata bytes. |
 
 **Platform reference (`codegen/platform/`)** — the generator's machine/human contract:
@@ -120,5 +121,6 @@ breakpoints and current-PC highlighting.
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Archon local WOZ patching | Experimental / emulator-verified | `patch-archon.test.mjs` covers synthetic editor fixtures and optional owner-supplied-disk gameplay; `patch-archon.test.ps1` covers native PS/2 timing and LED commands. Both game images stay outside the repository. |
 | Ultima V SD-card converter | Experimental / emulator-verified | `port-ultima5.test.mjs` covers the ProDOS reader, the guarded patch and the full shim on the ROM DOS with synthetic volumes; `U5_DISKS` adds an original-disk title boot. `port-ultima5.native.ps1` builds the VM with MSVC and checks the resident's PS/2 fast path against real keyboard frames, Caps Lock LED exchanges and a stop-bit strobe collision. |
+| Ultima III SD-card converter | Experimental / emulator-verified | `port-ultima3.test.mjs` covers boot-image reconstruction, the file table, top-down reads, the guarded MBS patch and the RWTS shim on the ROM DOS with synthetic files; `U3_DISKS` plays the original disks from set-up to a dungeon and an autosave resume. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |
 | AI-contributor entry point | Shipped | `web/llms.txt` + `CONTRIBUTING.md`; `prompt-system.md` closes the loop to the gallery. |
