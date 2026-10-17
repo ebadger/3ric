@@ -139,12 +139,15 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     the Apple, and its two `$03FE/$03FF` stores are redirected to the gamepad tick's
     `next_irq` link. Other speaker/delay-loop timing runs ~1.54x faster. No ROM, VM,
     web bridge or hardware change is part of the port.
-  - **SNES gamepads:** the loader resets (silences) the second Mockingboard AY, which
-    the game never uses for Sound I/II and never resets, and runs that VIA's Timer 1
+  - **SNES gamepads:** the loader starts with `SEI`, turns off and clears both
+    Mockingboard VIAs' interrupts and resets both AYs (whatever a previous run left
+    running; the game itself only resets the first), then runs the second VIA's Timer 1
     (`$C480`) free at ~61 Hz with `$03FE` → a tick in the dead RWTS code at
     `$BD03-$BE3C`. The tick services only its own T1 flag (otherwise `JMP (next_irq)`:
-    MBS's handler, or `LDA $45 / RTI`), touches `PTRIG $C070` for the ROM's next pad
-    scan and turns `$CEE0`/`$CEF0` presses (either pad) into keys in `$C000` once the
+    MBS's handler, or `LDA $45 / RTI`), reads both pads itself through VIA1 port B as
+    the ROM scan does (PB6 latch, PB7 clock, active-low PB5/PB4) rather than through
+    `PTRIG $C070`, whose ROM NMI scan exits by clearing every VIA1 flag and could drop a
+    PS/2 edge, and turns presses (either pad) into keys in `$C000` once the
     previous key was taken: D-pad → Return / `/` / ← / → (north/south/west/east, held
     repeats after ~0.3 s every ~0.15 s), B Space, A `A`ttack, X `E`nter, Y `T`ransact,
     L `K`limb, R `D`escend, Select `I`gnite, Start `G`et. Keyboard input is unchanged.

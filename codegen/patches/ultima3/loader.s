@@ -46,6 +46,11 @@ br_done:
         brk                     ; BRUN enters with JMP: no return address
 
 rom_ok:
+        sei                     ; no IRQ until the vector and its code are in place
+        ldx #$00                ; both Mockingboard VIAs: interrupts off and
+        jsr mb_quiet            ; cleared, AYs reset (silent), whatever a
+        ldx #$80                ; previous run left running
+        jsr mb_quiet
         stz $CAFE               ; ROM NMI nest count 0, so its exit keeps BASIC off
         bit $C007               ; BASIC ROM off: $9000-$BFFF is RAM
         ldy #17                 ; pages $AF-$BF
@@ -75,20 +80,9 @@ copy:
         jsr $FE93               ; SETVID (COUT1), then HOME on the screen
         jsr $FC58
 
-        ; Second Mockingboard VIA: reset (silence) its AY, which the game
-        ; never resets, and run Timer 1 free at ~61 Hz as the gamepad tick
+        ; Second Mockingboard VIA (already quiet, its AY reset: the game never
+        ; resets that AY): run Timer 1 free at ~61 Hz as the gamepad tick
         ; (gamepad.s). The game's IRQ vector chain starts at PAD_IRQ.
-        sei
-        lda #$FF
-        sta VIA2+3              ; DDRA: AY data bus out
-        lda #$07
-        sta VIA2+2              ; DDRB: BC1, BDIR, /RESET out
-        stz VIA2                ; /RESET low
-        lda #$04
-        sta VIA2                ; /RESET high, bus inactive
-        lda #$7F
-        sta VIA2+$0E            ; IER: all sources off
-        sta VIA2+$0D            ; IFR: clear
         lda #$40
         sta VIA2+$0B            ; ACR: Timer 1 free-running
         lda #<PAD_LATCH
@@ -118,6 +112,21 @@ rt_send:
         jsr COUT
         inx
         bne run_test
+
+; X = $00 or $80: one Mockingboard VIA/AY pair. Interrupts off and cleared,
+; timers left stopped from the IRQ's point of view, AY reset to silence.
+mb_quiet:
+        lda #$7F
+        sta $C40E,x             ; IER: all sources off
+        sta $C40D,x             ; IFR: clear
+        lda #$FF
+        sta $C403,x             ; DDRA: AY data bus out
+        lda #$07
+        sta $C402,x             ; DDRB: BC1, BDIR, /RESET out
+        stz $C400,x             ; /RESET low
+        lda #$04
+        sta $C400,x             ; /RESET high, bus inactive
+        rts
 
 msg_rom:    .byte $8D
             .text "U3.PRG NEEDS THE 3RIC ROM DOS"

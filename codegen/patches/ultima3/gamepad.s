@@ -14,19 +14,24 @@
 ; converter patch), so both interrupts share the line: ours is serviced
 ; when its T1 flag is set, anything else is passed on.
 ;
-; Each tick reads the ROM's pad tables ($CEE0/$CEF0, one byte per button,
-; 1 = pressed) and touches PTRIG ($C070), which makes the ROM scan the pads
-; again in its NMI before the next tick. Nothing here touches zero page
-; except $45, which the ROM's IRQ entry already uses to hold A.
+; Each tick reads both pads itself through VIA1 port B, the way the ROM's
+; scan does (PB6 latch, PB7 clock, active-low data on PB5/PB4). It does NOT
+; touch PTRIG ($C070): that runs the scan inside the ROM's NMI, whose exit
+; writes $7F to VIA1's IFR and would discard a PS/2 clock edge arriving
+; during the scan. Here only IRQs are masked, so keyboard NMIs interrupt the
+; scan normally (the ROM's keyboard path does not touch port B). Nothing
+; here touches zero page except $45, which the ROM's IRQ entry already uses
+; to hold A.
 ;
 ; Lives in the dead part of the original DOS 3.3 RWTS, right after the
 ; JMP that replaces its entry ($BD00), and must end before $BE3D.
 
 ACC         = $45               ; ROM IRQ entry: A saved here
 KBD         = $C000
-PTRIG       = $C070
-PAD1        = $CEE0             ; ROM pad tables: B Y Sel Start Up Down
-PAD2        = $CEF0             ; Left Right A X L R, 1 = pressed
+VIA1_ORB    = $C200             ; PB6 latch, PB7 clock, PB5/PB4 pad 1/2 data
+PAD_LATCH_B = $40
+PAD_CLOCK_B = $80
+PAD_DATA_B  = $30               ; either pad, active low
 VIA2_T1CL   = $C484
 VIA2_IFR    = $C48D
 NBUTTONS    = 12
@@ -55,13 +60,27 @@ no_irq:
 next_irq:   .word no_irq        ; MBS stores its handler here
 
 pad_tick:
-        bit PTRIG               ; ask the ROM for a fresh scan
+        stz VIA1_ORB            ; as the ROM scan: latch, then one clock
+        lda #PAD_LATCH_B        ; per button, in SNES order B Y Select
+        sta VIA1_ORB            ; Start Up Down Left Right A X L R
+        ldx #0
+ps_bit:
+        stz VIA1_ORB            ; latch low, clock low: bit on PB5/PB4
+        lda VIA1_ORB
+        eor #$FF
+        and #PAD_DATA_B
+        sta now,x
+        lda #PAD_CLOCK_B
+        sta VIA1_ORB            ; clock high: shift the next bit
+        inx
+        cpx #NBUTTONS
+        bne ps_bit
+        stz VIA1_ORB
         ldx #NBUTTONS-1
 pt_loop:
         lda keymap,x
         beq pt_next             ; unmapped button
-        lda PAD1,x
-        ora PAD2,x
+        lda now,x
         bne pt_down
         stz held,x              ; released
         bra pt_next
@@ -83,8 +102,10 @@ pt_held:
         bne pt_next
         lda #NEXT_REPEAT
         sta timer,x
-        lda pending             ; never pile up repeats
-        bne pt_next
+        lda pending             ; never pile up repeats: wait until the
+        bne pt_next             ; game has taken the last key
+        bit KBD
+        bmi pt_next
         lda keymap,x
         sta pending
 pt_next:
@@ -99,7 +120,7 @@ pt_next:
 pt_done:
         rts
 
-; Button -> Apple II key (high bit set), 0 = unmapped. Order as PAD1.
+; Button -> Apple II key (high bit set), 0 = unmapped, in SNES bit order.
 keymap:
         .byte $A0               ; B      Space: pass / continue
         .byte $D4               ; Y      T: transact (talk, shop)
@@ -113,6 +134,7 @@ keymap:
         .byte $C5               ; X      E: enter
         .byte $CB               ; L      K: klimb
         .byte $C4               ; R      D: descend
+now:        .res NBUTTONS
 held:       .res NBUTTONS
 timer:      .res NBUTTONS
 pending:    .byte 0

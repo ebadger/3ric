@@ -117,8 +117,13 @@ own handler in `$03FE`; two guarded byte patches send those stores to the tick's
 `next_irq` link instead, so the music handler still runs on every interrupt that isn't
 the tick's (the 61.5 Hz music cadence is re-checked by the real-disk test).
 
-Each tick touches `PTRIG $C070` so the ROM rescans both pads in its NMI, then reads the
-ROM's tables (`$CEE0`, `$CEF0`; either pad counts). A new press of a mapped button
+Each tick reads both pads itself through VIA1 port B, the way the ROM's scan does (PB6
+latch, PB7 clock, active-low data on PB5/PB4; either pad counts). The first version
+touched `PTRIG $C070` and read the ROM's `$CEE0`/`$CEF0` tables instead; review caught
+that the ROM runs that scan inside its NMI and leaves by writing `$7F` to VIA1's IFR,
+so a PS/2 clock edge arriving during the ~240-cycle scan would be cleared undecoded, 61
+times a second, even with no pad connected. Scanning from the IRQ tick leaves keyboard
+NMIs free to interrupt it. A new press of a mapped button
 becomes that key in `$C000` as soon as the game has taken the previous key; a held
 D-pad direction repeats after ~0.3 s, then every ~0.15 s, never queueing more than one
 key. The keyboard is untouched.
@@ -135,15 +140,20 @@ key. The keyboard is untouched.
 | Start | `G` | get a chest |
 
 Set-up prompts (Mockingboard type and slot, the disk drive, character creation, shop
-quantities) still need the keyboard. The loader also resets the second AY before the
-game starts; the game only ever resets the first, so the second could otherwise power
-up making noise.
+quantities) still need the keyboard. The loader also starts with interrupts off and
+quiets both Mockingboard VIAs and AYs before installing the tick (a re-run could
+otherwise take an interrupt from the previous session's timers while the vector's code
+is being copied), and resets the second AY, which the game never resets and which
+could otherwise power up making noise.
 
 Evidence (WASM): the synthetic test checks the vector, that a button on pad 2 types its
 key, that a released button types nothing more and that a held direction repeats; the
 real-disk test walks the party north with SNES Up, and a manual run answered a fight's
-"HAND ATTACK DIR-" prompt with A. Not shown: the board,
-where every pad scan is an NMI alongside the PS/2 keyboard's.
+"HAND ATTACK DIR-" prompt with A. Not shown: the board. On a 65C22 every port-B access
+also clears the CB1 flag that `$C010` raises. The tick cannot normally collide with
+that: `$C010` is the CPU's own access, so its NMI is taken (ahead of any IRQ) right
+after that instruction. A collision would need the CB1 edge to arrive late enough to
+land on one of the tick's port-B instructions; that hardware timing is unmeasured.
 
 ## Using it
 
