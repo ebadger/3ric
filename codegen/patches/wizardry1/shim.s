@@ -154,6 +154,7 @@ do_write:
         lda blk+1
         adc #0
         sta tmp+1
+        bcs io_protect          ; wrapped (a negative Pascal block number)
         lda #<WR_END
         cmp tmp
         lda #>WR_END
@@ -163,6 +164,7 @@ dw_loop:
         lda cnt+1
         beq io_ok
         jsr set_lba
+        bcs io_range
         lda buf
         ldy buf+1
         jsr sd_write

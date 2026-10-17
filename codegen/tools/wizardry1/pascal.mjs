@@ -31,7 +31,7 @@ export function readDirectory(blocks) {
   const volume = String.fromCharCode(...d.subarray(7, 7 + nameLen));
   if (!/^[\x21-\x7e]+$/.test(volume)) return null;
   const eovblk = word(14), count = word(16);
-  if (count > 77 || eovblk < 6) return null;
+  if (count > 77 || eovblk < 6 || eovblk * BLOCK > blocks.length) return null;
   const files = [];
   let prev = 6;
   for (let i = 1; i <= count; i++) {

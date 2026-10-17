@@ -175,6 +175,9 @@ fill:   txa
         ldx #80                 ; 10: read them back to $6400
         jsr bios
         sta RES+10
+        ldx #88                 ; 10b: negative block number (16-bit wrap)
+        jsr bios
+        sta RES+19
         lda $C083               ; 11: NMI with bank 2 mapped
         lda $C083
         lda #$5C
@@ -288,6 +291,9 @@ calls:
         .byte 1
         .word 10,1024,$6400
         .byte 0
+        .byte 2
+        .word $FFFF,512,$4000
+        .byte 0
 `;
 
 function syntheticVolume({ badRuntime = false } = {}) {
@@ -354,6 +360,7 @@ for (const options of [{}, { sectorsPerCluster: 8, fragment: true, totalSectors:
   assert.equal(r(8), 16, "a write may not straddle the protected end");
   assert.equal(r(9), 0, "scenario write");
   assert.equal(r(10), 0, "read back");
+  assert.equal(r(19), 16, "a negative block number cannot wrap into the writable range");
   for (let i = 0; i < 1024; i++) assert.equal(vm.peek(0x6400 + i), vm.peek(0x6000 + i), `${label}: written byte ${i}`);
   assert.equal(r(11), 0x5c, "bank 2 still mapped after an NMI");
   assert.equal(r(12), 0xa7, "bank 2 still writable after an NMI");
