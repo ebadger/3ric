@@ -11,7 +11,8 @@
 // DOS prompt:  CD U3   then   BRUN U3.PRG 0800
 //
 // The game files are copied unchanged except MBS, the Mockingboard music,
-// whose timer and note periods are rescaled for the 3RIC clock. U3.PRG
+// whose timer and note periods are rescaled for the 3RIC clock and whose IRQ
+// handler is chained behind the gamepad tick. U3.PRG
 // carries the game's DOS image
 // (taken from side 1) with its DOS 3.3 RWTS replaced by SD-card FLOAD /
 // OWRITE commands (codegen/patches/ultima3/shim.s). The disk images and the
@@ -52,12 +53,27 @@ const MBS_ADDR = 0x9a00;
 const MBS_T1 = { at: 0x9a59, before: [0xa9, 0x1a, 0x91, 0xb4, 0xa0, 0x05, 0xa9, 0x41] };
 const MBS_NOTES = { lo: 0x9e40, hi: 0x9ea0, count: 96,
   sha256: "d4c929032ae830c5fea5c612fe83620ba1fa584ef99ac083766ff2b368c94e6a" };
+// MBS init writes its IRQ handler to the Apple vector ($03FE/$03FF). The
+// gamepad tick (gamepad.s) owns that vector, so MBS's handler goes into the
+// tick's next_irq link instead.
+const MBS_VECTOR = [
+  { at: 0x9a3c, before: [0x8d, 0xfe, 0x03], offset: 0 },   // STA $03FE
+  { at: 0x9a41, before: [0x8d, 0xff, 0x03], offset: 1 },   // STA $03FF
+];
+// The gamepad tick: second Mockingboard VIA Timer 1, ~61 Hz like the music.
+export const PAD_LATCH = Math.round(25_175_000 / 16 / 61.36) - 2;
 
-/** Retime MBS for the 3RIC clock (VIA T1 latch and AY note periods). */
-export function patchMbs(mbs) {
+/** Retime MBS for the 3RIC clock (VIA T1 latch and AY note periods) and
+ *  chain its IRQ handler behind the gamepad tick at nextIrq. */
+export function patchMbs(mbs, nextIrq) {
   const t1 = MBS_T1.at - MBS_ADDR;
   if (Array.from(mbs.subarray(t1, t1 + 8)).join() !== MBS_T1.before.join())
     throw new Error("MBS: unexpected music timer set-up at $9A59 (different release?)");
+  for (const v of MBS_VECTOR) {
+    const at = v.at - MBS_ADDR;
+    if (Array.from(mbs.subarray(at, at + 3)).join() !== v.before.join())
+      throw new Error(`MBS: unexpected IRQ vector store at $${v.at.toString(16).toUpperCase()} (different release?)`);
+  }
   const lo = MBS_NOTES.lo - MBS_ADDR, hi = MBS_NOTES.hi - MBS_ADDR, n = MBS_NOTES.count;
   const table = mbs.subarray(lo, hi + n);
   if (crypto.createHash("sha256").update(table).digest("hex") !== MBS_NOTES.sha256)
@@ -71,6 +87,11 @@ export function patchMbs(mbs) {
     if (period > 0xfff) throw new Error("MBS: scaled note period exceeds 12 bits");
     mbs[lo + i] = period & 255;
     mbs[hi + i] = period >> 8;
+  }
+  for (const v of MBS_VECTOR) {
+    const at = v.at - MBS_ADDR, target = nextIrq + v.offset;
+    mbs[at + 1] = target & 255;
+    mbs[at + 2] = target >> 8;
   }
   return mbs;
 }
@@ -153,7 +174,7 @@ function asmText(bytes) {
   return lines.join("\n");
 }
 
-/** Assemble the shim and loader around a DOS memory image -> U3.PRG. */
+/** Assemble the shim, gamepad tick and loader around a DOS memory image -> U3.PRG. */
 export function buildLoader(mem) {
   const shim = assemble(fs.readFileSync(path.join(patchDir, "shim.s"), "utf8"));
   const s = shim.symbols;
@@ -165,13 +186,20 @@ export function buildLoader(mem) {
     throw new Error("unexpected RWTS entry at $BD00");
   image.set([0x4c, s.RWTS & 255, s.RWTS >> 8], at);
   image.set(shim.bytes, SHIM_ORG - IMG_BASE);
+  // The gamepad tick fills the dead RWTS code after the new JMP, below the
+  // $BE3D byte count the DOS still writes.
+  const gamepad = assemble(fs.readFileSync(path.join(patchDir, "gamepad.s"), "utf8"));
+  const g = gamepad.symbols;
+  if (gamepad.org !== RWTS + 3 || g.GAMEPAD_END > 0xbe3d) throw new Error("gamepad tick exceeds $BD03-$BE3C");
+  image.set(gamepad.bytes, gamepad.org - IMG_BASE);
 
-  const loader = assemble(`ROMCSW = $${s.ROMCSW.toString(16)}\n` + fs.readFileSync(path.join(patchDir, "loader.s"), "utf8"));
+  const loader = assemble(`ROMCSW = $${s.ROMCSW.toString(16)}\nPAD_IRQ = $${g.PAD_IRQ.toString(16)}\n`
+    + `PAD_LATCH = $${PAD_LATCH.toString(16)}\n` + fs.readFileSync(path.join(patchDir, "loader.s"), "utf8"));
   if (loader.org !== LOADER_ORG || loader.org + loader.bytes.length > IMG_SRC) throw new Error("loader overlaps its payload");
   const prg = new Uint8Array(IMG_SRC - LOADER_ORG + image.length);
   prg.set(loader.bytes, 0);
   prg.set(image, IMG_SRC - LOADER_ORG);
-  return { prg, shim, loader };
+  return { prg, shim, gamepad, loader };
 }
 
 /** mem: DOS memory image; sides: { 1: img, 2: img }. Returns the U3 tree. */
@@ -189,9 +217,9 @@ export function buildFromImages(mem, sides, { checkHash = true } = {}) {
   }
   for (const f of SAVE_FILES) if (!tree[f]) throw new Error(`save file ${f} missing from the table`);
   if (!tree.MBS) throw new Error("MBS missing from the table");
-  patchMbs(tree.MBS);
   if (tree["U3.PRG"]) throw new Error("a game file is called U3.PRG");
-  const { prg } = buildLoader(mem);
+  const { prg, gamepad } = buildLoader(mem);
+  patchMbs(tree.MBS, gamepad.symbols.NEXT_IRQ);
   return { "U3.PRG": prg, ...tree };
 }
 

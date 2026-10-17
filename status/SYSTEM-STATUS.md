@@ -211,7 +211,9 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   slot `4`, and the disk prompt with `1`. Game data stays local. The game's own DOS
   runs unchanged; only its RWTS is replaced by whole-file ROM DOS commands. WASM play
   reached creation, the world, a castle, combat, a dungeon and save/resume, with music
-  retimed for the 3RIC clock; talking, shops and the board are unverified. Loads run
+  retimed for the 3RIC clock. Either SNES pad plays too (D-pad moves; B Space, A Attack,
+  X Enter, Y Transact, L Klimb, R Descend, Select Ignite, Start Get); talking, shops and
+  the board are unverified. Loads run
   ~2 KB/s in the emulator. Card contents are trusted: copy the whole folder.
   See [`docs/porting-logs/ultima-iii.md`](../docs/porting-logs/ultima-iii.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`

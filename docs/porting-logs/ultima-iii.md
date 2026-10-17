@@ -1,6 +1,6 @@
 # Ultima III: an SD-card port under the game's own DOS
 
-**2026-10-15. Emulator-verified; no board trial yet.**
+**2026-10-15. Emulator-verified. Board: the music sounded discordant on the first trial and correct on a retry (cause not isolated); gamepads untried.**
 The owner supplied two Apple II disk images (`ULT31SND.DSK`, `ULT32SND.DSK`) and asked
 for a port like the [Ultima IV one](https://github.com/ebadger/u4remasteredA2)
 (`fixed` branch), which put the game files on the SD card and turned its disk
@@ -92,7 +92,8 @@ changes one game file, with guards on the original bytes:
 - the T1 latch at `$9A5A/$9A60`, `$411A` → `$6429` (period `latch + 2` scaled), and
 - the 96-entry AY note period table (`$9E40` low bytes, `$9EA0` high bytes; an
   equal-tempered A0-B7 table, checked by SHA-256), each period scaled and kept within
-  12 bits.
+  12 bits; and
+- its two IRQ-vector stores (`$9A3C/$9A41`), redirected for the gamepad tick (below).
 
 Measured on the WASM build: 123 music interrupts in two seconds of 3RIC time
 (61.5 Hz; the Apple runs at 61.4 Hz). Pitch is calculated, not a listening test.
@@ -103,6 +104,46 @@ sounds and delay loops run about 1.54 times faster.
 The original RWTS ran with interrupts off; the shim does the same and restores
 `$B0-$BF` and `CSW` around each ROM command. A trace of the first six commands showed
 no other zero-page or `$0200-$03FF` byte changed by the ROM.
+
+## SNES gamepads
+
+Ultima III only reads the keyboard, and it has no periodic hook of its own once the
+Mockingboard is off. The port adds one: the loader runs Timer 1 of the **second**
+Mockingboard VIA (`$C480`) free at ~61 Hz and points the Apple IRQ vector `$03FE` at a
+tick (`codegen/patches/ultima3/gamepad.s`) placed in the dead RWTS code at
+`$BD03-$BE3C`. Sound I/II settings drive only the first AY; SND/SPCH drives the second
+AY's ports but never its timer, so the two uses don't collide. `MBS` used to store its
+own handler in `$03FE`; two guarded byte patches send those stores to the tick's
+`next_irq` link instead, so the music handler still runs on every interrupt that isn't
+the tick's (the 61.5 Hz music cadence is re-checked by the real-disk test).
+
+Each tick touches `PTRIG $C070` so the ROM rescans both pads in its NMI, then reads the
+ROM's tables (`$CEE0`, `$CEF0`; either pad counts). A new press of a mapped button
+becomes that key in `$C000` as soon as the game has taken the previous key; a held
+D-pad direction repeats after ~0.3 s, then every ~0.15 s, never queueing more than one
+key. The keyboard is untouched.
+
+| Button | Key | Use |
+|--------|-----|-----|
+| D-pad | Return, `/`, ←, → | north, south, west, east (also combat directions) |
+| B | Space | pass, continue, "press space" |
+| A | `A` | attack (then a direction) |
+| X | `E` | enter a town, castle or dungeon |
+| Y | `T` | transact (talk, shop) |
+| L / R | `K` / `D` | klimb / descend |
+| Select | `I` | ignite a torch |
+| Start | `G` | get a chest |
+
+Set-up prompts (Mockingboard type and slot, the disk drive, character creation, shop
+quantities) still need the keyboard. The loader also resets the second AY before the
+game starts; the game only ever resets the first, so the second could otherwise power
+up making noise.
+
+Evidence (WASM): the synthetic test checks the vector, that a button on pad 2 types its
+key, that a released button types nothing more and that a held direction repeats; the
+real-disk test walks the party north with SNES Up, and a manual run answered a fight's
+"HAND ATTACK DIR-" prompt with A. Not shown: the board,
+where every pad scan is an NMI alongside the PS/2 keyboard's.
 
 ## Using it
 

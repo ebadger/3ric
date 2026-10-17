@@ -7,7 +7,8 @@
 ; $9000-$BFFF is RAM, copies the game's resident DOS (with the SD shim in
 ; place of its RWTS, see shim.s) to $AF00-$BFFF, hooks COUT to it exactly as
 ; the booted disk left it, and runs the first program the disk ran: TEST
-; (Mockingboard set-up and credits), through the DOS's own BRUN.
+; (Mockingboard set-up and credits), through the DOS's own BRUN. Before that
+; it starts the gamepad tick on the second Mockingboard VIA (gamepad.s).
 
 COUT        = $FDED
 DOS_HOOK    = $03EA             ; ROM DOS: JSR hook_buffer_no_output; RTS
@@ -17,6 +18,8 @@ IMG_DST     = $AF00
 DOS_COUT    = $B44A             ; the game DOS's COUT hook
 DOS_BRK     = $B72D             ; the game DOS's BRK/reset target
 BRKV        = $03F0
+IRQV        = $03FE             ; Apple IRQ vector (ROM IRQ entry jumps through it)
+VIA2        = $C480             ; second Mockingboard VIA
 
         .org $0800
 
@@ -71,6 +74,34 @@ copy:
         bit $C054
         jsr $FE93               ; SETVID (COUT1), then HOME on the screen
         jsr $FC58
+
+        ; Second Mockingboard VIA: reset (silence) its AY, which the game
+        ; never resets, and run Timer 1 free at ~61 Hz as the gamepad tick
+        ; (gamepad.s). The game's IRQ vector chain starts at PAD_IRQ.
+        sei
+        lda #$FF
+        sta VIA2+3              ; DDRA: AY data bus out
+        lda #$07
+        sta VIA2+2              ; DDRB: BC1, BDIR, /RESET out
+        stz VIA2                ; /RESET low
+        lda #$04
+        sta VIA2                ; /RESET high, bus inactive
+        lda #$7F
+        sta VIA2+$0E            ; IER: all sources off
+        sta VIA2+$0D            ; IFR: clear
+        lda #$40
+        sta VIA2+$0B            ; ACR: Timer 1 free-running
+        lda #<PAD_LATCH
+        sta VIA2+4
+        lda #>PAD_LATCH
+        sta VIA2+5              ; starts Timer 1
+        lda #<PAD_IRQ
+        sta IRQV
+        lda #>PAD_IRQ
+        sta IRQV+1
+        lda #$C0
+        sta VIA2+$0E            ; IER: Timer 1 on
+        cli
         lda #<DOS_COUT          ; COUT -> the game DOS, like the booted disk
         sta CSW
         lda #>DOS_COUT
@@ -80,7 +111,9 @@ copy:
         ldx #0
 run_test:
         lda cmd_test,x          ; Ctrl-D BRUN TEST: the DOS loads and jumps
-        beq br_done             ; (only reached if the DOS returned)
+        bne rt_send
+        brk                     ; only reached if the DOS returned
+rt_send:
         ora #$80                ; (the DOS parses high-bit ASCII)
         jsr COUT
         inx

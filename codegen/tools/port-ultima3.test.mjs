@@ -223,6 +223,26 @@ async function bootU3(tree) {
   assert.match(serial, /OWRITE SAVE 3800 0080\r/);
   assert.match(serial, /FLOAD SAVE 3800 0000 007F\r/);
   console.log("PASS RWTS shim on ROM DOS: whole-file loads, zero page, write/read-back, IOB and flags");
+
+  // Gamepad tick: second Mockingboard VIA Timer 1 -> IRQ -> $03FE.
+  const run = (n) => { for (let i = 0; i < n; i++) vm.run(20000); };
+  assert.equal(vm.peek(0x3fe) | (vm.peek(0x3ff) << 8), 0xbd03, "IRQ vector -> gamepad tick");
+  vm.setGamepadState(1, 1 << 8);               // pad 2, A
+  run(20);
+  assert.equal(vm.peek(0xc000), 0xc1, "A button types A");
+  vm.setGamepadState(1, 0);
+  vm.poke(0xc000, 0x41);                       // game takes the key
+  run(20);
+  assert.equal(vm.peek(0xc000), 0x41, "a released button types nothing more");
+  let ups = 0;
+  vm.setGamepadState(0, 1 << 4);               // pad 1, Up held
+  for (let i = 0; i < 60; i++) {
+    run(4);
+    if (vm.peek(0xc000) === 0x8d) { ups++; vm.poke(0xc000, 0x0d); }
+  }
+  vm.setGamepadState(0, 0);
+  assert.ok(ups >= 3, `a held direction repeats Return (${ups})`);
+  console.log(`PASS gamepad tick: buttons type keys, held direction repeats (${ups} in the window)`);
 }
 
 // ---------------------------------------------------------------------------
@@ -233,6 +253,9 @@ if (process.env.U3_DISKS) {
   assert.equal(Object.keys(tree).length, 97);
   const mbs = tree.MBS;
   assert.equal(mbs[0x5a] | (mbs[0x60] << 8), Math.round(0x411c * CLOCK_RATIO) - 2, "music timer rescaled");
+  const mbsVector = mbs[0x3d] | (mbs[0x3e] << 8);
+  assert.ok(mbsVector > 0xbd03 && mbsVector < 0xbe3d && (mbs[0x42] | (mbs[0x43] << 8)) === mbsVector + 1,
+    "MBS installs its IRQ handler behind the gamepad tick");
   const vm = await bootU3(tree);
   const run = (n) => { for (let i = 0; i < n; i++) vm.run(50000); };
   const key = (c, n = 30) => { vm.keyDown(typeof c === "number" ? c : c.charCodeAt(0)); run(n); };
@@ -261,6 +284,12 @@ if (process.env.U3_DISKS) {
   assert.match(serial, /FLOAD ULT3 5000 0000 43FF\r[^]*FLOAD SOSA 1000 0000 0FFF\r/);
   assert.ok(!vm.textMode(), "in the world");
   const start = [vm.peek(0), vm.peek(1)];
+  vm.setGamepadState(0, 1 << 4);               // SNES Up walks north
+  run(3);
+  vm.setGamepadState(0, 0);
+  run(30);
+  assert.ok(vm.peek(1) < start[1], `gamepad Up moved the party north (${start} -> ${vm.peek(0)},${vm.peek(1)})`);
+  vm.poke(0, start[0]); vm.poke(1, start[1]);  // back to the start for the walk below
   key(13); key(0x15); key(13); key("E", 300); // into Lord British's castle
   serial = vm.drainOutput();
   assert.match(serial, /FLOAD MAPA 1000 0000 0FFF\r/, "castle map loaded");
