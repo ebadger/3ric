@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-15 — ebadger (via Copilot)_
+_Last updated: 2026-10-16 — ebadger (via Copilot)_
 
 ---
 
@@ -71,6 +71,8 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_woz_download.cjs        # Disk II boots, overlap-safe images through 34,560 bytes, size guards
 & $node codegen\tools\port-ultima5.test.mjs # Ultima V shim on ROM DOS (set U5_DISKS to also boot the real disks)
 pwsh codegen\tools\port-ultima5.native.ps1  # Ultima V resident: real PS/2 frames with language-card RAM mapped (MSVC)
+& $node codegen\tools\port-wizardry1.test.mjs # Wizardry I block driver on ROM DOS + SD, 3 cluster layouts (WIZ1_DISKS = real disks)
+pwsh codegen\tools\port-wizardry1.native.ps1  # Wizardry I resident through the native PS/2 harness (MSVC)
 ```
 
 C++ CPU unit tests (`emulator/Badger6502VMTest`, MSTest): **Test → Run All Tests** in
@@ -204,6 +206,20 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   dungeons and music (128 KB only) are unverified. Card contents are trusted: copy
   the whole folder. New overworld blocks cost ~1.1 s each through `FLOAD`.
   See [`docs/porting-logs/ultima-v.md`](../docs/porting-logs/ultima-v.md).
+- **Wizardry I (SD-card port, experimental):** `node codegen\tools\port-wizardry1.mjs <disks> <out>`
+  turns the owner's Apple Pascal boot + scenario disks into `WIZ1\` (`WIZ1.PRG` +
+  `WIZ1.VOL`, one combined Pascal volume); copy it to the card, then `CD WIZ1` and
+  `BRUN WIZ1.PRG 0800`, and press RETURN at both disk prompts. The loader replaces the
+  Pascal boot blocks and hooks the runtime's BIOS disk entry; the shim reads and writes
+  sectors directly with the ROM's `sd_readsector`/`sd_writesector` through a cluster
+  table (fingerprinted ROM internals; any cluster size or fragmentation), ~150 K
+  cycles per block. Four byte-verified p-code patches remove Sir-Tech's Disk II timing
+  checks. WASM play reached the castle, a tavern roster write and the maze; no board
+  trial yet. Game data stays local. See
+  [`docs/porting-logs/wizardry-i.md`](../docs/porting-logs/wizardry-i.md).
+- **Disk II spin-up gap:** after the motor stops, the emulated drive gives no data for
+  one second after motor-on, so Apple Pascal disks report error 9 between slow
+  accesses (recorded in `EMULATOR.md`; not changed).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**
