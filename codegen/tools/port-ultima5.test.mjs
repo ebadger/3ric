@@ -11,7 +11,7 @@ import { assemble } from "./asm6502.mjs";
 import harness from "./harness.cjs";
 import { readProdosImage } from "./ultima5/prodos.mjs";
 import { buildSparseFat32 } from "./ultima5/fat32.mjs";
-import { VOLUMES, BANKSIG_VALUE, applyPatches, buildFromVolumes, buildTree, sdKey } from "./port-ultima5.mjs";
+import { VOLUMES, BANKSIG_VALUE, applyPatches, assembleResident, buildFromVolumes, buildTree, sdKey } from "./port-ultima5.mjs";
 
 // ---------------------------------------------------------------------------
 // ProDOS reader on a synthetic image (seedling + sapling + unowned blocks).
@@ -61,17 +61,35 @@ console.log("PASS ProDOS reader (DOS and ProDOS order) and SD key mapping");
 // STARTUP patch: applied only over the exact original bytes.
 
 {
-  const startup = new Uint8Array(0x200);
+  const LDA_C000 = [0xad, 0x00, 0xc0];
+  const startup = new Uint8Array(0xc00);
   const original = [0x8d, 0x08, 0xc0, 0xa9, 0x00, 0x8d, 0x05, 0xc0, 0x8d, 0x7e, 0x03, 0x8d, 0x04, 0xc0, 0x85, 0xb1, 0x8d, 0x73, 0xc0];
   startup.set(original, 0x169);
-  const vols = new Map([["ULTIMA5", { files: [{ name: "STARTUP", aux: 0x8000, eof: startup.length, data: startup }] }]]);
+  startup.set(LDA_C000, 0xb77);
+  const subs = new Uint8Array(0x1000);
+  subs.set(LDA_C000, 0xfc2);
+  const view = (n) => { const d = new Uint8Array(0x100); d.set(LDA_C000, 0x5a); return { name: "VIEW", aux: 0xa700, eof: d.length, data: d, n }; };
+  const views = [view(1), view(2)];
+  const vols = new Map([
+    ["ULTIMA5", { files: [{ name: "STARTUP", aux: 0x8000, eof: startup.length, data: startup },
+      { name: "MAIN.SUBS", aux: 0xe000, eof: subs.length, data: subs }] }],
+    ["BRITANNIA", { files: [views[0]] }], ["TOWNE", { files: [views[1]] }],
+  ]);
+  const padKey = assembleResident().symbols.PAD_KEY;
+  const jsrPad = [0x20, padKey & 255, padKey >> 8];
   applyPatches(vols);
   assert.deepEqual(Array.from(startup.subarray(0x169, 0x169 + 3)), [0xea, 0xea, 0xea]);
   assert.deepEqual(Array.from(startup.subarray(0x16c, 0x16e)), [0xa9, 0x00], "LDA #0 is kept");
+  assert.deepEqual(Array.from(startup.subarray(0xb77, 0xb7a)), jsrPad, "title menu reads the pads");
+  assert.deepEqual(Array.from(subs.subarray(0xfc2, 0xfc5)), jsrPad, "in-game scankey reads the pads");
+  for (const v of views) assert.deepEqual(Array.from(v.data.subarray(0x5a, 0x5d)), jsrPad, "VIEW on every disk");
   applyPatches(vols); // idempotent
+  subs[0xfc2] = 0x2c;
+  assert.throws(() => applyPatches(vols), /MAIN\.SUBS.*unexpected bytes/);
+  subs.set(LDA_C000, 0xfc2);
   startup[0x169] = 0x00;
   assert.throws(() => applyPatches(vols), /unexpected bytes/);
-  console.log("PASS STARTUP aux-memory patch is exact and guarded");
+  console.log("PASS STARTUP aux-memory and keyboard-read patches are exact and guarded");
 }
 
 // ---------------------------------------------------------------------------
@@ -274,6 +292,57 @@ async function bootGame(tree) {
   assert.match(serial, /OWRITE SAVEDAT 3800 0040\r/);
   assert.doesNotMatch(serial, /NOPE|NOWHERE|BLOAD/, "missing files/volumes never reach the ROM");
   console.log(`PASS shim on ROM DOS: loads, block reads, writes, volumes, errors, ${nmis} forwarded NMIs`);
+}
+
+// ---------------------------------------------------------------------------
+// SNES pads: pad_key types mapped keys into $C000 (tap, held repeat, release).
+
+{
+  const padKey = assembleResident().symbols.PAD_KEY;
+  const padProg = assemble(`
+        .org $8000
+        jmp start               ; the loader expects STARTUP to begin with JMP
+start:  lda $C083               ; bank 2 read/write, like the game
+        lda $C083
+        ldx #0
+loop:   stz $B8                 ; the game's key queue stays empty
+        jsr $${padKey.toString(16)}
+        bpl loop
+        sta $0300,x
+        bit $C010
+        inx
+        txa
+        and #1
+        beq use2
+        lda $C08B
+        lda $C08B
+        bra loop
+use2:   lda $C083
+        lda $C083
+        bra loop
+`).bytes;
+  const { volumes } = synthVolumes();
+  const u5 = volumes.get("ULTIMA5").files;
+  u5.splice(u5.findIndex((f) => f.name === "STARTUP"), 1,
+    { name: "STARTUP", aux: 0x8000, eof: padProg.length, data: padProg });
+  const vm = await bootGame(buildFromVolumes(volumes));
+  const second = 1573438;
+  const hold = (mask, seconds) => { vm.setGamepadState(1, mask); vm.runCycles(Math.round(seconds * second)); };
+  const typed = () => { const out = []; for (let i = 0; i < 64 && vm.peek(0x300 + i); i++) out.push(vm.peek(0x300 + i)); return out; };
+  for (let i = 0; i < 64; i++) vm.poke(0x300 + i, 0);
+  hold(0, 0.3);
+  hold(256, 0.1); hold(0, 0.3);
+  assert.deepEqual(typed(), [0x8d], `a tap of A types one Return (controller 2 mirrors 1); PC $${vm.pc().toString(16)} serial ${JSON.stringify(vm.drainOutput().slice(-200))}`);
+  hold(128, 1.5);
+  const held = typed().length - 1;
+  hold(0, 0.6);
+  const afterRelease = typed().length - 1;
+  assert.ok(typed().slice(1).every((k) => k === 0x95), "Right types right-arrow");
+  assert.ok(held >= 5 && held <= 9, `holding Right 1.5 s repeats after a delay (${held} keys)`);
+  assert.equal(afterRelease, held, "releasing stops at once");
+  hold(1 | 8, 0.2); hold(0, 0.3);
+  assert.deepEqual(typed().slice(-2).sort(), [0xa0, 0xda], "B and Start pressed together both type");
+  console.log(`PASS SNES pads: tap, ${held}-key held repeat, release, simultaneous buttons, bank swaps`);
 }
 
 // ---------------------------------------------------------------------------

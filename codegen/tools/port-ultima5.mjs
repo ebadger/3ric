@@ -34,7 +34,19 @@ export function sdKey(name) {
   return name.replace(/\./g, "").toUpperCase().slice(0, 8);
 }
 
-// Each patch: file, load address, original bytes, replacement bytes, reason.
+const PAD_POLL = 0xd02a;             // shim jump-table slot after $D027
+
+/** Assemble the $CF00 resident (independent of the file tables). */
+export function assembleResident() {
+  const src = fs.readFileSync(path.join(patchDir, "resident.s"), "utf8");
+  const resident = assemble(`BANKSIG_VALUE = $${BANKSIG_VALUE.toString(16)}\nPAD_POLL = $${PAD_POLL.toString(16)}\n${src}`);
+  if (resident.org !== 0xcf00 || resident.bytes.length > 0x100) throw new Error("resident exceeds $CF00-$CFFF");
+  return resident;
+}
+
+const LDA_KEYBOARD = [0xad, 0x00, 0xc0];
+// Each patch: volume ("*" = every disk holding the file), file, load address,
+// original bytes, replacement bytes (or a function of the resident), reason.
 const PATCHES = [
   {
     volume: "ULTIMA5", file: "STARTUP", address: 0x8169,
@@ -42,6 +54,10 @@ const PATCHES = [
     after: [0xea, 0xea, 0xea, 0xa9, 0x00, 0xea, 0xea, 0xea, 0x8d, 0x7e, 0x03, 0xea, 0xea, 0xea, 0x85, 0xb1, 0xea, 0xea, 0xea],
     why: "Apple IIe aux-memory/RamWorks resets ($C008/$C005/$C004/$C073); 3RIC has no aux bank and its $C00x decode is not specified for these.",
   },
+  // SNES pads: the game's keyboard reads become JSR pad_key (same length).
+  { volume: "ULTIMA5", file: "MAIN.SUBS", address: 0xefc2, before: LDA_KEYBOARD, why: "in-game scankey (all overlays use it)" },
+  { volume: "ULTIMA5", file: "STARTUP", address: 0x8b77, before: LDA_KEYBOARD, why: "title-menu scankey" },
+  { volume: "*", file: "VIEW", address: 0xa75a, before: LDA_KEYBOARD, why: "View / gem map: any key closes it" },
 ];
 
 function loadVolumes(diskDir) {
@@ -60,17 +76,24 @@ function loadVolumes(diskDir) {
   return found;
 }
 
-export function applyPatches(volumes) {
+export function applyPatches(volumes, resident = assembleResident()) {
+  const padKey = resident.symbols.PAD_KEY;
   for (const p of PATCHES) {
-    const file = volumes.get(p.volume).files.find((f) => f.name === p.file);
-    if (!file) throw new Error(`patch target ${p.volume}/${p.file} not found`);
-    const offset = p.address - file.aux;
-    const actual = Array.from(file.data.subarray(offset, offset + p.before.length));
-    if (actual.join() !== p.before.join()) {
-      if (actual.join() === p.after.join()) continue;
-      throw new Error(`${p.volume}/${p.file} at $${p.address.toString(16)}: unexpected bytes (different release?)`);
+    const after = p.after || [0x20, padKey & 255, padKey >> 8];
+    const names = p.volume === "*" ? [...volumes.keys()] : [p.volume];
+    let found = 0;
+    for (const volume of names) {
+      const file = volumes.get(volume)?.files.find((f) => f.name === p.file);
+      if (!file) continue;
+      found++;
+      const offset = p.address - file.aux;
+      const actual = Array.from(file.data.subarray(offset, offset + p.before.length));
+      if (actual.join() === after.join()) continue;
+      if (actual.join() !== p.before.join())
+        throw new Error(`${volume}/${p.file} at $${p.address.toString(16)}: unexpected bytes (different release?)`);
+      file.data.set(after, offset);
     }
-    file.data.set(p.after, offset);
+    if (!found) throw new Error(`patch target ${p.volume}/${p.file} not found`);
   }
 }
 
@@ -102,10 +125,8 @@ function asmText(bytes) {
 
 /** Assemble resident, shim and loader into U5.PRG. */
 export function buildLoader(table) {
-  const resSrc = fs.readFileSync(path.join(patchDir, "resident.s"), "utf8");
-  const resident = assemble(`BANKSIG_VALUE = $${BANKSIG_VALUE.toString(16)}\n${resSrc}`);
+  const resident = assembleResident();
   const r = resident.symbols;
-  if (resident.org !== 0xcf00 || resident.bytes.length > 0x100) throw new Error("resident exceeds $CF00-$CFFF");
 
   const tab = [];
   for (const e of [...table].sort((a, b) => a.key.localeCompare(b.key) || a.volmask - b.volmask)) {
@@ -125,6 +146,8 @@ export function buildLoader(table) {
   const s = shim.symbols;
   if (shim.org !== 0xd000 || s.CODE_END > 0xd600) throw new Error("shim code overlaps the $D600 block buffer");
   if (s.SHIM_END > 0xdfff) throw new Error("shim tables overlap the bank signature at $DFFF");
+  if (shim.bytes[PAD_POLL - 0xd000] !== 0x4c || (shim.bytes[PAD_POLL - 0xcfff] | shim.bytes[PAD_POLL - 0xcffe] << 8) !== s.PAD_POLL)
+    throw new Error("PAD_POLL slot does not jump to pad_poll");
   const shimImage = new Uint8Array(0x1000);
   shimImage.set(shim.bytes);
   shimImage[0xfff] = BANKSIG_VALUE;

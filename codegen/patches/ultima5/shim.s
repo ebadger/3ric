@@ -66,6 +66,7 @@ MUTE_OUTPUT = $CE09             ; ROM: suppress screen echo of DOS output
         jmp e_vol_p             ; $D021
         jmp e_rdblk             ; $D024
         jmp e_wrblk             ; $D027
+        jmp pad_poll            ; $D02A: SNES pads (resident pad_key)
 
 curvol:     .byte $FF           ; current volume index, $FF = loader folder
 
@@ -634,6 +635,178 @@ cr_restore:
 
 romcsw:     .word 0             ; captured by the loader from the $03EA hook
 zsave:      .res 18
+
+; ---------------------------------------------------------------------------
+; SNES controllers. The resident's pad_key calls this (bank 1 mapped) in
+; place of the game's keyboard reads. Both pads are read straight from VIA1
+; port B, as the ROM's own scan does but without $C070 and its timer NMIs:
+; PB6 latch, PB7 clock, PB5/PB4 pad 1/2 data (active low), SNES bit order
+; B Y Select Start Up Down Left Right A X L R. The pads are merged.
+; A new press types its mapped key into $C000 (as the ROM does for a PS/2
+; key), only when no key is pending. A held direction repeats after
+; PAD_DELAY, then every PAD_REPEAT, and only while the game's key queue
+; ($B8, MAIN.SUBS and STARTUP) is empty, so releasing the pad stops at once.
+; Time comes from VIA1 Timer 2 (one-shot mode keeps counting down; read-only
+; use of T2H, 256 cycles per unit). Preserves X and Y.
+
+PORTB       = $C200
+VIA_T2H     = $C209
+KEYQ_LEN    = $B8
+PAD_MIN     = 8                 ; ~1.3 ms between pad reads
+PAD_DELAY   = 2400              ; ~0.39 s before a held direction repeats
+PAD_REPEAT  = 1100              ; ~0.18 s between repeats
+
+pad_poll:
+        phx
+        phy
+        cld
+        ldy VIA_T2H             ; elapsed = last - now (T2 counts down)
+        tya
+        eor #$FF
+        sec
+        adc pad_t2
+        sty pad_t2
+        clc
+        adc pad_since
+        bcc pp_sum
+        lda #$FF
+pp_sum:
+        sta pad_since
+        cmp #PAD_MIN
+        bcs pp_time
+pp_out:
+        ply
+        plx
+        rts
+pp_time:
+        sec                     ; repeat countdown -= time since last read
+        lda pad_rpt
+        sbc pad_since
+        sta pad_rpt
+        lda pad_rpt+1
+        sbc #0
+        sta pad_rpt+1
+        stz pad_since
+        bit $C000               ; a key is still pending: try again later
+        bmi pp_out
+        jsr pad_read
+        lda pad_prev            ; released buttons may fire again
+        and pad_cur
+        sta pad_prev
+        lda pad_prev+1
+        and pad_cur+1
+        sta pad_prev+1
+        lda pad_prev            ; first new press
+        eor #$FF
+        and pad_cur
+        sta pad_new
+        lda pad_prev+1
+        eor #$FF
+        and pad_cur+1
+        sta pad_new+1
+        ldx #0
+pp_find:
+        lsr pad_new+1
+        ror pad_new
+        bcs pp_new
+        inx
+        cpx #12
+        bne pp_find
+        lda pad_cur             ; no new press: repeat a held direction
+        and #$F0
+        beq pp_done
+        lda KEYQ_LEN
+        bne pp_done
+        lda pad_rpt+1
+        bpl pp_done
+        lda pad_cur
+        lsr a
+        lsr a
+        lsr a
+        lsr a
+        ldx #4
+pp_dir:
+        lsr a
+        bcs pp_held
+        inx
+        bra pp_dir
+pp_held:
+        lda #<PAD_REPEAT
+        sta pad_rpt
+        lda #>PAD_REPEAT
+        sta pad_rpt+1
+        bra pp_type
+pp_new:
+        lda bitmask,x
+        cpx #8
+        bcs pp_hi
+        ora pad_prev
+        sta pad_prev
+        bra pp_mark
+pp_hi:
+        ora pad_prev+1
+        sta pad_prev+1
+pp_mark:
+        cpx #4
+        bcc pp_type
+        cpx #8
+        bcs pp_type
+        lda #<PAD_DELAY
+        sta pad_rpt
+        lda #>PAD_DELAY
+        sta pad_rpt+1
+pp_type:
+        lda padmap,x
+        sta $C000
+pp_done:
+        ply
+        plx
+        rts
+
+; pad_cur = buttons held on either pad (bit n = SNES bit n, 1 = pressed)
+pad_read:
+        stz PORTB
+        lda #$40
+        sta PORTB               ; latch
+        ldx #16
+pr_bit:
+        stz PORTB               ; latch low, clock low: data valid
+        lda PORTB
+        and #$30
+        eor #$30
+        cmp #1                  ; carry = either pad pulls its data low
+        ror pad_cur+1
+        ror pad_cur
+        lda #$80
+        sta PORTB               ; clock high: next bit
+        dex
+        bne pr_bit
+        stz PORTB
+        lda pad_cur+1
+        and #$0F
+        sta pad_cur+1
+        rts
+
+; Key typed for each SNES bit (high bit set, as in $C000).
+padmap:     .byte $A0           ; B      Space (pass / continue)
+            .byte $C1           ; Y      A (attack)
+            .byte $D1           ; Select Q (quit & save)
+            .byte $DA           ; Start  Z (Ztats)
+            .byte $8B           ; Up     up arrow
+            .byte $8A           ; Down   down arrow
+            .byte $88           ; Left   left arrow
+            .byte $95           ; Right  right arrow
+            .byte $8D           ; A      Return
+            .byte $D4           ; X      T (talk)
+            .byte $9B           ; L      Esc
+            .byte $C5           ; R      E (enter / klimb)
+bitmask:    .byte $01,$02,$04,$08,$10,$20,$40,$80,$01,$02,$04,$08
+pad_t2:     .byte 0
+pad_since:  .byte 0
+pad_rpt:    .word 0
+pad_cur:    .word 0
+pad_new:    .word 0
+pad_prev:   .word $0FFF         ; ignore buttons already held at start
 
 s_fload:    .asciiz "FLOAD "
 s_zero:     .asciiz " 0000 "

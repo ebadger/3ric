@@ -99,17 +99,25 @@ nmi_more:
         pla
         rti
 
+irq_entry:
+        pha
+        phx
+        phy
+        ldx #4                  ; JMP ($FFFE)
+        bra lc_forward
 nmi_rom:
         phx
         phy
+        ldx #0                  ; JMP ($FFFA)
+lc_forward:
         lda BANKSIG
         cmp #BANKSIG_VALUE
-        beq nmi_bank1
+        beq lc_bank1
         lda #$83
-        bra nmi_save
-nmi_bank1:
+        bra lc_save
+lc_bank1:
         lda #$8B
-nmi_save:
+lc_save:
         pha                     ; mode to restore
         lda #>lc_resume
         pha
@@ -118,7 +126,7 @@ nmi_save:
         lda #$04                ; fake P: I set, B clear
         pha
         lda LC_ROM
-        jmp ($FFFA)             ; ROM NMI handler; its RTI returns below
+        jmp ($FFFA,x)           ; ROM handler; its RTI returns below
 lc_resume:
         pla                     ; saved mode ($83 or $8B)
         tax
@@ -126,36 +134,28 @@ lc_resume:
         lda $C000,x             ; second read enables writes
         ply
         plx
-        bra nmi_more
+        bra nmi_more            ; also catches a VIA source that raised no edge
 
-irq_entry:
-        pha
+; Replaces the game's LDA $C000 keyboard reads (see port-ultima5.mjs).
+; Lets the SNES pads type a mapped key into $C000, then reads it like the
+; original instruction. Preserves X, Y and all flags except N and Z.
+pad_key:
+        php
         lda BANKSIG
         cmp #BANKSIG_VALUE
-        beq irq_bank1
-        lda #$83
-        bra irq_save
-irq_bank1:
-        lda #$8B
-irq_save:
-        pha
-        lda #>irq_resume
-        pha
-        lda #<irq_resume
-        pha
-        lda #$04
-        pha
-        lda LC_ROM
-        jmp ($FFFE)
-irq_resume:
-        pla
-        phx
-        tax
-        lda $C000,x
-        lda $C000,x
-        plx
-        pla
-        rti
+        beq pk_bank1
+        lda LC_RW_B1            ; game in bank 2: borrow bank 1 for the poll
+        lda LC_RW_B1
+        jsr PAD_POLL
+        lda $C083
+        lda $C083
+        bra pk_done
+pk_bank1:
+        jsr PAD_POLL
+pk_done:
+        plp
+        lda $C000
+        rts
 
 ; Send cmdbuf (Ctrl-D ... CR) through COUT with ROM reads and bank-1 writes.
 ; Called from the shim in bank 1; returns with bank 1 read/write again.
