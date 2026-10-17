@@ -71,6 +71,7 @@ async function bootDisk(woz, firmware = rom) {
   vm.reset();
   vm.runCycles(5000000);
   assert(vm.insertDisk(0, woz), "Disk was not inserted");
+  vm.poke(0xcfff, 0xa5);                   // sentinel: the adapter must leave $CFFF alone
   for (const ch of "MON\rC600G\r") {
     for (let i = 0; i < 200 && (vm.peek(0xc000) & 0x80); i++) vm.runCycles(10000);
     vm.keyDown(ch.charCodeAt(0));
@@ -102,7 +103,6 @@ function testSynthetic() {
   for (let i = 0; i < DSK_SIZE; i++) changed += image[i] !== patched[i];
   assert(changed > 0 && changed <= 280, `Unexpected change count ${changed}`);
   for (const [track, sector, offset, before, , why] of patches) {
-    if (!Buffer.from(before).some(Boolean)) continue;
     const wrong = Buffer.from(image);
     wrong[(track * 16 + sector) * 256 + offset] ^= 0xff;
     assert.throws(() => applyPatches(wrong, patches), /Unexpected Flight Simulator II bytes/, why);
@@ -148,6 +148,7 @@ async function testDisk(input) {
     seek(vm, KEYPOLL, 60 * CPS, false);    // title: "TYPE A OR B"
     assert.deepEqual(Buffer.from(Array.from(resident.bytes, (_, i) => vm.peek(0xcf00 + i))),
       Buffer.from(resident.bytes), "Boot hook did not install the resident");
+    assert.equal(vm.peek(0xcfff), 0xa5, "Boot hook overwrote $CFFF");
     assert.equal(vm.peekMapped(0xfffa) | vm.peekMapped(0xfffb) << 8, s.NMI_ENTRY, "LC NMI vector");
     assert.equal(vm.peekMapped(0xfffe) | vm.peekMapped(0xffff) << 8, RESTART, "Game IRQ vector changed");
     key(vm, "A", 2);                       // colour display
@@ -160,6 +161,9 @@ async function testDisk(input) {
       seek(vm, handler(vm, ch), CPS);
       run(vm, 0.2 * CPS);
       assert.equal(vm.peek(0xc000) & 0x80, 0, `${ch} strobe was not cleared`);
+      // The web build clears $C000 on any $C010 access itself; the resident's
+      // part is acknowledging the CB1 NMI source.
+      assert.equal(vm.readBus(0xc20d) & 0x10, 0, `${ch} strobe NMI (CB1) was not acknowledged`);
     }
     for (let i = 0; i < 16; i++) key(vm, 0x15, 0.1);  // right arrow: throttle
     assert.equal(vm.peek(0x0aaa), 0x78, "Right arrow did not open the throttle fully");
@@ -215,6 +219,10 @@ async function testDisk(input) {
       [...frame.slice(0, 5), frame[5] & 0xcf], "Bank-1 NMI did not preserve registers");
     assert.equal(vm.memoryMapping(0xd000), 2, "Bank-1 NMI did not restore bank 1");
     assert.equal(vm.memoryMapping(0x9000), 0, "Bank-1 NMI left BASIC visible");
+    const kept = vm.peekMapped(0xd002);
+    vm.writeBus(0xd002, kept ^ 0xff);
+    assert.equal(vm.peekMapped(0xd002), kept ^ 0xff, "Bank-1 NMI left the language card write-protected");
+    vm.writeBus(0xd002, kept);
     assert.equal(vm.peek(0xcee7), 1, "ROM pad scan did not run");
     vm.setGamepadState(0, 0);
     run(vm, 10 * CPS);

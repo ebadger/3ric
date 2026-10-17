@@ -128,12 +128,14 @@ lc_resume:
 
 ; Replaces the game's first "LDA $C083 / LDA $C083" ($AC9A). The RAM NMI
 ; vector is written while reads still see the ROM, so it is valid from the
-; first cycle that language-card RAM is visible.
+; first cycle that language-card RAM is visible. The bank flag is cleared
+; first so it names bank 2 regardless of power-on RAM or a warm restart.
+; (nmi_entry is page-aligned: the patcher checks its low byte is zero.)
 lc_on:
+        stz FS2_BANK
         lda LC_ROM_WB2
         lda LC_ROM_WB2
-        lda #<nmi_entry
-        sta $FFFA
+        stz $FFFA
         lda #>nmi_entry
         sta $FFFB
         lda LC_RW_B2
@@ -143,9 +145,8 @@ lc_on:
 ; Replaces "STA $FFFA / STX $FFFB" in the game's vector setup ($AD17).
 ; A and X still hold the game's restart address for RESET and IRQ.
 set_nmi:
+        stz $FFFA
         pha
-        lda #<nmi_entry
-        sta $FFFA
         lda #>nmi_entry
         sta $FFFB
         pla

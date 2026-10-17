@@ -30,6 +30,8 @@ export function buildResident() {
   const resident = assemble(fs.readFileSync(path.join(root, "codegen", "patches", "fs2", "resident.s"), "utf8"));
   if (resident.org !== 0xcf00 || resident.bytes.length > 0xff)
     throw new Error("FS2 resident exceeds $CF00-$CFFE");
+  if ((resident.symbols.NMI_ENTRY & 0xff) !== 0)
+    throw new Error("FS2 resident NMI entry must be page-aligned (lc_on/set_nmi store a zero low byte)");
   return resident;
 }
 
@@ -44,6 +46,7 @@ copy:
         lda $2000,y
         sta $CF00,y
         iny
+        cpy #${hex(resident.bytes.length)}   ; leave the rest of the page, incl. $CFFF
         bne copy
         jsr ${hex(s.BOOT_INIT)}
         ldx $2B

@@ -122,13 +122,15 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     points the RAM NMI/RESET/IRQ vectors at its restart code `$A7E2`. The first `$C010`
     strobe clear (a VIA1 CB1 NMI on 3RIC) restarted the loader forever.
   - **Boot:** boot0 loads one more page (T0 logical sector 14, zero-filled originally)
-    to `$2000` and a hook in its zero slack copies it to `$CF00` before `JMP $1D00`.
+    to `$2000` and a hook in its zero slack copies the resident (leaving `$CFFF`) to
+    `$CF00` before `JMP $1D00`.
     `boot_init` refuses a ROM whose `$FFFA` vector or NMI proxy `$F1BB-$F1C5` differs
     (`FS2: ROM MISMATCH`, then `BRK`), zeroes `$CAFE` and turns the BASIC overlay off.
-  - **Banking and interrupts:** the game's LC enable (`$AC9A`) first writes the RAM
+  - **Banking and interrupts:** the game's LC enable (`$AC9A`) clears the bank flag
+    `$0E43`, writes the RAM
     NMI vector with ROM reads/bank-2 writes, then selects bank 2 read/write; its vector
     setup (`$AD17`) keeps that NMI vector and its own RESET/IRQ vectors. The resident
-    (`$CF00-$CFFC`) shares the Ultima V fast path (PS/2 start/data/parity edges and the
+    (`$CF00-$CFFB`) shares the Ultima V fast path (PS/2 start/data/parity edges and the
     CB1 strobe without bank work). Other sources enter the ROM handler through a fake
     RTI frame and return to bank 1 or 2 read/write chosen by the game's flag `$0E43`,
     which its only bank helpers (`$F8B0/$F8BC`) set before their two selecting reads.
@@ -138,7 +140,7 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   - **Input:** original keyboard controls (→/← throttle via Apple arrow codes
     `$15/$08`); the game's own editor `JOYSTICK` option uses SNES pad 1 through the
     ROM's `$C070` paddle emulation (D-pad = low/centre/high, B = button 0 calibrates).
-  - **Delivery:** 7 byte-verified sites (272 bytes) in the DSK, then the existing
+  - **Delivery:** 7 byte-verified sites (275 bytes) in the DSK, then the existing
     `wozgen.mjs` DSK→WOZ conversion. No ROM, VM, web bridge, platform-ref or hardware
     change. Acceptance and limits:
     [`docs/porting-logs/flight-simulator-ii.md`](../docs/porting-logs/flight-simulator-ii.md).

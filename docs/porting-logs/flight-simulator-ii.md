@@ -10,7 +10,7 @@ generated disk stay local; this repository holds the adapter, the patcher and te
 | Artifact | SHA-256 |
 |----------|---------|
 | Owner-supplied `FlightSimulator2.dsk` | `533c25dd24ed0cdb3e29a83ec42df126583771f4dbfc1aed83848bdab67768d2` |
-| Generated 3RIC WOZ2 (deterministic) | `26eb4f4d5c1bae458a96c5bf8741fcd7c3e46414fa62bf50fba9b29df5c06213` |
+| Generated 3RIC WOZ2 (deterministic) | `c00b7e602c82166ef37b5e74460f7b21328acf8d8527f5f6cdb355bbfb118ebd` |
 | Unchanged repository `badger6502.bin` | `fcea03683b77b7f113e6d8f0064ea8edbd6c75b04b472ec5c84de1c3a9f86435` |
 
 The image is unprotected (standard 16-sector tracks), so the existing `wozgen.mjs`
@@ -41,7 +41,7 @@ sectors except `$D4xx`, which the game modifies itself.
 Same model as [Ultima V](ultima-v.md): forward NMIs while language-card RAM is
 mapped, without touching the game's other vectors or code paths.
 
-- **Resident** (`codegen/patches/fs2/resident.s`, `$CF00-$CFFC`): the Ultima V fast
+- **Resident** (`codegen/patches/fs2/resident.s`, `$CF00-$CFFB`): the Ultima V fast
   path for PS/2 start/data/parity edges and the `$C010` strobe (no bank work before the
   DATA sample); everything else enters the ROM handler through a fake RTI frame with
   ROM selected, then returns to bank 1 or 2 read/write.
@@ -53,13 +53,15 @@ mapped, without touching the game's other vectors or code paths.
   no language-card memory. The native test allows a bank change only at those resume PCs.
 - **Install:** boot0 already loads three sectors to `$1D00-$1FFF`; its page count and
   table now also load T0 logical sector 14 (zero-filled originally) to `$2000`, and a
-  19-byte hook in boot0's zero slack copies it to `$CF00` and calls `boot_init` before
+  21-byte hook in boot0's zero slack copies the resident (not the rest of the page, so
+  `$CFFF` is untouched) to `$CF00` and calls `boot_init` before
   `JMP $1D00`. `boot_init` checks the ROM NMI vector and proxy, zeroes `$CAFE` and turns
-  the BASIC overlay off. Game code: `$AC9A` writes the RAM NMI vector (ROM reads,
+  the BASIC overlay off. Game code: `$AC9A` clears the bank flag `$0E43` (power-on RAM
+  or a restart from bank 1 could leave it set) and writes the RAM NMI vector (ROM reads,
   bank-2 writes) before RAM becomes visible; `$AD17` keeps it when the game installs
   its vectors. RESET and IRQ keep `$A7E2`.
 - **Patcher:** `node codegen\tools\patch-fs2.mjs FlightSimulator2.dsk fs2-3ric.woz`
-  checks both fingerprints, applies 7 byte-verified edits (272 bytes) and refuses to
+  checks both fingerprints, applies 7 byte-verified edits (275 bytes) and refuses to
   overwrite an existing file.
 
 ## Playing it
@@ -89,15 +91,20 @@ pwsh -NoProfile -File codegen\tools\port-ultima5.native.ps1   # shared harness, 
 
 The WASM test cold-boots the generated disk through the Disk II PROM: resident and
 vectors installed; title → flight mode with bank 2 mapped and the BASIC overlay off;
-T/B/F/H/G reach their handlers and their strobes clear; full throttle and a takeoff
+T/B/F/H/G reach their handlers, their strobes clear and the CB1 NMI source is
+acknowledged; full throttle and a takeoff
 read back from the editor's altitude/airspeed; the editor's joystick option with pad
 calibration and all four D-pad directions; course recording with bank 1 mapped, an
-injected `$C070` NMI there preserving registers/flags/bank/overlay, and the course plot.
+injected `$C070` NMI there preserving registers/flags/bank/overlay and language-card
+write-enable, and the course plot. `$CFFF` keeps a sentinel through boot and play.
 It also reproduces the unpatched restart on the first key and the on-machine ROM
 mismatch message. The native test types real PS/2 frames (94/120/160-cycle bits,
 DATA held 80) and a Caps Lock LED exchange while a program swaps banks through
-FS2-style helpers continuously; 293 NMIs per run keep registers, flags and overlay,
-with 3-5 landing in the recorded-bank window.
+FS2-style helpers continuously; 293 NMIs per run keep registers, flags and overlay.
+Each recorded-bank window is hit 8-14 times and may only return the recorded bank;
+the program starts with a stale `$0E43 = 1` that `lc_on` must clear and checks
+language-card writes after NMIs, including in an idle loop that never reselects.
+Removing `lc_resume`'s write-enabling second read makes all three cases fail.
 
 ## Still open
 

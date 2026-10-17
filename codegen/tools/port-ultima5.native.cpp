@@ -10,9 +10,10 @@
 // A/X/Y, flags, stack, language-card bank and BASIC overlay unchanged.
 //
 // Also used by codegen/tools/patch-fs2.native.ps1 with its own resident and
-// program. An optional last argument lists resume PCs (hex, comma-separated)
-// where the program has recorded a bank but not yet selected it; an NMI that
-// resumes exactly there may return with that recorded bank already mapped.
+// program. An optional last argument lists "pc:bank" pairs (hex PC, decimal
+// MemoryReadMapping; comma-separated) where the program has recorded a bank but
+// not yet selected it. An NMI that resumes exactly at such a PC may return with
+// exactly that bank mapped instead; every listed window must be exercised.
 #include "SDCard.h"
 #include "vm.h"
 #include <algorithm>
@@ -124,8 +125,13 @@ namespace
         uint16_t nmiEntry;
         bool checking = false;
         unsigned checkedInterrupts = 0;
-        std::vector<uint16_t> bankWindows;
-        unsigned windowInterrupts = 0;
+        struct BankWindow
+        {
+            uint16_t pc;
+            MemoryReadMapping bank;
+            unsigned hits = 0;
+        };
+        std::vector<BankWindow> bankWindows;
         struct Frame
         {
             uint16_t pc;
@@ -165,11 +171,14 @@ namespace
                 const Frame& f = frames.back();
                 require(f.a == cpu->A && f.x == cpu->X && f.y == cpu->Y, "NMI corrupted A/X/Y");
                 require((f.p & 0xcf) == (cpu->flags.reg & 0xcf), "NMI corrupted CPU flags");
-                if (f.bank != vm->GetMemoryReadMapping(0xd000))
+                const MemoryReadMapping now = vm->GetMemoryReadMapping(0xd000);
+                auto window = std::find_if(bankWindows.begin(), bankWindows.end(),
+                    [&](const BankWindow& w) { return w.pc == f.pc; });
+                if (window != bankWindows.end()) ++window->hits;
+                if (f.bank != now)
                 {
-                    require(std::find(bankWindows.begin(), bankWindows.end(), f.pc) != bankWindows.end(),
+                    require(window != bankWindows.end() && now == window->bank,
                         "NMI restored the wrong language-card bank");
-                    ++windowInterrupts;
                 }
                 require(f.basic == vm->IsROMVisible(0x9000), "NMI changed the BASIC overlay");
                 frames.pop_back();
@@ -241,7 +250,15 @@ int main(int argc, char** argv)
             for (size_t pos = 0; pos < list.size(); )
             {
                 const size_t comma = (std::min)(list.find(',', pos), list.size());
-                m.bankWindows.push_back(uint16_t(std::stoul(list.substr(pos, comma - pos), nullptr, 16)));
+                const std::string item = list.substr(pos, comma - pos);
+                const size_t colon = item.find(':');
+                require(colon != std::string::npos, "Bank window must be pc:bank");
+                Machine::BankWindow w;
+                w.pc = uint16_t(std::stoul(item.substr(0, colon), nullptr, 16));
+                w.bank = MemoryReadMapping(std::stoul(item.substr(colon + 1)));
+                require(w.bank == MemoryReadMapping::LanguageCardBank1 || w.bank == MemoryReadMapping::LanguageCardBank2,
+                    "Bank window must name language-card bank 1 or 2");
+                m.bankWindows.push_back(w);
                 pos = comma + 1;
             }
         }
@@ -296,11 +313,18 @@ int main(int argc, char** argv)
         require(!(m.vm->PeekData(0xc000) & 0x80), "A $C010 strobe on a PS/2 stop bit was lost");
         m.scan(0x1c);
         m.run(40000);
+        require(m.vm->PeekData(0x03fe) != 0xee, "Test program detected a wrong bank or lost language-card write-enable");
+        for (const auto& w : m.bankWindows)
+            require(w.hits > 0, "No NMI resumed in the recorded-bank window at PC " + std::to_string(w.pc));
         std::cout << "PASS native PS/2 " << period << "/" << hold << ": Caps Lock LEDs, " << got
                   << ", strobe on stop bit, " << m.checkedInterrupts
                   << " NMIs preserved registers, flags, bank and overlay";
         if (!m.bankWindows.empty())
-            std::cout << " (" << m.windowInterrupts << " in a recorded-bank window)";
+        {
+            std::cout << " (recorded-bank windows hit";
+            for (const auto& w : m.bankWindows) std::cout << " " << w.hits;
+            std::cout << ")";
+        }
         std::cout << "\n";
         return 0;
     }

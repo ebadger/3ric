@@ -5,8 +5,11 @@
 # 94/120/160 cycles, DATA held 80) while a program keeps language-card RAM
 # mapped and swaps bank 1/bank 2 continuously the way FS2's $F8B0/$F8BC helpers
 # do: record the bank in $0E43, then select it with two reads. An NMI that
-# resumes on one of those selecting reads may return with the recorded bank
-# already mapped; everywhere else the bank must be unchanged.
+# resumes on the first selecting read may return with exactly the recorded bank
+# already mapped (each such window must be hit); everywhere else the bank must be
+# unchanged. The program also starts with a stale $0E43 = 1 that lc_on must
+# clear, and checks language-card writes still work after NMIs, including in an
+# idle loop that never reselects the bank.
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $out = Join-Path $root 'codegen\out\fs2-native'
@@ -54,8 +57,13 @@ const h = v => "$" + v.toString(16);
 const program = assemble(`
         .org $0800
         jsr ${h(s.BOOT_INIT)}       ; ROM check, $CAFE = 0, BASIC overlay off
-        stz $0E43
-        jsr ${h(s.LC_ON)}           ; RAM NMI vector, then bank 2 read/write
+        lda #1
+        sta $0E43                   ; stale flag, as after power-on or a bank-1 restart
+        jsr ${h(s.LC_ON)}           ; must clear it, set the RAM NMI vector, map bank 2
+        lda $0E43
+        beq flag_ok
+        jmp fail
+flag_ok:
         lda #$5A
         sta $D000                   ; bank 2 marker
         lda #$E2                    ; the game's vector setup, as patched
@@ -89,6 +97,7 @@ win2b:  lda $C083
         bne fail
         cpy #$77
         bne fail
+        jsr wcheck                  ; bank 2 still writable
         lda $C000
         bpl wait
         sta $0300,x
@@ -97,14 +106,28 @@ win2b:  lda $C083
         cpx #7
         bne wait
 idle:   ldy #$77                    ; stop polling: the stop-bit strobe check follows
+        jsr wcheck                  ; NMIs here return with no reselection after them
+        lda $D000
+        cmp #$5A
+        bne fail
         bra idle
+wcheck: lda #$A5                    ; language-card write-enable survived the NMIs
+        sta $D002
+        cmp $D002
+        bne fail
+        lda #$5A
+        sta $D002
+        cmp $D002
+        bne fail
+        rts
 fail:   lda #$EE
         sta $03FE
         jmp fail
 `);
 fs.writeFileSync(path.join(out, "program.bin"), program.bytes);
 const p = program.symbols;
-console.log(s.NMI_ENTRY.toString(16) + " " + [p.WIN1, p.WIN2].map(v => v.toString(16)).join(","));
+// MemoryReadMapping: 2 = language-card bank 1, 3 = bank 2.
+console.log(s.NMI_ENTRY.toString(16) + " " + p.WIN1.toString(16) + ":2," + p.WIN2.toString(16) + ":3");
 '@ | & $node --input-type=module -
 if ($LASTEXITCODE -ne 0) { throw 'Could not assemble the resident/test program' }
 $entry, $windows = $info.Trim().Split(' ')
