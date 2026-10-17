@@ -8,8 +8,15 @@
 // frames on VIA1 CA2/PA7 at a given bit period with DATA changing a given
 // number of cycles after each falling clock edge. Every NMI must return with
 // A/X/Y, flags, stack, language-card bank and BASIC overlay unchanged.
+//
+// Also used by codegen/tools/patch-fs2.native.ps1 with its own resident and
+// program. An optional last argument lists "pc:bank" pairs (hex PC, decimal
+// MemoryReadMapping; comma-separated) where the program has recorded a bank but
+// not yet selected it. An NMI that resumes exactly at such a PC may return with
+// exactly that bank mapped instead; every listed window must be exercised.
 #include "SDCard.h"
 #include "vm.h"
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <fstream>
@@ -118,6 +125,13 @@ namespace
         uint16_t nmiEntry;
         bool checking = false;
         unsigned checkedInterrupts = 0;
+        struct BankWindow
+        {
+            uint16_t pc;
+            MemoryReadMapping bank;
+            unsigned hits = 0;
+        };
+        std::vector<BankWindow> bankWindows;
         struct Frame
         {
             uint16_t pc;
@@ -157,7 +171,15 @@ namespace
                 const Frame& f = frames.back();
                 require(f.a == cpu->A && f.x == cpu->X && f.y == cpu->Y, "NMI corrupted A/X/Y");
                 require((f.p & 0xcf) == (cpu->flags.reg & 0xcf), "NMI corrupted CPU flags");
-                require(f.bank == vm->GetMemoryReadMapping(0xd000), "NMI restored the wrong language-card bank");
+                const MemoryReadMapping now = vm->GetMemoryReadMapping(0xd000);
+                auto window = std::find_if(bankWindows.begin(), bankWindows.end(),
+                    [&](const BankWindow& w) { return w.pc == f.pc; });
+                if (window != bankWindows.end()) ++window->hits;
+                if (f.bank != now)
+                {
+                    require(window != bankWindows.end() && now == window->bank,
+                        "NMI restored the wrong language-card bank");
+                }
                 require(f.basic == vm->IsROMVisible(0x9000), "NMI changed the BASIC overlay");
                 frames.pop_back();
                 ++checkedInterrupts;
@@ -213,7 +235,8 @@ int main(int argc, char** argv)
 {
     try
     {
-        require(argc == 7, "Usage: u5-native <rom> <resident.bin> <program.bin> <nmi-entry-hex> <period> <hold>");
+        require(argc == 7 || argc == 8,
+            "Usage: u5-native <rom> <resident.bin> <program.bin> <nmi-entry-hex> <period> <hold> [window-pcs-hex]");
         const auto resident = readFile(argv[2]);
         const auto program = readFile(argv[3]);
         const uint16_t entry = uint16_t(std::stoul(argv[4], nullptr, 16));
@@ -221,6 +244,24 @@ int main(int argc, char** argv)
         const uint32_t hold = uint32_t(std::stoul(argv[6]));
         require(hold >= period / 2 && hold <= period, "Invalid PS/2 timing");
         Machine m(argv[1], period, hold, entry);
+        if (argc == 8)
+        {
+            std::string list = argv[7];
+            for (size_t pos = 0; pos < list.size(); )
+            {
+                const size_t comma = (std::min)(list.find(',', pos), list.size());
+                const std::string item = list.substr(pos, comma - pos);
+                const size_t colon = item.find(':');
+                require(colon != std::string::npos, "Bank window must be pc:bank");
+                Machine::BankWindow w;
+                w.pc = uint16_t(std::stoul(item.substr(0, colon), nullptr, 16));
+                w.bank = MemoryReadMapping(std::stoul(item.substr(colon + 1)));
+                require(w.bank == MemoryReadMapping::LanguageCardBank1 || w.bank == MemoryReadMapping::LanguageCardBank2,
+                    "Bank window must name language-card bank 1 or 2");
+                m.bankWindows.push_back(w);
+                pos = comma + 1;
+            }
+        }
         for (size_t i = 0; i < resident.size(); ++i) m.vm->WriteData(uint16_t(0xcf00 + i), resident[i]);
         for (size_t i = 0; i < program.size(); ++i) m.vm->WriteData(uint16_t(0x0800 + i), program[i]);
         for (uint16_t a = 0x0300; a < 0x0400; ++a) m.vm->WriteData(a, 0);
@@ -272,9 +313,19 @@ int main(int argc, char** argv)
         require(!(m.vm->PeekData(0xc000) & 0x80), "A $C010 strobe on a PS/2 stop bit was lost");
         m.scan(0x1c);
         m.run(40000);
+        require(m.vm->PeekData(0x03fe) != 0xee, "Test program detected a wrong bank or lost language-card write-enable");
+        for (const auto& w : m.bankWindows)
+            require(w.hits > 0, "No NMI resumed in the recorded-bank window at PC " + std::to_string(w.pc));
         std::cout << "PASS native PS/2 " << period << "/" << hold << ": Caps Lock LEDs, " << got
                   << ", strobe on stop bit, " << m.checkedInterrupts
-                  << " NMIs preserved registers, flags, bank and overlay\n";
+                  << " NMIs preserved registers, flags, bank and overlay";
+        if (!m.bankWindows.empty())
+        {
+            std::cout << " (recorded-bank windows hit";
+            for (const auto& w : m.bankWindows) std::cout << " " << w.hits;
+            std::cout << ")";
+        }
+        std::cout << "\n";
         return 0;
     }
     catch (const std::exception& e)

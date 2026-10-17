@@ -114,6 +114,36 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     not `$06`. `STARTUP`'s unconditional IIe aux/RamWorks writes are removed by one
     byte-verified patch. No ROM, VM, web bridge or hardware change is part of the port.
   - **Acceptance and limits:** see [`docs/porting-logs/ultima-v.md`](../docs/porting-logs/ultima-v.md).
+- **Flight Simulator II disk adapter:** `codegen/tools/patch-fs2.mjs` turns the
+  owner-supplied 143,360-byte DOS-order `.dsk` (SHA-256
+  `533c25dd24ed0cdb3e29a83ec42df126583771f4dbfc1aed83848bdab67768d2`) into a separate
+  bootable WOZ2 for the unchanged repository ROM (SHA-256 above). Game bytes stay local.
+  - **Failure:** after the title the game keeps language-card RAM read/write mapped and
+    points the RAM NMI/RESET/IRQ vectors at its restart code `$A7E2`. The first `$C010`
+    strobe clear (a VIA1 CB1 NMI on 3RIC) restarted the loader forever.
+  - **Boot:** boot0 loads one more page (T0 logical sector 14, zero-filled originally)
+    to `$2000` and a hook in its zero slack copies the resident (leaving `$CFFF`) to
+    `$CF00` before `JMP $1D00`.
+    `boot_init` refuses a ROM whose `$FFFA` vector or NMI proxy `$F1BB-$F1C5` differs
+    (`FS2: ROM MISMATCH`, then `BRK`), zeroes `$CAFE` and turns the BASIC overlay off.
+  - **Banking and interrupts:** the game's LC enable (`$AC9A`) clears the bank flag
+    `$0E43`, writes the RAM
+    NMI vector with ROM reads/bank-2 writes, then selects bank 2 read/write; its vector
+    setup (`$AD17`) keeps that NMI vector and its own RESET/IRQ vectors. The resident
+    (`$CF00-$CFFB`) shares the Ultima V fast path (PS/2 start/data/parity edges and the
+    CB1 strobe without bank work). Other sources enter the ROM handler through a fake
+    RTI frame and return to bank 1 or 2 read/write chosen by the game's flag `$0E43`,
+    which its only bank helpers (`$F8B0/$F8BC`) set before their two selecting reads.
+    An NMI between flag and selection therefore restores the bank the game is selecting.
+    The game only maps the language card read/write; `$CF00-$CFFF` is reserved for
+    this profile, not a general free-RAM declaration.
+  - **Input:** original keyboard controls (→/← throttle via Apple arrow codes
+    `$15/$08`); the game's own editor `JOYSTICK` option uses SNES pad 1 through the
+    ROM's `$C070` paddle emulation (D-pad = low/centre/high, B = button 0 calibrates).
+  - **Delivery:** 7 byte-verified sites (275 bytes) in the DSK, then the existing
+    `wozgen.mjs` DSK→WOZ conversion. No ROM, VM, web bridge, platform-ref or hardware
+    change. Acceptance and limits:
+    [`docs/porting-logs/flight-simulator-ii.md`](../docs/porting-logs/flight-simulator-ii.md).
 - **ROM DOS load/write semantics (observed, unchanged):** `FLOAD name addr start end`
   takes an inclusive end offset and skips to `start` byte by byte; `BLOAD` stores one
   byte past EOF; `OWRITE` writes whole sectors in place and, for a missing file, falls
@@ -444,6 +474,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | Ultima V SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima5.test.mjs` drives the real loader/resident/shim on the ROM DOS with synthetic volumes (and boots the original disks to the title with `U5_DISKS`); `port-ultima5.native.ps1` decodes real PS/2 frames at 94-160-cycle periods with language-card RAM mapped, including Caps Lock LED exchanges and a `` strobe on a stop-bit edge. Manual WASM play covered creation, save, overworld, combat, towne entry. First board trial: title shown, keyboard failed (fixed since, re-trial pending). Dialogue, dungeons, endgame and music (needs 128 KB) are open; ROM DOS command failures are not detected (card contents trusted); block reads cost ~1.7 M cycles. |
+| Flight Simulator II disk adapter | Experimental / emulator-verified | `patch-fs2.test.mjs --dsk` cold-boots the generated WOZ: title, flight mode, keyboard handlers, throttle, takeoff, editor, SNES-pad joystick, course plotter in bank 1, ROM-mismatch rejection, and reproduces the unpatched restart loop; `patch-fs2.native.ps1` checks real PS/2 frames/LEDs with continuous bank swaps. Physical board, scenery disks and full feature coverage remain open; see the porting log. |
 | ROM `BLOAD` stores one byte past EOF | Known gap (ROM) | Observed in `fat32_file_read`; programs loading below live data must use `FLOAD 0000 eof-1`. ROM source is not in this repository. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |

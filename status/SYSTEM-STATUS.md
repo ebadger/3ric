@@ -70,6 +70,8 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_disk.cjs                # boot a WOZ floppy via C600G into a hi-res title
 & $node web/test_woz_download.cjs        # Disk II boots, overlap-safe images through 34,560 bytes, size guards
 & $node codegen\tools\port-ultima5.test.mjs # Ultima V shim on ROM DOS (set U5_DISKS to also boot the real disks)
+& $node codegen\tools\patch-fs2.test.mjs   # FS2 adapter bounds/guards (add --dsk <FS2.dsk> for the real-disk flight checks)
+pwsh codegen\tools\patch-fs2.native.ps1    # FS2 resident: real PS/2 frames during bank swaps (MSVC)
 pwsh codegen\tools\port-ultima5.native.ps1  # Ultima V resident: real PS/2 frames with language-card RAM mapped (MSVC)
 ```
 
@@ -204,6 +206,14 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   dungeons and music (128 KB only) are unverified. Card contents are trusted: copy
   the whole folder. New overworld blocks cost ~1.1 s each through `FLOAD`.
   See [`docs/porting-logs/ultima-v.md`](../docs/porting-logs/ultima-v.md).
+- **Flight Simulator II (disk adapter, experimental):**
+  `node codegen\tools\patch-fs2.mjs FlightSimulator2.dsk fs2-3ric.woz` turns the owner's
+  exact `.dsk` into a bootable WOZ (`MON`, `C600G`; `A` then `B` at the menus). Its
+  language-card NMI vector now reaches a `$CF00` forwarder instead of the game's restart
+  code, which every `$C010` key strobe used to hit. Keyboard controls, the editor's
+  SNES-pad joystick option and the bank-1 course plotter pass in WASM; real PS/2 frames
+  pass natively (`patch-fs2.native.ps1`). Game data stays local; no board trial yet.
+  See [`docs/porting-logs/flight-simulator-ii.md`](../docs/porting-logs/flight-simulator-ii.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**

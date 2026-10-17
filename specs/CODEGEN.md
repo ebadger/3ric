@@ -25,6 +25,7 @@ graphics / registers → produce a `.PRG` that also `BRUN`s on real hardware.
 | `run6502.mjs` | CLI: assemble/load → run → apply checks → emit `.PRG` + verdict (exit 0 only if it halted cleanly and every check passed). |
 | `gen_platform_ref.mjs` | Regenerates `platform/platform-ref.{md,json}` from `vm.h` + `badger6502.dbg`. |
 | `patch-archon.mjs` | Exact-image local WOZ compatibility patcher; see `ROM-SOFTWARE.md`. Contains only adapter code and guarded replacements, never downloads game assets, and refuses input overwrite or fingerprint/sector validation failure. |
+| `patch-fs2.mjs` | Exact-image Flight Simulator II `.dsk` → bootable 3RIC WOZ patcher (resident `codegen/patches/fs2/resident.s`); see `ROM-SOFTWARE.md`. Byte-verified edits, refuses other images/ROMs and existing outputs; game data never enters the repository. |
 | `port-ultima5.mjs` | Converts the eight Ultima V ProDOS disk sides into a micro-SD `U5/` folder (`U5.PRG` + one folder per disk); see `ROM-SOFTWARE.md`. Uses `ultima5/prodos.mjs` (read-only ProDOS reader) and, for tests, `ultima5/fat32.mjs` (builds a sparse FAT32 card for the WASM SD mock). Game data never enters the repository. |
 | `wozedit.mjs` | Node-only checked WOZ2 sector reading/editing, reusing the dual-use `wozgen.mjs` CRC and 6-and-2 codec. Preserves non-edited bitstream and metadata bytes. |
 
@@ -120,5 +121,6 @@ breakpoints and current-PC highlighting.
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Archon local WOZ patching | Experimental / emulator-verified | `patch-archon.test.mjs` covers synthetic editor fixtures and optional owner-supplied-disk gameplay; `patch-archon.test.ps1` covers native PS/2 timing and LED commands. Both game images stay outside the repository. |
 | Ultima V SD-card converter | Experimental / emulator-verified | `port-ultima5.test.mjs` covers the ProDOS reader, the guarded patch and the full shim on the ROM DOS with synthetic volumes; `U5_DISKS` adds an original-disk title boot. `port-ultima5.native.ps1` builds the VM with MSVC and checks the resident's PS/2 fast path against real keyboard frames, Caps Lock LED exchanges and a stop-bit strobe collision. |
+| Flight Simulator II disk patching | Experimental / emulator-verified | `patch-fs2.test.mjs` covers resident bounds and patch preimages without the game, and with `--dsk` the full WASM cold-boot/flight checks. `patch-fs2.native.ps1` reuses the `port-ultima5.native.cpp` harness (optional `pc:bank` recorded-bank windows, each of which must be hit) for real PS/2 frames during continuous bank swaps. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |
 | AI-contributor entry point | Shipped | `web/llms.txt` + `CONTRIBUTING.md`; `prompt-system.md` closes the loop to the gallery. |
