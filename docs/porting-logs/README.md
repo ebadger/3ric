@@ -19,6 +19,7 @@ below as working on the physical machine.
 |-------|-------------|-------------------|
 | [Archon](archon.md) (2026-10-05) | Preserve input interrupts across both language-card banks, and avoid paddle-timer traffic in a digital-controller adapter | Reproducible disk patcher with native PS/2 and WASM board/combat coverage; physical-board confirmation remains open |
 | [Ultima V](ultima-v.md) (2026-10-15) | Replace a game's own disk loader under unmodified binaries; decode PS/2 bits before any bank work; read the ROM DOS's exact load/write semantics | Converter, glue, synthetic-volume and native PS/2 tests; WASM play through creation, overworld, combat, towne entry and save; first board trial failed on keyboard (fixed, re-trial pending) |
+| [Seven Cities of Gold](seven-cities-of-gold.md) (2026-10-16) | Replace a game's RWTS with direct SD sector access to the original disk images; find the buffer the RWTS really uses (patched operands, not the IOB); 3RIC buttons need a `$C070` scan | Converter, loader, resident and shim tests on synthetic cards (two cluster sizes, refusals); native PS/2 on the resident; WASM play through sailing, landing and natives; World Maker made a new world that played; save at the Pub and the board are open |
 
 ## Scope and evidence
 
