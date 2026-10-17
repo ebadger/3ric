@@ -8,8 +8,14 @@
 // frames on VIA1 CA2/PA7 at a given bit period with DATA changing a given
 // number of cycles after each falling clock edge. Every NMI must return with
 // A/X/Y, flags, stack, language-card bank and BASIC overlay unchanged.
+//
+// Also used by codegen/tools/patch-fs2.native.ps1 with its own resident and
+// program. An optional last argument lists resume PCs (hex, comma-separated)
+// where the program has recorded a bank but not yet selected it; an NMI that
+// resumes exactly there may return with that recorded bank already mapped.
 #include "SDCard.h"
 #include "vm.h"
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <fstream>
@@ -118,6 +124,8 @@ namespace
         uint16_t nmiEntry;
         bool checking = false;
         unsigned checkedInterrupts = 0;
+        std::vector<uint16_t> bankWindows;
+        unsigned windowInterrupts = 0;
         struct Frame
         {
             uint16_t pc;
@@ -157,7 +165,12 @@ namespace
                 const Frame& f = frames.back();
                 require(f.a == cpu->A && f.x == cpu->X && f.y == cpu->Y, "NMI corrupted A/X/Y");
                 require((f.p & 0xcf) == (cpu->flags.reg & 0xcf), "NMI corrupted CPU flags");
-                require(f.bank == vm->GetMemoryReadMapping(0xd000), "NMI restored the wrong language-card bank");
+                if (f.bank != vm->GetMemoryReadMapping(0xd000))
+                {
+                    require(std::find(bankWindows.begin(), bankWindows.end(), f.pc) != bankWindows.end(),
+                        "NMI restored the wrong language-card bank");
+                    ++windowInterrupts;
+                }
                 require(f.basic == vm->IsROMVisible(0x9000), "NMI changed the BASIC overlay");
                 frames.pop_back();
                 ++checkedInterrupts;
@@ -213,7 +226,8 @@ int main(int argc, char** argv)
 {
     try
     {
-        require(argc == 7, "Usage: u5-native <rom> <resident.bin> <program.bin> <nmi-entry-hex> <period> <hold>");
+        require(argc == 7 || argc == 8,
+            "Usage: u5-native <rom> <resident.bin> <program.bin> <nmi-entry-hex> <period> <hold> [window-pcs-hex]");
         const auto resident = readFile(argv[2]);
         const auto program = readFile(argv[3]);
         const uint16_t entry = uint16_t(std::stoul(argv[4], nullptr, 16));
@@ -221,6 +235,16 @@ int main(int argc, char** argv)
         const uint32_t hold = uint32_t(std::stoul(argv[6]));
         require(hold >= period / 2 && hold <= period, "Invalid PS/2 timing");
         Machine m(argv[1], period, hold, entry);
+        if (argc == 8)
+        {
+            std::string list = argv[7];
+            for (size_t pos = 0; pos < list.size(); )
+            {
+                const size_t comma = (std::min)(list.find(',', pos), list.size());
+                m.bankWindows.push_back(uint16_t(std::stoul(list.substr(pos, comma - pos), nullptr, 16)));
+                pos = comma + 1;
+            }
+        }
         for (size_t i = 0; i < resident.size(); ++i) m.vm->WriteData(uint16_t(0xcf00 + i), resident[i]);
         for (size_t i = 0; i < program.size(); ++i) m.vm->WriteData(uint16_t(0x0800 + i), program[i]);
         for (uint16_t a = 0x0300; a < 0x0400; ++a) m.vm->WriteData(a, 0);
@@ -274,7 +298,10 @@ int main(int argc, char** argv)
         m.run(40000);
         std::cout << "PASS native PS/2 " << period << "/" << hold << ": Caps Lock LEDs, " << got
                   << ", strobe on stop bit, " << m.checkedInterrupts
-                  << " NMIs preserved registers, flags, bank and overlay\n";
+                  << " NMIs preserved registers, flags, bank and overlay";
+        if (!m.bankWindows.empty())
+            std::cout << " (" << m.windowInterrupts << " in a recorded-bank window)";
+        std::cout << "\n";
         return 0;
     }
     catch (const std::exception& e)

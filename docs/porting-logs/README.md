@@ -19,6 +19,7 @@ below as working on the physical machine.
 |-------|-------------|-------------------|
 | [Archon](archon.md) (2026-10-05) | Preserve input interrupts across both language-card banks, and avoid paddle-timer traffic in a digital-controller adapter | Reproducible disk patcher with native PS/2 and WASM board/combat coverage; physical-board confirmation remains open |
 | [Ultima V](ultima-v.md) (2026-10-15) | Replace a game's own disk loader under unmodified binaries; decode PS/2 bits before any bank work; read the ROM DOS's exact load/write semantics | Converter, glue, synthetic-volume and native PS/2 tests; WASM play through creation, overworld, combat, towne entry and save; first board trial failed on keyboard (fixed, re-trial pending) |
+| [Flight Simulator II](flight-simulator-ii.md) (2026-10-16) | A key strobe is an NMI on 3RIC: a game's language-card vectors must forward it; the visible loop can be two steps from the cause | Exact-image DSK→WOZ patcher; WASM cold boot through flight, takeoff, editor joystick and bank-1 course plotter; native PS/2 with continuous bank swaps; not yet tried on the board |
 
 ## Scope and evidence
 
