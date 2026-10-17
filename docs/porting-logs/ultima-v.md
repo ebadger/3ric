@@ -94,6 +94,30 @@ while the ROM is still selected for reads (an NMI during setup always sees ROM
 vectors), installs the RAM vectors, then selects `/ULTIMA5` and runs `STARTUP`
 exactly as DINKEYDOS would.
 
+**SNES controllers** (added after the first board trial): the game reads the
+keyboard in three places, all `LDA $C000`: `MAIN.SUBS` `scankey` at `$EFC2`
+(every overlay goes through it), the title menu at `STARTUP $8B77`, and `VIEW
+$A75A` (any key closes the map). Guarded patches turn each into `JSR pad_key`
+(resident, same length). `pad_key` maps bank 1 if the game is in bank 2 and calls
+`pad_poll` (shim, `$D02A` slot), then returns `LDA $C000` with X/Y and the other
+flags unchanged. `pad_poll` reads both pads straight from VIA1 port B, the way
+the ROM's scan does (PB6 latch, PB7 clock, PB5/PB4 data) but without `$C070`
+and the paddle-timer NMIs that follow it, and types the mapped key into `$C000`
+exactly as the ROM does for a PS/2 key, only when no key is pending. The game's
+own `$C010` then acknowledges it. VIA1 Timer 2 (one-shot mode keeps counting) is
+the clock: pads are read at most every ~1.3 ms, and a held direction repeats
+after ~0.39 s, then every ~0.18 s, only while the game's key queue (`$B8`) is
+empty, so releasing stops at once. Both pads are merged.
+
+| Pad | Key | | Pad | Key |
+|-----|-----|-|-----|-----|
+| D-pad | arrow keys (move, menus) | | A | Return |
+| B | Space (pass, continue) | | X | T (talk) |
+| Y | A (attack) | | L | Esc (cancel) |
+| R | E (enter, klimb) | | Start / Select | Z (Ztats) / Q (save) |
+
+Names, numbers and the other commands still need the keyboard.
+
 ## What went wrong on the way
 
 - **The keyboard did not work on the board** (first hardware trial). The first
@@ -134,6 +158,9 @@ exactly as DINKEYDOS would.
   file on another disk / unknown volume errors, NMIs taken with bank 2 and with
   bank 1 mapped (bank, write-enable and BASIC-overlay state preserved), load-and-run.
 - With `U5_DISKS=<folder>`: the original disks boot to the animated title.
+- SNES pads through the real resident and shim with bank swaps: one tap types one
+  key, holding Right 1.5 s types 8, release stops at once, chorded buttons both
+  type; the keyboard-read patches are exact and guarded.
 
 `pwsh codegen\tools\port-ultima5.native.ps1` (Visual Studio C++ tools): builds the
 shared VM natively and types `ULTIMA5` as real PS/2 frames (bit periods 94/120/160
@@ -149,11 +176,14 @@ title and intro animation; character creation through the gypsy's questions,
 with the save written to `UNDRWRLD`/`BRITANIA`; *Journey Onward* into Iolo's hut;
 walking out to Britannia (overworld chunks streamed from `BRITANIA/RAWnn`); a
 wandering-monster fight (`PRECOM` → `MAIN.COMBAT` → back to `MAIN.OUT`); entering
-Yew (`TOWNE` disk, towne map blocks); Z-stats overlay; Quit & Save.
+Yew (`TOWNE` disk, towne map blocks); Z-stats overlay; Quit & Save. With the pad
+only: menu → *Journey Onward* (A), single steps and held walking in the hut,
+Z-stats (Start) and cancel (L), pass (B).
 
 **Physical board:** the first trial booted to the title; the keyboard did not
-respond (fixed above, not yet re-tried on the board) and there was no music
-(expected: see below).
+respond and there was no music (expected: see below). With the PS/2 fix, the
+owner reports the game running on the board. SNES controllers: not yet tried on
+the board.
 
 **Not yet shown:** a conversation (the `TALK` overlay loads; no scripted dialogue
 completed), dungeons, keeps/castle, the endgame, and performance on a real card's

@@ -110,6 +110,13 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     reserved for this profile, not a general free-RAM declaration.
   - **Trust:** ROM DOS command failures are not detected (the ROM reports them only
     as text); the generated card contents are assumed complete.
+  - **SNES controllers:** three guarded patches turn the game's keyboard reads
+    (`MAIN.SUBS $EFC2`, `STARTUP $8B77`, `VIEW $A75A`, all `LDA $C000`) into
+    `JSR pad_key` in the resident. It reads both pads directly from VIA1 port B (no
+    `$C070`, so no paddle-timer NMIs) and writes the mapped key to `$C000` as the ROM
+    does for PS/2, only when no key is pending. D-pad = arrows (held repeat, only
+    while the game's queue `$B8` is empty), A Return, B Space, X T, Y A, L Esc, R E,
+    Start Z, Select Q. VIA1 T2 (read-only, one-shot mode) provides the time base.
   - **Machine:** 64 KB play; the game's 128 KB music path stays off because `$FBB3` is
     not `$06`. `STARTUP`'s unconditional IIe aux/RamWorks writes are removed by one
     byte-verified patch. No ROM, VM, web bridge or hardware change is part of the port.
@@ -443,7 +450,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
-| Ultima V SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima5.test.mjs` drives the real loader/resident/shim on the ROM DOS with synthetic volumes (and boots the original disks to the title with `U5_DISKS`); `port-ultima5.native.ps1` decodes real PS/2 frames at 94-160-cycle periods with language-card RAM mapped, including Caps Lock LED exchanges and a `` strobe on a stop-bit edge. Manual WASM play covered creation, save, overworld, combat, towne entry. First board trial: title shown, keyboard failed (fixed since, re-trial pending). Dialogue, dungeons, endgame and music (needs 128 KB) are open; ROM DOS command failures are not detected (card contents trusted); block reads cost ~1.7 M cycles. |
+| Ultima V SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima5.test.mjs` drives the real loader/resident/shim on the ROM DOS with synthetic volumes (and boots the original disks to the title with `U5_DISKS`); `port-ultima5.native.ps1` decodes real PS/2 frames at 94-160-cycle periods with language-card RAM mapped, including Caps Lock LED exchanges and a `` strobe on a stop-bit edge. Manual WASM play covered creation, save, overworld, combat, towne entry, and pad-only menu/walking/Ztats; the WASM suite also covers pad tap/repeat/release/chords. Board: running after the PS/2 fix; pads not yet tried on the board. Dialogue, dungeons, endgame and music (needs 128 KB) are open; ROM DOS command failures are not detected (card contents trusted); block reads cost ~1.7 M cycles. |
 | ROM `BLOAD` stores one byte past EOF | Known gap (ROM) | Observed in `fat32_file_read`; programs loading below live data must use `FLOAD 0000 eof-1`. ROM source is not in this repository. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |

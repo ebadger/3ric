@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-15 — ebadger (via Copilot)_
+_Last updated: 2026-10-17 — ebadger (via Copilot)_
 
 ---
 
@@ -198,11 +198,13 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   converts the owner's eight ProDOS disk sides into a `U5\` folder; copy it to the
   card, then `CD U5` and `BRUN U5.PRG 0800`. Game data stays local. A shim replaces
   Origin's DINKEYDOS loader with ROM DOS commands, and a `$CF00` resident decodes
-  PS/2 bits itself while language-card RAM is mapped (the first board trial's
-  keyboard failure; fixed and native-tested, board re-trial pending). WASM play
-  reached character creation, save, the overworld, combat and a towne; dialogue,
-  dungeons and music (128 KB only) are unverified. Card contents are trusted: copy
-  the whole folder. New overworld blocks cost ~1.1 s each through `FLOAD`.
+  PS/2 bits itself while language-card RAM is mapped. Running on the board (owner,
+  2026-10-17). Both SNES pads play the game (D-pad moves, A Return, B pass, X talk,
+  Y attack, L Esc, R enter, Start Ztats, Select save; emulator-tested, board trial
+  pending). WASM play reached character creation, save, the overworld, combat and a
+  towne; dialogue and dungeons are unverified; no music (the original needs 128 KB;
+  a 64 KB player is being investigated). Card contents are trusted: copy the whole
+  folder. New overworld blocks cost ~1.1 s each through `FLOAD`.
   See [`docs/porting-logs/ultima-v.md`](../docs/porting-logs/ultima-v.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
