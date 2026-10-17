@@ -302,6 +302,6 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
   const { files, knownRelease, imageSha } = buildFolder(program, map, readRom());
   fs.mkdirSync(target, { recursive: true });
   for (const [name, bytes] of Object.entries(files)) fs.writeFileSync(path.join(target, name), bytes);
-  if (!knownRelease) console.warn(`note: program image ${imageSha} differs from the release this port was built on; every patch site matched`);
+  if (!knownRelease) console.warn(`WARNING: program image ${imageSha} is not the release this port was built on. The patch sites matched, but the code the two shims replace was not checked: this conversion is untested and may crash.`);
   console.log(`wrote ${target}: copy the ${FOLDER} folder to the SD card root, then CD ${FOLDER} and BRUN 7CITIES.PRG 0800`);
 }

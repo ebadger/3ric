@@ -415,6 +415,7 @@ async function runSynthetic(label, fatOpts) {
 
 await runSynthetic("512-byte clusters", {});
 await runSynthetic("4 KB clusters", { sectorsPerCluster: 8, totalSectors: 600000 });
+await runSynthetic("FAT entries with reserved bits set", { reservedBits: ["PROGRAM.DSK", "MAP.DSK", "GAME.BIN"] });
 
 async function expectLoaderError(label, mutate, fatOpts, pattern, beforeRun) {
   const { files } = synthFolder();

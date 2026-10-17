@@ -6,7 +6,8 @@
 // Names must already be FAT 8.3 (upper case, NAME or NAME.EXT).
 // Test options for other card layouts: sectorsPerCluster (a power of two;
 // larger clusters need a larger totalSectors to stay FAT32) and fragment, a
-// list of file names whose cluster chain gets a one-cluster gap halfway.
+// list of file names whose cluster chain gets a one-cluster gap halfway, and
+// reservedBits, file names whose FAT entries set the four reserved top bits.
 
 const SEC = 512;
 const PART_LBA = 2048;
@@ -21,9 +22,9 @@ function shortName(name) {
 }
 
 /** tree: { NAME: Uint8Array | tree }. Returns the "SDSP" sparse image bytes. */
-export function buildSparseFat32(tree, { totalSectors = 131072, label = "3RIC U5", sectorsPerCluster = 1, fragment = [] } = {}) {
+export function buildSparseFat32(tree, { totalSectors = 131072, label = "3RIC U5", sectorsPerCluster = 1, fragment = [], reservedBits = [] } = {}) {
   const SPC = sectorsPerCluster, CL = SEC * SPC;
-  const fragmented = new Set(fragment);
+  const fragmented = new Set(fragment), reserved = new Set(reservedBits);
   const sectors = new Map();
   const sector = (lba) => {
     let s = sectors.get(lba);
@@ -47,14 +48,14 @@ export function buildSparseFat32(tree, { totalSectors = 131072, label = "3RIC U5
   let nextFree = 2;
   const clusterLba = (c) => dataLba + (c - 2) * SPC;
 
-  function allocChain(count, gap = false) {
+  function allocChain(count, gap = false, high = 0) {
     const chain = [];
     for (let i = 0; i < Math.max(1, count); i++) {
       if (gap && i === Math.floor(count / 2)) nextFree++;
       chain.push(nextFree++);
     }
     if (nextFree - 2 > clusterCount) throw new Error("image full");
-    chain.forEach((c, i) => fat.set(c, i + 1 < chain.length ? chain[i + 1] : EOC));
+    chain.forEach((c, i) => fat.set(c, ((i + 1 < chain.length ? chain[i + 1] : EOC) | high) >>> 0));
     return chain;
   }
   function writeData(chain, data) {
@@ -91,7 +92,7 @@ export function buildSparseFat32(tree, { totalSectors = 131072, label = "3RIC U5
     for (const name of names) {
       const value = node[name];
       if (value instanceof Uint8Array) {
-        const c = value.length ? allocChain(Math.ceil(value.length / CL), fragmented.has(name)) : null;
+        const c = value.length ? allocChain(Math.ceil(value.length / CL), fragmented.has(name), reserved.has(name) ? 0xa0000000 : 0) : null;
         if (c) writeData(c, value);
         entries.push(dirEntry(name, 0x20, c ? c[0] : 0, value.length));
       } else {

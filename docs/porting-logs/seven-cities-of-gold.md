@@ -54,7 +54,8 @@ commands cost ~0.8 s per 256-byte `FLOAD` on the emulated card - 13 s per overla
 `$C800`. Track T, sector S is half of card sector `base + (T*16+S)/2`; a write is a
 read-modify-write. The loader learns each file's first cluster from the ROM's FAT32
 variables after an `FLOAD` of its first 256 bytes, proves the computed sector holds
-those bytes, and walks the FAT to prove the file is contiguous. It refuses a missing
+those bytes, and walks the FAT (ignoring the four reserved bits of each entry) to
+prove the file is contiguous. It refuses a missing
 or fragmented file, or a ROM whose SD routines (`$E141-$E279` checksum) or NMI proxy
 differ. Measured: ~102 ms per sector read (the floppy traced at ~110 ms), ~200 ms
 per write, ~23 s to format.
@@ -114,7 +115,8 @@ vectors to it before the game starts.
 - Converter: track layout, gzip, identification, the decryption key stream, the
   relocation map, every patch guarded and surviving relocation, World Maker offsets.
 - Real loader, resident and both shim copies on generated FAT32 cards with
-  **synthetic** disks and `GAME.BIN`, at 512-byte and 4 KB clusters: reads and writes
+  **synthetic** disks and `GAME.BIN`, at 512-byte and 4 KB clusters and with FAT32's
+  reserved entry bits set: reads and writes
   on both disks with bank 2, bank 1 and ROM mapped (state and zero page preserved),
   half-sector isolation, buffer pages taken from the operands (stale IOB page never
   touched), bad track, seek, `prog_load`, the World Maker copy's program-disk read and
@@ -147,6 +149,12 @@ endgame, and anything on the physical board.
   loader reads FAT32 variables; a ROM with different SD routines is refused at load.
 - **Files must be contiguous** (normal after copying to a card); the loader refuses
   otherwise rather than fall back.
+- **Other releases are converted with a warning, untested.** Only the program disk
+  this port was built on is recognised (pinned image hash). Another dump is still
+  converted if every patch site holds the expected bytes, but the 349- and 331-byte
+  regions the two shims overwrite are not verified, and the pinned hash does not cover
+  the World Maker sectors - such a conversion may crash. (Review finding; owner chose
+  to document it rather than refuse.)
 - **The World Maker overwrites `MAP.DSK`.** Keep a copy of the original map disk -
   the demo only works with the historical map. Restart (reset, `BRUN`) afterwards.
 - **Keys pressed during disk access may be lost:** the SD routines read VIA port A,

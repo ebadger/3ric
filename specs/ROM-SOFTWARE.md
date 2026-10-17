@@ -133,7 +133,9 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   - **Loader:** refuses a ROM whose SD routines (`$E141-$E279` checksum) or NMI proxy
     differ; learns each file's first cluster from the ROM FAT32 variables (`$CC00`,
     `$CC04`, `$CC18`, `$CC32`) after an `FLOAD` of 256 bytes, verifies that sector's
-    content, and requires an unbroken FAT chain (no fallback for fragmented files). Its
+        content, and requires an unbroken FAT chain (entries masked to 28 bits; no fallback
+        for fragmented files). An unrecognized program-disk release is converted with a
+        warning; the code regions the shims replace are not verified for it (owner decision). Its
     final stage runs in `$CA00-$CABF` (no ROM references) while `GAME.BIN` overwrites it.
   - **Banking and interrupts:** the Ultima V resident at `$CF00`, signatures `$A5`/`$5A`
     at bank 1/2 `$DFFF`; the game's IRQ vector and RESET writes are redirected so the LC

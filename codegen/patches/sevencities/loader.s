@@ -466,7 +466,6 @@ wc_c:
 wc_last:
         jsr fat_entry           ; end of chain: $0FFFFFF8-$0FFFFFFF
         lda entry+3
-        and #$0F
         cmp #$0F
         bne wc_bad
         lda entry+2
@@ -543,6 +542,9 @@ fe_get:
         iny
         cpy #4
         bne fe_copy
+        lda entry+3             ; FAT32: the top four bits are reserved
+        and #$0F
+        sta entry+3
         rts
 
 ; File order: PROGRAM.DSK (shim base 0), MAP.DSK (base 1), GAME.BIN (final).
