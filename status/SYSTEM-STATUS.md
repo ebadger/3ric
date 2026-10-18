@@ -70,6 +70,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_disk.cjs                # boot a WOZ floppy via C600G into a hi-res title
 & $node web/test_woz_download.cjs        # Disk II boots, overlap-safe images through 34,560 bytes, size guards
 & $node codegen\tools\port-ultima5.test.mjs # Ultima V shim, pads and music (set U5_DISKS to also boot the real disks)
+& $node codegen\tools\port-ultima3.test.mjs # Ultima III RWTS shim on ROM DOS (set U3_DISKS to also play the real disks)
 
 pwsh codegen\tools\port-ultima5.native.ps1  # Ultima V resident: real PS/2 frames with language-card RAM mapped (MSVC)
 & $node codegen\tools\port-sevencities.test.mjs # Seven Cities SD port on ROM DOS/SD (SEVENCITIES_DISKS boots the real disks)
@@ -260,6 +261,17 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   (owner decision): each 4 KB map save writes one extra SD sector past the file, and
   saves need a 512-byte-cluster card.
   See [`docs/porting-logs/ultima-ii.md`](../docs/porting-logs/ultima-ii.md).
+- **Ultima III (SD-card port, experimental):** `node codegen\tools\port-ultima3.mjs <disks> <out>`
+  converts the owner's two DOS-order images into a `U3\` folder; copy it to the card,
+  then `CD U3` and `BRUN U3.PRG 0800`, answer the Mockingboard prompt with type `2`,
+  slot `4`, and the disk prompt with `1`. Game data stays local. The game's own DOS
+  runs unchanged; only its RWTS is replaced by whole-file ROM DOS commands. WASM play
+  reached creation, the world, a castle, combat, a dungeon and save/resume, with music
+  retimed for the 3RIC clock. Either SNES pad plays too (D-pad moves; B Space, A Attack,
+  X Enter, Y Transact, L Klimb, R Descend, Select Ignite, Start Get); talking, shops and
+  the board are unverified. Loads run
+  ~2 KB/s in the emulator. Card contents are trusted: copy the whole folder.
+  See [`docs/porting-logs/ultima-iii.md`](../docs/porting-logs/ultima-iii.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**
