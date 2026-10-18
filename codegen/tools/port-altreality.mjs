@@ -5,7 +5,7 @@
 //   node codegen/tools/port-altreality.mjs <output-dir> <image>...
 //
 // Images may be .nib (232,960 bytes; the volume number in the address fields
-// identifies the side), DOS-order .dsk / .do (143,360 bytes), or either
+// names the side and the contents must agree), DOS-order .dsk / .do (143,360 bytes), or either
 // gzipped. Give the City's two sides and/or the Dungeon's three sides (disk 1
 // side 1 original or cracked, side 2, disk 2 side 1); character disks are
 // optional - initialized empty ones are generated otherwise. Writes
@@ -150,13 +150,21 @@ function hasText(buf, text, mask = 0) {
 const bytesAt = (dsk, t, s, off, n) => Array.from(dsk.subarray(sectorAt(t, s) + off, sectorAt(t, s) + off + n));
 const eq = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
 
-/** Which side an image is, from its volume (nib) or its contents (dsk). */
+/** Which side an image is: a .nib's volume must agree with its contents
+ *  (known SHA-256 or the side's markers); a .dsk is named by its contents. */
 export function identify({ dsk, vol }) {
+  const byContent = contentRole(dsk);
   if (vol != null) {
     const role = BY_VOL[vol];
     if (!role) throw new Error(`.nib volume ${vol} is not an Alternate Reality disk`);
+    if (byContent !== role)
+      throw new Error(`.nib volume ${vol} names the ${SIDES[role].what}, but its contents ${byContent ? `are the ${SIDES[byContent].what}` : "are not a known release of it"}`);
     return role;
   }
+  return byContent;
+}
+
+function contentRole(dsk) {
   const h = sha256(dsk);
   for (const [role, hashes] of Object.entries(KNOWN_SHA256)) if (hashes.includes(h)) return role;
   if (eq(bytesAt(dsk, 0, 5, 0, 6), [0x84, 0x48, 0x85, 0x49, 0xa0, 0x02]) && hasText(dsk.subarray(sectorAt(23, 0), sectorAt(24, 0)), "Hit I to initialize a character disk")) return "city1";

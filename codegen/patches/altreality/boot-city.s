@@ -33,9 +33,9 @@ gb_copy:
         bne gb_copy
         inc ZBUF+1
         bne gb_copy
+        jsr SETVEC              ; vectors first, while the CPU still reads ROM
         lda $C083               ; read/write bank 2
         lda $C083
-        jsr SETVEC
         lda #$60                ; slot 6 * 16, as the boot ROM leaves it
         sta $2B
         jmp $1000

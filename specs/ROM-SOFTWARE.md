@@ -208,13 +208,15 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     `$CFE0-$CFFB`: each image's volume and first sector, the image in each drive.
   - **Loader:** at `$6000` (scratch `$7000`). Refuses a ROM whose SD routines (`$E141-$E279`
     checksum) or NMI proxy differ; locates and proves every image contiguous like the Seven
-    Cities loader; then does the boot sector's work (raw track-0 reads, the monitor ROM copied
-    into language-card RAM) without its RESET-vector changes, and enters the game.
+    Cities loader (the file size is not checked); then does the boot sector's work (raw
+    track-0 reads, the monitor ROM copied into language-card RAM) without its RESET-vector
+    changes, writing the NMI/IRQ vectors before RAM is selected, and enters the game.
   - **Banking and interrupts:** both games copy the monitor ROM into bank 2 and play with it
     mapped, never bank 1. The resident at `$CF00` (the Ultima V PS/2 fast path) is reached
     only through the RAM vectors, so it restores bank 2 read/write after the ROM handler.
     The City re-copies the ROM before its menu and overwrites `$F000-$F7FF` (the ROM's NMI
-    proxy): its `$C083` pair at `$68E3` becomes `JSR fixvec`, which re-points the vectors.
+    proxy): its `$C083` pair at `$68E3` becomes `JSR fixvec`, which re-points the vectors
+    while the ROM is still read-mapped, then selects RAM.
   - **Game patches** (byte-guarded): City - skip the disk-timed random seed (`$6905`), no
     raw "disk has data?" probe in the character initializer (`$7400`: always warn) and no
     other-drive probes after a disk error (`$77AE`, `$8C70`), drop the raw-disk Backup

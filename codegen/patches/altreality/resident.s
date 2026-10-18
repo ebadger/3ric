@@ -126,11 +126,18 @@ irq_resume:
         rti
 
 ; The City copies the whole ROM into bank 2 again before the title menu
-; ($687B-$68E2), restoring the ROM's vectors, then selects RAM with
-; BIT $C083 twice. That pair becomes JSR fixvec.
+; ($687B-$68E2) with ROM read and RAM written, restoring the ROM's vectors,
+; then selects RAM with BIT $C083 twice. That pair becomes JSR fixvec, which
+; puts the vectors back while the ROM is still what the CPU reads (an NMI
+; between the two stores must not see half a vector), then selects RAM.
 fixvec:
+        jsr setvec
         bit LC_RAM2
         bit LC_RAM2
+        rts
+
+; Point the RAM NMI/IRQ vectors at the resident. Call it with the ROM read-
+; mapped and language-card writes enabled ($C081 twice).
 setvec:
         pha
         lda #<nmi_entry

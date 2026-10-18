@@ -42,8 +42,8 @@ the game's cue to ask for a disk swap.
 
 ## The port
 
-`node codegen/tools/port-altreality.mjs <out> <images...>` identifies each side (a `.nib`
-by its volume number; a `.dsk` by known SHA-256 or content markers) and writes one
+`node codegen/tools/port-altreality.mjs <out> <images...>` identifies each side by known
+SHA-256 or content markers (a `.nib` must also carry that side's volume number) and writes one
 `<out>/AR/` folder: `CITY.PRG` + `CITY1.DSK CITY2.DSK CITYCHR.DSK` and/or `DUNGEON.PRG` +
 `DUNGEON1.DSK DUNGEON2.DSK DUNGEON3.DSK DUNCHR.DSK`. Copy it to the card, then
 `CD AR`, `BRUN CITY.PRG 6000` (or `DUNGEON.PRG`). One folder holds both games so the
@@ -74,7 +74,10 @@ only reached through the RAM vectors, so it always restores bank 2 read/write.
 **Loader** (`loader.s` + `boot-city.s` / `boot-dungeon.s`, at `$6000`, scratch `$7000`): the
 Seven Cities loader's ROM checks and contiguity proof for 3 or 5 images, then the boot
 sector's work - raw track-0 reads, the ROM copied into the language card, NMI/IRQ vectors on
-the resident - without the City's RESET-wiping stub, and a jump into the game.
+the resident - without the City's RESET-wiping stub, and a jump into the game. The vectors
+are written while the CPU still reads the ROM (`$C081`), and only then is RAM selected: an
+NMI in between must never find half a vector or the ROM's `$F1BB` in RAM (review finding;
+the same order is used by `fixvec`).
 
 **Patches** (each applied only over the expected bytes):
 
@@ -158,7 +161,9 @@ and anything on the physical board.
 - **Binds to the ROM:** like Seven Cities, the shim calls `sd_readsector`/`sd_writesector`
   and the loader reads FAT32 variables; a ROM with different SD routines is refused.
 - **Files must be contiguous** (normal after copying to a card); the loader refuses
-  otherwise.
+  otherwise. It does not check the file size: an image truncated by less than a cluster
+  would pass and read slack bytes at its end (review finding, documented by owner
+  decision; the converter always writes exact 143,360-byte images).
 - **Loading is slower than the floppy in places:** ~55 ms per sector; entering the City
   spends ~29 s in the shim (the game animates meanwhile).
 - **Keyboard only;** no SNES-pad mapping yet. Backup (the raw disk copier) is gone from the

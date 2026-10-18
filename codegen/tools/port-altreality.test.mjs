@@ -54,9 +54,13 @@ function nibFromDsk(dsk, vol) {
   bad[at] = 0xd5;                                       // not a 6-and-2 nibble
   assert.throws(() => P.nibToDsk(bad), /track 5: 15 of 16/);
   assert.throws(() => P.readImage(new Uint8Array(1000)), /140 KB/);
-  assert.equal(P.identify({ dsk, vol: 17 }), "dun2", "a .nib side is named by its volume");
+  assert.throws(() => P.identify({ dsk, vol: 17 }), /not a known release/, "a volume alone does not make a side");
+  const dun2 = Uint8Array.from(dsk);
+  dun2.set(Buffer.from("NO D.O.S. ON THIS DISK", "latin1").map((c) => c ^ 0x87), 0x40);
+  assert.equal(P.identify(P.readImage(nibFromDsk(dun2, 17))), "dun2", "a .nib side whose volume and contents agree");
+  assert.throws(() => P.identify({ dsk: dun2, vol: 3 }), /are the Dungeon disk 1 side 2/, "volume and contents disagree");
   assert.throws(() => P.identify({ dsk, vol: 99 }), /volume 99/);
-  console.log("PASS .nib decoding (6-and-2, checksum, interleave, volume) and identification by volume");
+  console.log("PASS .nib decoding (6-and-2, checksum, interleave, volume) and identification by volume and contents");
 }
 
 // ---------------------------------------------------------------------------
@@ -355,29 +359,13 @@ call:   lda #>IOB
   };
 }
 
-// Dungeon: T0 S0 -> $0800 (the $08C1 copy routine and a JMP to the test at
-// $0844), T0 S15..S0 -> $4000-$4FFF (wrapper at $4380, shim at $4517).
+// Dungeon: T0 S0 -> $0800 (a JMP to the test at $0844, where the boot
+// sector continues), T0 S15..S0 -> $4000-$4FFF (wrapper at $4380, shim at $4517).
 function dungeonFolder() {
   const boot = assemble(`
         .org $0800
         .res $44
         jmp $4C00
-        .res $08C1-$0847
-        lda $C081               ; as the boot sector: ROM $F800-$FFFF -> LC
-        lda $C081
-        ldy #0
-        lda #$F8
-        sta $FF
-        sty $FE
-cp:     lda ($FE),y
-        sta ($FE),y
-        iny
-        bne cp
-        inc $FF
-        bne cp
-        lda $C083
-        lda $C083
-        rts
 `);
   const wrapper = [0x8d, 0x7b, 0x43, 0x08, 0x78, 0x20, 0x17, 0x45, 0xb0, 0x04, 0x28, 0x18, 0x90, 0x02, 0x28, 0x38, 0x60];
   const prog = assemble(`
