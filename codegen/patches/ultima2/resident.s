@@ -134,7 +134,7 @@ pi_button:
 pi_repeat:
         jsr pad_inject
         bcs pi_next             ; latch busy: try again next tick
-        lda #REPEAT_FIRST-REPEAT_GAP
+        lda #REPEAT_FIRST-REPEAT_GAP+1  ; next repeat after exactly REPEAT_GAP ticks
         sta padheld,x
         bra pi_next
 pi_new:

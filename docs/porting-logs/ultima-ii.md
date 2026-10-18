@@ -164,7 +164,7 @@ NMI raised.
   stale memory.
 - Gamepads on the emulated SNES pads (`setGamepadState`), after a ROM DOS command:
   all twelve buttons on either pad type their mapped key once; a held D-pad repeats
-  (5-8 keys a second), a held A does not; a pending typed key survives and the pad
+    after 10 ticks then every 4 (6-7 keys in 30 ticks), a held A does not; a pending typed key survives and the pad
   key follows; A, X, Y and flags survive the IRQ; 30 ticks per 30 timer periods;
   2.1% CPU; no CB2 scan or T1/T2 paddle-timer NMI; ROM `FLOAD` is entered with IRQs
   masked. On the real disks a D-pad press walks the party south. The ACIA-receive
@@ -224,7 +224,10 @@ native PS/2-frame test was run for this port.
   emulator-tested: the browser injects keys without the PS/2 receiver, so the
   board's keyboard-plus-pad interaction is unproven, and no native PS/2-frame test
   was run. A PS/2 key decoded between the poller's latch check and its store (two
-  instructions) can still be overwritten by a pad key. The poller adds ~1,000-cycle
+    instructions) can still be overwritten by a pad key, and one decoded right after
+    the store replaces the pad key (that press is then lost). Closing the window
+    means masking the keyboard's VIA1 interrupt, which delays PS/2 bit sampling - the
+    failure the Ultima V board trial hit - so it is left open. The poller adds ~1,000-cycle
   pauses to speaker tones 30 times a second.
 - **Speed.** 3RIC runs at 1.573 MHz, so the game and its speaker sounds run about
   1.54x faster than on a 1.02 MHz Apple II, including the idle timer that makes

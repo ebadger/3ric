@@ -276,8 +276,8 @@ for (const [cmds, message] of [
 console.log("PASS missing file, partial BSAVE and unknown commands stop in the monitor with a message");
 
 // ---------------------------------------------------------------------------
-// SNES gamepads -> keys, through the real ROM pad scan (setGamepadState feeds
-// the VIA1 shift registers the ROM clocks).
+// SNES gamepads -> keys: the resident clocks VIA1 port B itself (setGamepadState
+// feeds the emulated shift registers on those pins); no ROM scan is involved.
 
 const TICK = 52448;                                 // ~30 Hz Mockingboard T1 period
 const runFor = (vm, n) => { let c = 0; while (c < n) c += vm.run(Math.min(20000, n - c)) || 1; };
@@ -328,9 +328,9 @@ hang:   jmp hang
   assert.deepEqual(keys(), [0xc5, 0xc7, 0x9b, 0xa0, 0x8d, 0xaf, 0x88, 0x95, 0xc1, 0xd4, 0xda, 0xc9], "each button on either pad types its key once");
 
   clear();
-  press(0, 5, 30);                                   // D-pad down held ~1 s
-  const downs = keys();
-  assert.ok(downs.every((k) => k === 0xaf) && downs.length >= 5 && downs.length <= 8, `held D-pad repeats (${downs.length})`);
+  press(0, 5, 30);                                   // D-pad down held 30 ticks
+  const downs = keys();                              // ticks 0, 10, 14, 18, 22, 26 (+30 at the edge)
+  assert.ok(downs.every((k) => k === 0xaf) && downs.length >= 6 && downs.length <= 7, `held D-pad repeats after 10 ticks, then every 4 (${downs.length})`);
   clear();
   press(0, 8, 30);                                   // A held ~1 s
   assert.deepEqual(keys(), [0xc1], "other buttons do not repeat");
