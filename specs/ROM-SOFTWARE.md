@@ -184,6 +184,46 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     first (3RIC buttons are refreshed by the ROM's joystick scan). The copy-protection
     call is replaced by its passed result. No ROM, VM, web bridge or hardware change.
   - **Acceptance and limits:** see [`docs/porting-logs/seven-cities-of-gold.md`](../docs/porting-logs/seven-cities-of-gold.md).
+- **Alternate Reality SD-card port (The City, The Dungeon):** `codegen/tools/port-altreality.mjs`
+  turns the owner-supplied `.nib`/`.dsk` sides (City: 2; Dungeon: 3, disk 1 side 1 original
+  or cracked) into one `AR/` folder (`CD AR`, `BRUN CITY.PRG 6000` or
+  `BRUN DUNGEON.PRG 6000`): the two loaders and every side as a 140 KB DOS-order image
+  (`CITY1/2.DSK`, `DUNGEON1/2/3.DSK`) plus character disks `CITYCHR.DSK` (volume 253) and
+  `DUNCHR.DSK` (volume 20), generated initialized-empty when not supplied. Game data stays
+  local; the repository holds the converter and glue (`codegen/patches/altreality/`).
+  - **Disk contract:** every disk access in both games goes through one RWTS, replaced on
+    track 0 of side 1 by an SD shim with the original interface. The City (a crack with a
+    relocated DOS 3.3 RWTS) keeps entry `$0D00` and the IOB contract (`A:Y` = IOB; status
+    `$20` wrong volume, `$40` drive error; volume found at `+$0E`). The Dungeon keeps its
+    `PHP/SEI` wrapper at `$4383` and gets the shim at `$4517` (`$437B` command, `$3D-$41`
+    slot/drive/volume/track/sector, `$45/$46` buffer, `$437C` error 3 volume / 4 drive,
+    `$437D` volume found) and stores every byte XOR `$87`, as its RWTS does. Both games
+    name the side they want by **volume number**; the shim selects the image with that
+    volume and leaves it "in" the drive (volume 0 = the current one), so no disk-swap
+    prompt appears. Format succeeds without writing (images are always formatted). T/S is
+    half of card sector `base + (T*16+S)/2` via the ROM's `sd_readsector`/`sd_writesector`
+    (`$E1B9`/`$E21C`, LBA `$B0-$B3` saved and restored, buffer `$C800`), with the last card
+    sector cached (about 55 ms per sector); writes are read-modify-write. The ROM is mapped
+    only around the ROM call: game buffers may be in language-card RAM. Port state at
+    `$CFE0-$CFFB`: each image's volume and first sector, the image in each drive.
+  - **Loader:** at `$6000` (scratch `$7000`). Refuses a ROM whose SD routines (`$E141-$E279`
+    checksum) or NMI proxy differ; locates and proves every image contiguous like the Seven
+    Cities loader (the file size is not checked); then does the boot sector's work (raw
+    track-0 reads, the monitor ROM copied into language-card RAM) without its RESET-vector
+    changes, writing the NMI/IRQ vectors before RAM is selected, and enters the game.
+  - **Banking and interrupts:** both games copy the monitor ROM into bank 2 and play with it
+    mapped, never bank 1. The resident at `$CF00` (the Ultima V PS/2 fast path) is reached
+    only through the RAM vectors, so it restores bank 2 read/write after the ROM handler.
+    The City re-copies the ROM before its menu and overwrites `$F000-$F7FF` (the ROM's NMI
+    proxy): its `$C083` pair at `$68E3` becomes `JSR fixvec`, which re-points the vectors
+    while the ROM is still read-mapped, then selects RAM.
+  - **Game patches** (byte-guarded): City - skip the disk-timed random seed (`$6905`), no
+    raw "disk has data?" probe in the character initializer (`$7400`: always warn) and no
+    other-drive probes after a disk error (`$77AE`, `$8C70`), drop the raw-disk Backup
+    utility from the menu (`$6948`, menu line blanked), keep the ROM RESET vector (`$103E`,
+    `$1043`); Dungeon - the copy-protection nibble check `$49FD` reports a pass.
+    No ROM, VM, web bridge or hardware change.
+  - **Acceptance and limits:** see [`docs/porting-logs/alternate-reality.md`](../docs/porting-logs/alternate-reality.md).
 - **Ultima I SD-card port:** `codegen/tools/port-ultima1.mjs` converts the owner-supplied
   single-sided ProDOS disk (volume `/U1`, the 1986 Origin release) into a `U1/` folder
   for the micro-SD card (`CD U1`, `BRUN U1.PRG 0800`). The game data stays local; the
@@ -756,6 +796,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | Ultima V SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima5.test.mjs` drives the real loader/resident/shim on the ROM DOS with synthetic volumes (and boots the original disks to the title with `U5_DISKS`); `port-ultima5.native.ps1` decodes real PS/2 frames at 94-160-cycle periods with language-card RAM mapped, including Caps Lock LED exchanges and a `$C010` strobe on a stop-bit edge. The suite also plays a synthetic two-region song end to end (on-demand `SONG01` load, timer-IRQ ticks in bank 2, pause/load/resume, reload after a block read), tests the song packer (phrase subroutines, two-region layout, replay check) and the stale-folder check, and checks the 46 music-site patches; a session-only py65 harness matched the player to the reverse-engineered driver per tick for all 15 songs. Manual WASM play covered creation, save, overworld, combat, towne entry, pad-only menu/walking/Ztats, and music (title theme at the title, huts song on *Journey Onward*, on-demand song switches). Board: running after the PS/2 fix; pads and music not yet tried on the board. Dialogue, dungeons and endgame are open; block reads cost ~1.7 M cycles. |
 | Seven Cities of Gold SD-card port | Experimental / emulator-verified | `codegen/tools/port-sevencities.test.mjs` runs the real loader, resident and both shim copies on the ROM DOS/SD emulation with synthetic disks at 512-byte and 4 KB clusters, plus missing/fragmented/ROM refusals (`SEVENCITIES_DISKS` adds an original-disk boot to the title); `port-ultima5.native.ps1 -Resident codegen\patches\sevencities\resident.s` passes the native PS/2 checks. Scripted WASM play: menus, sailing, landing, natives; World Maker created a world that then played. A save at the Pub, resume, and the physical board are open; requires contiguous files and the current ROM's SD routines. |
+| Alternate Reality SD-card port (The City, The Dungeon) | Experimental / emulator-verified | `codegen/tools/port-altreality.test.mjs` runs both loaders, the resident and both shims on the ROM DOS/SD emulation with synthetic images (volume selection, XOR `$87`, error codes, sector+16, language-card buffers, zero page, `$C010` NMI, `fixvec`) at 512-byte and 4 KB clusters, plus missing/fragmented/ROM refusals; `AR_DISKS` boots both original games to their menus. `port-altreality.native.ps1` passes the native PS/2 checks. Scripted WASM play from the card: City title, menu, character creation, stat gate, the street with an encounter, side 1/2 streaming and writes, character-disk initialize, save ("You have been saved!", via the save module entered directly) and resume after reset; Dungeon title, menu, character creation and the dungeon entrance with encounters (both from the original, uncracked side 1). The City's in-play save at an Inn, the Dungeon's save, City-character transfer, combat and the physical board are open; ~55 ms per sector. |
 | Ultima I SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima1.test.mjs` drives the real loader and ProDOS stand-in through the ROM DOS with synthetic files (file info, open/read with marks and EOF, write/read-back, every error path, registers, zero page, NMI) and the SNES pad glue (all 12 buttons, both controllers, one key per press with overlapping buttons, D-pad repeat gated on the game's buffer, keyboard priority including a key decoded mid-scan); `codegen/tools/port-ultima1.native.ps1` clocks real PS/2 frames (94/120/160-cycle bits, Caps Lock LED exchange) while the glue scans, with hundreds of keyboard NMIs landing inside scans, and fails the earlier `PTRIG` version; with `U1_DISK` it plays the original disk through intro, character creation and save, continue, quick-save and Lord British's castle (entered with the pad's B) and checks the stand-in and pad glue stayed intact. Manual WASM play also covered a town, overworld combat and the Dungeon of Doubt (entered and walked with the pad). Space flight, the time machine and the endgame are unverified; the owner's first SD-card run loaded the game and went through character creation (saving, play and the pads not yet confirmed outside the emulator); ROM DOS command failures are not detected (card contents trusted); loads cost ~0.45 s/KB. |
 | Ultima II SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima2.test.mjs` drives the real loader and DOS 3.3 translator on the ROM DOS with synthetic disks (BLOAD/BRUN/BSAVE, folder switches, exact lengths, register preservation, fail-loud errors); with `U2_DISKS` it plays the original disks through title, character creation and save, the overworld and both patched space disk swaps, plus a D-pad move; SNES pads are covered on the emulated pads with the resident clocking VIA1 port B directly (12-button map on both pads, D-pad repeat after 10 ticks then every 4, pending keys kept, A/X/Y/flags preserved, 30 Hz at 2.1% CPU with no scan or paddle-timer NMIs, IRQs masked during ROM DOS commands, timer off at every error stop). Manual WASM play also covered movement, Z-stats, quit-save, dungeon entry, reloading a saved character and the demo slideshow. No physical-board trial yet; towns/dialogue, combat depth, space flight and the endgame were not played through; the game runs ~1.54x faster than on a 1.02 MHz Apple II. Known issue (shipped by owner decision): `OWRITE` gets the file length, so 4 KB map saves write one extra SD sector; saves need 512-byte clusters. |
 | Ultima III SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima3.test.mjs` reconstructs a synthetic boot image and drives the real loader/RWTS shim on the ROM DOS (whole-file loads, zero-page load, write and read-back, IOB/flag state); with `U3_DISKS` it plays the original disks through Mockingboard set-up, title, character creation, party, world, Lord British's castle, a dungeon and an autosave resume after reset, and checks the 61.5 Hz music IRQ; the gamepad tick is checked synthetically (buttons type keys, held directions repeat) and SNES Up walks the real party north. Talking, shops, Moongates, the endgame and the physical board (including pad scans alongside PS/2 typing) are open; ROM DOS command failures are not detected (card contents trusted); loads run ~2 KB/s in the emulator (boot ~30 s). |

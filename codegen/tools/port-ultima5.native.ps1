@@ -2,7 +2,9 @@
 #   pwsh codegen\tools\port-ultima5.native.ps1
 # Builds the shared VM sources with MSVC, then types ULTIMA5 as real PS/2
 # frames while a program keeps language-card RAM mapped and swaps banks.
-param([string]$Resident)
+# -Bank2Only keeps bank 2 mapped throughout, for residents of games that
+# never map bank 1 (Alternate Reality).
+param([string]$Resident, [switch]$Bank2Only)
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $out = Join-Path $root 'codegen\out\ultima5-native'
@@ -37,6 +39,7 @@ if (-not $node) { $node = 'C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.ex
 $env:U5_NATIVE_OUT = $out
 $env:U5_NATIVE_ROOT = $root
 $env:U5_NATIVE_RESIDENT = $Resident
+$env:U5_NATIVE_BANK2ONLY = if ($Bank2Only) { '1' } else { '' }
 $entry = @'
 import fs from "node:fs";
 import path from "node:path";
@@ -92,10 +95,10 @@ wait:   lda $C000
         txa
         and #1
         beq use2
-        lda $C08B
-        lda $C08B
+        lda $${process.env.U5_NATIVE_BANK2ONLY ? "C083" : "C08B"}
+        lda $${process.env.U5_NATIVE_BANK2ONLY ? "C083" : "C08B"}
         lda $D000
-        cmp #$4C
+        cmp #$${process.env.U5_NATIVE_BANK2ONLY ? "5A" : "4C"}
         bne fail
         bra wait
 use2:   lda $C083
