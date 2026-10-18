@@ -66,7 +66,7 @@ pairs, so this halves the card reads (about 55 ms per sector, 52-92 ms measured 
 The ROM is mapped only around the ROM call - game buffers are often in language-card RAM
 (`$D000-$EFFF`) - and the mapping is put back from the RAM NMI vector (ours means RAM).
 
-**Resident** (`resident.s`, `$CF00-$CFB0`, state `$CFE0-$CFFB`): the Ultima V / Seven Cities
+**Resident** (`resident.s`, `$CF00-$CFB4`, state `$CFE0-$CFFB`): the Ultima V / Seven Cities
 NMI/IRQ forwarder (PS/2 start/data/parity bits and the `$C010` strobe without bank work,
 everything else through the ROM handler). Neither game ever maps bank 1 and the resident is
 only reached through the RAM vectors, so it always restores bank 2 read/write.
