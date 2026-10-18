@@ -77,4 +77,25 @@ overwrites every visible byte, so a render-then-`WAI` hook can even follow a pri
 
 ---
 
+### 5. Fix the 1977 KIM-1 `ROR RESULT+2` typo in `badger6502.bin` (`$A5C7`)
+
+**Problem:** In `emulator/Data/badger6502.bin` at file offset `$A5C7` (`MULSHF` inside
+`FMULT`, `msbasic/float.s` line 585 in `badger6502.dbg`), the ROM inherited the classic
+1977 KIM-1 mask-ROM byte typo `.byte $67, RESULT+2` (`67 67`) instead of `ror RESULT+2`
+(`66 67`). On a WDC 65C02, opcode `$67` executes `RMB6 $67` (clearing bit 6 of `RESULT+2`
+without rotating the carry into bit 7 or bit 0 into carry), corrupting the 3rd mantissa
+byte whenever a floating-point multiplication has 1-bits in the 3rd byte of the multiplier
+(for example, `PRINT 303009 * 100` in ROM BASIC prints `30300290.5` instead of `30300900`).
+This surfaced while porting *Adventure* (1980), where 8-digit travel table entries use
+`FNM(B) = B - INT(B / 100) * 100`.
+
+**Suggestion:** In the upstream ROM source (`msbasic/float.s`), enable the `FIX_ROR_BUG`
+conditional (or replace `.byte $67, RESULT+2` with `ror RESULT+2` = `$66 $67`) on the next
+planned `badger6502.bin` rebuild. (`patch-adventure.mjs` already patches this byte in its
+Language Card copy at `$E5C7` so *Adventure* runs against the unchanged current ROM.)
+
+**Owner:** ROM / firmware.
+
+---
+
 *Add new suggestions at the bottom. ebadger promotes accepted ones into practice.*

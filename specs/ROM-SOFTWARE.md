@@ -354,6 +354,51 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   shipped card image is). Found during the Ultima II review; both come from
   `fat32_file_write` (`$EBB5`), which the Ultima V shim now calls directly with the
   file's directory size, so it may be affected too.
+- **Adventure (Colossal Cave, A Bit Better Associates 1980) compatibility experiment:**
+  an image-specific, disk-only adapter for the owner-supplied 143,360-byte DOS 3.3 `.dsk`
+  with SHA-256 `7d429cfd7d1999db3b42d1f4f149efdb16fda67685b282e68208ee4131b37e1d` (or its
+  234,496-byte WOZ2 equivalent `426af3b3e925d6c53d98ff239cb5e15b4246de439c61d6bba4960a36da17e075`),
+  targeting the unchanged repository ROM `badger6502.bin` (`fcea03683b77b7f113e6d8f0064ea8edbd6c75b04b472ec5c84de1c3a9f86435`).
+  The game and resulting disk stay outside the repository.
+  - **Language Card BASIC relocation and NMI preservation:** DOS 3.3 occupies `$9600-$BFFF`
+    in main RAM, overlapping 3ric's banked ROM BASIC (`$9000-$BFFF`). The patcher relocates
+    3ric's MSBASIC (`$9000-$B0FF`, driven by `badger6502.dbg` spans and fixups) by `+$4000`
+    into `$D000-$F0FF` across 33 unused sectors (`T3S0-T5S0`), and installs a 1-sector
+    stage-2 loader at `T5S1` (all 34 sectors marked allocated in the Track 17 VTOC). At
+    boot, `T0S9` (`$BFC8-$BFDB` and `$BFA8-$BFB6`) loads stage 2 at `$0800`; stage 2 verifies
+    the ROM NMI proxy (`$F1BB-$F1D5`) and banked PS/2 handler checksum (`$B500-$BDFF`),
+    copies `$F100-$FFFF` into Language Card RAM (`$C081`×2), installs a Language-Card-safe
+    NMI wrapper at `$FFFA/$FFFB` (`$F040`, servicing PS/2 start/data/parity edges and `$C010`
+    CB1 strobes without bank work and forwarding stop-bit/other NMIs via `$B78D`
+    (`BIT $C082 / JMP $F1BB`) -> `$BFB1` (`BIT $C080 / JMP LC_RESUME`)), and loads the 33
+    BASIC sectors into `$D000-$F0FF` so PS/2 keyboard and VIA interrupts never leave upper
+    ROM mapped over Language Card BASIC.
+  - **DOS 3.3, `CHAIN`, and Applesoft runtime bridge:** DOS 3.3 vectors, zero-page
+    pointers (`TXTTAB $6A`, `VARTAB $6C`, `ARYTAB $6E`, `STREND $70`, `FRETOP $72`,
+    `MEMSIZ $76`, `CURLIN $78`), and the machine-language `CHAIN` loader at `$0208` (`T6S13-T6S12`)
+    are adapted to 3ric's relocated MSBASIC entry points (`NEWSTT $D0EF`, `LINGET $D2D2`,
+    `CLEAR/CLEARC $D2DA`, `RESTORE $D55E`, `RUN $D40D`, `GARBAG $E077`) plus a backwards
+    block-move helper `CHAIN_BLTU2`. Both BASIC programs on disk (`ADVENTURE` at `T18S15`
+    and `ADVENTURE^Q PART TWO` at `T19S15`) are retokenized to 3ric MSBASIC token bytes.
+  - **Applesoft dialect and KIM-1 `FMULT` fix:** the relocated BASIC image adds Applesoft
+    statement handlers (`HOME`, `CLEAR`, `CALL`, `HTAB`, `VTAB`, `HIMEM:`, `SPEED=`,
+    `ONERR GOTO`, `RESUME`, `POP`), `PEEK(107)`/`PEEK(108)` and `PEEK`/`POKE -16368` (`$C000`/`$C010`)
+    hooks, `INLIN` non-destructive backspace (`$08`) and high-bit stripping, single-line
+    `INPUT` retry on `EXTRA IGNORED`, 5-byte `GARBAG` variable stride (`$DDBE`), Applesoft
+    `+1`/`0` boolean operators (`CMPDONE $DBE6`, `NOT $DAAF`, `OR`/`AND $DB52`), Applesoft
+    `FOUT`/`PRINT`/`STR$` number formatting without leading/trailing spaces, and fixes the
+    1977 KIM-1 mask-ROM bug at `FMULT` (`$A5C7` / `LC $E5C7`: `$67 $67` -> `$66 $67` =
+    `ROR RESULT+2`) so 8-digit travel table entries (`FNM(B)`) evaluate exact 32-bit products.
+  - **Acceptance and limits:** verified in headless WASM (`patch-adventure.test.mjs`) from
+    cold `C600G` boot through `HELLO`, `ADVENTURE` data loading, `CHAIN` into
+    `ADVENTURE^Q PART TWO`, hi-res splash screen, above-ground exploration, unlocking the
+    grate, descending `DOWN` into `BELOW THE GRATE`, `IN COBBLE CRAWL`, `IN DEBRIS ROOM`,
+    and `IN BIRD CHAMBER`, catching the bird, `PR#1` (`POP` -> `NO PRINTER AVAILABLE`), `INVENTORY`, and `SCORE`. In-game `SAVE`
+    exercises `VERIFY` Error 6 through `ONERR GOTO 9000` (`PEEK(222) = 6`), executes
+    `SAVING 'ADGMTEST'...` and `NEW : END` cleanly to the prompt without corrupting disk
+    tracks (`WozLib` is read-only and does not persist Disk II sector writes), and
+    restarts via `RUN ADVENTURE`. See
+    [`docs/porting-logs/adventure.md`](../docs/porting-logs/adventure.md).
 - **Bouncing Ball (scottybe's community contribution):** the canonical source remains
   `web/programs/bouncing-ball.s`, loaded at `$0800` by the gallery, assembler, or
   `BRUN BOUNCE.PRG 0800`. Its 114-vertex, 128-face checkerboard sphere is transformed,
@@ -685,6 +730,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Ultima II SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima2.test.mjs` drives the real loader and DOS 3.3 translator on the ROM DOS with synthetic disks (BLOAD/BRUN/BSAVE, folder switches, exact lengths, register preservation, fail-loud errors); with `U2_DISKS` it plays the original disks through title, character creation and save, the overworld and both patched space disk swaps, plus a D-pad move; SNES pads are covered on the emulated pads with the resident clocking VIA1 port B directly (12-button map on both pads, D-pad repeat after 10 ticks then every 4, pending keys kept, A/X/Y/flags preserved, 30 Hz at 2.1% CPU with no scan or paddle-timer NMIs, IRQs masked during ROM DOS commands, timer off at every error stop). Manual WASM play also covered movement, Z-stats, quit-save, dungeon entry, reloading a saved character and the demo slideshow. No physical-board trial yet; towns/dialogue, combat depth, space flight and the endgame were not played through; the game runs ~1.54x faster than on a 1.02 MHz Apple II. Known issue (shipped by owner decision): `OWRITE` gets the file length, so 4 KB map saves write one extra SD sector; saves need 512-byte clusters. |
 | Ultima III SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima3.test.mjs` reconstructs a synthetic boot image and drives the real loader/RWTS shim on the ROM DOS (whole-file loads, zero-page load, write and read-back, IOB/flag state); with `U3_DISKS` it plays the original disks through Mockingboard set-up, title, character creation, party, world, Lord British's castle, a dungeon and an autosave resume after reset, and checks the 61.5 Hz music IRQ; the gamepad tick is checked synthetically (buttons type keys, held directions repeat) and SNES Up walks the real party north. Talking, shops, Moongates, the endgame and the physical board (including pad scans alongside PS/2 typing) are open; ROM DOS command failures are not detected (card contents trusted); loads run ~2 KB/s in the emulator (boot ~30 s). |
 | ROM `BLOAD` stores one byte past EOF | Known gap (ROM) | Observed in `fat32_file_read`; programs loading below live data must use `FLOAD 0000 eof-1`. ROM source is not in this repository. |
+| Adventure disk-only compatibility adapter | Experimental / emulator-verified | Exact-image `.dsk`/`.woz` patcher (`patch-adventure.mjs`); relocates MSBASIC to LC `$D000-$F0FF`, patches DOS 3.3 + `CHAIN` + Applesoft dialect + KIM-1 `FMULT` `ROR RESULT+2` bug (`$E5C7`), retokenizes `ADVENTURE` and `ADVENTURE^Q PART TWO`, and boots through `CHAIN` into full above-ground and underground gameplay. Physical board confirmation and Disk II write support for `SAVE` remain open; see [`docs/porting-logs/adventure.md`](../docs/porting-logs/adventure.md). |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |
 | 3RIC Groovebox | Shipped | Six-voice, 16-step Mockingboard sequencer; gamepad/keyboard editing and timer-driven stereo sound. `codegen/tools/groovebox.test.mjs` covers real stereo PCM, all controls, fractional tempo, clean exit, and a dense-step/input deadline below 6,556 cycles. |
