@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-12 — ebadger (via Copilot)_
+_Last updated: 2026-10-18 — ebadger (via Copilot)_
 
 ---
 
@@ -48,6 +48,8 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node codegen/tools/hackaday.test.mjs # Built from Bits scenes, music, timing, controls, WOZ boot
 & $node web/test_hackaday_page.cjs      # showcase page, source links, and committed preview
 & $node web/test_boot.cjs                # ROM boots, sane PC, video RAM written
+& $node web\test_embed.cjs              # iframe player, real URL disk boot/restart, fullscreen state, errors
+& $node web\test_woz_validation.cjs     # native-parser bounds/CRC/formats, 8 MiB boundary, safe recovery
 & $node web/test_render.cjs              # framebuffer has lit pixels
 & $node web/test_keyboard.cjs            # monitor echoes typed commands
 & $node web/test_virtual_keyboard.cjs    # touch layout covers symbols/modifiers/key codes
@@ -69,11 +71,29 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_woz_download.cjs        # Disk II boots, overlap-safe images through 34,560 bytes, size guards
 & $node codegen\tools\msbasic-woz.test.mjs # disk-booted MS-BASIC on scrubbed overlay RAM, NMI coexistence, ROM guard
 pwsh codegen\tools\msbasic-woz.test.ps1 -Node $node # native PS/2 typing into that disk under picodisk READY stalls (MSVC)
+& $node codegen\tools\port-ultima5.test.mjs # Ultima V shim, pads and music (set U5_DISKS to also boot the real disks)
+& $node codegen\tools\port-ultima3.test.mjs # Ultima III RWTS shim on ROM DOS (set U3_DISKS to also play the real disks)
+
+pwsh codegen\tools\port-ultima5.native.ps1  # Ultima V resident: real PS/2 frames with language-card RAM mapped (MSVC)
+& $node codegen\tools\port-sevencities.test.mjs # Seven Cities SD port on ROM DOS/SD (SEVENCITIES_DISKS boots the real disks)
+& $node codegen\tools\port-ultima1.test.mjs # Ultima I ProDOS stand-in + SNES pads on ROM DOS (set U1_DISK to also play the real disk)
+pwsh codegen\tools\port-ultima1.native.ps1  # Ultima I pad glue: real PS/2 frames while the pads are scanned (MSVC)
+& $node codegen\tools\port-ultima2.test.mjs # Ultima II DOS 3.3 translator on ROM DOS (set U2_DISKS to also play the real disks)
+& $node codegen\tools\port-wizardry1.test.mjs # Wizardry I block driver on ROM DOS + SD, 3 cluster layouts (WIZ1_DISKS = real disks)
+pwsh codegen\tools\port-wizardry1.native.ps1  # Wizardry I resident through the native PS/2 harness (MSVC)
 ```
 
 C++ CPU unit tests (`emulator/Badger6502VMTest`, MSTest): **Test → Run All Tests** in
 Visual Studio. Expected: a booted ROM sits at the monitor `*` prompt; the smoke tests all
 print `PASS` / exit 0.
+
+For the focused native WOZ regressions, use a Visual Studio Developer PowerShell
+(restore the project's existing NuGet packages first if CppWinRT is missing):
+
+```powershell
+msbuild emulator\Badger6502VM.sln /t:Badger6502VMTest /p:Configuration=Debug /p:Platform=x64 /m
+& "$env:VSINSTALLDIR\Common7\IDE\Extensions\TestPlatform\vstest.console.exe" emulator\x64\Debug\Badger6502VMTest.dll /TestCaseFilter:FullyQualifiedName~WozFileTests
+```
 
 ## Credentials & secrets
 
@@ -149,6 +169,18 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   USB/Bluetooth controllers through the SNES/VIA path. Shared VM core runs identically on
   Windows and in the browser. VIA timers count after reset release without being programmed;
   warm reset retains timer storage but disarms timeout interrupts and PB7 events.
+- **Embedded player:** `index.html?embed=1&woz=<encoded-disk-url>` fills an iframe
+  with a 4:3 display and compact restart/sound/fullscreen/touch-keyboard controls.
+  WOZ URLs auto-boot using the real Disk II path, including `MON` before `C600G`
+  because the current ROM starts in DOS. Disk bytes are retained for **Restart**.
+  Cross-origin images require CORS and HTTPS pages require HTTPS disk URLs.
+  Single-sided 5.25-inch WOZ2 bitstreams only; WOZ1, 3.5-inch, flux, malformed,
+  or over-8-MiB images are rejected safely by the shared native/WASM parser.
+  Data/program/source fetches time out after 30 seconds, including stalled bodies;
+  controls recover, and an embedded **Restart** retries a failed disk URL.
+  Fullscreen and sound still need a visitor gesture; the iframe must delegate
+  fullscreen/autoplay/gamepad permissions. Copyable embed/full-viewport examples
+  are in `web/README.md`. Without `embed=1`, the normal workbench remains available.
 - **In-browser assembler:** assembles 65C02 source client-side with the project's own
   `asm6502.mjs` and runs it like `BRUN`; ships ~11 sample programs; deep-linkable via `?src=`.
   Exports the assembled program as a raw **.PRG** or a bootable **.woz** disk image
@@ -195,6 +227,99 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   `codegen\tools\patch-archon.mjs` creates a separate local WOZ without changing the
   ROM or VM. Native PS/2/LED and WASM board/combat checks pass; hardware confirmation
   remains open. See [`docs/porting-logs/archon.md`](../docs/porting-logs/archon.md).
+- **Ultima V (SD-card port, experimental):** `node codegen\tools\port-ultima5.mjs <disks> <out>`
+  converts the owner's eight ProDOS disk sides into a `U5\` folder; copy it to the
+  card, then `CD U5` and `BRUN U5.PRG 0800`. Game data stays local. A shim replaces
+  Origin's DINKEYDOS loader with direct calls to the ROM's FAT32 routines, and a
+  `$CF00` resident decodes PS/2 bits itself while language-card RAM is mapped.
+  Running on the board (owner, 2026-10-17). Both SNES pads play the game (D-pad
+  moves, A Return, B pass, X talk, Y attack, L Esc, R enter, Start Ztats, Select
+  save; emulator-tested, board trial pending). Mockingboard music: a compact 64 KB
+  player plays all 15 songs (losslessly compressed by the tool; the title theme
+  borrows the block buffer), bit-exact per tick against the reverse-engineered
+  driver after clock scaling; emulator-tested, board trial pending. WASM play
+  reached character creation, save, the overworld, combat and a towne; dialogue and
+  dungeons are unverified. Missing files are detected. To update a card, delete the
+  old `U5` folder first (the loader reports leftovers). New overworld blocks cost
+  ~1.1 s each.
+
+
+  See [`docs/porting-logs/ultima-v.md`](../docs/porting-logs/ultima-v.md).
+- **Seven Cities of Gold (SD-card port, experimental):**
+  `node codegen\tools\port-sevencities.mjs <program.dsk> <map.dsk> <out>` builds a
+  `7CITIES\` folder; copy it to the card, then `CD 7CITIES` and
+  `BRUN 7CITIES.PRG 0800`. The game reads and writes the original 140 KB disk images
+  in place through the ROM's SD sector routines (~0.1 s per sector, like the floppy),
+  so the files must be contiguous (the loader checks) and the ROM's SD routines
+  unchanged. Play with an SNES pad (the game's joystick). WASM play covered menus,
+  sailing, landing and natives; the World Maker built a new world that then played
+  (it overwrites `MAP.DSK`: keep a copy). Saving at the Pub and the board are untried.
+  See [`docs/porting-logs/seven-cities-of-gold.md`](../docs/porting-logs/seven-cities-of-gold.md).
+- **Ultima I (SD-card port, experimental):** `node codegen\tools\port-ultima1.mjs <u1.dsk> <out>`
+  converts the owner's ProDOS disk (`/U1`) into a `U1\` folder; copy it to the card,
+  then `CD U1` and `BRUN U1.PRG 0800`. Game data stays local. Only ProDOS is replaced:
+  a stand-in global page and MLI at `$BB00-$BFFF` turn file reads/writes into
+  `FLOAD`/`OWRITE`; `U1.SYSTEM`, Origin's file layer and the game run unmodified apart
+  from two STUPH patches: one skips the mouse-card probe, one routes the game's
+  input-wait keyboard read through `$0300` glue that also reads the **SNES
+  controllers** (D-pad moves, A Attack, B Enter, X eXit, Y Transact, L Klimb, R Fire,
+  Select Ztats, Start pass; either port). The glue clocks the pads itself on VIA1
+  port B - not through `PTRIG`, whose NMI-time scan corrupts PS/2 keyboard frames
+  (native PS/2 harness). The language card is never mapped, so the ROM's
+  own keyboard NMI path serves the game. WASM play covered the intro, character
+  creation and save, continue, quick-save, a town, a castle, overworld combat and a
+  dungeon (also with the pad only); space, the time machine and the endgame are
+  unverified. The owner's first SD-card run loaded the game and went through character
+  creation; saving, play and the pads are not yet confirmed outside the emulator.
+  Loads cost ~0.45 s/KB (startup ~22 s, a town ~8 s). The save is
+  `U1\U1VARS` (the converter keeps an existing one). Card contents are trusted.
+  See [`docs/porting-logs/ultima-i.md`](../docs/porting-logs/ultima-i.md).
+- **Ultima II (SD-card port, experimental):** `node codegen\tools\port-ultima2.mjs <disks> <out>`
+  converts the owner's three DOS 3.3 disks (program, player master, galactic) into a
+  `U2\` folder; copy it to the card, then `CD U2` and `BRUN U2.PRG 0800`. Game data stays
+  local. The game only spoke to DOS 3.3 through Ctrl-D text commands, so a resident at
+  `$9600` translates them to ROM DOS `FLOAD`/`OWRITE`/`CD`; seven "insert disk" prompts
+  became folder switches. Both SNES pads type keys through a ~30 Hz slot-4 Mockingboard
+  timer IRQ that clocks the pads directly (no `$C070` paddle-timer NMIs) (D-pad = move, A Attack, B Enter, X Transact, Y Get, L Ztats, R Ignite,
+  Select ESC, Start Space; 2.1% CPU); the keyboard still works. WASM play reached the title, demo, character creation and
+  save, the overworld, a dungeon and a saved-game reload; the space disk swaps were run
+  in place. No board trial yet; towns, space flight and the endgame are unplayed, and
+  the game runs ~1.54x faster than an Apple II. Card contents are trusted. Known issue
+  (owner decision): each 4 KB map save writes one extra SD sector past the file, and
+  saves need a 512-byte-cluster card.
+  See [`docs/porting-logs/ultima-ii.md`](../docs/porting-logs/ultima-ii.md).
+- **Ultima III (SD-card port, experimental):** `node codegen\tools\port-ultima3.mjs <disks> <out>`
+  converts the owner's two DOS-order images into a `U3\` folder; copy it to the card,
+  then `CD U3` and `BRUN U3.PRG 0800`, answer the Mockingboard prompt with type `2`,
+  slot `4`, and the disk prompt with `1`. Game data stays local. The game's own DOS
+  runs unchanged; only its RWTS is replaced by whole-file ROM DOS commands. WASM play
+  reached creation, the world, a castle, combat, a dungeon and save/resume, with music
+  retimed for the 3RIC clock. Either SNES pad plays too (D-pad moves; B Space, A Attack,
+  X Enter, Y Transact, L Klimb, R Descend, Select Ignite, Start Get); talking, shops and
+  the board are unverified. Loads run
+  ~2 KB/s in the emulator. Card contents are trusted: copy the whole folder.
+  See [`docs/porting-logs/ultima-iii.md`](../docs/porting-logs/ultima-iii.md).
+- **Adventure compatibility candidate:** the owner-supplied 1980 A Bit Better Associates
+  *Adventure* DOS 3.3 disk (`adventure.dsk`) chains two Applesoft programs through machine-code
+  `CHAIN` at `$0208`. `codegen\tools\patch-adventure.mjs` creates a bootable local WOZ2
+  image by relocating 3ric's ROM MSBASIC to Language Card RAM (`$D000-$F0FF`), patching
+  DOS 3.3 + `CHAIN` + Applesoft runtime hooks + the 1977 KIM-1 `FMULT` `ROR RESULT+2` bug,
+  and retokenizing both BASIC programs without changing `badger6502.bin` or the VM. See
+  [`docs/porting-logs/adventure.md`](../docs/porting-logs/adventure.md).
+- **Wizardry I (SD-card port, experimental):** `node codegen\tools\port-wizardry1.mjs <disks> <out>`
+  turns the owner's Apple Pascal boot + scenario disks into `WIZ1\` (`WIZ1.PRG` +
+  `WIZ1.VOL`, one combined Pascal volume); copy it to the card, then `CD WIZ1` and
+  `BRUN WIZ1.PRG 0800`, and press RETURN at both disk prompts. The loader replaces the
+  Pascal boot blocks and hooks the runtime's BIOS disk entry; the shim reads and writes
+  sectors directly with the ROM's `sd_readsector`/`sd_writesector` through a cluster
+  table (fingerprinted ROM internals; any cluster size or fragmentation), ~150 K
+  cycles per block. Four byte-verified p-code patches remove Sir-Tech's Disk II timing
+  checks. WASM play reached the castle, a tavern roster write and the maze; no board
+  trial yet. Game data stays local. See
+  [`docs/porting-logs/wizardry-i.md`](../docs/porting-logs/wizardry-i.md).
+- **Disk II spin-up gap:** after the motor stops, the emulated drive gives no data for
+  one second after motor-on, so Apple Pascal disks report error 9 between slow
+  accesses (recorded in `EMULATOR.md`; not changed).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**

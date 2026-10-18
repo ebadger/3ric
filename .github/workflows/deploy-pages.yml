@@ -99,6 +99,9 @@ jobs:
           node web/test_debugger.cjs
           node web/test_keyboard.cjs
           node web/test_boot.cjs
+          node web/test_embed.cjs
+          node web/test_woz_validation.cjs
+          node web/test_sound_default.cjs
           node web/test_woz_download.cjs
           node codegen/tools/bouncing-ball.test.mjs
           node codegen/tools/matrix.test.mjs
