@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-15 — ebadger (via Copilot)_
+_Last updated: 2026-10-18 — ebadger (via Copilot)_
 
 ---
 
@@ -69,8 +69,12 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_sd.cjs                  # mount SD + DIR lists the FAT32 root
 & $node web/test_disk.cjs                # boot a WOZ floppy via C600G into a hi-res title
 & $node web/test_woz_download.cjs        # Disk II boots, overlap-safe images through 34,560 bytes, size guards
-& $node codegen\tools\port-ultima5.test.mjs # Ultima V shim on ROM DOS (set U5_DISKS to also boot the real disks)
+& $node codegen\tools\port-ultima5.test.mjs # Ultima V shim, pads and music (set U5_DISKS to also boot the real disks)
+
 pwsh codegen\tools\port-ultima5.native.ps1  # Ultima V resident: real PS/2 frames with language-card RAM mapped (MSVC)
+& $node codegen\tools\port-sevencities.test.mjs # Seven Cities SD port on ROM DOS/SD (SEVENCITIES_DISKS boots the real disks)
+& $node codegen\tools\port-ultima1.test.mjs # Ultima I ProDOS stand-in + SNES pads on ROM DOS (set U1_DISK to also play the real disk)
+pwsh codegen\tools\port-ultima1.native.ps1  # Ultima I pad glue: real PS/2 frames while the pads are scanned (MSVC)
 & $node codegen\tools\port-ultima2.test.mjs # Ultima II DOS 3.3 translator on ROM DOS (set U2_DISKS to also play the real disks)
 ```
 
@@ -198,13 +202,50 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 - **Ultima V (SD-card port, experimental):** `node codegen\tools\port-ultima5.mjs <disks> <out>`
   converts the owner's eight ProDOS disk sides into a `U5\` folder; copy it to the
   card, then `CD U5` and `BRUN U5.PRG 0800`. Game data stays local. A shim replaces
-  Origin's DINKEYDOS loader with ROM DOS commands, and a `$CF00` resident decodes
-  PS/2 bits itself while language-card RAM is mapped (the first board trial's
-  keyboard failure; fixed and native-tested, board re-trial pending). WASM play
-  reached character creation, save, the overworld, combat and a towne; dialogue,
-  dungeons and music (128 KB only) are unverified. Card contents are trusted: copy
-  the whole folder. New overworld blocks cost ~1.1 s each through `FLOAD`.
+  Origin's DINKEYDOS loader with direct calls to the ROM's FAT32 routines, and a
+  `$CF00` resident decodes PS/2 bits itself while language-card RAM is mapped.
+  Running on the board (owner, 2026-10-17). Both SNES pads play the game (D-pad
+  moves, A Return, B pass, X talk, Y attack, L Esc, R enter, Start Ztats, Select
+  save; emulator-tested, board trial pending). Mockingboard music: a compact 64 KB
+  player plays all 15 songs (losslessly compressed by the tool; the title theme
+  borrows the block buffer), bit-exact per tick against the reverse-engineered
+  driver after clock scaling; emulator-tested, board trial pending. WASM play
+  reached character creation, save, the overworld, combat and a towne; dialogue and
+  dungeons are unverified. Missing files are detected. To update a card, delete the
+  old `U5` folder first (the loader reports leftovers). New overworld blocks cost
+  ~1.1 s each.
+
+
   See [`docs/porting-logs/ultima-v.md`](../docs/porting-logs/ultima-v.md).
+- **Seven Cities of Gold (SD-card port, experimental):**
+  `node codegen\tools\port-sevencities.mjs <program.dsk> <map.dsk> <out>` builds a
+  `7CITIES\` folder; copy it to the card, then `CD 7CITIES` and
+  `BRUN 7CITIES.PRG 0800`. The game reads and writes the original 140 KB disk images
+  in place through the ROM's SD sector routines (~0.1 s per sector, like the floppy),
+  so the files must be contiguous (the loader checks) and the ROM's SD routines
+  unchanged. Play with an SNES pad (the game's joystick). WASM play covered menus,
+  sailing, landing and natives; the World Maker built a new world that then played
+  (it overwrites `MAP.DSK`: keep a copy). Saving at the Pub and the board are untried.
+  See [`docs/porting-logs/seven-cities-of-gold.md`](../docs/porting-logs/seven-cities-of-gold.md).
+- **Ultima I (SD-card port, experimental):** `node codegen\tools\port-ultima1.mjs <u1.dsk> <out>`
+  converts the owner's ProDOS disk (`/U1`) into a `U1\` folder; copy it to the card,
+  then `CD U1` and `BRUN U1.PRG 0800`. Game data stays local. Only ProDOS is replaced:
+  a stand-in global page and MLI at `$BB00-$BFFF` turn file reads/writes into
+  `FLOAD`/`OWRITE`; `U1.SYSTEM`, Origin's file layer and the game run unmodified apart
+  from two STUPH patches: one skips the mouse-card probe, one routes the game's
+  input-wait keyboard read through `$0300` glue that also reads the **SNES
+  controllers** (D-pad moves, A Attack, B Enter, X eXit, Y Transact, L Klimb, R Fire,
+  Select Ztats, Start pass; either port). The glue clocks the pads itself on VIA1
+  port B - not through `PTRIG`, whose NMI-time scan corrupts PS/2 keyboard frames
+  (native PS/2 harness). The language card is never mapped, so the ROM's
+  own keyboard NMI path serves the game. WASM play covered the intro, character
+  creation and save, continue, quick-save, a town, a castle, overworld combat and a
+  dungeon (also with the pad only); space, the time machine and the endgame are
+  unverified. The owner's first SD-card run loaded the game and went through character
+  creation; saving, play and the pads are not yet confirmed outside the emulator.
+  Loads cost ~0.45 s/KB (startup ~22 s, a town ~8 s). The save is
+  `U1\U1VARS` (the converter keeps an existing one). Card contents are trusted.
+  See [`docs/porting-logs/ultima-i.md`](../docs/porting-logs/ultima-i.md).
 - **Ultima II (SD-card port, experimental):** `node codegen\tools\port-ultima2.mjs <disks> <out>`
   converts the owner's three DOS 3.3 disks (program, player master, galactic) into a
   `U2\` folder; copy it to the card, then `CD U2` and `BRUN U2.PRG 0800`. Game data stays
