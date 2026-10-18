@@ -46,6 +46,7 @@ only when the program halted cleanly and every check passed.
 | `tools/run6502.mjs` | CLI: assemble/load → run → apply checks → emit `.PRG` + verdict. |
 | `tools/gen_platform_ref.mjs` | Regenerates `platform/platform-ref.{md,json}` from `vm.h` + `badger6502.dbg`. |
 | `tools/msbasic-woz.mjs` | Writes a local WOZ that boots the ROM's Microsoft BASIC into the RAM under `$9000-$BFFF` (see below). |
+| `tools/msbasic-prg.mjs` | Writes a local `BASIC.PRG`: the same BASIC started from the DOS shell, with SD-card `LOAD`/`SAVE` (see below). |
 | `tools/msbasic-woz.test.ps1` | Native PS/2 + picodisk READY-stall check of that disk (Windows, MSVC). |
 
 ## MS-BASIC boot disk
@@ -70,6 +71,24 @@ BASIC ROM (`$C006`, e.g. `PEEK(49158)`) from disk BASIC or the monitor: key inpu
 `node codegen/tools/msbasic-woz.test.mjs` verifies it on the WASM build;
 `pwsh codegen/tools/msbasic-woz.test.ps1 [-Node <node>]` (Windows, MSVC) types into it
 through the ROM's real PS/2 decoder while modelling the picodisk's READY stalls.
+
+## MS-BASIC for 3RIC DOS
+
+```sh
+node codegen/tools/msbasic-prg.mjs codegen/out/BASIC.PRG   # ROM + badger6502.dbg from emulator/Data
+node codegen/tools/msbasic-prg.mjs codegen/out/BASIC.PRG --rom my-board.bin --dbg my-board.dbg
+```
+
+Copy `BASIC.PRG` to the SD card. At the DOS `>` prompt, `CD` to the folder that should
+hold your programs, then `BRUN BASIC.PRG 0800` (with `BASIC.PRG` in that folder) and press
+Return at `MEMORY SIZE?` (`34047 BYTES FREE`). In BASIC, `SAVE "HELLO.BAS"` writes the
+program to that folder, replacing a file of the same name, and `LOAD "HELLO.BAS"` reads it
+back; any string expression works (`SAVE A$`). Names are FAT 8.3 and upper-cased. Errors:
+`?FILE NOT FOUND ERR`, `?FILE TYPE MISMATCH ERR` (a directory or not a BASIC program),
+`?BAD FILE NAME ERR`, `?OUT OF MEMORY ERR`, `?I/O ERR`. Use the shell for `DIR`, `CD` and
+`DEL`. Like the disk, the file refuses to start on a ROM other than the one it was built
+from and contains Microsoft's BASIC, so keep it local.
+`node codegen/tools/msbasic-prg.test.mjs` verifies it on the WASM build.
 
 ## Layout
 

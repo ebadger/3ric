@@ -152,10 +152,72 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   - **Limits:** a disk refuses to load unless the machine's upper ROM (`$D000–$FFFF`)
     matches the ROM that generated it (`--rom` selects the board's image); the BASIC ROM
     bank only runs the machine's own NMI handler and is not fingerprinted. `LOAD`/`SAVE`
-    behave as in ROM BASIC; there is no Disk II file system. BASIC appears about one
+    behave as in ROM BASIC; there is no Disk II file system (`BASIC.PRG` below has SD
+    `LOAD`/`SAVE`). BASIC appears about one
     second after loading ends. The first physical boot garbled keys at `MEMORY SIZE?`
     (Return echoed `GG`); the start-up resync addresses the cause reproduced natively.
     A fixed physical-board boot is not yet confirmed.
+- **MS-BASIC for 3RIC DOS (`BASIC.PRG`):** `codegen/tools/msbasic-prg.mjs` packages the
+  boot disk's interpreter as a `.PRG` that the DOS shell starts with
+  `BRUN BASIC.PRG 0800`, and gives its `LOAD "NAME"` and `SAVE "NAME"` the ROM DOS's
+  FAT32 file system in the DOS current directory. Like the disk, it embeds the
+  third-party interpreter and is a generated local output (`NOTICE`).
+  - **File:** a one-page loader at `$0800`, then the LOAD/SAVE glue (whole pages; three,
+    `$8D00–$8FFF`, for the shipped ROM), then the boot disk's 48-page interpreter image
+    with the changes below (13,312 bytes for the shipped ROM).
+  - **Loader:** the disk's upper-ROM Fletcher-16 guard. On mismatch it prints
+    `BASIC.PRG/ROM MISMATCH` through `COUT` (the running ROM's DOS just loaded the file)
+    and `RTS`s to the DOS prompt before touching `$8D00–$BFFF`. Otherwise it selects RAM
+    (`$C007`), copies the glue and interpreter to `$8D00–$BFFF` and `JMP $E000`. There
+    is no spin-down wait or PS/2 resync: the CPU bit-bangs the SD card, so nothing
+    stalls it. The shell runs with `$CAFE` at 0 and RAM at `$9000`, so NMIs return to
+    the RAM interpreter as for the disk.
+  - **Memory top:** the glue does not fit the image's 514 unused bytes, so it sits below
+    the interpreter and the disk's probe stop and size clamp move from `$9000` to the
+    glue's first page: Return at `MEMORY SIZE?` gives `34047 BYTES FREE` (768 fewer than
+    the disk). BASIC never writes at or above `MEMSIZ`; a `POKE` there can break
+    `LOAD`/`SAVE`.
+  - **`LOAD`/`SAVE`:** the cassette versions call the Apple monitor's tape routines
+    (`$FECD`/`$FEFD`); 3ric has no cassette port. The first three bytes of each become
+    a `JMP` to the glue; the generator finds them by their bytes. The argument is any
+    string expression (`SAVE "HELLO.BAS"`, `SAVE A$`) and must end the statement, else
+    `?SYNTAX ERR` before any file access. Letters are upper-cased. A name must be a FAT
+    short name: 1–8 characters, optionally `.` and 1–3 more, with no space, control
+    character or ``"*+,/:;<=>?[\]|``; otherwise `?BAD FILE NAME ERR`. A file is the raw
+    program text `TXTTAB`..`VARTAB`, line links included, with no header.
+    - `SAVE`: a directory of that name gives `?FILE TYPE MISMATCH ERR`; an existing
+      file is deleted as the shell's `DEL` does. Then the file is allocated, its
+      directory entry written and its bytes written as the shell's `BSAVE` does. A
+      directory-entry or write failure reported by the library gives `?I/O ERR`. The
+      statement then continues, in a running program too.
+    - `LOAD`: a missing name gives `?FILE NOT FOUND ERR`; a directory or a file under
+      2 bytes gives `?FILE TYPE MISMATCH ERR`; a file that would end at or above
+      `MEMSIZ` gives `?OUT OF MEMORY ERR`. None of these touch the program. Otherwise
+      the file's exact length is read to `TXTTAB` with `fat32_file_readbyte` and
+      `VARTAB` set after it. The lines are then walked as `FIX_LINKS` will walk them:
+      every link high byte non-zero, every line terminated within 255 bytes, ending
+      exactly on `00 00` at `VARTAB-2`. A short read (`?I/O ERR`) or failed walk
+      (`?FILE TYPE MISMATCH ERR`) does `NEW`. Success jumps to `FIX_LINKS`, which
+      clears variables, rebuilds the links and returns to the `]` prompt, from a
+      running program too, like the cassette version.
+    - Errors print as BASIC's own: `?<message> ERR`, plus ` IN <line>` while running
+      (`CRDO`, `OUTQUES`, `STROUT`, `STKINI`, `QT_ERROR`, `PRINT_ERROR_LINNUM`).
+  - **Zero page:** the FAT32 library's pointers live in `$B0–$BF`, inside BASIC's
+    `CHRGET` (`$B2–$CE`, `TXTPTR` `$B9`). The glue saves `$B0–$CF` after evaluating the
+    name and restores it before continuing or reporting an error. The name goes through
+    the DOS command line (`dos_command` `$CD00`) and `fat32_prep_fileparam`; the
+    library's other state is the DOS's `$C800–$CDFF`, which BASIC does not use.
+  - **Current directory:** each `LOAD`/`SAVE` opens the DOS current directory
+    (`fat32_open_cd`, cluster at `$CC20`), so `CD` before `BRUN` chooses it. The card is
+    not remounted, and BASIC has no `CD`, `DIR` or `DEL`; use the shell.
+  - **Addresses:** every ROM routine and variable comes from `badger6502.dbg` (`--dbg`,
+    default beside `--rom`) and is checked against the bytes its source assembles to;
+    the generator refuses a ROM or symbol file that differs. The run-time guard then
+    pins the upper-ROM addresses to the board.
+  - **Limits:** the library's: files below 64 KiB, a full card is not detected, deleted
+    directory entries are not reused (the directory grows with each replacement), and
+    SD sector write errors are not reported. Emulator-verified only; no physical-board
+    run yet.
 - **Ultima V SD-card port:** `codegen/tools/port-ultima5.mjs` converts the eight
   owner-supplied ProDOS disk sides into a `U5/` folder for the micro-SD card
   (`CD U5`, `BRUN U5.PRG 0800`). The game data stays local; the repository holds
@@ -811,6 +873,12 @@ PROM loads T0 S0 → upper-ROM guard → $C007 → 48 ReadSector pages into $900
 spin-down wait → PS/2 decoder resync → JMP $E000 → COLD_START in RAM → MEMORY SIZE? (capped at
 $9000) → BASIC prompt`; NMIs bank the ROM handler in and return to RAM.
 
+For `BASIC.PRG`:
+`ROM BASIC + the disk's hooks + SAVE/LOAD JMPs, glue → msbasic-prg.mjs → BASIC.PRG on the SD card →
+CD + BRUN BASIC.PRG 0800 → upper-ROM guard → $C007 → copy $8D00–$BFFF → JMP $E000 → COLD_START in
+RAM → MEMORY SIZE? (capped at $8D00) → prompt`; `LOAD`/`SAVE "NAME"` → glue → save `$B0–$CF` →
+ROM FAT32 in the DOS current directory → restore → `FIX_LINKS` / next statement.
+
 For Matrix Rain:
 `gallery/sample source → assembler → $0800 program → $C000/$C010 pause/quit input +
 LFSR/column timers → glyph history and clipped hi-res cell writes → existing native/WASM
@@ -873,6 +941,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | MS-BASIC boot disk | Implemented / emulator-verified | `msbasic-woz.mjs` local generator. `msbasic-woz.test.mjs` round-trips the WOZ sectors and boots with scrubbed overlay RAM, even with BASIC ROM left selected. `COLD_START` runs only from RAM, at least 1,023,000 cycles after motor-off and with a poisoned PS/2 decoder reset. Return gives `34815 BYTES FREE`, the image survives the probe, programs and a gamepad NMI work, reset then `MON`/`E000G` restarts it, sizes clamp, and a mismatched ROM stops before loading. Every prompt is a bare `]` at the start of a line. `BREAK IN 10` survives a scroll, and the `A` credit line has no stray byte. Shift+= types `+` through the real PS/2 decoder (native, left Shift) and with either Shift simulated (WASM), plain `=` stays `=`, the reader returns after reset and `E000G`, and another `KSW` routine is left alone. `msbasic-woz.test.ps1` (native, MSVC) types through the real PS/2 decoder across 18 bit-period/READY-stall/Enter-release cases. The first physical boot garbled keys; the fixed disk is not yet confirmed on the board. |
+| MS-BASIC for 3RIC DOS (`BASIC.PRG`) | Implemented / emulator-verified | `msbasic-prg.mjs` local generator. `msbasic-prg.test.mjs` checks the file is the loader, glue and the disk's interpreter with only `SAVE`/`LOAD` and the memory top changed, and that unrecognized ROMs and symbol files are refused. On the WASM build with the ROM DOS, SD emulation and scrubbed RAM: `CD` then `BRUN BASIC.PRG 0800` gives `34047 BYTES FREE`; `SAVE`, `NEW`, `LOAD`, `LIST` and `RUN` round-trip a program; `SAVE` replaces a file; `SAVE A$` and `LOAD` work inside a running program; every error (missing, directory, bad names, a non-program, oversized, junk after the name) leaves BASIC working; after reset the shell's `DIR` shows each program once, only in that directory; a mismatched ROM returns to the DOS prompt before loading. No physical-board run. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | Ultima V SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima5.test.mjs` drives the real loader/resident/shim on the ROM DOS with synthetic volumes (and boots the original disks to the title with `U5_DISKS`); `port-ultima5.native.ps1` decodes real PS/2 frames at 94-160-cycle periods with language-card RAM mapped, including Caps Lock LED exchanges and a `$C010` strobe on a stop-bit edge. The suite also plays a synthetic two-region song end to end (on-demand `SONG01` load, timer-IRQ ticks in bank 2, pause/load/resume, reload after a block read), tests the song packer (phrase subroutines, two-region layout, replay check) and the stale-folder check, and checks the 46 music-site patches; a session-only py65 harness matched the player to the reverse-engineered driver per tick for all 15 songs. Manual WASM play covered creation, save, overworld, combat, towne entry, pad-only menu/walking/Ztats, and music (title theme at the title, huts song on *Journey Onward*, on-demand song switches). Board: running after the PS/2 fix; pads and music not yet tried on the board. Dialogue, dungeons and endgame are open; block reads cost ~1.7 M cycles. |
 | Seven Cities of Gold SD-card port | Experimental / emulator-verified | `codegen/tools/port-sevencities.test.mjs` runs the real loader, resident and both shim copies on the ROM DOS/SD emulation with synthetic disks at 512-byte and 4 KB clusters, plus missing/fragmented/ROM refusals (`SEVENCITIES_DISKS` adds an original-disk boot to the title); `port-ultima5.native.ps1 -Resident codegen\patches\sevencities\resident.s` passes the native PS/2 checks. Scripted WASM play: menus, sailing, landing, natives; World Maker created a world that then played. A save at the Pub, resume, and the physical board are open; requires contiguous files and the current ROM's SD routines. |

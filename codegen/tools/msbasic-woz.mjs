@@ -126,11 +126,11 @@ function findPattern(bytes, pattern) {
   return hits;
 }
 
-function residentSource(org, { setTop, qtOk, keyIn }) {
+function residentSource(org, { setTop, qtOk, keyIn, memTop }) {
   const d = PS2_DECODER;
   return `
 LINNUM  = ${hex(LINNUM, 2)}
-TOPHI   = ${hex(BASIC_START >> 8, 2)}       ; the interpreter starts at $9000
+TOPHI   = ${hex(memTop >> 8, 2)}       ; BASIC's memory top: the interpreter, or code below it
 SETTOP  = ${hex(setTop)}     ; L40FA: store MEMSIZ/FRETOP
 BASICGO = ${hex(BASIC_ENTRY)}     ; ROM BASIC entry: JMP COLD_START
 WAIT    = $FCA8       ; monitor delay; preserves X and Y
@@ -203,12 +203,12 @@ probepage:
         lda LINNUM+1
         cmp #TOPHI
         bcc probeok
-        pla                 ; stop probing at $9000: drop our return address
+        pla                 ; stop probing at the top: drop our return address
         pla
         jmp SETTOP
 probeok:
         rts
-; Called in place of "LDA LINNUM / LDY LINNUM+1"; returns min(LINNUM, $9000) in A/Y.
+; Called in place of "LDA LINNUM / LDY LINNUM+1"; returns min(LINNUM, top) in A/Y.
 clamptop:
         lda LINNUM
         ldy LINNUM+1
@@ -401,10 +401,17 @@ message:
 }
 
 /**
- * Build the MS-BASIC boot disk from a 3ric ROM image (the first 64 KiB is the mapped
- * address space). Throws if the ROM's BASIC layout is not the one this tool adapts.
+ * Build the RAM-resident MS-BASIC image ($9000-$BFFF) from a 3ric ROM image (the first
+ * 64 KiB is the mapped address space). Throws if the ROM's BASIC layout is not the one
+ * this tool adapts. `memTop` (page-aligned, at most $9000) is where the MEMORY SIZE probe
+ * stops and typed sizes clamp, leaving room for code below the interpreter;
+ * `extraPatches({ image, symbols })` returns further guarded `{ name, site, before,
+ * after }` replacements, given the unpatched image and the resident's symbols.
+ * msbasic-prg.mjs uses both for its DOS LOAD/SAVE.
  */
-export function buildMsBasicWoz(romBytes) {
+export function buildMsBasicImage(romBytes, { memTop = BASIC_START, extraPatches = () => [] } = {}) {
+  if ((memTop & 0xff) !== 0 || memTop > BASIC_START || memTop < 0x1000)
+    throw new Error(`memory top ${hex(memTop)} must be page-aligned in $1000-${hex(BASIC_START)}`);
   const rom = Uint8Array.from(romBytes);
   if (rom.length < 0x10000) throw new Error("ROM image must contain the 64 KiB mapped address space");
 
@@ -440,10 +447,11 @@ export function buildMsBasicWoz(romBytes) {
   if (RESET_CLEARS.some(store => findPattern(resetCode, store).length === 0))
     throw new Error(`the reset handler at ${hex(reset)} does not clear the PS/2 decoder state this disk resyncs`);
 
-  const resident = { setTop: BASIC_START + setTop, qtOk, keyIn };
-  const draft = assemble(residentSource(BASIC_END - 0x100, resident));
+  const resident = { setTop: BASIC_START + setTop, qtOk, keyIn, memTop };
+  const source = org => residentSource(org, resident);
+  const draft = assemble(source(BASIC_END - 0x100));
   const hooksOrg = BASIC_END - draft.bytes.length;
-  const hooks = assemble(residentSource(hooksOrg, resident));
+  const hooks = assemble(source(hooksOrg));
   if (hooks.bytes.length !== draft.bytes.length) throw new Error("hook size changed with its origin");
   const hookAt = hooksOrg - BASIC_START;
   if (image.subarray(hookAt).some(byte => byte !== 0))
@@ -454,14 +462,57 @@ export function buildMsBasicWoz(romBytes) {
   const jsrNop = target => [0x20, target & 0xff, target >> 8, 0xea];
   const probeSite = BASIC_START + probe + PROBE_PAGE_STEP;
   const topSite = BASIC_START + setTop;
+  const s = hooks.symbols;
+  const patches = [
+    { name: "probe", site: probeSite, before: [0xd0, 0x02, 0xe6, LINNUM + 1], after: jsrNop(s.PROBEPAGE) },
+    { name: "top", site: topSite, before: SET_TOP, after: jsrNop(s.CLAMPTOP) },
+    {
+      name: "RESTART", site: BASIC_START + restart, before: restartCode(qtOk).slice(0, RESTART_STEP),
+      after: jsrNop(s.KEYHOOK),
+    },
+    ...messages,
+  ];
+  const builtIn = patches.length;
+  patches.push(...extraPatches({ image: image.slice(), symbols: s }));
+  const touched = new Set();
+  patches.forEach(({ name, site, before, after }, index) => {
+    const at = site - BASIC_START;
+    if (index >= builtIn) {
+      if (before.length !== after.length || at < 0 || at + after.length > hookAt)
+        throw new Error(`${name} patch is outside the interpreter or misshapen`);
+      if (before.some((byte, i) => image[at + i] !== byte))
+        throw new Error(`${name} patch site ${hex(site)} does not hold the expected bytes`);
+    }
+    for (let i = 0; i < after.length; i++) {
+      if (touched.has(at + i)) throw new Error(`${name} patch overlaps another patch`);
+      touched.add(at + i);
+    }
+  });
   image.set(hooks.bytes, hookAt);
-  image.set(jsrNop(hooks.symbols.PROBEPAGE), probeSite - BASIC_START);
-  image.set(jsrNop(hooks.symbols.CLAMPTOP), topSite - BASIC_START);
-  image.set(jsrNop(hooks.symbols.KEYHOOK), restart);
-  for (const { site, after } of messages) image.set(after, site - BASIC_START);
+  for (const { site, after } of patches) image.set(after, site - BASIC_START);
 
+  return {
+    image,
+    coldStart,
+    memTop,
+    symbols: s,
+    hooks: {
+      start: hooksOrg, end: BASIC_END, postload: s.POSTLOAD, resync: s.RESYNC, quiet: s.QUIET,
+      probePage: s.PROBEPAGE, clampTop: s.CLAMPTOP, keyHook: s.KEYHOOK, shiftKey: s.SHIFTKEY, keyIn,
+    },
+    patches,
+  };
+}
+
+/**
+ * Build the MS-BASIC boot disk from a 3ric ROM image (the first 64 KiB is the mapped
+ * address space). Throws if the ROM's BASIC layout is not the one this tool adapts.
+ */
+export function buildMsBasicWoz(romBytes) {
+  const rom = Uint8Array.from(romBytes);
+  const { image, coldStart, symbols, hooks, patches } = buildMsBasicImage(rom);
   const guard = fletcher16(rom.subarray(GUARD_START, 0x10000));
-  const loaded = assemble(loaderSource(guard, hooks.symbols.POSTLOAD), { org: 0x0800 });
+  const loaded = assemble(loaderSource(guard, symbols.POSTLOAD), { org: 0x0800 });
   if (loaded.bytes.length > 256) throw new Error(`boot loader is ${loaded.bytes.length} bytes (> 256)`);
   const loader = new Uint8Array(256);
   loader.set(loaded.bytes);
@@ -473,7 +524,6 @@ export function buildMsBasicWoz(romBytes) {
     placeSector(dsk, track, sector, image.subarray(page * 256, (page + 1) * 256));
   }
 
-  const s = hooks.symbols;
   return {
     woz: buildWozFromDsk(dsk),
     image,
@@ -481,19 +531,8 @@ export function buildMsBasicWoz(romBytes) {
     loaderSymbols: loaded.symbols,
     coldStart,
     guard,
-    hooks: {
-      start: hooksOrg, end: BASIC_END, postload: s.POSTLOAD, resync: s.RESYNC, quiet: s.QUIET,
-      probePage: s.PROBEPAGE, clampTop: s.CLAMPTOP, keyHook: s.KEYHOOK, shiftKey: s.SHIFTKEY, keyIn,
-    },
-    patches: [
-      { name: "probe", site: probeSite, before: [0xd0, 0x02, 0xe6, LINNUM + 1], after: jsrNop(s.PROBEPAGE) },
-      { name: "top", site: topSite, before: SET_TOP, after: jsrNop(s.CLAMPTOP) },
-      {
-        name: "RESTART", site: BASIC_START + restart, before: restartCode(qtOk).slice(0, RESTART_STEP),
-        after: jsrNop(s.KEYHOOK),
-      },
-      ...messages,
-    ],
+    hooks,
+    patches,
   };
 }
 

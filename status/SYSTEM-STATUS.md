@@ -70,6 +70,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web/test_disk.cjs                # boot a WOZ floppy via C600G into a hi-res title
 & $node web/test_woz_download.cjs        # Disk II boots, overlap-safe images through 34,560 bytes, size guards
 & $node codegen\tools\msbasic-woz.test.mjs # disk-booted MS-BASIC on scrubbed overlay RAM, NMI coexistence, ROM guard
+& $node codegen\tools\msbasic-prg.test.mjs # BASIC.PRG via BRUN on the ROM DOS: SD LOAD/SAVE, errors, ROM guard
 pwsh codegen\tools\msbasic-woz.test.ps1 -Node $node # native PS/2 typing into that disk under picodisk READY stalls (MSVC)
 & $node codegen\tools\port-ultima5.test.mjs # Ultima V shim, pads and music (set U5_DISKS to also boot the real disks)
 & $node codegen\tools\port-ultima3.test.mjs # Ultima III RWTS shim on ROM DOS (set U3_DISKS to also play the real disks)
@@ -199,6 +200,12 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 - **Disk gap:** DOS 3.3 / Quick-DOS and games that chain through an Applesoft auto-run
   greeting don't run — this clone's `$E000` BASIC is generic Microsoft BASIC, not Applesoft.
   Self-booting machine-code disks work.
+- **MS-BASIC for 3RIC DOS:** `node codegen\tools\msbasic-prg.mjs codegen\out\BASIC.PRG`
+  writes a local `BASIC.PRG` (it contains the ROM's Microsoft BASIC; see `NOTICE`). Copy it
+  to the SD card; at the shell `CD` to the folder for your programs, then
+  `BRUN BASIC.PRG 0800` and Return at `MEMORY SIZE?` (`34047 BYTES FREE`). `SAVE "NAME"`
+  and `LOAD "NAME"` use that folder; names are 8.3. Emulator-verified, not yet run on the
+  board.
 - **MS-BASIC boot disk:** `node codegen\tools\msbasic-woz.mjs codegen\out\basic.woz` writes
   a local WOZ that loads the ROM's own Microsoft BASIC into the RAM under `$9000–$BFFF`;
   keep it out of the repo (`codegen/out/` is ignored; the disk carries that third-party

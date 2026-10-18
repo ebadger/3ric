@@ -75,6 +75,8 @@ licenses above.
       Disk images written by codegen/tools/msbasic-woz.mjs contain that same
       interpreter. They are local outputs with the same status, not repository
       assets.
+      codegen/tools/msbasic-prg.mjs writes BASIC.PRG files containing it too,
+      with the same status.
 
   - Apple II disk images and program binaries used as test/demo data
       (e.g. emulator/Data/loderun.bin and the .woz images under
