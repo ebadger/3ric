@@ -1,6 +1,7 @@
 # Ultima I: replacing ProDOS under an unmodified game
 
-**2026-10-15. Emulator-verified; no physical-board trial yet.**
+**2026-10-15, controllers added 2026-10-17. Emulator-verified; the owner's first
+run from an SD card (2026-10-17) loaded the game and went through character creation.**
 The owner supplied one Apple II disk image, `Ultima_I-Enhanced.dsk`, and asked
 for a port like the [Ultima IV one](https://github.com/ebadger/u4remastereda2)
 (`fixed` branch). That port rebuilt Ultima IV from a reconstructed source tree,
@@ -59,18 +60,50 @@ at the Apple addresses in the 3RIC ROM.
 `node codegen/tools/port-ultima1.mjs <ultima1.dsk> <out-dir>` reads the image, checks
 the volume and the `U1.SYSTEM` fingerprint, and writes `<out-dir>/U1/`:
 
-- `U1.PRG` (1,792 bytes at `$0800`): the loader and the ProDOS stand-in image.
+- `U1.PRG` (1,984 bytes at `$0800`): the loader, the ProDOS stand-in image and the
+  SNES pad glue.
 - Every game file except `PRODOS`, under a dot-less 8-character key
   (`MAKE.INDATA` → `MAKEINDA`, `U1.SYSTEM` → `U1SYSTEM`, `MI.U1` → `MIU1`).
 - `U1VARS`, the player disk's save, created zero-filled (the game reads that as "no
   character": *Please put in the Player disk.*). The ROM's `OWRITE` can only rewrite
   an existing file, so it must exist. Re-running the tool keeps an existing save.
-- One verified patch: `STUPH $178C` `LDX #$C7` → `BRA $17BB`, skipping the mouse
-  probe. 3RIC has no mouse card, and the probe reads `$Cn0C/$Cn11/$CnFB` of every slot,
+- Three verified STUPH patches. `$178C` `LDX #$C7` → `BRA $17BB` skips the mouse
+  probe: 3RIC has no mouse card, and the probe reads `$Cn0C/$Cn11/$CnFB` of every slot,
   including the live ACIA and VIA pages; on undecoded slot space a false match would
-  send the game into mouse firmware that is not there.
+  send the game into mouse firmware that is not there. `$1D64` and `$1C59`
+  `LDA $C000` → `JSR $0300` add the SNES controllers (below).
 
 Copy `U1` to the card root, then at the DOS prompt: `CD U1`, `BRUN U1.PRG 0800`.
+
+**SNES controllers** (`codegen/patches/ultima1/pad.s`, added at the owner's request
+after the first board run). The game reads the keyboard in exactly two places in
+`STUPH`, both `LDA $C000` feeding its 4-key type-ahead buffer (`$74-$77`, count `$78`):
+`$1D64` on every input wait and `$1C59` while the view is drawn. Both now call
+`padpoll` at `$0300`, which returns what `LDA $C000` would - unless no key is waiting
+and a button is down, in which case it returns that button's key with bit 7 set and
+the game buffers it like a typed one. The game itself turns Return, `/`, `;` and `'`
+into the arrow codes `$0B/$0A/$08/$15`, so the D-pad sends those and works for
+walking, the dungeon view and character creation alike.
+
+| Pad | Key | | Pad | Key |
+|-----|-----|-|-----|-----|
+| D-pad | arrows (move) | | Y | `T` Transact |
+| A | `A` Attack | | L | `K` Klimb |
+| B | `E` Enter | | R | `F` Fire |
+| X | `X` eXit | | Select / Start | `Z` Ztats / Space (pass) |
+
+- Either controller works; a typed key always wins; X/Y are preserved.
+- One `PTRIG` scan costs ~1,500 cycles and the game polls ~127 times a second while
+  it waits (measured), so only every 4th poll scans (~3% of the CPU instead of 12%).
+- A press sends one key. A held D-pad repeats after 10 scans, then every 6 (≈0.3 s,
+  then ≈5 steps a second), and only while the type-ahead count is zero: the first
+  try at 3 scans ran ~8 tiles a second, and without the count check a release could
+  leave up to four queued steps.
+- `$0300-$03BF` was chosen by measurement: with pages 2-3 filled with a marker before
+  `BRUN`, play through creation, save, continue, a town, a castle and a dungeon left
+  `$0300-$03CD` untouched (`U1.INTRO` writes `$03CE`); the static hits in other
+  overlays are data bytes, not instructions. The loader also sets the ROM's
+  `JOYSTICK_MODE $CE15` to 0, its power-on default, so the pads are scanned.
 
 **ProDOS stand-in** (`codegen/patches/ultima1/prodos.s`). Only ProDOS is replaced;
 `U1.SYSTEM`, Origin's layer and the game run unmodified.
@@ -139,22 +172,34 @@ off (`$C007`), installs the stand-in, captures the command collector, then loads
 - With `U1_DISK=<image>`: the original game shows the intro in hi-res; a fighter is
   created and saved (`OWRITE U1VARS 7E6D 01CA`); *Continue previous game* loads it
   into the overworld; **Q** saves in place; Lord British's castle loads (`CAS`,
-  `TCMAPS`, `MAPCHARS` at `$B000`); and `$BB00-$BFFF` is byte-identical to the image
-  apart from the stand-in's own state and the bytes `U1.SYSTEM` writes (`$BF6E/F`,
-  `$BFFC/D`).
+  `TCMAPS`, `MAPCHARS` at `$B000`) when the pad's **B** is pressed; and `$BB00-$BFFF`
+  is byte-identical to the image apart from the stand-in's own state and the bytes
+  `U1.SYSTEM` writes (`$BF6E/F`, `$BFFC/D`), as is the pad code at `$0300`.
+- SNES pads (synthetic loop calling `padpoll` like STUPH): each of the 12 buttons
+  sends its key, controller 2 works, a held button sends one key, a held D-pad waits
+  while the type-ahead count is non-zero and repeats once it is zero, a typed key wins
+  over a held pad, X/Y are preserved, and the ROM is in pad mode.
 
 Manual emulator sessions on the original disk (scripted keys, screenshots): the
 title text, the animated intro, the menu, character generation, the city of Britain,
 an overworld fight with bears, a quick-save, and **the Dungeon of Doubt** (`DNG`,
-3D view, moving forward), with the stand-in checked intact after each.
+3D view, moving forward), with the stand-in checked intact after each. With the
+controller only: Select showed Ztats, the D-pad walked to the dungeon, B entered it
+and Up moved forward; holding the D-pad walked ≈5 tiles a second and stopped on
+release.
 
 Measured load cost (`runCycles`, 512-byte-cluster test card): `U1.SYSTEM` 1.3 s,
 `MAKE.INDATA` 6.3 s, the whole start-up ≈22 s, `OUT` 2.6 s, `DNG` 4.6 s, a town or
 castle ≈8 s (three files). About 0.45 s per KB, nearly all in the ROM's bit-banged SPI
 byte loop - the same cost the Ultima V port measured.
 
-**Not yet shown:** space flight (`SPA`), the time machine (`TM`, `NIF`), the endgame,
-a physical-board run, and a real card's cluster size.
+**Owner's first SD-card run (2026-10-17, before the controller change):** the game
+loaded and character creation worked. (*Continue* first said "Please put in the
+Player disk." - correctly, as no character had been saved yet.)
+
+**Not yet shown:** saving and continuing, play and the controllers outside the
+emulator; space flight (`SPA`), the time machine (`TM`, `NIF`), the endgame; and
+performance on a real card's cluster size.
 
 ## Known limits
 
@@ -173,5 +218,6 @@ a physical-board run, and a real card's cluster size.
   card. A stand-in that kept recently loaded overlays there would make re-entering a
   town or returning to the overworld nearly instant, but every copy would need the
   ROM hidden briefly - the bank-safe NMI path the Ultima V resident needed.
-- **Physical board.** The keyboard path is the ROM's own (no language card mapped),
-  so the Ultima V keyboard failure mode should not apply; a board trial would confirm.
+- **Hardware confirmation.** The keyboard path is the ROM's own (no language card
+  mapped), so the Ultima V keyboard failure mode should not apply, and the first run
+  got through character creation; saving, play and the controllers still need it.

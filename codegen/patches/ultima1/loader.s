@@ -4,11 +4,12 @@
 ;     BRUN U1.PRG 0800
 ;
 ; Stands in for the ProDOS boot: installs the ProDOS stand-in (prodos.s) at
-; $BB00-$BFFF, then loads U1.SYSTEM at $2000 through it and starts it the
-; way ProDOS starts a SYS file. Everything after that is Origin's code.
+; $BB00-$BFFF and the SNES pad glue (pad.s) at $0300, then loads U1.SYSTEM
+; at $2000 through the stand-in and starts it the way ProDOS starts a SYS
+; file. Everything after that is Origin's code.
 ;
-; The tool defines MLI_IMAGE (where the stand-in sits in this file),
-; ROMCSW and IRQ_RETURN (symbols inside it).
+; The tool defines MLI_IMAGE and PAD_IMAGE/PAD_SIZE (where the stand-in and
+; pad glue sit in this file), ROMCSW and IRQ_RETURN (symbols in the stand-in).
 
 COUT1       = $FDF0             ; print A to the screen, bypassing CSW
 SETKBD      = $FE89
@@ -16,6 +17,7 @@ SETVID      = $FE93
 DOS_HOOK    = $03EA             ; ROM DOS: JSR hook_buffer_no_output; RTS
 MUTE_OUTPUT = $CE09
 NMI_NEST    = $CAFE             ; ROM NMI proxy nest count
+JOYSTICK_MODE = $CE15           ; ROM: 0 = scan SNES pads on PTRIG
 MLI         = $BF00
 
         .org $0800
@@ -59,6 +61,14 @@ copy_mli:                       ; 5 pages -> $BB00-$BFFF
         sta $BF00,x
         inx
         bne copy_mli
+        ldx #PAD_SIZE-1         ; SNES pad glue -> $0300-$03BF
+copy_pad:
+        lda PAD_IMAGE,x
+        sta $0300,x
+        dex
+        cpx #$FF
+        bne copy_pad
+        stz JOYSTICK_MODE       ; ROM scans SNES pads (its power-on default)
 
         lda MUTE_OUTPUT
         pha

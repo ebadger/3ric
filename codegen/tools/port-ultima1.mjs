@@ -7,10 +7,11 @@
 // then at the ROM DOS prompt:  CD U1   then   BRUN U1.PRG 0800
 //
 // Only ProDOS is replaced (codegen/patches/ultima1/prodos.s); U1.SYSTEM,
-// Origin's file layer and the game run unmodified except one verified patch
-// to STUPH. The disk image and the generated folder contain Origin's
-// copyrighted game; keep them local - this repository holds only the tool
-// and the glue code.
+// Origin's file layer and the game run unmodified except three verified
+// patches to STUPH (mouse probe skipped; both keyboard polls also read the
+// SNES pads via pad.s). The disk image and the generated folder contain
+// Origin's copyrighted game; keep them local - this repository holds only
+// the tool and the glue code.
 
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -24,6 +25,10 @@ const patchDir = path.join(root, "codegen", "patches", "ultima1");
 
 export const VOLUME = "U1";
 const LOADER_ORG = 0x0800, MLI_IMAGE = 0x0a00, MLI_ORG = 0xbb00, MLI_END = 0xc000;
+const PAD_IMAGE = 0x0f00, PAD_ORG = 0x0300, PAD_SIZE = 0xc0;
+// SNES D-pad auto-repeat, in pad scans (~32 a second while the game waits):
+// first repeat after ~0.3 s, then ~5 steps a second (measured in the emulator).
+export const PAD_DELAYS = { first: 10, repeat: 6 };
 
 // The stand-in emulates exactly the MLI calls this U1.SYSTEM (and the file
 // layer it relocates to $B700) makes, so other builds are refused.
@@ -41,6 +46,14 @@ export const PATCHES = [
   {
     file: "STUPH", address: 0x178c, before: [0xa2, 0xc7], after: [0x80, 0x2d],
     why: "Skip the mouse-card probe (LDX #$C7 -> BRA $17BB). 3RIC has no mouse card; the probe reads $Cn0C/$Cn11/$CnFB of every slot, including live ACIA and VIA registers.",
+  },
+  {
+    file: "STUPH", address: 0x1d64, before: [0xad, 0x00, 0xc0], after: [0x20, 0x00, 0x03],
+    why: "Keyboard poll on every input wait: LDA $C000 -> JSR padpoll ($0300), which adds SNES controller buttons as keys.",
+  },
+  {
+    file: "STUPH", address: 0x1c59, before: [0xad, 0x00, 0xc0], after: [0x20, 0x00, 0x03],
+    why: "Keyboard poll while the view is drawn: LDA $C000 -> JSR padpoll.",
   },
 ];
 
@@ -86,15 +99,20 @@ export function buildLoader(files) {
   if (s.FILETAB_END > 0xbf00) throw new Error(`stand-in code and file table overflow into the global page ($${s.FILETAB_END.toString(16)})`);
   if (s.NODEV !== 0xbf4a || s.ROMCSW !== 0xbfa0 || s.ZSAVE !== 0xbfc0 || s.CMDTAB !== 0xbf70 || s.JMPTAB !== 0xbfd0 || s.GP_END !== 0xc000) throw new Error("global page layout drifted");
 
-  const loader = assemble(`MLI_IMAGE = $${MLI_IMAGE.toString(16)}\nROMCSW = $${s.ROMCSW.toString(16)}\n`
+  const loader = assemble(`MLI_IMAGE = $${MLI_IMAGE.toString(16)}\nPAD_IMAGE = $${PAD_IMAGE.toString(16)}\nPAD_SIZE = $${PAD_SIZE.toString(16)}\nROMCSW = $${s.ROMCSW.toString(16)}\n`
     + `IRQ_RETURN = $${s.IRQ_RETURN.toString(16)}\n`
     + fs.readFileSync(path.join(patchDir, "loader.s"), "utf8"));
   if (loader.org !== LOADER_ORG || loader.org + loader.bytes.length > MLI_IMAGE) throw new Error("loader overlaps the stand-in image");
 
-  const prg = new Uint8Array(MLI_IMAGE + (MLI_END - MLI_ORG) - LOADER_ORG);
+  const pad = assemble(`FIRST_DELAY = ${PAD_DELAYS.first}\nREPEAT_DELAY = ${PAD_DELAYS.repeat}\n`
+    + fs.readFileSync(path.join(patchDir, "pad.s"), "utf8"));
+  if (pad.org !== PAD_ORG || pad.bytes.length > PAD_SIZE) throw new Error("pad code exceeds $0300-$03BF");
+
+  const prg = new Uint8Array(PAD_IMAGE + PAD_SIZE - LOADER_ORG);
   prg.set(loader.bytes, 0);
   prg.set(mli.bytes, MLI_IMAGE - LOADER_ORG);
-  return { prg, mli, loader };
+  prg.set(pad.bytes, PAD_IMAGE - LOADER_ORG);
+  return { prg, mli, loader, pad };
 }
 
 /** files: [{ name, type, aux, eof, data }] as on the ProDOS volume.

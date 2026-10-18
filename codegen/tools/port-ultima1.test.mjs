@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { assemble } from "./asm6502.mjs";
 import harness from "./harness.cjs";
 import { buildSparseFat32 } from "./ultima5/fat32.mjs";
-import { PATCHES, SAVE_FILE, applyPatches, buildFromFiles, buildLoader, buildTree, sdKey } from "./port-ultima1.mjs";
+import { PAD_DELAYS, PATCHES, SAVE_FILE, applyPatches, buildFromFiles, buildLoader, buildTree, sdKey } from "./port-ultima1.mjs";
 
 const HZ = 1573437;
 
@@ -20,15 +20,17 @@ assert.equal(sdKey("U1.SYSTEM"), "U1SYSTEM");
 assert.equal(sdKey("MI.U1"), "MIU1");
 {
   const stuph = new Uint8Array(0x1800);
-  const p = PATCHES[0];
-  stuph.set(p.before, p.address - 0x800);
+  for (const p of PATCHES) stuph.set(p.before, p.address - 0x800);
   const files = [{ name: "STUPH", type: 6, aux: 0x800, eof: stuph.length, data: stuph }];
   applyPatches(files);
-  assert.deepEqual(Array.from(stuph.subarray(p.address - 0x800, p.address - 0x800 + 2)), [0x80, 0x2d], "LDX #$C7 -> BRA $17BB");
+  const at = (addr, n) => Array.from(stuph.subarray(addr - 0x800, addr - 0x800 + n));
+  assert.deepEqual(at(0x178c, 2), [0x80, 0x2d], "LDX #$C7 -> BRA $17BB");
+  assert.deepEqual(at(0x1d64, 3), [0x20, 0x00, 0x03], "input-wait poll -> JSR padpoll");
+  assert.deepEqual(at(0x1c59, 3), [0x20, 0x00, 0x03], "view-draw poll -> JSR padpoll");
   applyPatches(files); // idempotent
-  stuph[p.address - 0x800] = 0;
+  stuph[0x1d64 - 0x800] = 0;
   assert.throws(() => applyPatches(files), /unexpected bytes/);
-  console.log("PASS STUPH mouse-probe patch is exact and guarded");
+  console.log("PASS STUPH patches (mouse probe, two pad polls) are exact and guarded");
 }
 
 // ---------------------------------------------------------------------------
@@ -295,8 +297,22 @@ zok:    dex
         sta RES+$73
         lda #$AA
         sta RES+$7F
-done:   jmp done
-`;
+padloop:                        ; poll like STUPH $1D64 (JSR padpoll)
+        ldx #$11
+        ldy #$22
+        jsr $0300
+        php
+        cpx #$11
+        bne regbad
+        cpy #$22
+        beq regok
+regbad: inc RES+$7E             ; X/Y clobbered
+regok:  plp
+        bpl padloop
+        sta RES+$7D             ; last key
+        inc RES+$7C             ; keys seen
+        bit $C010
+        bra padloop`;
 
 const sys = assemble(sysSrc).bytes;
 const data = Uint8Array.from({ length: 300 }, (_, i) => (i * 7 + 3) & 255);
@@ -308,7 +324,7 @@ const files = [
   { name: "PRODOS", type: 0xff, aux: 0x2000, eof: 4, data: new Uint8Array(4) },
 ];
 const tree = buildFromFiles(files);
-assert.equal(tree["U1.PRG"].length, 0x0700, "loader + $BB00-$BFFF image");
+assert.equal(tree["U1.PRG"].length, 0x07c0, "loader + $BB00-$BFFF image + $0300 pad glue");
 assert.ok(!("PRODOS" in tree), "the ProDOS kernel is not copied");
 assert.equal(tree.U1VARS.length, SAVE_FILE.eof, "zero-filled save file is created");
 assert.ok(tree.U1VARS.every((b) => b === 0));
@@ -402,6 +418,43 @@ async function bootU1(tree) {
   assert.match(serial, /FLOAD BIGONE 6000 0000 1387\r/);
   assert.doesNotMatch(serial, /NOPE|BLOAD|EH\?|NOFIND/, "only well-formed commands for known files reach the ROM");
   console.log("PASS ProDOS stand-in on the ROM DOS: info, open/read/mark/EOF, write/read-back, errors, registers, zero page, NMI");
+
+  // SNES pads through the ROM's PTRIG scan, as STUPH's patched polls see them.
+  const seen = () => vm.peek(RES + 0x7c);
+  const runFor = (cycles) => { for (let c = 0; c < cycles;) c += vm.runCycles(2000); };
+  const press = (pad, mask) => vm.setGamepadState(pad, mask);
+  const nextKey = (pad, button) => {
+    const before = seen();
+    press(pad, 1 << button);
+    for (let c = 0; c < HZ && seen() === before;) c += vm.runCycles(500);
+    press(pad, 0);
+    runFor(20000);
+    assert.equal(seen(), before + 1, `button ${button} gives one key`);
+    return vm.peek(RES + 0x7d);
+  };
+  vm.poke(0x78, 1);                     // type-ahead buffer busy: no D-pad repeats
+  runFor(200000);
+  assert.equal(seen(), 0, "no buttons, no keys");
+  const want = [0xc5, 0xd4, 0xda, 0xa0, 0x8b, 0x8a, 0x88, 0x95, 0xc1, 0xd8, 0xcb, 0xc6]; // E T Z sp up down left right A X K F
+  for (let b = 0; b < 12; b++) assert.equal(nextKey(0, b), want[b], `button ${b} key`);
+  assert.equal(nextKey(1, 8), 0xc1, "controller 2 works too");
+  let n = seen();
+  press(0, 1 << 8); runFor(400000); press(0, 0); runFor(20000);
+  assert.equal(seen(), n + 1, "a held button sends one key");
+  n = seen();
+  press(0, 1 << 7); runFor(400000);
+  assert.equal(seen(), n + 1, "held D-pad waits while the game's buffer holds a key");
+  vm.poke(0x78, 0);
+  runFor(400000);
+  assert.ok(seen() > n + 3, `held D-pad repeats once the buffer is empty (${seen() - n})`);
+  assert.equal(vm.peek(RES + 0x7d), 0x95);
+  vm.poke(0x78, 1); n = seen();
+  vm.keyDown("Q".charCodeAt(0)); runFor(100000);
+  press(0, 0); runFor(20000);
+  assert.equal(vm.peek(RES + 0x7d), 0xd1, "a typed key wins over a held pad");
+  assert.equal(vm.peek(RES + 0x7e), 0, "padpoll preserves X and Y");
+  assert.equal(vm.peek(0xce15), 0, "ROM in SNES-pad mode");
+  console.log(`PASS SNES pads: 12 buttons, both controllers, one key per press, D-pad repeat (delays ${PAD_DELAYS.first}/${PAD_DELAYS.repeat} scans), keyboard priority`);
 }
 
 {
@@ -439,15 +492,19 @@ if (process.env.U1_DISK) {
   keys(["Q"]); run(8); drain();                          // quit = save in place
   assert.equal(serial.match(/OWRITE U1VARS 7E6D 01CA\r/g).length, 2, "overworld quick-save");
   keys([13, 13, 13, 13, 8, 8, 8, 8, 8, 8, 8, 8, 8, "/", "/"], 0.5);
-  keys(["E"]); run(15); drain();
+  vm.setGamepadState(0, 1 << 0); run(0.3); vm.setGamepadState(0, 0);  // SNES B = Enter
+  run(15); drain();
   assert.match(serial, /FLOAD CAS 8956 0000 1593\r[\s\S]*FLOAD TCMAPS 4000[\s\S]*FLOAD MAPCHARS B000/, "Lord British's castle");
   const prg = realTree["U1.PRG"];
   for (let a = 0xbb00; a < 0xc000; a++) {
     if ((a >= 0xbfa0 && a < 0xbfd0) || [0xbf6e, 0xbf6f, 0xbffc, 0xbffd].includes(a)) continue; // state, U1.SYSTEM's bytes
     assert.equal(vm.peek(a), prg[0x0200 + a - 0xbb00], `stand-in byte $${a.toString(16)} intact`);
   }
+  const { pad } = buildLoader([{ name: "X", type: 6, aux: 0, eof: 1 }]);
+  for (let a = 0x300; a < pad.symbols.HELD; a++)    // then its held/repeat/skip state
+    assert.equal(vm.peek(a), pad.bytes[a - 0x300], `pad glue byte $${a.toString(16)} intact`);
   assert.doesNotMatch(serial, /EH\?|NOFIND|BLOAD/);
-  console.log("PASS original Ultima I: intro, character creation + save, continue, quick-save, castle; stand-in intact");
+  console.log("PASS original Ultima I: intro, character creation + save, continue, quick-save, castle via SNES B; stand-in and pad glue intact");
 } else {
   console.log("SKIP real-disk play (set U1_DISK to the Ultima I .dsk)");
 }
