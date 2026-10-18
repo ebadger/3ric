@@ -95,8 +95,14 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     `$D000` by a shim with the same 14-entry jump table, inline parameters, zero
     page (`$52-$55`, `$60-$7F`), `$D600` block buffer and return codes. Each disk is a
     folder; ProDOS names become dot-less 8-character keys looked up only among the
-    current disk's files. Loads use `FLOAD key addr 0000 eof-1`, writes use `OWRITE`
-    on existing files only, block `n` is bytes `(n&7)*512` of `RAWnn` (`n/8`, hex).
+    current disk's files. The shim calls the ROM's FAT32 routines directly (the calls
+    `FLOAD`/`OWRITE` make: `fat32_open_cd $ECEA`, `fat32_finddirent $E9A0`,
+    `fat32_opendirent $E7B4`, `fat32_file_read_part $EB69`, `fat32_file_write $EBB5`;
+    the loader also uses `fat32_readdirent $E96D`) and the loader refuses a ROM whose
+    first 8 bytes of any of them differ from the repository ROM. Loads read bytes
+    `[0, size-1]`, writes rewrite existing files in place, a missing file fails with
+    `$46`; block `n` is bytes `(n&7)*512` of `RAWnn` (`n/8`, hex). A volume select
+    sets the current-directory cluster `$CC20` from a table the loader builds.
   - **Banking and interrupts:** the game runs with the BASIC overlay off (`$CAFE`
     nest count 0) and language-card RAM read/write in bank 1 or 2. The loader points
     the RAM `$FFFA/$FFFE` vectors at a resident in `$CF00-$CFFF`. PS/2 start/data/
@@ -105,11 +111,28 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     the bank switch would otherwise delay the DATA sample past the next bit. Other
     sources record the bank from a `$DFFF` signature, enter the ROM handler through
     a fake RTI frame, and restore `$C083`/`$C08B` and X/Y. The loader refuses a ROM
-    whose NMI proxy `$F1BB-$F1C5` differs. ROM DOS commands run with ROM reads and
-    bank-1 writes; `$B0-$BF` and `$36/$37` are preserved. `$CF00-$CFFF` is
-    reserved for this profile, not a general free-RAM declaration.
-  - **Trust:** ROM DOS command failures are not detected (the ROM reports them only
-    as text); the generated card contents are assumed complete.
+    whose NMI proxy `$F1BB-$F1C5` differs. ROM FAT32 sessions run with ROM reads and
+    bank-1 writes and the music timer held off; `$B0-$BF` is preserved. The IRQ entry
+    first tests the Mockingboard T1 flag (`BIT $C40D`, patched in by the loader when
+    a card answers) and runs one music tick with bank 1 mapped; other IRQs go to the
+    ROM as above.
+  - **RAM2 use (this profile only, not a general free-RAM declaration):** `$CF00-$CFFF`
+    resident; `$CD80-$CDFF` music glue; `$CA00-$CABD` player state; player tables in
+    `$CABE-$CAFD`, `$CC3D-$CCFF`, `$CD00-$CD6B`, `$CE24-$CEDF` - areas the ROM writes
+    only at boot (`$CC00`/`$CE00` page clears) or from the DOS prompt (command line
+    `$CD00`), found by scanning the ROM for absolute references
+    (`codegen/patches/ultima5/ram2.inc`).
+  - **Music:** a compact player (`music.s`, bank 1) re-implements the 128K edition's
+    Mockingboard driver per tick (sequencer, two envelopes, register shadow + flush,
+    `$80-$83` request interface) for one song at a time (810-byte buffer; 11 of 15
+    songs fit). The tool repacks songs into `SONGnn` in every disk folder and
+    pre-scales periods, noise and timer latches by 1.5734/1.0227 MHz from the user's
+    `MUDR`. 46 guarded patches open the game's `LDA $EC / LSR / BCC` music gates,
+    replace `STA $C009`/`STA $C008` with `JSR mus_in`/`mus_out` (swap `$80-$83` with
+    the player's copy), `TEMP.SUBS $15B9` with `mus_setx`, and the `MAIN.SUBS $EE46`
+    pause/resume dispatcher with `mus_ctl` (pause silences at once). A song not in
+    the buffer is loaded by the foreground at the next keyboard scan.
+  - **Trust:** missing files and folders are detected; file contents are trusted.
   - **SNES controllers:** three guarded patches turn the game's keyboard reads
     (`MAIN.SUBS $EFC2`, `STARTUP $8B77`, `VIEW $A75A`, all `LDA $C000`) into
     `JSR pad_key` in the resident. It reads both pads directly from VIA1 port B (no
@@ -117,9 +140,11 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     does for PS/2, only when no key is pending. D-pad = arrows (held repeat, only
     while the game's queue `$B8` is empty), A Return, B Space, X T, Y A, L Esc, R E,
     Start Z, Select Q. VIA1 T2 (read-only, one-shot mode) provides the time base.
-  - **Machine:** 64 KB play; the game's 128 KB music path stays off because `$FBB3` is
-    not `$06`. `STARTUP`'s unconditional IIe aux/RamWorks writes are removed by one
-    byte-verified patch. No ROM, VM, web bridge or hardware change is part of the port.
+  - **Machine:** 64 KB play; the game's 128 KB aux-memory path stays off because
+    `$FBB3` is not `$06` (music runs on the port's own player instead). `STARTUP`'s
+    unconditional IIe aux/RamWorks writes are removed by one byte-verified patch. No
+    ROM, VM, web bridge or hardware change is part of the port.
+
   - **Acceptance and limits:** see [`docs/porting-logs/ultima-v.md`](../docs/porting-logs/ultima-v.md).
 - **ROM DOS load/write semantics (observed, unchanged):** `FLOAD name addr start end`
   takes an inclusive end offset and skips to `start` byte by byte; `BLOAD` stores one
@@ -450,7 +475,8 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
-| Ultima V SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima5.test.mjs` drives the real loader/resident/shim on the ROM DOS with synthetic volumes (and boots the original disks to the title with `U5_DISKS`); `port-ultima5.native.ps1` decodes real PS/2 frames at 94-160-cycle periods with language-card RAM mapped, including Caps Lock LED exchanges and a `` strobe on a stop-bit edge. Manual WASM play covered creation, save, overworld, combat, towne entry, and pad-only menu/walking/Ztats; the WASM suite also covers pad tap/repeat/release/chords. Board: running after the PS/2 fix; pads not yet tried on the board. Dialogue, dungeons, endgame and music (needs 128 KB) are open; ROM DOS command failures are not detected (card contents trusted); block reads cost ~1.7 M cycles. |
+| Ultima V SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima5.test.mjs` drives the real loader/resident/shim on the ROM DOS with synthetic volumes (and boots the original disks to the title with `U5_DISKS`); `port-ultima5.native.ps1` decodes real PS/2 frames at 94-160-cycle periods with language-card RAM mapped, including Caps Lock LED exchanges and a `$C010` strobe on a stop-bit edge. The suite also plays a synthetic song end to end (on-demand `SONG01` load, timer-IRQ ticks in bank 2, pause/load/resume) and checks the 46 music-site patches; a session-only py65 harness matched the player to the reverse-engineered driver per tick for all 11 built songs. Manual WASM play covered creation, save, overworld, combat, towne entry, pad-only menu/walking/Ztats, and in-game music (huts song on *Journey Onward*, on-demand song switches). Board: running after the PS/2 fix; pads and music not yet tried on the board. Dialogue, dungeons and endgame are open; 4 songs do not fit; block reads cost ~1.7 M cycles. |
+
 | ROM `BLOAD` stores one byte past EOF | Known gap (ROM) | Observed in `fat32_file_read`; programs loading below live data must use `FLOAD 0000 eof-1`. ROM source is not in this repository. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |

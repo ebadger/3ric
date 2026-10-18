@@ -34,31 +34,41 @@ loader underneath them.
 `$FBB3` reads `$06`; the 3RIC ROM returns `$EA`, so the game records "no aux" and every
 later aux access (all in the Mockingboard music driver) is skipped. The game itself
 runs in 64 KB, which 3RIC provides as RAM to `$BFFF` (BASIC overlay off) plus
-language-card RAM.
+language-card RAM. Music came back later through a compact player written for
+this port (see **Music** below).
 
 ## The port
 
 `node codegen/tools/port-ultima5.mjs <disk-dir> <out-dir>` reads the eight images,
 finds each volume by name and writes `<out-dir>/U5/`:
 
-- `U5.PRG` (5 KB at `$0800`): loader + resident page + shim.
+- `U5.PRG` (~5.5 KB at `$0800`): loader, resident page, music glue, the player's
+  RAM2 tables, and the shim + player image for bank 1.
 - One folder per disk (`ULTIMA5 BRITANIA UNDRWRLD TOWNE DWELLING CASTLE KEEP DUNGEON`).
   ProDOS names become 8-character keys with the dots removed (`MAIN.COMBAT` →
-  `MAINCOMB`). Each disk's 280 blocks are also written as `RAW00`-`RAW22`, 4 KB each.
-- One verified patch: `STARTUP $8169` no longer writes the IIe aux/RamWorks
-  switches `$C008/$C005/$C004/$C073`. They are no-ops in the emulator; the board's
-  `$C00x` decode is not specified for them, so the port does not depend on it.
+  `MAINCOMB`). Each disk's 280 blocks are also written as `RAW00`-`RAW22`, 4 KB each,
+  and each folder starts with the repacked songs `SONGnn`.
+- Guarded patches (each applied only over the exact original bytes): `STARTUP $8169`
+  no longer writes the IIe aux/RamWorks switches `$C008/$C005/$C004/$C073` (no-ops
+  in the emulator; the board's `$C00x` decode is not specified for them); the three
+  keyboard reads (SNES pads, below); and 46 music sites (below).
 
 Copy `U5` to the card root, then at the DOS prompt: `CD U5`, `BRUN U5.PRG 0800`.
 
 **Shim** (`codegen/patches/ultima5/shim.s`, bank 1 `$D000`): keeps DINKEYDOS's jump
-table, inline parameters, zero page (`$52-$55`, `$60-$7F`) and return codes. A
-volume select becomes `CD ..` + `CD <dir>`; a file is looked up only among the
-current disk's files (a table the tool generates: key, aux type, length, disk
-mask) and loaded with `FLOAD key addr 0000 eof-1`; a write becomes
-`OWRITE key addr eof`; a block read becomes `FLOAD RAWnn D600 start end` into
-bank 1. A missing file or volume fails without reaching the ROM, as it did on the
-floppy.
+table, inline parameters, zero page (`$52-$55`, `$60-$7F`) and return codes. It
+calls the ROM's FAT32 routines directly - the ones its `FLOAD` and `OWRITE` commands
+use (`fat32_open_cd`, `fat32_finddirent`, `fat32_opendirent`,
+`fat32_file_read_part`, `fat32_file_write`) - through the resident's `rom_call`
+(ROM reads, bank-1 writes, so loads can land in `$D600` and `$E000-$FFFF`), saving
+the ROM's zero page `$B0-$BF` around each session. A volume select sets the ROM's
+current-directory cluster from a table the loader fills in; a file is found in the
+current directory only (so a missing file fails with `$46`, as on the floppy) and
+read as bytes `[0, size-1]`; its ProDOS load address comes from `auxtab`, grouped
+16-bit hashes of the keys (the tool rejects a collision); a write rewrites the
+file's sectors in place, as `OWRITE` does; a block read loads 512 bytes of
+`RAWnn` into `$D600`. The first version sent ROM DOS command lines through `COUT`;
+direct calls freed ~1.2 KB of bank 1 for music and made missing files detectable.
 
 **Resident** (`resident.s`, `$CF00-$CFFF`): the game keeps language-card RAM
 mapped, so the CPU takes NMI and IRQ vectors from the game's `$FFFA/$FFFE`. Every
@@ -80,19 +90,16 @@ loader points both RAM vectors here.
   which re-selects `$C083` or `$C08B` with two reads. Ultima V only maps the
   language card read/write, so those two modes are its complete state.
 
-The shim runs ROM DOS commands: it saves `$B0-$BF` and `$36/$37`, points `CSW` at
-the ROM's command collector captured from `$03EA` at load time, and calls the
-resident, which selects "read ROM, write bank 1" (so loads can land in `$D600`
-and `$E000-$FFFF`) while the Ctrl-D command goes through `COUT`.
-
-**Loader** (`loader.s`): checks that `COUT` is `JMP ($0036)`, the `$03EA` hook
-exists and the ROM NMI proxy `$F1BB-$F1C5` matches the one whose receiver state the
-fast path shares (otherwise it prints a message and stops in the monitor), turns
-the BASIC overlay off and zeroes the ROM NMI nest counter (`$CAFE`),
-installs the resident, copies the shim into bank 1 and clears bank 2/high RAM
-while the ROM is still selected for reads (an NMI during setup always sees ROM
-vectors), installs the RAM vectors, then selects `/ULTIMA5` and runs `STARTUP`
-exactly as DINKEYDOS would.
+**Loader** (`loader.s`): checks the ROM NMI proxy `$F1BB-$F1C5` (whose receiver
+state the fast path shares) and the first 8 bytes of each ROM FAT32 routine the
+shim calls against the repository's ROM image (otherwise it prints a message and
+stops in the monitor), turns the BASIC overlay off and zeroes the ROM NMI nest
+counter (`$CAFE`), copies the resident, the music glue and the player's tables
+into RAM2, finds the eight disk folders in one `fat32_readdirent` pass (one lookup
+per folder cost ~0.3 s each), detects the Mockingboard, copies the shim into
+bank 1 and clears bank 2/high RAM while the ROM is still selected for reads (an NMI
+during setup always sees ROM vectors), installs the RAM vectors, starts the music
+timer, then selects `/ULTIMA5` and runs `STARTUP` exactly as DINKEYDOS would.
 
 **SNES controllers** (added after the first board trial): the game reads the
 keyboard in three places, all `LDA $C000`: `MAIN.SUBS` `scankey` at `$EFC2`
@@ -118,6 +125,46 @@ empty, so releasing stops at once. Both pads are merged.
 
 Names, numbers and the other commands still need the keyboard.
 
+**Music** (added after the board ran the game). The 128K edition's Mockingboard
+driver (`MUDR`, with `MUDI`, `MUIN` instruments and `MUFF` songs) lives in auxiliary
+memory and takes ~19 KB; 3RIC has 64 KB and main RAM is full. A reverse-engineering
+pass documented its format and algorithm exactly (per-tick sequencer, two ADSR
+envelopes, a register shadow flushed on change, the `$80-$83` request interface), and
+this port plays the songs with a compact re-implementation (`music.s`, ~1.3 KB):
+
+- **Memory.** Bank 1 holds the shim, the player and one song buffer (`SONGBUF`,
+  810 bytes). The player's state is in RAM2 `$CA00-$CABD`; its tables (period,
+  duration, noise, instrument records, voice map) are in RAM2 the ROM uses only at
+  boot or from the DOS prompt (`$CABE-$CAFD`, `$CC3D-$CCFF`, `$CD00-$CD6B`,
+  `$CE24-$CEDF`); the game-side glue is at `$CD80` (`ram2.inc` has the map).
+- **Songs.** The tool repacks each song for that buffer (absolute pointers, tempo
+  as a ready T1 latch, instrument numbers as record offsets, sync bytes dropped)
+  and writes `SONGnn` into every disk folder. 11 of 15 fit: 2 overworld, 3 ship,
+  4 combat, 6 huts, 7 shrines, 8 Castle British, 9 townes, 10 dungeon, 13 keeps,
+  14 ending, 15 Rule Britannia. Left out: 1 title/victory, 5 shrine/death,
+  11 underworld, 12 Blackthorn (the game stays silent for them).
+- **Loading.** When the tick meets a song that is not in the buffer it goes silent
+  and asks the foreground; the next keyboard scan (`pad_poll`, already called from
+  the game's scankey) reads `SONGnn` from the current disk folder, then the tick
+  starts it.
+- **Timing and pitch.** The tool pre-scales note periods, the noise period and every
+  timer latch for 3RIC's 1.5734 MHz Mockingboard clock (×1.5385), from the user's own
+  `MUDR` (no driver data is stored in the repository).
+- **Game hooks.** The game talks to the driver through aux zero page `$80-$83`
+  between `STA $C009`/`STA $C008`, behind `LDA $EC / LSR / BCC` (music card present).
+  The patches open those gates and turn the two stores into `JSR mus_in` /
+  `JSR mus_out`, which swap the game's `$80-$83` with the player's copy. The song
+  helper `TEMP.SUBS $15B9` becomes `mus_setx` (no wait), and the pause/resume
+  dispatcher `MAIN.SUBS $EE46` calls `mus_ctl`: pause silences at once and stops the
+  timer (the original faded out over ~0.85 s before every disk access), resume
+  restarts it and the volume ramps back up as before. The title screen's
+  music-synchronized animation waits and the combat-victory jingle (song 1) keep
+  their 64K behaviour.
+- **IRQ.** The resident's IRQ entry checks the Mockingboard T1 flag (`BIT $C40D`,
+  patched in by the loader only when a card answers), maps bank 1 if the game is in
+  bank 2, runs one tick and restores the bank; anything else still goes to the ROM.
+  ROM sessions hold the timer off (`IER`) because the ROM owns the vectors then.
+
 ## What went wrong on the way
 
 - **The keyboard did not work on the board** (first hardware trial). The first
@@ -139,6 +186,10 @@ Names, numbers and the other commands still need the keyboard.
 - **`OWRITE` of a missing file jumps into BASIC-bank code.** Its fallback to
   `BSAVE` is `JMP $ACFD`, which is game RAM with the overlay off. DINKEYDOS only
   writes existing files, so the shim refuses unknown names before the ROM sees them.
+- **The first music layout did not fit.** Shim, player and tables left 62 bytes for
+  a song. Calling the ROM's FAT32 routines directly instead of building DOS command
+  lines, and moving the tables into RAM2 that only the ROM's boot code and DOS prompt
+  touch (found by scanning the ROM for absolute references), left 810.
 - **Block reads are slow.** One 512-byte read measured **1.71 M cycles (≈1.1 s at
   1.573 MHz)** on a 512-byte-cluster card: ~82% is the bit-banged SPI byte loop over
   ~13 sectors (directory scan, FAT hops, and the sectors `FLOAD` skips byte by byte
@@ -157,7 +208,14 @@ Names, numbers and the other commands still need the keyboard.
   per-disk cache invalidation, volume switch, write and read-back, missing file /
   file on another disk / unknown volume errors, NMIs taken with bank 2 and with
   bank 1 mapped (bank, write-enable and BASIC-overlay state preserved), load-and-run.
-- With `U5_DISKS=<folder>`: the original disks boot to the animated title.
+- Music end to end with **synthetic** driver files: the song request goes through
+  the glue, the foreground loads `SONG01` on demand, the timer IRQ plays it while
+  bank 2 is mapped (mixer, scaled period, envelope, scaled tempo latch checked in the
+  register shadow), pause silences every channel and stops the timer, a file loads,
+  resume restarts it and the volume ramps back. All 46 music-site patches are exact
+  and guarded.
+- With `U5_DISKS=<folder>`: the original disks boot to the animated title with the
+  Mockingboard timer running and 11 songs built.
 - SNES pads through the real resident and shim with bank swaps: one tap types one
   key, holding Right 1.5 s types 8, release stops at once, chorded buttons both
   type; the keyboard-read patches are exact and guarded.
@@ -171,6 +229,13 @@ Caps bit and the keyboard's FA replies, and a $C010 strobe landing on a stop-bit
 edge must still clear $C000. The first resident garbles the typing; the second
 fails only the stop-bit strobe case.
 
+Player accuracy (session-only, since it runs Origin's data): a py65 harness ran the
+assembled player against the reverse-engineered reference (itself verified bit-exact
+against the original driver) and compared the AY register image and timer latch
+after every tick, with the reference scaled to 3RIC's clock: all 11 songs exact for
+6000 ticks, plus switching, bit-7 and `> 15` requests, stop/restart, volume changes
+and both chain cases. A tick costs ~3-5 K cycles on average (6-15% of the CPU).
+
 Manual emulator sessions on the original disks (scripted keys, screenshots):
 title and intro animation; character creation through the gypsy's questions,
 with the save written to `UNDRWRLD`/`BRITANIA`; *Journey Onward* into Iolo's hut;
@@ -178,12 +243,15 @@ walking out to Britannia (overworld chunks streamed from `BRITANIA/RAWnn`); a
 wandering-monster fight (`PRECOM` → `MAIN.COMBAT` → back to `MAIN.OUT`); entering
 Yew (`TOWNE` disk, towne map blocks); Z-stats overlay; Quit & Save. With the pad
 only: menu → *Journey Onward* (A), single steps and held walking in the hut,
-Z-stats (Start) and cancel (L), pass (B).
+Z-stats (Start) and cancel (L), pass (B). With music: *Journey Onward* starts the
+huts song in Iolo's hut (audible Mockingboard output); requests for songs 2, 9, 3
+and 10 load each from the disk folder mid-game and play; song 1 stays silent;
+music keeps playing across moves.
 
 **Physical board:** the first trial booted to the title; the keyboard did not
-respond and there was no music (expected: see below). With the PS/2 fix, the
-owner reports the game running on the board. SNES controllers: not yet tried on
-the board.
+respond and there was no music (expected then). With the PS/2 fix, the owner
+reports the game running on the board. SNES controllers and music: not yet tried
+on the board.
 
 **Not yet shown:** a conversation (the `TALK` overlay loads; no scripted dialogue
 completed), dungeons, keeps/castle, the endgame, and performance on a real card's
@@ -191,18 +259,18 @@ cluster size.
 
 ## Known limits
 
-- **No music.** Ultima V's Apple II music needs 128 KB; `STARTUP` sees no
-  auxiliary memory on 3RIC and disables it, exactly as on a 64 KB Apple II.
-- **The card's contents are trusted.** The ROM DOS reports a failed command only
-  as text (`NOFIND`, `ERR`), which the shim does not read, so every command is
-  assumed to succeed. With the tool's complete `U5` folder that always holds. If a
-  file or folder is missing or renamed, a load runs on stale memory and a save
-  crashes (the ROM's `OWRITE` fallback runs `$ACFD`), where the floppy version
-  would have reported an error. Copy the whole folder. (Owner decision, after the
-  review raised it as a blocker.)
-- **Interrupts other than NMI:** the IRQ forwarder always presents a hardware IRQ
-  to the ROM (status B clear). Ultima V enables no IRQ source on 3RIC (its music is
-  off), so a `BRK` while language-card RAM is mapped would not reach the monitor.
+- **Music:** 4 of 15 songs do not fit the 810-byte buffer (title, shrine/death,
+  underworld, Blackthorn). A song change mid-game pauses the game briefly while
+  `SONGnn` loads at the next keyboard scan. Pause is immediate rather than a fade.
+  The player depends on the RAM2 areas above staying unused by the ROM during play,
+  and on the ROM FAT32 routines the loader checks.
+- **Missing files are now detected** (the ROM's directory search fails cleanly with
+  `$46`, as on the floppy), and a missing disk folder stops the loader with a
+  message. A damaged file is still trusted. Copy the whole `U5` folder.
+- **Interrupts other than NMI and the music timer:** the IRQ forwarder always
+  presents a hardware IRQ to the ROM (status B clear), so a `BRK` while
+  language-card RAM is mapped would not reach the monitor.
+
 
 ## Next steps worth discussing
 
