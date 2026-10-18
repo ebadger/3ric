@@ -87,7 +87,8 @@ ay_cache    = RTVARS+32         ; 32 bytes: AY 1 regs 0-15, AY 2 regs 0-15
 snap_g      = RTVARS+64         ; 32: GTIA registers for the renderer
 snap_a      = RTVARS+96         ; 16: ANTIC registers
 snap_v      = RTVARS+112        ; 2: VDSLST
-RTVARS_END  = RTVARS+114
+vct         = RTVARS+114        ; VCOUNT compare scratch (main code only)
+RTVARS_END  = RTVARS+115
 
 ; =====================================================================
 ; Bank-neutral part (RAM2): entered with either language-card bank mapped
@@ -127,6 +128,7 @@ irq_tick:
         jmp (VVBLKI)
 vbi_after:
         sei
+        cld                     ; the game's RTI restored the interrupted D
         lda rendering
         bne irq_out
         dec render_cd
@@ -266,17 +268,21 @@ vc_ldy: php                     ; LDY VCOUNT
         iny
         dey
         rts
-vc_cmp: pha                     ; CMP VCOUNT
+vc_cmp: php                     ; CMP VCOUNT (V kept, own scratch)
+        pha
         jsr vc_get
-        sta vt
+        sta vct
         pla
-        cmp vt
+        plp
+        cmp vct
         rts
-vc_cpy: pha                     ; CPY VCOUNT
+vc_cpy: php                     ; CPY VCOUNT
+        pha
         jsr vc_get
-        sta vt
+        sta vct
         pla
-        cpy vt
+        plp
+        cpy vct
         rts
 
 ; ---- CONSOL ($D01F) stores: bit 3 drives the console speaker

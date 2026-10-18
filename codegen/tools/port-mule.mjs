@@ -170,7 +170,7 @@ export function buildRuntime() {
   b2.set(tmp.subarray(L.RT_B2, 0xe000), L.RT_B2);
   if (S.RT_RAM2_END > 0xd000) throw new Error(`rt.s RAM2 part overflows (${h4(S.RT_RAM2_END)})`);
   if (S.RT_B2_END > 0xd8e6) throw new Error(`rt.s bank-2 part runs into the FP stubs (${h4(S.RT_B2_END)})`);
-  if (S.RTVARS_END > L.SPRITES - 0x200 + 0x100 && S.RTVARS_END > 0x0400) throw new Error("runtime variables overflow page 3");
+  if (S.RTVARS_END > 0x0400) throw new Error("runtime variables overflow page 3");
   const fp = assembleInto(b2, equ({ FPW: L.FPW }) + src("fp.s"), "fp.s");
   const F = fp.symbols;
   for (const [a, e, lim, name] of [[F.FP_A, F.FP_A_END, 0xdd89, "A"], [F.FP_B, F.FP_END, 0xdfff, "B"], [F.FP_C, F.FP_C_END, 0xd200, "C"],
@@ -193,6 +193,8 @@ export function buildRuntime() {
   shared[L.RG + 0x1f] = 0x07;
   shared[L.RA] = 0xff;
   shared[L.RA + 1] = 0xff;
+  shared[S.RND_LO] = 0x5a;           // RANDOM's LFSR must not start at zero
+  shared[S.RND_HI] = 0x01;
   return { b1, b2, shared, rt: S, fp: F, render: rd.symbols };
 }
 

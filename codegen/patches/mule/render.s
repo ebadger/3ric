@@ -486,7 +486,15 @@ dl_clr: lda zt4
         bra dl_clr
 dl_d2:  lda r_end
         sta r_pend
-        jmp spr_draw
+        ldx r_n                 ; entries gone from this frame: redraw them
+dl_iv:  cpx #NL                 ; when they come back
+        bcs dl_iv2
+        lda #$A5
+        sta pv_lo,x
+        sta pv_hi,x
+        inx
+        bra dl_iv
+dl_iv2: jmp spr_draw
 
 ; 16-bit hash of an entry's layout, registers and screen bytes
 entry_hash:
