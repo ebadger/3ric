@@ -213,12 +213,13 @@ int main(int argc, char** argv)
 {
     try
     {
-        require(argc == 7, "Usage: u5-native <rom> <resident.bin> <program.bin> <nmi-entry-hex> <period> <hold>");
+        require(argc == 7 || argc == 8, "Usage: u5-native <rom> <resident.bin> <program.bin> <nmi-entry-hex> <period> <hold> [min-nmis]");
         const auto resident = readFile(argv[2]);
         const auto program = readFile(argv[3]);
         const uint16_t entry = uint16_t(std::stoul(argv[4], nullptr, 16));
         const uint32_t period = uint32_t(std::stoul(argv[5]));
         const uint32_t hold = uint32_t(std::stoul(argv[6]));
+        const unsigned minChecked = argc == 8 ? unsigned(std::stoul(argv[7])) : 200;
         require(hold >= period / 2 && hold <= period, "Invalid PS/2 timing");
         Machine m(argv[1], period, hold, entry);
         for (size_t i = 0; i < resident.size(); ++i) m.vm->WriteData(uint16_t(0xcf00 + i), resident[i]);
@@ -263,7 +264,7 @@ int main(int argc, char** argv)
         }
         require(m.vm->PeekData(0x03fe) != 0xee, "Language-card bank marker changed after a keystroke");
         require(got == expected, "Typed ULTIMA5 but the program received '" + got + "'");
-        require(m.checkedInterrupts > 200, "Too few NMIs were checked");
+        require(m.checkedInterrupts > minChecked, "Too few NMIs were checked (" + std::to_string(m.checkedInterrupts) + ")");
         // The program has stopped polling. A $C010 strobe that lands on a
         // stop-bit edge must still clear $C000 (the ROM's exit writes $7F to IFR).
         m.vm->WriteData(0xc000, 0xc1);

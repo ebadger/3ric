@@ -79,6 +79,8 @@ pwsh codegen\tools\port-ultima1.native.ps1  # Ultima I pad glue: real PS/2 frame
 & $node codegen\tools\port-ultima2.test.mjs # Ultima II DOS 3.3 translator on ROM DOS (set U2_DISKS to also play the real disks)
 & $node codegen\tools\port-wizardry1.test.mjs # Wizardry I block driver on ROM DOS + SD, 3 cluster layouts (WIZ1_DISKS = real disks)
 pwsh codegen\tools\port-wizardry1.native.ps1  # Wizardry I resident through the native PS/2 harness (MSVC)
+& $node codegen\tools\port-merlin8.test.mjs # Merlin-8 FAT32 ProDOS stand-in on ROM DOS (MERLIN_DISKS=<d1>;<d2> runs the real assembler)
+pwsh codegen\tools\port-merlin8.native.ps1  # Merlin-8 resident through the native PS/2 harness (MSVC)
 ```
 
 C++ CPU unit tests (`emulator/Badger6502VMTest`, MSTest): **Test → Run All Tests** in
