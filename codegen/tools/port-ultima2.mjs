@@ -135,6 +135,7 @@ export function buildLoader(table) {
   const pages = Math.ceil(resident.bytes.length / 256);
   const loader = assemble(`RES_ORG = $${RES_ORG.toString(16)}\nRES_PAGES = ${pages}\n`
     + `RES_ROMCSW = $${r.ROMCSW.toString(16)}\nRES_ORIGCSW = $${r.ORIGCSW.toString(16)}\n`
+    + `RES_PADIRQ = $${r.PAD_IRQ.toString(16)}\n`
     + fs.readFileSync(path.join(patchDir, "loader.s"), "utf8"));
   if (loader.org !== LOADER_ORG || loader.org + loader.bytes.length > RES_SRC) throw new Error("loader overlaps the resident image");
   const prg = new Uint8Array(RES_SRC - LOADER_ORG + pages * 256);

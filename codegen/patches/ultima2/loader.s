@@ -5,12 +5,14 @@
 ;
 ; It stands in for the Ultima II boot disk's DOS 3.3: turns the BASIC ROM
 ; overlay off (the game uses RAM up to $95FF), installs the DOS command
-; translator at $9600 as the output hook (CSW), selects the PROGRAM folder
-; and runs HELLO through the translator, as the boot disk's DOS did.
+; translator at $9600 as the output hook (CSW), starts the ~30 Hz SNES
+; gamepad poller (slot-4 Mockingboard Timer 1 IRQ), selects the PROGRAM
+; folder and runs HELLO through the translator, as the boot disk's DOS did.
 
 COUT        = $FDED
 DOS_HOOK    = $03EA             ; ROM DOS: JSR hook_buffer_no_output; RTS
 RES_SRC     = $0900             ; resident image in U2.PRG
+PAD_LATCH   = $CCDE             ; 1,573,437.5 Hz / 30 - 2 (VIA T1 period = N+2)
 
         .org $0800
 
@@ -73,6 +75,23 @@ copy_res:
         sta $36
         lda #>RES_ORG
         sta $37
+        sei                     ; SNES pads: ROM IRQ vector -> resident poller,
+        lda #<RES_PADIRQ        ; Mockingboard VIA 1 Timer 1 free-running ~30 Hz
+        sta $03FE
+        lda #>RES_PADIRQ
+        sta $03FF
+        lda #$7F
+        sta $C40E               ; IER: all sources off
+        lda #$40
+        sta $C40B               ; ACR: T1 continuous, PB7 untouched
+        lda #<PAD_LATCH
+        sta $C404               ; T1 latch low
+        lda #>PAD_LATCH
+        sta $C405               ; T1 latch high: counter starts
+        lda $C404               ; clear any stale T1 flag
+        lda #$C0
+        sta $C40E               ; IER: Timer 1 on
+        cli
         ldx #$FF
         txs
         bit $C051               ; text, page 1, as after a DOS 3.3 boot

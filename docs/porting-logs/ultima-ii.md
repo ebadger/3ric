@@ -71,9 +71,47 @@ program `$500D` (player), `CREATE` `$600D` (player) and `$6586` (program),
 **Loader** (`loader.s`): checks that `COUT` is `JMP ($0036)` and the `$03EA` hook
 exists, zeroes the ROM NMI nest counter `$CAFE` and turns the BASIC overlay off,
 copies the translator to `$9600`, records the previous and ROM-collector `CSW`,
-selects `PROGRAM`, zeroes `$6000` (so a failed `HELLO` load stops at a `BRK` rather
-than running stale memory) and prints `BRUN HELLO` through the translator, as the boot
-disk's DOS did.
+starts the gamepad timer (below), selects `PROGRAM`, zeroes `$6000` (so a failed
+`HELLO` load stops at a `BRK` rather than running stale memory) and prints
+`BRUN HELLO` through the translator, as the boot disk's DOS did.
+
+## SNES gamepads (added 2026-10-17)
+
+Ultima II reads the keyboard in many places (`RDKEY` in the menu and character
+creation, `$C000` polling in the command loop, ESC waits), so the pads are turned
+into keystrokes rather than patched into each input path. The 3RIC ROM's `KEYIN`
+reads the `$C000` latch directly, and the ROM's own keyboard decoder writes there,
+so a key the resident writes into `$C000` is indistinguishable from a typed one.
+
+The loader points the ROM's Apple-style IRQ vector (`$03FE`; the ROM's entry saves
+A in `$45`) at the resident and runs the slot-4 Mockingboard's first VIA Timer 1
+free-running at ~30 Hz. The game never uses the Mockingboard or `$45`. Each tick
+touches `PTRIG $C070` (the ROM scans both pads in an NMI before the next
+instruction), ORs `GAMEPAD1 $CEE0`/`GAMEPAD2 $CEF0`, and turns a new press into
+its key when `$C000` bit 7 is clear; otherwise it retries next tick, so a pending
+key is never overwritten. The D-pad repeats after ~0.33 s, every ~0.13 s.
+
+| Pad | Key | Ultima II |
+|-----|-----|-----------|
+| D-pad | Return / `/` / ← / → | north / south / west / east, and direction answers |
+| A | `A` | Attack |
+| B | `E` | Enter |
+| X | `T` | Transact |
+| Y | `G` | Get |
+| L | `Z` | Ztats |
+| R | `I` | Ignite torch |
+| Select | ESC | dismiss prompts |
+| Start | Space | pass / continue |
+
+ROM DOS commands run with IRQs masked, so a pad scan never interleaves with SD
+bit-banging on VIA1. A tick costs ~1,600 cycles (mostly the ROM scan): 3.8% of the
+CPU measured. The first rate tried, 60 Hz, cost ~7% and interrupts the game's
+speaker tone loops twice as often.
+
+**Detour:** the first overhead figure read 52% because `vm.run()` budgets do not
+map to executed cycles while interrupts are active; a per-instruction `vm.step()`
+profile gave the real number. A "pending key overwritten" failure was a test race
+(the consumer read the typed key before its pause took effect), not the poller.
 
 ## Why it was simpler than Ultima V
 
@@ -110,6 +148,11 @@ disk's DOS did.
   A missing file, a partial `BSAVE` and `CATALOG` each stop in the monitor with
   their message, in text mode, without reaching the ROM. A card missing `HELLO`
   stops at the loader's `BRK` at `$6000` instead of running stale memory.
+- Gamepads through the real ROM scan (`setGamepadState`): all twelve buttons on
+  either pad type their mapped key once; a held D-pad repeats (5-8 keys a second),
+  a held A does not; a pending typed key survives and the pad key follows; X/Y
+  survive the IRQ; 30 ticks per 30 timer periods; 3.8% CPU; ROM `FLOAD` is entered
+  with IRQs masked. On the real disks a D-pad press walks the party south.
 - With `U2_DISKS=<folder>`: the original disks run through the intro to the menu,
   create a character (saved to `PLAYER`, then back to `PROGRAM` and `HELLO`),
   start play on Earth's map in mixed hi-res with the character loaded, and run the
@@ -159,13 +202,18 @@ native PS/2-frame test was run for this port.
   under DOS 3.3, no Ultima II `BRUN` target returns or checks the stack, the game
   keeps no data in page 1, and abandoned frames on the circular stack are never
   popped.
+- **Gamepads need the slot-4 Mockingboard.** Its VIA supplies the poll timer; on a
+  board without it the pads are ignored and the keyboard still works. With the
+  timer running, the ROM's IRQ entry overwrites `$45` (unused by the game). Only
+  emulator-tested; the poller adds ~1,600-cycle pauses to speaker tones 30 times a
+  second.
 - **Speed.** 3RIC runs at 1.573 MHz, so the game and its speaker sounds run about
   1.54x faster than on a 1.02 MHz Apple II, including the idle timer that makes
   the party "PASS".
 - **The card's contents are trusted.** The translator checks its own table, but the
   ROM DOS reports failures only as text, so a missing or renamed file on the card
   loads nothing and the game continues on stale memory. Copy the whole folder.
-- **Reserved memory.** `$9600-$AFFF` belongs to the translator while the game runs;
+- **Reserved memory.** `$9600-$AFFF` belongs to the translator while the game runs, and the IRQ vector `$03FE` and Mockingboard VIA 1 Timer 1 to the pad poller;
   `$C800-$CFFF` remains ROM state.
 
 ## Next steps worth discussing

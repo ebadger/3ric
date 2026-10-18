@@ -51,6 +51,73 @@ origcsw:    .word 0             ; $9608: CSW before the port (for errors)
 curdisk:    .byte $FF           ; $960A: $FF = still in the U2 folder
 
 ; ---------------------------------------------------------------------------
+; SNES gamepads -> keystrokes. The loader points the ROM's IRQ vector ($03FE)
+; here and runs the Mockingboard's first VIA Timer 1 at ~30 Hz; a tick costs
+; about 1,600 cycles, mostly the ROM's scan. The ROM's IRQ entry has saved A
+; in $45. Each tick asks the ROM for a fresh pad scan and
+; turns a new press (both pads ORed) into a key in the $C000 latch, exactly
+; where a typed key lands, so every input path in the game sees it. A press
+; that finds a key still pending retries on the next tick; D-pad keys repeat
+; while held.
+
+MB_T1CL     = $C404             ; Mockingboard VIA 1 (slot 4)
+MB_IER      = $C40E
+PTRIG       = $C070             ; ROM SNES scan trigger (NMI)
+GAMEPAD1    = $CEE0             ; ROM pad tables: 1 = pressed
+GAMEPAD2    = $CEF0
+KBD         = $C000
+IRQ_SAVEA   = $45               ; where the ROM's IRQ entry saved A
+REPEAT_FIRST = 10               ; ticks (~0.33 s) before a held D-pad key repeats
+REPEAT_GAP  = 4                 ; ticks (~0.13 s) between repeats
+
+pad_irq:
+        lda MB_T1CL             ; acknowledge Timer 1
+        phx
+        bit PTRIG               ; ROM scan NMI runs before the next instruction
+        ldx #11
+pi_button:
+        lda GAMEPAD1,x
+        ora GAMEPAD2,x
+        beq pi_up
+        lda padheld,x
+        beq pi_fire             ; new press
+        cpx #4                  ; D-pad (4-7) repeats while held
+        bcc pi_next
+        cpx #8
+        bcs pi_next
+        inc padheld,x
+        lda padheld,x
+        cmp #REPEAT_FIRST
+        bcc pi_next
+        lda #REPEAT_FIRST-REPEAT_GAP
+        sta padheld,x
+        bra pi_send
+pi_fire:
+        bit KBD                 ; a key is pending: try again next tick
+        bmi pi_next
+        lda #1
+        sta padheld,x
+pi_send:
+        lda padkeys,x
+        beq pi_next
+        bit KBD                 ; never overwrite a pending key
+        bmi pi_next
+        sta KBD
+        bra pi_next
+pi_up:
+        stz padheld,x
+pi_next:
+        dex
+        bpl pi_button
+        plx
+        lda IRQ_SAVEA
+        rti
+
+;                 B    Y    SEL  START UP   DOWN LEFT RIGHT A    X    L    R
+padkeys:    .byte $C5, $C7, $9B, $A0, $8D, $AF, $88, $95, $C1, $D4, $DA, $C9
+padheld:    .res 12
+
+; ---------------------------------------------------------------------------
 ; Output hook.
 
 out_hook:
@@ -635,6 +702,8 @@ cn_store:
 send:
         lda #$8D
         jsr cmd_char
+        php                     ; no pad scan (VIA1) during SD bit-banging
+        sei
         ldx #$0F
 sd_save:
         lda $B0,x
@@ -675,6 +744,7 @@ sd_restore:
         sta $B0,x
         dex
         bpl sd_restore
+        plp
         rts
 
 ; ---------------------------------------------------------------------------
@@ -683,6 +753,8 @@ sd_restore:
 fail:
         stx fl_op+1
         sty fl_op+2
+        lda #$7F                ; gamepad timer off: the monitor owns input
+        sta MB_IER
         lda origcsw
         sta $36
         lda origcsw+1

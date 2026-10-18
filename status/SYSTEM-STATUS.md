@@ -210,7 +210,9 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   `U2\` folder; copy it to the card, then `CD U2` and `BRUN U2.PRG 0800`. Game data stays
   local. The game only spoke to DOS 3.3 through Ctrl-D text commands, so a resident at
   `$9600` translates them to ROM DOS `FLOAD`/`OWRITE`/`CD`; seven "insert disk" prompts
-  became folder switches. WASM play reached the title, demo, character creation and
+  became folder switches. Both SNES pads type keys through a ~30 Hz slot-4 Mockingboard
+  timer IRQ (D-pad = move, A Attack, B Enter, X Transact, Y Get, L Ztats, R Ignite,
+  Select ESC, Start Space; 3.8% CPU); the keyboard still works. WASM play reached the title, demo, character creation and
   save, the overworld, a dungeon and a saved-game reload; the space disk swaps were run
   in place. No board trial yet; towns, space flight and the endgame are unplayed, and
   the game runs ~1.54x faster than an Apple II. Card contents are trusted. Known issue
