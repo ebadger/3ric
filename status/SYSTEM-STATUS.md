@@ -74,6 +74,8 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 
 pwsh codegen\tools\port-ultima5.native.ps1  # Ultima V resident: real PS/2 frames with language-card RAM mapped (MSVC)
 & $node codegen\tools\port-sevencities.test.mjs # Seven Cities SD port on ROM DOS/SD (SEVENCITIES_DISKS boots the real disks)
+& $node codegen\tools\port-altreality.test.mjs # Alternate Reality City + Dungeon SD port (AR_DISKS boots the real disks)
+pwsh codegen\tools\port-altreality.native.ps1 # Alternate Reality resident: real PS/2 frames with bank 2 mapped (MSVC)
 & $node codegen\tools\port-ultima1.test.mjs # Ultima I ProDOS stand-in + SNES pads on ROM DOS (set U1_DISK to also play the real disk)
 pwsh codegen\tools\port-ultima1.native.ps1  # Ultima I pad glue: real PS/2 frames while the pads are scanned (MSVC)
 & $node codegen\tools\port-ultima2.test.mjs # Ultima II DOS 3.3 translator on ROM DOS (set U2_DISKS to also play the real disks)
@@ -230,6 +232,18 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   sailing, landing and natives; the World Maker built a new world that then played
   (it overwrites `MAP.DSK`: keep a copy). Saving at the Pub and the board are untried.
   See [`docs/porting-logs/seven-cities-of-gold.md`](../docs/porting-logs/seven-cities-of-gold.md).
+- **Alternate Reality: The City and The Dungeon (SD-card port, experimental):**
+  `node codegen\tools\port-altreality.mjs <out> <images...>` (`.nib` or `.dsk`, gzipped
+  or not; the City's two sides and/or the Dungeon's three) builds one `AR\` folder; copy it
+  to the card, then `CD AR` and `BRUN CITY.PRG 6000` or `BRUN DUNGEON.PRG 6000`. Each game
+  reads and writes its original 140 KB images in place through the ROM's SD sector
+  routines (~55 ms per sector; entering the City streams ~540 sectors, ~30 s), so the
+  files must be contiguous (the loader checks) and the ROM's SD routines unchanged. The
+  games pick sides by volume number, so no disk swaps; empty character disks are
+  generated (keep `CITYCHR.DSK`/`DUNCHR.DSK`: they hold your characters). Keyboard only.
+  WASM play covered both games from the card through character creation into play, the
+  City's character-disk initialize, save and resume. See
+  [`docs/porting-logs/alternate-reality.md`](../docs/porting-logs/alternate-reality.md).
 - **Ultima I (SD-card port, experimental):** `node codegen\tools\port-ultima1.mjs <u1.dsk> <out>`
   converts the owner's ProDOS disk (`/U1`) into a `U1\` folder; copy it to the card,
   then `CD U1` and `BRUN U1.PRG 0800`. Game data stays local. Only ProDOS is replaced:
