@@ -43,10 +43,10 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 const root = process.env.U5_NATIVE_ROOT, out = process.env.U5_NATIVE_OUT;
 const { assemble } = await import(pathToFileURL(path.join(root, "codegen", "tools", "asm6502.mjs")));
-const { buildLoader, BANKSIG_VALUE } = await import(pathToFileURL(path.join(root, "codegen", "tools", "port-ultima5.mjs")));
+const { buildLoader, assembleResident, BANKSIG_VALUE } = await import(pathToFileURL(path.join(root, "codegen", "tools", "port-ultima5.mjs")));
 let resident;
 if (process.env.U5_NATIVE_RESIDENT) {
-  resident = assemble(`BANKSIG_VALUE = $${BANKSIG_VALUE.toString(16)}\n` + fs.readFileSync(process.env.U5_NATIVE_RESIDENT, "utf8"));
+  resident = assembleResident(fs.readFileSync(process.env.U5_NATIVE_RESIDENT, "utf8"));
 } else {
   resident = buildLoader([{ key: "STARTUP", aux: 0x8000, eof: 1, volmask: 1 }]).resident;
 }

@@ -329,7 +329,7 @@ async function bootCard(card) {
 
 const built = buildLoader({ volBlocks: VOL_BLOCKS, rtBlock: RT_BLOCK, wrFirst: WR_FIRST, wrEnd: WR_END, dirSig: DIRSIG });
 const NMI = built.resident.symbols.NMI_ENTRY;
-for (const options of [{}, { sectorsPerCluster: 8, fragment: true, totalSectors: 600000 }, { sectorsPerCluster: 64, totalSectors: 4300000 }]) {
+for (const options of [{}, { sectorsPerCluster: 8, fragment: ["WIZ1.VOL"], totalSectors: 600000 }, { sectorsPerCluster: 64, totalSectors: 4300000 }]) {
   const label = `${options.sectorsPerCluster ?? 1}-sector clusters${options.fragment ? ", fragmented" : ""}`;
   const card = { "WIZ1.PRG": built.prg, "WIZ1.VOL": syntheticVolume() };
   Object.defineProperty(card, "options", { value: options, enumerable: false });

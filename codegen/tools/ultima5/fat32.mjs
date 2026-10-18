@@ -3,9 +3,11 @@
 // Test-only helper: lets the headless harness boot a generated folder tree
 // through the real ROM DOS and SPI SD emulation. Layout mirrors the shipped
 // card: MBR, one type-0x0C partition at LBA 2048, 512-byte clusters, 2 FATs.
-// Options: sectorsPerCluster (power of two, default 1) and fragment (allocate
-// every other cluster, so no file is contiguous).
 // Names must already be FAT 8.3 (upper case, NAME or NAME.EXT).
+// Test options for other card layouts: sectorsPerCluster (a power of two;
+// larger clusters need a larger totalSectors to stay FAT32) and fragment, a
+// list of file names whose cluster chain gets a one-cluster gap halfway, and
+// reservedBits, file names whose FAT entries set the four reserved top bits.
 
 const SEC = 512;
 const PART_LBA = 2048;
@@ -20,9 +22,9 @@ function shortName(name) {
 }
 
 /** tree: { NAME: Uint8Array | tree }. Returns the "SDSP" sparse image bytes. */
-export function buildSparseFat32(tree, { totalSectors = 131072, label = "3RIC U5", sectorsPerCluster = 1, fragment = false } = {}) {
-  const spc = sectorsPerCluster, CLUSTER = spc * SEC;
-  if (!(spc >= 1 && spc <= 128 && (spc & (spc - 1)) === 0)) throw new Error("sectorsPerCluster must be a power of two up to 128");
+export function buildSparseFat32(tree, { totalSectors = 131072, label = "3RIC U5", sectorsPerCluster = 1, fragment = [], reservedBits = [] } = {}) {
+  const SPC = sectorsPerCluster, CL = SEC * SPC;
+  const fragmented = new Set(fragment), reserved = new Set(reservedBits);
   const sectors = new Map();
   const sector = (lba) => {
     let s = sectors.get(lba);
@@ -33,32 +35,32 @@ export function buildSparseFat32(tree, { totalSectors = 131072, label = "3RIC U5
   // Solve for FAT size: clusters = data sectors, 128 entries per FAT sector.
   let fatSectors = 1;
   for (;;) {
-    const clusters = Math.floor((partSectors - RESERVED - 2 * fatSectors) / spc);
+    const clusters = Math.floor((partSectors - RESERVED - 2 * fatSectors) / SPC);
     const need = Math.ceil((clusters + 2) / 128);
     if (need <= fatSectors) break;
     fatSectors = need;
   }
-  const clusterCount = Math.floor((partSectors - RESERVED - 2 * fatSectors) / spc);
+  const clusterCount = Math.floor((partSectors - RESERVED - 2 * fatSectors) / SPC);
   if (clusterCount < 65525) throw new Error("image too small for FAT32");
   const fatLba = PART_LBA + RESERVED;
   const dataLba = fatLba + 2 * fatSectors;
   const fat = new Map([[0, 0x0ffffff8], [1, EOC]]);
   let nextFree = 2;
-  const clusterLba = (c) => dataLba + (c - 2) * spc;
+  const clusterLba = (c) => dataLba + (c - 2) * SPC;
 
-  function allocChain(count) {
+  function allocChain(count, gap = false, high = 0) {
     const chain = [];
-    for (let i = 0; i < Math.max(1, count); i++) { chain.push(nextFree); nextFree += fragment ? 2 : 1; }
+    for (let i = 0; i < Math.max(1, count); i++) {
+      if (gap && i === Math.floor(count / 2)) nextFree++;
+      chain.push(nextFree++);
+    }
     if (nextFree - 2 > clusterCount) throw new Error("image full");
-    chain.forEach((c, i) => fat.set(c, i + 1 < chain.length ? chain[i + 1] : EOC));
+    chain.forEach((c, i) => fat.set(c, ((i + 1 < chain.length ? chain[i + 1] : EOC) | high) >>> 0));
     return chain;
   }
   function writeData(chain, data) {
     chain.forEach((c, i) => {
-      for (let j = 0; j < spc; j++) {
-        const part = data.subarray(i * CLUSTER + j * SEC, i * CLUSTER + (j + 1) * SEC);
-        if (part.length) sector(clusterLba(c) + j).set(part);
-      }
+      for (let k = 0; k < SPC; k++) sector(clusterLba(c) + k).set(data.subarray(i * CL + k * SEC, i * CL + k * SEC + SEC));
     });
   }
   function dirEntry(name, attr, cluster, size) {
@@ -81,7 +83,7 @@ export function buildSparseFat32(tree, { totalSectors = 131072, label = "3RIC U5
       entries.push(dirEntry(v, 0x08, 0, 0));
     }
     const names = Object.keys(node);
-    const chain = allocChain(Math.ceil((entries.length + names.length + 1) * 32 / CLUSTER));
+    const chain = allocChain(Math.ceil((entries.length + names.length + 1) * 32 / CL));
     const first = chain[0];
     if (self !== null) {
       entries[0][26] = first & 255; entries[0][27] = (first >> 8) & 255;
@@ -90,14 +92,14 @@ export function buildSparseFat32(tree, { totalSectors = 131072, label = "3RIC U5
     for (const name of names) {
       const value = node[name];
       if (value instanceof Uint8Array) {
-        const c = value.length ? allocChain(Math.ceil(value.length / CLUSTER)) : null;
+        const c = value.length ? allocChain(Math.ceil(value.length / CL), fragmented.has(name), reserved.has(name) ? 0xa0000000 : 0) : null;
         if (c) writeData(c, value);
         entries.push(dirEntry(name, 0x20, c ? c[0] : 0, value.length));
       } else {
         entries.push(dirEntry(name, 0x10, writeDir(value, 0, self === null ? 0 : first), 0));
       }
     }
-    const bytes = new Uint8Array(chain.length * CLUSTER);
+    const bytes = new Uint8Array(chain.length * CL);
     entries.forEach((e, i) => bytes.set(e, i * 32));
     writeData(chain, bytes);
     return first;
@@ -116,7 +118,7 @@ export function buildSparseFat32(tree, { totalSectors = 131072, label = "3RIC U5
   for (const at of [0, 6]) {
     const bs = sector(PART_LBA + at), dv = new DataView(bs.buffer);
     bs.set([0xeb, 0x58, 0x90], 0); bs.set(Buffer.from("MSWIN4.1"), 3);
-    dv.setUint16(11, SEC, true); bs[13] = spc; dv.setUint16(14, RESERVED, true); bs[16] = 2;
+    dv.setUint16(11, SEC, true); bs[13] = SPC; dv.setUint16(14, RESERVED, true); bs[16] = 2;
     bs[21] = 0xf8; dv.setUint16(24, 32, true); dv.setUint16(26, 64, true);
     dv.setUint32(28, PART_LBA, true); dv.setUint32(32, partSectors, true);
     dv.setUint32(36, fatSectors, true); dv.setUint32(44, 2, true); dv.setUint16(48, 1, true); dv.setUint16(50, 6, true);
