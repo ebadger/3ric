@@ -401,6 +401,36 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     `N` = 150, 145 ... 80 (211.7 to 394.6 Hz), volume 14; silent but timed with sound off.
   - **No ROM, VM, web bridge, generated platform-reference or hardware change.**
   - **Acceptance and limits:** see [`docs/porting-logs/lode-runner.md`](../docs/porting-logs/lode-runner.md).
+- **Wizardry I SD-card port:** `codegen/tools/port-wizardry1.mjs` converts the
+  owner-supplied Apple Pascal boot and scenario disks into a `WIZ1/` folder
+  (`CD WIZ1`, `BRUN WIZ1.PRG 0800`). The game data stays local; the repository holds
+  the converter and glue (`codegen/patches/wizardry1/`).
+  - **Volume contract:** `WIZ1.VOL` is one Pascal volume: the scenario disk's
+    blocks 0-279 followed by the boot disk's system files, under the boot disk's
+    directory header (its byte 25 steers the runtime's volume search). Both "insert
+    disk" prompts are answered with RETURN. Four byte-verified p-code patches,
+    located through segment dictionaries, remove the two Disk II timing checks and
+    the `CASTLE` checks of their `$0479` watermark.
+  - **BIOS contract:** the loader stands in for the Pascal boot blocks: 45 pages of
+    `RTSTRP.APPLE` at `$9200`, `X=$60`, ROM selected, `JMP ($BEFE)`. The runtime's
+    DISKREAD/DISKWRITE body (`$AF31`) jumps to a `$CF00` resident; the shim in
+    language-card `$E000` serves unit 4 only (9 otherwise), blocks past the volume
+    give 8, and writes outside blocks 2-279 or not in whole blocks give 16 (the
+    master boot disk was write-protected; WIZBOOT checks for it).
+  - **SD access (ROM internals, owner-approved):** block n is file sector n; the
+    loader resolves `WIZ1.VOL`'s FAT chain into a per-cluster LBA table, so any
+    cluster size and fragmentation work, and the shim calls `sd_readsector`
+    (`$E1B9`) / `sd_writesector` (`$E21C`) with `$B0-$B3`/`$B8` saved. It also
+    reads `$CC00/$CC04/$CC08/$CC20/$CC32`. The loader refuses a ROM whose code in
+    those ranges has different Fletcher sums; a failed `FLOAD` is not used as a
+    probe because it continues with stale state.
+  - **Banking and interrupts:** Wizardry maps the empty language card (anti-RESET),
+    so the loader fills it with the shim, the cluster table, `$DFFF` signatures
+    (`$A5` bank 1, `$5A` bank 2) and RAM NMI/IRQ vectors to the resident, which
+    reuses the Ultima V PS/2 fast path and ROM forwarder and restores ROM, bank 1 or
+    bank 2 around each BIOS call. `$CF00-$CFFF` is reserved for this profile, not a
+    general free-RAM declaration. No ROM, VM, web bridge or hardware change.
+  - **Acceptance and limits:** see [`docs/porting-logs/wizardry-i.md`](../docs/porting-logs/wizardry-i.md).
 - **ROM DOS load/write semantics (observed, unchanged):** `FLOAD name addr start end`
   takes an inclusive end offset and skips to `start` byte by byte; `BLOAD` stores one
   byte past EOF; `OWRITE` writes whole sectors in place and, for a missing file, falls
@@ -787,6 +817,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Ultima II SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima2.test.mjs` drives the real loader and DOS 3.3 translator on the ROM DOS with synthetic disks (BLOAD/BRUN/BSAVE, folder switches, exact lengths, register preservation, fail-loud errors); with `U2_DISKS` it plays the original disks through title, character creation and save, the overworld and both patched space disk swaps, plus a D-pad move; SNES pads are covered on the emulated pads with the resident clocking VIA1 port B directly (12-button map on both pads, D-pad repeat after 10 ticks then every 4, pending keys kept, A/X/Y/flags preserved, 30 Hz at 2.1% CPU with no scan or paddle-timer NMIs, IRQs masked during ROM DOS commands, timer off at every error stop). Manual WASM play also covered movement, Z-stats, quit-save, dungeon entry, reloading a saved character and the demo slideshow. No physical-board trial yet; towns/dialogue, combat depth, space flight and the endgame were not played through; the game runs ~1.54x faster than on a 1.02 MHz Apple II. Known issue (shipped by owner decision): `OWRITE` gets the file length, so 4 KB map saves write one extra SD sector; saves need 512-byte clusters. |
 | Ultima III SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima3.test.mjs` reconstructs a synthetic boot image and drives the real loader/RWTS shim on the ROM DOS (whole-file loads, zero-page load, write and read-back, IOB/flag state); with `U3_DISKS` it plays the original disks through Mockingboard set-up, title, character creation, party, world, Lord British's castle, a dungeon and an autosave resume after reset, and checks the 61.5 Hz music IRQ; the gamepad tick is checked synthetically (buttons type keys, held directions repeat) and SNES Up walks the real party north. Talking, shops, Moongates, the endgame and the physical board (including pad scans alongside PS/2 typing) are open; ROM DOS command failures are not detected (card contents trusted); loads run ~2 KB/s in the emulator (boot ~30 s). |
 | Lode Runner SD-card port | Experimental / emulator-verified | `codegen/tools/port-loderunner.test.mjs` drives the real resident on the ROM DOS with synthetic level files (master reads, refused master writes and format, data-disk read-modify-write, lazy-format bitmap, score writes, missing files, zero page kept), checks pacing (work x1.539, `PLAY_NOTE`/`BEEP` against the original loops' 6502 cycle counts), both SNES pads and the Mockingboard tally (15 tones in 1.002 s at the Atari pitches); with `LR_DISK` it plays the original disk: loader, attract demo, high scores and `Ctrl-D` per disk, editor draw/save/play on the data disk to a Mockingboard level clear, a recorded high score, Move from the master, Initialize, `Esc` out of the editor, and a pad-started master game; `LR_TIMING` compares the demo's first level with the unpatched game (within 1%). No physical-board trial yet. |
+| Wizardry I SD-card port | Experimental / emulator-verified | `codegen/tools/port-wizardry1.test.mjs` drives the real loader/resident/shim on the ROM DOS with a synthetic volume on 1-, 8-(fragmented) and 64-sector-cluster cards (reads, writes, errors 8/9/16, NMIs and bank restore, loader refusals), and with `WIZ1_DISKS` plays the original disks from `BRUN` to the training grounds; `port-wizardry1.native.ps1` passes the native PS/2 harness. Manual WASM play reached the tavern (roster write) and the maze. No board trial; combat, deeper levels and a reload after reboot are unverified. Depends on fingerprinted ROM SD/FAT32 internals. |
 | ROM `BLOAD` stores one byte past EOF | Known gap (ROM) | Observed in `fat32_file_read`; programs loading below live data must use `FLOAD 0000 eof-1`. ROM source is not in this repository. |
 | Adventure disk-only compatibility adapter | Experimental / emulator-verified | Exact-image `.dsk`/`.woz` patcher (`patch-adventure.mjs`); relocates MSBASIC to LC `$D000-$F0FF`, patches DOS 3.3 + `CHAIN` + Applesoft dialect + KIM-1 `FMULT` `ROR RESULT+2` bug (`$E5C7`), retokenizes `ADVENTURE` and `ADVENTURE^Q PART TWO`, and boots through `CHAIN` into full above-ground and underground gameplay. Physical board confirmation and Disk II write support for `SAVE` remain open; see [`docs/porting-logs/adventure.md`](../docs/porting-logs/adventure.md). |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |

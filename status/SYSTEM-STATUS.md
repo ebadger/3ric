@@ -78,6 +78,8 @@ pwsh codegen\tools\port-ultima5.native.ps1  # Ultima V resident: real PS/2 frame
 pwsh codegen\tools\port-ultima1.native.ps1  # Ultima I pad glue: real PS/2 frames while the pads are scanned (MSVC)
 & $node codegen\tools\port-ultima2.test.mjs # Ultima II DOS 3.3 translator on ROM DOS (set U2_DISKS to also play the real disks)
 & $node codegen\tools\port-loderunner.test.mjs # Lode Runner SD shim, pacing, pads, Mockingboard tally (LR_DISK plays the real disk; +LR_TIMING=1 compares demo timing)
+& $node codegen\tools\port-wizardry1.test.mjs # Wizardry I block driver on ROM DOS + SD, 3 cluster layouts (WIZ1_DISKS = real disks)
+pwsh codegen\tools\port-wizardry1.native.ps1  # Wizardry I resident through the native PS/2 harness (MSVC)
 ```
 
 C++ CPU unit tests (`emulator/Badger6502VMTest`, MSTest): **Test → Run All Tests** in
@@ -280,6 +282,20 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   DOS 3.3 + `CHAIN` + Applesoft runtime hooks + the 1977 KIM-1 `FMULT` `ROR RESULT+2` bug,
   and retokenizing both BASIC programs without changing `badger6502.bin` or the VM. See
   [`docs/porting-logs/adventure.md`](../docs/porting-logs/adventure.md).
+- **Wizardry I (SD-card port, experimental):** `node codegen\tools\port-wizardry1.mjs <disks> <out>`
+  turns the owner's Apple Pascal boot + scenario disks into `WIZ1\` (`WIZ1.PRG` +
+  `WIZ1.VOL`, one combined Pascal volume); copy it to the card, then `CD WIZ1` and
+  `BRUN WIZ1.PRG 0800`, and press RETURN at both disk prompts. The loader replaces the
+  Pascal boot blocks and hooks the runtime's BIOS disk entry; the shim reads and writes
+  sectors directly with the ROM's `sd_readsector`/`sd_writesector` through a cluster
+  table (fingerprinted ROM internals; any cluster size or fragmentation), ~150 K
+  cycles per block. Four byte-verified p-code patches remove Sir-Tech's Disk II timing
+  checks. WASM play reached the castle, a tavern roster write and the maze; no board
+  trial yet. Game data stays local. See
+  [`docs/porting-logs/wizardry-i.md`](../docs/porting-logs/wizardry-i.md).
+- **Disk II spin-up gap:** after the motor stops, the emulated drive gives no data for
+  one second after motor-on, so Apple Pascal disks report error 9 between slow
+  accesses (recorded in `EMULATOR.md`; not changed).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**
