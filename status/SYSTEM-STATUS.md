@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-17 — ebadger (via Copilot)_
+_Last updated: 2026-10-18 — ebadger (via Copilot)_
 
 ---
 
@@ -72,6 +72,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node codegen\tools\port-ultima5.test.mjs # Ultima V shim, pads and music (set U5_DISKS to also boot the real disks)
 
 pwsh codegen\tools\port-ultima5.native.ps1  # Ultima V resident: real PS/2 frames with language-card RAM mapped (MSVC)
+& $node codegen\tools\port-sevencities.test.mjs # Seven Cities SD port on ROM DOS/SD (SEVENCITIES_DISKS boots the real disks)
 ```
 
 C++ CPU unit tests (`emulator/Badger6502VMTest`, MSTest): **Test → Run All Tests** in
@@ -213,6 +214,16 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 
 
   See [`docs/porting-logs/ultima-v.md`](../docs/porting-logs/ultima-v.md).
+- **Seven Cities of Gold (SD-card port, experimental):**
+  `node codegen\tools\port-sevencities.mjs <program.dsk> <map.dsk> <out>` builds a
+  `7CITIES\` folder; copy it to the card, then `CD 7CITIES` and
+  `BRUN 7CITIES.PRG 0800`. The game reads and writes the original 140 KB disk images
+  in place through the ROM's SD sector routines (~0.1 s per sector, like the floppy),
+  so the files must be contiguous (the loader checks) and the ROM's SD routines
+  unchanged. Play with an SNES pad (the game's joystick). WASM play covered menus,
+  sailing, landing and natives; the World Maker built a new world that then played
+  (it overwrites `MAP.DSK`: keep a copy). Saving at the Pub and the board are untried.
+  See [`docs/porting-logs/seven-cities-of-gold.md`](../docs/porting-logs/seven-cities-of-gold.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**

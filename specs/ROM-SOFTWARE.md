@@ -155,6 +155,35 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     ROM, VM, web bridge or hardware change is part of the port.
 
   - **Acceptance and limits:** see [`docs/porting-logs/ultima-v.md`](../docs/porting-logs/ultima-v.md).
+- **Seven Cities of Gold SD-card port:** `codegen/tools/port-sevencities.mjs` turns the
+  owner-supplied program and map disk images into a `7CITIES/` folder (`CD 7CITIES`,
+  `BRUN 7CITIES.PRG 0800`): loader, `GAME.BIN` (the decrypted, patched `$0800-$BFFF`
+  image Electronic Arts' boot loader would leave), and the two disks as 140 KB
+  DOS-order images that the game reads and writes in place. Game data stays local; the
+  repository holds the converter and glue (`codegen/patches/sevencities/`).
+  - **Disk contract:** the game's (and World Maker's) RWTS entry jumps to an SD shim in
+    its dead code that keeps the IOB contract (seek, read, write, format; status `$40`
+    for a bad track) but takes buffer pages from the RWTS's patched loop operands
+    (`$8B5F`/`$8A57`; `$125F`/`$1157`), not the stale IOB field. T/S is half of card
+    sector `base + (T*16+S)/2`, through the ROM's `sd_readsector`/`sd_writesector`
+    (`$E1B9`/`$E21C`, LBA `$B0-$B3`, buffer `$C800`); writes read-modify-write; format
+    zeroes `MAP.DSK`. `$CFF0-$CFF7` hold the two files' first sectors, `$CFF8` the disk
+    "in drive 1" (program disk only for the start-up language-card loads and the World
+    Maker until its format). Owner decision: bound to these ROM internals for floppy
+    speed (~0.1 s/sector) rather than ROM DOS commands (~0.8 s).
+  - **Loader:** refuses a ROM whose SD routines (`$E141-$E279` checksum) or NMI proxy
+    differ; learns each file's first cluster from the ROM FAT32 variables (`$CC00`,
+    `$CC04`, `$CC18`, `$CC32`) after an `FLOAD` of 256 bytes, verifies that sector's
+    content, and requires an unbroken FAT chain (entries masked to 28 bits; no fallback
+    for fragmented files). An unrecognized program-disk release is converted with a
+    warning; the code regions the shims replace are not verified for it (owner decision).
+    Its final stage runs in `$CA00-$CABF` (no ROM references) while `GAME.BIN` overwrites it.
+  - **Banking and interrupts:** the Ultima V resident at `$CF00`, signatures `$A5`/`$5A`
+    at bank 1/2 `$DFFF`; the game's IRQ vector and RESET writes are redirected so the LC
+    vectors stay the resident's and the ROM's. Three button tests get a `$C070` scan
+    first (3RIC buttons are refreshed by the ROM's joystick scan). The copy-protection
+    call is replaced by its passed result. No ROM, VM, web bridge or hardware change.
+  - **Acceptance and limits:** see [`docs/porting-logs/seven-cities-of-gold.md`](../docs/porting-logs/seven-cities-of-gold.md).
 - **ROM DOS load/write semantics (observed, unchanged):** `FLOAD name addr start end`
   takes an inclusive end offset and skips to `start` byte by byte; `BLOAD` stores one
   byte past EOF; `OWRITE` writes whole sectors in place and, for a missing file, falls
@@ -485,8 +514,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | Ultima V SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima5.test.mjs` drives the real loader/resident/shim on the ROM DOS with synthetic volumes (and boots the original disks to the title with `U5_DISKS`); `port-ultima5.native.ps1` decodes real PS/2 frames at 94-160-cycle periods with language-card RAM mapped, including Caps Lock LED exchanges and a `$C010` strobe on a stop-bit edge. The suite also plays a synthetic two-region song end to end (on-demand `SONG01` load, timer-IRQ ticks in bank 2, pause/load/resume, reload after a block read), tests the song packer (phrase subroutines, two-region layout, replay check) and the stale-folder check, and checks the 46 music-site patches; a session-only py65 harness matched the player to the reverse-engineered driver per tick for all 15 songs. Manual WASM play covered creation, save, overworld, combat, towne entry, pad-only menu/walking/Ztats, and music (title theme at the title, huts song on *Journey Onward*, on-demand song switches). Board: running after the PS/2 fix; pads and music not yet tried on the board. Dialogue, dungeons and endgame are open; block reads cost ~1.7 M cycles. |
-
-
+| Seven Cities of Gold SD-card port | Experimental / emulator-verified | `codegen/tools/port-sevencities.test.mjs` runs the real loader, resident and both shim copies on the ROM DOS/SD emulation with synthetic disks at 512-byte and 4 KB clusters, plus missing/fragmented/ROM refusals (`SEVENCITIES_DISKS` adds an original-disk boot to the title); `port-ultima5.native.ps1 -Resident codegen\patches\sevencities\resident.s` passes the native PS/2 checks. Scripted WASM play: menus, sailing, landing, natives; World Maker created a world that then played. A save at the Pub, resume, and the physical board are open; requires contiguous files and the current ROM's SD routines. |
 | ROM `BLOAD` stores one byte past EOF | Known gap (ROM) | Observed in `fat32_file_read`; programs loading below live data must use `FLOAD 0000 eof-1`. ROM source is not in this repository. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |
