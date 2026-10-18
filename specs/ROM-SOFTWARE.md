@@ -225,7 +225,11 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     SD sector write errors are not reported. Writes need 512-byte clusters: on a 4 KB-
     cluster card the shell's `BSAVE`, and so `SAVE`, does not return in the emulator
     (reads work). A failed `SAVE` can leave a partial new entry after the old one; the
-    next successful `SAVE` of that name removes both. Emulator-verified only; no physical-board
+    next successful `SAVE` of that name removes both. A directory-entry failure (an SD
+    read error) leaves the new file's clusters allocated with no entry: that space is
+    lost, as with the shell's `BSAVE`. Until the old file is deleted, a replacement
+    needs free space for the whole new program; on a card without it the library's
+    allocator does not return. Emulator-verified only; no physical-board
     run yet.
 - **Ultima V SD-card port:** `codegen/tools/port-ultima5.mjs` converts the eight
   owner-supplied ProDOS disk sides into a `U5/` folder for the micro-SD card
