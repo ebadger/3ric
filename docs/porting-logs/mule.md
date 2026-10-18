@@ -25,7 +25,12 @@ floating point). About 120 instructions modify other instructions.
 ## The port
 
 `node codegen/tools/port-mule.mjs <mule.atr> <out-dir> [--players 1|2] [--level ...]`
-writes `<out-dir>/MULE/`; on the 3RIC: `CD MULE`, `BRUN MULE.PRG 2000`.
+writes `<out-dir>/MULE/`; on the 3RIC: `CD MULE`, `BRUN MULE.PRG 2000`. Add
+`--woz MULE.WOZ` for the same game on one Disk II side (boot with `MON`, `C600G`):
+`diskboot.s` re-enters the boot PROM's sector reader piece by piece, stages the
+language-card images at `$4000-$7FFF` and copies them into the card between reads
+(a card write-enable set before a read did not survive it), then hands off to the
+same `boot_final`.
 
 - **The intro runs at conversion time** (`mule-intro.mjs`): a small 6502 with just
   enough Atari (ANTIC line timing and interrupts, POKEY RANDOM, sticks, console keys,

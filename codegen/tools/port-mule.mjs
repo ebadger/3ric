@@ -314,6 +314,47 @@ export function buildLoader(files, rt) {
   return mem.slice(0x2000, end);
 }
 
+/**
+ * The same game as a bootable Disk II image (MULE.WOZ, boot with C600G):
+ * diskboot.s in track 0 sectors 0-1, then every piece in order.
+ */
+export function buildWoz(files, rt, buildWozFromDsk) {
+  const order = [
+    ["WIN.BIN", 0x40], ["RTB2.BIN", 0x60], ["RTB1.BIN", 0x70], ["STAGE2", 0x20],
+    ["RAM2.BIN", 0x24], ["LOW.BIN", 0x2c], ["CFG.BIN", 0x30], ["G1.BIN", 0x10], ["G2.BIN", 0x40],
+  ];
+  const pages = (name) => Math.ceil((name === "STAGE2" ? 256 : files[name].length) / 256);
+  const bytes = (a) => a.map((v) => "$" + v.toString(16).padStart(2, "0")).join(",");
+  const eq = `NPIECES = ${order.length}\nBOOT_FINAL = ${rt.BOOT_FINAL}\n`;
+  const src = eq + src_("diskboot.s") + `        .byte ${bytes(order.map(([n]) => pages(n)))}\n` +
+    `p_hi:   .byte ${bytes(order.map(([, hi]) => hi))}\n`;
+  const mem = new Uint8Array(0x10000);
+  const r = assembleInto(mem, src, "diskboot.s");
+  if (r.symbols.STAGE2_END > 0x2100) throw new Error("disk stage 2 exceeds one page");
+  const bootEnd = Math.max(...r.used.filter(([a]) => a < 0x0a00).map(([, e]) => e));
+  if (bootEnd > 0x0a00) throw new Error("disk boot loader exceeds two sectors");
+  const dsk = new Uint8Array(35 * 16 * 256);
+  const place = (k, data) => {                      // payload page k (boot = -2, -1)
+    const s = k + 2, track = s >> 4, phys = s & 15;
+    if (track >= 35) throw new Error("game does not fit on one disk side");
+    const logical = phys === 15 ? 15 : (phys * 7) % 15;
+    dsk.set(data, (track * 16 + logical) * 256);
+  };
+  place(-2, mem.subarray(0x0800, 0x0900));
+  place(-1, mem.subarray(0x0900, 0x0a00));
+  let k = 0;
+  for (const [name] of order) {
+    const data = name === "STAGE2" ? mem.subarray(0x2000, 0x2100) : files[name];
+    for (let p = 0; p < pages(name); p++) {
+      const page = new Uint8Array(256);
+      page.set(data.subarray(p * 256, Math.min(data.length, p * 256 + 256)));
+      place(k++, page);
+    }
+  }
+  return buildWozFromDsk(dsk);
+}
+const src_ = (name) => fs.readFileSync(path.join(patchDir, name), "utf8");
+
 /** Convert: returns { files: {name: Uint8Array}, known, hash }. */
 export function convert(atrBytes, handoff, opts = {}) {
   if (!handoff || handoff.length !== 0x1000) throw new Error("handoff image must be 4096 bytes ($0000-$0FFF)");
@@ -328,16 +369,17 @@ export function convert(atrBytes, handoff, opts = {}) {
 }
 
 async function main(argv) {
-  const opts = { players: 2, level: "BEGINNER", handoff: null };
+  const opts = { players: 2, level: "BEGINNER", handoff: null, woz: null };
   const pos = [];
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--players") opts.players = +argv[++i];
     else if (argv[i] === "--level") opts.level = String(argv[++i]).toUpperCase();
     else if (argv[i] === "--handoff") opts.handoff = argv[++i];
+    else if (argv[i] === "--woz") opts.woz = argv[++i];
     else pos.push(argv[i]);
   }
   if (pos.length !== 2) {
-    console.error("usage: node codegen/tools/port-mule.mjs <mule.atr> <output-dir> [--players 1|2] [--level beginner|standard|tournament]");
+    console.error("usage: node codegen/tools/port-mule.mjs <mule.atr> <output-dir> [--players 1|2] [--level beginner|standard|tournament] [--woz MULE.WOZ]");
     process.exit(2);
   }
   const [atrPath, outDir] = pos;
@@ -357,5 +399,10 @@ async function main(argv) {
   for (const [name, data] of Object.entries(r.files)) fs.writeFileSync(path.join(dir, name), data);
   console.log(`wrote ${dir}: ${Object.keys(r.files).join(", ")}`);
   console.log(`then on the 3RIC: CD ${FOLDER}, BRUN MULE.PRG 2000`);
+  if (opts.woz) {
+    const { buildWozFromDsk } = await import("./wozgen.mjs");
+    fs.writeFileSync(opts.woz, buildWoz(r.files, r.rt.rt, buildWozFromDsk));
+    console.log(`wrote ${opts.woz}: boot it with C600G from the monitor`);
+  }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main(process.argv.slice(2));

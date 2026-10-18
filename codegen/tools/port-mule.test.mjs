@@ -205,6 +205,26 @@ async function testRealDisk(atrPath) {
   let lit = 0; for (let a = 0x2000; a < 0x4000; a++) if (vm.peek(a) & 0x7f) lit++;
   assert.ok(lit > 200, `hi-res page drawn (${lit} non-blank bytes)`);
   ok("original disk: intro hand-off, SD boot, status summary and land grant on the hi-res page");
+
+  const { buildWozFromDsk } = await import("./wozgen.mjs");
+  const woz = P.buildWoz(conv.files, conv.rt.rt, buildWozFromDsk);
+  const s2 = await harness.boot({});
+  const vm2 = s2.vm;
+  assert.ok(vm2.insertDisk(0, new Uint8Array(woz)), "WOZ accepted");
+  for (const ch of "MON\rC600G\r") {
+    for (let t = 0; t < 200 && (vm2.peek(0xc000) & 0x80) !== 0; t++) vm2.run(2000);
+    vm2.keyDown(ch === "\r" ? 13 : ch.charCodeAt(0));
+    for (let t = 0; t < 20; t++) vm2.run(4000);
+  }
+  let status = false;
+  for (let t = 0; t < 80 && !status; t++) {
+    vm2.setGamepadState(0, t % 3 === 0 ? 1 : 0);
+    for (let i = 0; i < 12; i++) vm2.run(50000);
+    let txt = ""; for (let i = 0; i < 120; i++) { const c = vm2.peek(0xb500 + i) & 0x7f; txt += c < 64 ? String.fromCharCode(c + 32) : " "; }
+    status = /STATUS SUMMARY/.test(txt);
+  }
+  assert.ok(status, "MULE.WOZ boots (C600G) to the status summary");
+  ok("MULE.WOZ: Disk II boot to the status summary");
 }
 
 testFp();
