@@ -75,6 +75,7 @@ pwsh codegen\tools\port-ultima5.native.ps1  # Ultima V resident: real PS/2 frame
 & $node codegen\tools\port-sevencities.test.mjs # Seven Cities SD port on ROM DOS/SD (SEVENCITIES_DISKS boots the real disks)
 & $node codegen\tools\port-ultima1.test.mjs # Ultima I ProDOS stand-in + SNES pads on ROM DOS (set U1_DISK to also play the real disk)
 pwsh codegen\tools\port-ultima1.native.ps1  # Ultima I pad glue: real PS/2 frames while the pads are scanned (MSVC)
+& $node codegen\tools\port-ultima2.test.mjs # Ultima II DOS 3.3 translator on ROM DOS (set U2_DISKS to also play the real disks)
 ```
 
 C++ CPU unit tests (`emulator/Badger6502VMTest`, MSTest): **Test → Run All Tests** in
@@ -245,6 +246,20 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   Loads cost ~0.45 s/KB (startup ~22 s, a town ~8 s). The save is
   `U1\U1VARS` (the converter keeps an existing one). Card contents are trusted.
   See [`docs/porting-logs/ultima-i.md`](../docs/porting-logs/ultima-i.md).
+- **Ultima II (SD-card port, experimental):** `node codegen\tools\port-ultima2.mjs <disks> <out>`
+  converts the owner's three DOS 3.3 disks (program, player master, galactic) into a
+  `U2\` folder; copy it to the card, then `CD U2` and `BRUN U2.PRG 0800`. Game data stays
+  local. The game only spoke to DOS 3.3 through Ctrl-D text commands, so a resident at
+  `$9600` translates them to ROM DOS `FLOAD`/`OWRITE`/`CD`; seven "insert disk" prompts
+  became folder switches. Both SNES pads type keys through a ~30 Hz slot-4 Mockingboard
+  timer IRQ that clocks the pads directly (no `$C070` paddle-timer NMIs) (D-pad = move, A Attack, B Enter, X Transact, Y Get, L Ztats, R Ignite,
+  Select ESC, Start Space; 2.1% CPU); the keyboard still works. WASM play reached the title, demo, character creation and
+  save, the overworld, a dungeon and a saved-game reload; the space disk swaps were run
+  in place. No board trial yet; towns, space flight and the endgame are unplayed, and
+  the game runs ~1.54x faster than an Apple II. Card contents are trusted. Known issue
+  (owner decision): each 4 KB map save writes one extra SD sector past the file, and
+  saves need a 512-byte-cluster card.
+  See [`docs/porting-logs/ultima-ii.md`](../docs/porting-logs/ultima-ii.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**

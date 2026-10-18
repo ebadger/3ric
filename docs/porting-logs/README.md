@@ -21,6 +21,7 @@ below as working on the physical machine.
 | [Ultima V](ultima-v.md) (2026-10-15) | Replace a game's own disk loader under unmodified binaries; decode PS/2 bits before any bank work; read the ROM DOS's exact load/write semantics | Converter, glue, synthetic-volume and native PS/2 tests; WASM play through creation, overworld, combat, towne entry and save; first board trial failed on keyboard (fixed, re-trial pending) |
 | [Seven Cities of Gold](seven-cities-of-gold.md) (2026-10-16) | Replace a game's RWTS with direct SD sector access to the original disk images; find the buffer the RWTS really uses (patched operands, not the IOB); 3RIC buttons need a `$C070` scan | Converter, loader, resident and shim tests on synthetic cards (two cluster sizes, refusals); native PS/2 on the resident; WASM play through sailing, landing and natives; World Maker made a new world that played; save at the Pub and the board are open |
 | [Ultima I](ultima-i.md) (2026-10-15) | Replace only ProDOS (global page + MLI) under an unmodified ProDOS game; the ROM DOS reuses `$B0-$BF`, so keep scratch across each command; test the parameter block, not just the loaded bytes; feed SNES buttons in at the game's own keyboard read, and clock the pads directly - a `PTRIG` scan corrupts PS/2 frames | Converter, synthetic stand-in and pad tests on the ROM DOS; scripted WASM play of the original disk through creation, save/continue, town, castle, combat and a dungeon (also pad-only); owner's first SD-card run reached character creation |
+| [Ultima II](ultima-ii.md) (2026-10-15) | A game that only speaks DOS 3.3 through Ctrl-D text needs a command translator on `CSW`, not a loader rewrite; patch "insert disk" prompts into folder switches; feed SNES pads in as keystrokes from a timer IRQ | Converter, translator and patch tests on synthetic disks; real-disk WASM play through creation, save, overworld, dungeon entry, reload, both space disk swaps and SNES-pad keys; no board trial yet |
 
 ## Scope and evidence
 
@@ -36,7 +37,7 @@ are included or offered for download here. Short instruction changes describe th
 engineering intervention, not a redistribution of the games.
 
 Historical patchers and runbooks named in the four September logs are **not present
-in this checkout**. The newer Archon, Ultima V and Ultima I experiments include their own
+in this checkout**. The newer Archon, Ultima V, Ultima I and Ultima II experiments include their own
 converters and tests, but none of the original or converted game data. Local commit IDs identify retained development history;
 they may not be reachable from `origin` or available in a fresh clone. They are
 intentionally not GitHub commit links. The offsets, transformations, hashes, and

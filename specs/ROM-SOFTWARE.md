@@ -253,10 +253,69 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     clock, no VBL sync on the II+ path). Loads cost ~0.45 s per KB through the ROM's
     bit-banged SPI path (startup ~22 s, a dungeon ~5 s, a town or castle ~8 s).
   - **Acceptance and limits:** see [`docs/porting-logs/ultima-i.md`](../docs/porting-logs/ultima-i.md).
+- **Ultima II SD-card port:** `codegen/tools/port-ultima2.mjs` converts the three
+  owner-supplied DOS 3.3 disks (program, player master, galactic) into a `U2/`
+  folder for the micro-SD card (`CD U2`, `BRUN U2.PRG 0800`). The game data stays
+  local; the repository holds the converter and glue (`codegen/patches/ultima2/`).
+  - **Translator contract:** Ultima II uses DOS 3.3 only through Ctrl-D text
+    commands printed via `COUT`, so the loader turns the BASIC overlay off (`$CAFE`
+    nest count 0; the game uses RAM to `$95FF`) and installs a resident at
+    `$9600-$AFFF` (DOS 3.3's old region) as `CSW`. Ordinary characters go to
+    `COUT1`; `BLOAD name[,A$]` becomes `FLOAD key addr 0000 len-1`, `BRUN` adds a
+    jump, `BSAVE name,A$,L$` becomes `OWRITE key addr len` and must rewrite an
+    existing whole file, `NOMON/MON/MAXFILES` are ignored. Each disk is a folder
+    (`PROGRAM`, `PLAYER`, `GALACTIC`); keys are a name's first eight letters/digits,
+    looked up among the current disk's files in a generated table (address,
+    length). A port-only `DISK n` command switches folders (`CD ..`, `CD dir`).
+    ROM commands run through the ROM's own collector (from the `$03EA` hook) with
+    echo muted, saving `$B0-$BF` and `CSW`; A/X/Y are preserved. An unknown
+    command, a file not on the current disk or a partial `BSAVE` stops in the
+    monitor with a message before reaching the ROM.
+  - **Patches:** seven byte-verified "insert disk" prompts (main program, `CREATE`
+    twice, `STARS.OBJ` twice on each of two disks) become `DISK n` commands with
+    the ESC wait removed. No other game byte, ROM, VM, web bridge or hardware
+    change. The ROM stays mapped (no language-card use), so keyboard NMIs reach the
+    unmodified ROM handler. `$9600-$AFFF` is reserved for this profile only.
+  - **SNES gamepads:** the loader points the ROM's IRQ vector `$03FE` at the
+    resident, clears both Mockingboard VIAs' interrupt enables and runs the first
+    VIA's (`$C400`) Timer 1 free running at ~30 Hz (latch `$CCDE`; the game never
+    uses the Mockingboard). On a Timer 1 IRQ the resident clocks both pads itself on
+    VIA1 port B with the ROM scan's exact pin sequence (`$B99B`: latch `$40`, clock
+    `$80`, pad 1 data bit 5, pad 2 bit 4, active low, 16 bits). It never touches
+    `PTRIG $C070`: the ROM's `$C070` scan also arms VIA1's paddle timers, and those
+    NMIs dropped PS/2 keys on the board in the A2Robots port. No NMI is raised. A
+    new press (both pads ORed) becomes a keystroke written to the `$C000` latch
+    only if bit 7 is clear, checked just before the store and recorded as sent only
+    when stored, so a busy latch retries next tick and a pending key is not
+    overwritten (a PS/2 key decoded within those two instructions can still be).
+    The game reads pad keys exactly like typed ones (`$C000`/`$C010`, `RDKEY`).
+    Mapping: D-pad = Return/`/`/←/→ (north/south/west/east, also direction
+    answers), repeating after ~0.33 s every ~0.13 s while held; A = `A`ttack,
+    B = `E`nter, X = `T`ransact, Y = `G`et, L = `Z`tats, R = `I`gnite torch,
+    Select = ESC, Start = Space. Any other IRQ: an ACIA received byte (the
+    emulator routes the ACIA to IRQ; the board routes it to NMI, where the ROM does
+    the same) is delivered to `$C000` as a key; anything else returns. The ROM's IRQ
+    entry stores A in `$45` (unused by the game); the handler returns with
+    `LDA $45`, `RTI`, preserving X/Y. ROM DOS commands run with IRQs masked so the
+    poller never interleaves with SD bit-banging; an error stop (including a
+    `HELLO` that did not load) disables the timer first. A tick costs about 1,000
+    cycles.
+  - **Known issues (shipped by owner decision after review):** `BSAVE` passes the
+    file length to `OWRITE`, so every 4 KB map save writes one extra sector past the
+    file's cluster chain (fix: pass `len-1`); multi-sector saves need a card with
+    512-byte clusters; the converter does not reject ambiguous, overlapping or
+    truncated input images; command lines over 96 characters are truncated.
+  - **Acceptance and limits:** see [`docs/porting-logs/ultima-ii.md`](../docs/porting-logs/ultima-ii.md).
 - **ROM DOS load/write semantics (observed, unchanged):** `FLOAD name addr start end`
   takes an inclusive end offset and skips to `start` byte by byte; `BLOAD` stores one
   byte past EOF; `OWRITE` writes whole sectors in place and, for a missing file, falls
   back to `BSAVE` code in the BASIC bank (`$ACFD`), which is unsafe with the overlay off.
+  `OWRITE name addr len` writes ⌊len/512⌋+1 sectors (one too many when `len` is a
+  multiple of 512; pass `len-1`), and its write loop advances one cluster per sector,
+  so multi-sector writes are correct only on cards with 512-byte clusters (as the
+  shipped card image is). Found during the Ultima II review; both come from
+  `fat32_file_write` (`$EBB5`), which the Ultima V shim now calls directly with the
+  file's directory size, so it may be affected too.
 - **Bouncing Ball (scottybe's community contribution):** the canonical source remains
   `web/programs/bouncing-ball.s`, loaded at `$0800` by the gallery, assembler, or
   `BRUN BOUNCE.PRG 0800`. Its 114-vertex, 128-face checkerboard sphere is transformed,
@@ -585,6 +644,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Ultima V SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima5.test.mjs` drives the real loader/resident/shim on the ROM DOS with synthetic volumes (and boots the original disks to the title with `U5_DISKS`); `port-ultima5.native.ps1` decodes real PS/2 frames at 94-160-cycle periods with language-card RAM mapped, including Caps Lock LED exchanges and a `$C010` strobe on a stop-bit edge. The suite also plays a synthetic two-region song end to end (on-demand `SONG01` load, timer-IRQ ticks in bank 2, pause/load/resume, reload after a block read), tests the song packer (phrase subroutines, two-region layout, replay check) and the stale-folder check, and checks the 46 music-site patches; a session-only py65 harness matched the player to the reverse-engineered driver per tick for all 15 songs. Manual WASM play covered creation, save, overworld, combat, towne entry, pad-only menu/walking/Ztats, and music (title theme at the title, huts song on *Journey Onward*, on-demand song switches). Board: running after the PS/2 fix; pads and music not yet tried on the board. Dialogue, dungeons and endgame are open; block reads cost ~1.7 M cycles. |
 | Seven Cities of Gold SD-card port | Experimental / emulator-verified | `codegen/tools/port-sevencities.test.mjs` runs the real loader, resident and both shim copies on the ROM DOS/SD emulation with synthetic disks at 512-byte and 4 KB clusters, plus missing/fragmented/ROM refusals (`SEVENCITIES_DISKS` adds an original-disk boot to the title); `port-ultima5.native.ps1 -Resident codegen\patches\sevencities\resident.s` passes the native PS/2 checks. Scripted WASM play: menus, sailing, landing, natives; World Maker created a world that then played. A save at the Pub, resume, and the physical board are open; requires contiguous files and the current ROM's SD routines. |
 | Ultima I SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima1.test.mjs` drives the real loader and ProDOS stand-in through the ROM DOS with synthetic files (file info, open/read with marks and EOF, write/read-back, every error path, registers, zero page, NMI) and the SNES pad glue (all 12 buttons, both controllers, one key per press with overlapping buttons, D-pad repeat gated on the game's buffer, keyboard priority including a key decoded mid-scan); `codegen/tools/port-ultima1.native.ps1` clocks real PS/2 frames (94/120/160-cycle bits, Caps Lock LED exchange) while the glue scans, with hundreds of keyboard NMIs landing inside scans, and fails the earlier `PTRIG` version; with `U1_DISK` it plays the original disk through intro, character creation and save, continue, quick-save and Lord British's castle (entered with the pad's B) and checks the stand-in and pad glue stayed intact. Manual WASM play also covered a town, overworld combat and the Dungeon of Doubt (entered and walked with the pad). Space flight, the time machine and the endgame are unverified; the owner's first SD-card run loaded the game and went through character creation (saving, play and the pads not yet confirmed outside the emulator); ROM DOS command failures are not detected (card contents trusted); loads cost ~0.45 s/KB. |
+| Ultima II SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima2.test.mjs` drives the real loader and DOS 3.3 translator on the ROM DOS with synthetic disks (BLOAD/BRUN/BSAVE, folder switches, exact lengths, register preservation, fail-loud errors); with `U2_DISKS` it plays the original disks through title, character creation and save, the overworld and both patched space disk swaps, plus a D-pad move; SNES pads are covered on the emulated pads with the resident clocking VIA1 port B directly (12-button map on both pads, D-pad repeat after 10 ticks then every 4, pending keys kept, A/X/Y/flags preserved, 30 Hz at 2.1% CPU with no scan or paddle-timer NMIs, IRQs masked during ROM DOS commands, timer off at every error stop). Manual WASM play also covered movement, Z-stats, quit-save, dungeon entry, reloading a saved character and the demo slideshow. No physical-board trial yet; towns/dialogue, combat depth, space flight and the endgame were not played through; the game runs ~1.54x faster than on a 1.02 MHz Apple II. Known issue (shipped by owner decision): `OWRITE` gets the file length, so 4 KB map saves write one extra SD sector; saves need 512-byte clusters. |
 | ROM `BLOAD` stores one byte past EOF | Known gap (ROM) | Observed in `fat32_file_read`; programs loading below live data must use `FLOAD 0000 eof-1`. ROM source is not in this repository. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |
