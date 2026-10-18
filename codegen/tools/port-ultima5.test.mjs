@@ -11,7 +11,8 @@ import { assemble } from "./asm6502.mjs";
 import harness from "./harness.cjs";
 import { readProdosImage } from "./ultima5/prodos.mjs";
 import { buildSparseFat32 } from "./ultima5/fat32.mjs";
-import { VOLUMES, BANKSIG_VALUE, applyPatches, buildFromVolumes, buildTree, sdKey } from "./port-ultima5.mjs";
+import { VOLUMES, BANKSIG_VALUE, PATCHES, applyPatches, assembleResident, buildFromVolumes, buildTree, keyHash, patchSymbols, ram2Symbols, sdKey } from "./port-ultima5.mjs";
+import { CLOCK_SCALE, KCALL, KRET, driverTables, repackSong, scaleLatch, tempoLatch } from "./ultima5/music.mjs";
 
 // ---------------------------------------------------------------------------
 // ProDOS reader on a synthetic image (seedling + sapling + unowned blocks).
@@ -60,18 +61,70 @@ console.log("PASS ProDOS reader (DOS and ProDOS order) and SD key mapping");
 // ---------------------------------------------------------------------------
 // STARTUP patch: applied only over the exact original bytes.
 
+const syms = patchSymbols();
+const NOT_MUSIC = PATCHES.filter((p) => p.group !== "music");
 {
-  const startup = new Uint8Array(0x200);
+  const LDA_C000 = [0xad, 0x00, 0xc0];
+  const startup = new Uint8Array(0xc00);
   const original = [0x8d, 0x08, 0xc0, 0xa9, 0x00, 0x8d, 0x05, 0xc0, 0x8d, 0x7e, 0x03, 0x8d, 0x04, 0xc0, 0x85, 0xb1, 0x8d, 0x73, 0xc0];
   startup.set(original, 0x169);
-  const vols = new Map([["ULTIMA5", { files: [{ name: "STARTUP", aux: 0x8000, eof: startup.length, data: startup }] }]]);
-  applyPatches(vols);
+  startup.set(LDA_C000, 0xb77);
+  const subs = new Uint8Array(0x1000);
+  subs.set(LDA_C000, 0xfc2);
+  const view = (n) => { const d = new Uint8Array(0x100); d.set(LDA_C000, 0x5a); return { name: "VIEW", aux: 0xa700, eof: d.length, data: d, n }; };
+  const views = [view(1), view(2)];
+  const vols = new Map([
+    ["ULTIMA5", { files: [{ name: "STARTUP", aux: 0x8000, eof: startup.length, data: startup },
+      { name: "MAIN.SUBS", aux: 0xe000, eof: subs.length, data: subs }] }],
+    ["BRITANNIA", { files: [views[0]] }], ["TOWNE", { files: [views[1]] }],
+  ]);
+  const padKey = assembleResident().symbols.PAD_KEY;
+  const jsrPad = [0x20, padKey & 255, padKey >> 8];
+  applyPatches(vols, syms, NOT_MUSIC);
   assert.deepEqual(Array.from(startup.subarray(0x169, 0x169 + 3)), [0xea, 0xea, 0xea]);
   assert.deepEqual(Array.from(startup.subarray(0x16c, 0x16e)), [0xa9, 0x00], "LDA #0 is kept");
-  applyPatches(vols); // idempotent
+  assert.deepEqual(Array.from(startup.subarray(0xb77, 0xb7a)), jsrPad, "title menu reads the pads");
+  assert.deepEqual(Array.from(subs.subarray(0xfc2, 0xfc5)), jsrPad, "in-game scankey reads the pads");
+  for (const v of views) assert.deepEqual(Array.from(v.data.subarray(0x5a, 0x5d)), jsrPad, "VIEW on every disk");
+  applyPatches(vols, syms, NOT_MUSIC); // idempotent
+  subs[0xfc2] = 0x2c;
+  assert.throws(() => applyPatches(vols, syms, NOT_MUSIC), /MAIN\.SUBS.*unexpected bytes/);
+  subs.set(LDA_C000, 0xfc2);
   startup[0x169] = 0x00;
-  assert.throws(() => applyPatches(vols), /unexpected bytes/);
-  console.log("PASS STARTUP aux-memory patch is exact and guarded");
+  assert.throws(() => applyPatches(vols, syms, NOT_MUSIC), /unexpected bytes/);
+  console.log("PASS STARTUP aux-memory and keyboard-read patches are exact and guarded");
+}
+
+// Music sites: every 128K gate opens, the aux zero-page switches become the
+// glue, and the dispatcher / song helper call it.
+{
+  const MUSIC = PATCHES.filter((p) => p.group === "music");
+  const vols = new Map();
+  const fileFor = (volume, name) => {
+    if (!vols.has(volume)) vols.set(volume, { files: [] });
+    let f = vols.get(volume).files.find((x) => x.name === name);
+    if (!f) { f = { name, aux: 0x0000, data: new Uint8Array(0x10000) }; f.eof = f.data.length; vols.get(volume).files.push(f); }
+    return f;
+  };
+  for (const p of MUSIC) {
+    const names = p.volume === "*" ? ["KEEP"] : [p.volume].flat();
+    for (const v of names) fileFor(v, p.file).data.set(p.before, p.address);
+  }
+  applyPatches(vols, syms, MUSIC);
+  const at = (v, name, a, n) => Array.from(fileFor(v, name).data.subarray(a, a + n));
+  const J = (a) => [0x20, a & 255, a >> 8];
+  assert.deepEqual(at("ULTIMA5", "MAIN.SUBS", 0xee5a, 5), [...J(syms.MUS_CTL), 0x80, 0x16], "dispatcher -> mus_ctl, BRA to its exit");
+  assert.deepEqual(at("ULTIMA5", "TEMP.SUBS", 0x1fa8, 4), [...J(syms.MUS_SETX), 0x60], "song helper -> mus_setx, RTS");
+  assert.deepEqual(at("ULTIMA5", "TEMP.SUBS", 0x1fdf, 5), [0xa5, 0xec, 0x4a, 0xea, 0xea], "volume-key gate opened");
+  assert.deepEqual(at("ULTIMA5", "TEMP.SUBS", 0x1fe7, 3), J(syms.MUS_IN));
+  assert.deepEqual(at("ULTIMA5", "TEMP.SUBS", 0x1fec, 3), J(syms.MUS_OUT));
+  for (const v of ["BRITANNIA", "UNDERWORLD"]) assert.deepEqual(at(v, "MAIN.OUT", 0x8760, 3), J(syms.MUS_IN), `ship song on ${v}`);
+  assert.deepEqual(at("DUNGEON", "MAIN.COMBAT", 0x85bc, 3), J(syms.MUS_IN));
+  assert.deepEqual(at("KEEP", "EY", 0xa70b, 3), J(syms.MUS_OUT));
+  applyPatches(vols, syms, MUSIC); // idempotent
+  fileFor("KEEP", "END").data[0xacac] = 0xea;
+  assert.throws(() => applyPatches(vols, syms, MUSIC), /END at \$acac: unexpected bytes/);
+  console.log(`PASS ${MUSIC.length} music-site patches are exact and guarded`);
 }
 
 // ---------------------------------------------------------------------------
@@ -218,12 +271,15 @@ async function bootGame(tree) {
   const s = await harness.boot({ sd: buildSparseFat32({ U5: tree }) });
   const vm = s.vm;
   for (const line of ["CD U5\r", "BRUN U5.PRG 0800\r"]) {
+    if (line.startsWith("BRUN")) vm.addBreakpoint(0x8000);   // stop at the loader's JMP to STARTUP
     for (const ch of line) {
       vm.keyDown(ch === "\r" ? 13 : ch.charCodeAt(0));
       for (let i = 0; i < 8; i++) vm.run(20000);
     }
     for (let i = 0; i < 40; i++) vm.run(50000);
   }
+  for (let i = 0; i < 400 && vm.pc() !== 0x8000; i++) vm.run(50000);
+  vm.removeBreakpoint(0x8000);
   return vm;
 }
 
@@ -231,11 +287,12 @@ async function bootGame(tree) {
   const { volumes, data } = synthVolumes();
   const info = {};
   const tree = buildFromVolumes(volumes, info);
-  assert.equal(tree["U5.PRG"].length, 0x1400);
-  assert.equal(tree["U5.PRG"][0x0c00 - 0x0800 + 0xfff], BANKSIG_VALUE, "bank-1 signature at $DFFF");
+  assert.equal(info.shimImage[0xfff], BANKSIG_VALUE, "bank-1 signature at $DFFF");
+  assert.ok(tree["U5.PRG"].length < 0x1800, `U5.PRG stops at the empty song buffer (${tree["U5.PRG"].length})`);
   assert.deepEqual(Object.keys(tree).slice(1), VOLUMES.map(([, dir]) => dir));
   assert.equal(Object.keys(tree.ULTIMA5).filter((k) => k.startsWith("RAW")).length, 35);
-  assert.equal(tree.ULTIMA5.DATAONE.length, 300);
+  assert.equal(tree.ULTIMA5["DATAONE.A"].length, 300, "file name carries its load address ($3400 = A)");
+  assert.ok(tree.ULTIMA5["STARTUP.D"] && tree.BRITANIA["SAVEDAT.B"], "letters follow the sorted load addresses");
 
   const vm = await bootGame(tree);
   let nmis = 0;
@@ -268,27 +325,266 @@ async function bootGame(tree) {
   assert.equal(r(16), 0x3c, "BASIC ROM stays off ($9000 is RAM)");
   assert.equal(r(17), 0x4c, "bank 1 (shim) still mapped after an NMI");
   assert.ok(nmis >= 2, `keyboard-strobe NMIs went through the language-card forwarder (${nmis})`);
-  assert.match(serial, /CD ULTIMA5\rOK\r/);
-  assert.match(serial, /FLOAD DATAONE 3000 0000 012B\r/);
-  assert.match(serial, /FLOAD RAW19 D600 0000 01FF\r/);
-  assert.match(serial, /OWRITE SAVEDAT 3800 0040\r/);
-  assert.doesNotMatch(serial, /NOPE|NOWHERE|BLOAD/, "missing files/volumes never reach the ROM");
-  console.log(`PASS shim on ROM DOS: loads, block reads, writes, volumes, errors, ${nmis} forwarded NMIs`);
+  assert.doesNotMatch(serial, /ERR|NOT FOUND|MISSING/, "the ROM printed no error");
+  console.log(`PASS shim on the ROM FAT32 routines: loads, block reads, writes, volumes, errors, ${nmis} forwarded NMIs`);
+}
+
+// An older U5 folder copied under the new one: STARTUP without an extension
+// would be found first; the loader must refuse it.
+{
+  const { volumes } = synthVolumes();
+  const tree = buildFromVolumes(volumes);
+  tree.ULTIMA5 = { STARTUP: tree.ULTIMA5["STARTUP.D"], ...tree.ULTIMA5 };
+  const vm = await bootGame(tree);
+  let screen = "";
+  for (let r = 0; r < 24; r++) for (let c = 0; c < 40; c++) screen += String.fromCharCode(vm.peek(0x400 + (r & 7) * 0x80 + (r >> 3) * 0x28 + c) & 0x7f);
+  assert.match(screen + vm.drainOutput(), /OLD FILES FOUND/, "stale folder reported");
+  assert.notEqual(vm.peek(RES + 30), 0xaa, "the game did not start");
+  console.log("PASS a leftover file from an older U5 folder stops the loader with a message");
+}
+
+// ---------------------------------------------------------------------------
+// SNES pads: pad_key types mapped keys into $C000 (tap, held repeat, release).
+
+{
+  const padKey = assembleResident().symbols.PAD_KEY;
+  const padProg = assemble(`
+        .org $8000
+        jmp start               ; the loader expects STARTUP to begin with JMP
+start:  lda $C083               ; bank 2 read/write, like the game
+        lda $C083
+        ldx #0
+loop:   stz $B8                 ; the game's key queue stays empty
+        jsr $${padKey.toString(16)}
+        bpl loop
+        sta $0300,x
+        bit $C010
+        inx
+        txa
+        and #1
+        beq use2
+        lda $C08B
+        lda $C08B
+        bra loop
+use2:   lda $C083
+        lda $C083
+        bra loop
+`).bytes;
+  const { volumes } = synthVolumes();
+  const u5 = volumes.get("ULTIMA5").files;
+  u5.splice(u5.findIndex((f) => f.name === "STARTUP"), 1,
+    { name: "STARTUP", aux: 0x8000, eof: padProg.length, data: padProg });
+  const vm = await bootGame(buildFromVolumes(volumes));
+  const second = 1573438;
+  const hold = (mask, seconds) => { vm.setGamepadState(1, mask); vm.runCycles(Math.round(seconds * second)); };
+  const typed = () => { const out = []; for (let i = 0; i < 64 && vm.peek(0x300 + i); i++) out.push(vm.peek(0x300 + i)); return out; };
+  for (let i = 0; i < 64; i++) vm.poke(0x300 + i, 0);
+  hold(0, 0.3);
+  hold(256, 0.1); hold(0, 0.3);
+  assert.deepEqual(typed(), [0x8d], `a tap of A types one Return (controller 2 mirrors 1); PC $${vm.pc().toString(16)} serial ${JSON.stringify(vm.drainOutput().slice(-200))}`);
+  hold(128, 1.5);
+  const held = typed().length - 1;
+  hold(0, 0.6);
+  const afterRelease = typed().length - 1;
+  assert.ok(typed().slice(1).every((k) => k === 0x95), "Right types right-arrow");
+  assert.ok(held >= 5 && held <= 9, `holding Right 1.5 s repeats after a delay (${held} keys)`);
+  assert.equal(afterRelease, held, "releasing stops at once");
+  hold(1 | 8, 0.2); hold(0, 0.3);
+  assert.deepEqual(typed().slice(-2).sort(), [0xa0, 0xda], "B and Start pressed together both type");
+  console.log(`PASS SNES pads: tap, ${held}-key held repeat, release, simultaneous buttons, bank swaps`);
+}
+
+// ---------------------------------------------------------------------------
+// Music: synthetic driver files (no game data) -> SONG01; the program asks for
+// it through the glue, the foreground loads it, the Mockingboard timer plays
+// it while bank 2 is mapped, and pause/resume bracket a file load.
+
+{
+  const mudr = new Uint8Array(0x10d8);
+  for (let i = 0; i < 256; i++) mudr[0xf00 + i] = Math.floor(((i >> 4) * (i & 15) + 7) / 15);
+  for (let i = 0; i < 96; i++) { const p = Math.round(0x121f * 2 ** (-i / 12)); mudr[0x1000 + i] = p & 255; mudr[0x1060 + i] = p >> 8; }
+  mudr.set([192, 96, 48, 24, 12, 6, 3, 255, 255, 144, 72, 36, 18, 9, 255, 255, 128, 64, 32, 16, 8, 4, 2, 1], 0x10c0);
+  const muin = new Uint8Array(256);
+  [0x400, 0xf00, 0x40, 0x800, 0x80, 2].forEach((v, k) => { muin[32 + 2 * k] = v & 255; muin[33 + 2 * k] = v >> 8; });
+  muin[32 + 28] = 0x38;                     // instrument 1: tone only
+  // Voice 0: instrument 1, tempo 120, notes +0 and +1, 762 notes that do
+  // not repeat (so the song outgrows the main buffer; the last two thirds
+  // in called tracks 2 and 3), call track 1, end.
+  // Voice 1: track 1 = instrument 1, note -1, return (= end at depth 0).
+  const DUR = [0, 1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23];
+  const wander = [];
+  for (let i = 0, seed = 7, pitch = 61; i < 762; i++) {
+    seed = (seed * 1103515245 + 12345) >>> 0;
+    let d = ((seed >>> 16) % 15) - 7;
+    if (pitch + d < 45 || pitch + d > 75) d = -d;
+    pitch += d;
+    wander.push(((16 + d) << 2) | 1, DUR[(seed >>> 8) % DUR.length]);
+  }
+  const third = wander.length / 3;
+  const t0 = [0, 0xd3, 1, 0xcb, 120, 0x40, 0x44, ...wander.slice(0, third), 0xf3, 2, 0xf3, 3, 0xf3, 1, 0xfb];
+  const t1 = [0, 0xd3, 1, 0x3c, 0xf7], t2 = [0, ...wander.slice(third, 2 * third), 0xf7], t3 = [0, ...wander.slice(2 * third), 0xf7];
+  const o0 = 13, o1 = o0 + t0.length, o2 = o1 + t1.length, o3 = o2 + t2.length;
+  const song = [0, 2, 0, 1, 4, o0 >> 8, o0 & 255, o1 >> 8, o1 & 255, o2 >> 8, o2 & 255, o3 >> 8, o3 & 255, ...t0, ...t1, ...t2, ...t3];
+  const muff = Uint8Array.from([0, 1, 0, 4, ...song]);
+  const R2 = ram2Symbols();
+  const prog = assemble(`
+        .org $8000
+        jmp start
+start:  lda $C083               ; bank 2 read/write, like the game
+        lda $C083
+        ldx #1
+        jsr $${syms.MUS_SETX.toString(16)}
+wait1:  stz $B8
+        jsr $${syms.PAD_KEY.toString(16)}   ; the foreground loads SONG01 here
+        lda $${R2.CUR.toString(16)}
+        cmp #1
+        bne wait1
+        lda #1
+        sta $0300
+wait2:  stz $B8
+        jsr $${syms.PAD_KEY.toString(16)}
+        lda $0301
+        beq wait2
+        ldx #6                  ; pause
+        jsr $${syms.MUS_CTL.toString(16)}
+        lda $${R2.MUS_IER.toString(16)}
+        sta $0302
+        ldx #2
+        lda #0
+vols:   ora $${(R2.WRITTEN + 8).toString(16)},x
+        dex
+        bpl vols
+        ora $${(R2.WRITTEN + 19).toString(16)}
+        ora $${(R2.WRITTEN + 20).toString(16)}
+        ora $${(R2.WRITTEN + 21).toString(16)}
+        sta $0303
+        lda $C08B               ; DINKEYDOS calls run with bank 1 mapped
+        lda $C08B
+        jsr $D006
+        .asciiz "DATA.ONE"
+        .word $3000
+        lda $C083
+        lda $C083
+        ldx #9                  ; resume
+        jsr $${syms.MUS_CTL.toString(16)}
+        lda #3
+        sta $0300
+wait4:  stz $B8
+        jsr $${syms.PAD_KEY.toString(16)}
+        lda $0308
+        beq wait4
+        lda $C08B               ; the game reads a disk block: song part lost
+        lda $C08B
+        jsr $D024
+        .word blk
+        lda $C083
+        lda $C083
+        lda $${R2.ASONG.toString(16)}
+        sta $0304
+        lda $${R2.WANT.toString(16)}
+        sta $0305
+        lda $${R2.CUR.toString(16)}
+        sta $0306
+        ldx #2
+        lda #0
+mute:   ora $${(R2.WRITTEN + 8).toString(16)},x
+        ora $${(R2.WRITTEN + 19).toString(16)},x
+        dex
+        bpl mute
+        sta $0309
+wait5:  stz $B8
+        jsr $${syms.PAD_KEY.toString(16)}   ; ... and loaded again
+        lda $${R2.CUR.toString(16)}
+        cmp #1
+        bne wait5
+        lda $${R2.ASONG.toString(16)}
+        sta $0307
+        lda #4
+        sta $0300
+hang:   stz $B8
+        jsr $${syms.PAD_KEY.toString(16)}
+        bra hang
+blk:    .word 200
+`).bytes;
+  const { volumes, data } = synthVolumes();
+  const u5 = volumes.get("ULTIMA5").files;
+  u5.splice(u5.findIndex((f) => f.name === "STARTUP"), 1, { name: "STARTUP", aux: 0x8000, eof: prog.length, data: prog });
+  for (const [name, bytes] of [["MUFF", muff], ["MUIN", muin], ["MUDR", mudr]]) u5.push({ name, aux: 0x6000, eof: bytes.length, data: bytes });
+  const info = {};
+  const tree = buildFromVolumes(volumes, info);
+  assert.deepEqual([...info.songs.keys()], [1], JSON.stringify(info.skipped));
+  assert.ok(info.partA.get(1) > 0, `the song continues in the block buffer (${info.songs.get(1).length} bytes, main buffer ${info.capacity})`);
+  for (const [, dir] of VOLUMES) assert.ok(tree[dir].SONG01, `SONG01 in ${dir}`);
+  const vm = await bootGame(tree);
+  const second = 1573438;
+  const runFor = (s) => vm.runCycles(Math.round(s * second));
+  for (let i = 0; i < 40 && vm.peek(0x300) !== 1; i++) runFor(0.1);
+  assert.equal(vm.peek(0x300), 1, `song 1 started (LOADED ${vm.peek(R2.LOADED)}, PC $${vm.pc().toString(16)})`);
+  assert.equal(vm.peek(R2.ASONG), 1, "its second part is in the block buffer");
+  const { perl, perh } = driverTables(mudr);
+  const per = (note) => [perl[note - 21], perh[note - 21]];
+  const W = (r) => vm.peek(R2.WRITTEN + r);
+  const vol0 = new Set();
+  for (let i = 0; i < 40; i++) { runFor(0.025); vol0.add(W(8)); }
+  assert.equal(W(7), 0x3e, "AY0 mixer: tone A on (instrument 1)");
+  assert.equal(W(11 + 7), 0x3e, "AY1 mixer: tone A on");
+  assert.deepEqual([W(11), W(12)], per(59), "voice 1 (AY1 A) plays note 59 at 3RIC pitch");
+  assert.ok(vol0.size >= 4, `voice 0's volume envelope moves (${[...vol0]})`);
+  const latch = scaleLatch(tempoLatch(120));
+  assert.equal(vm.peek(R2.LATCHL) | vm.peek(R2.LATCHH) << 8, latch, "tempo 120 latch, scaled");
+  vm.poke(0x301, 1);
+  for (let i = 0; i < 40 && vm.peek(0x300) !== 3; i++) runFor(0.1);
+  assert.equal(vm.peek(0x300), 3, "paused, loaded a file, resumed");
+  assert.equal(vm.peek(0x302), 0x40, "pause stops the timer IRQ");
+  assert.equal(vm.peek(0x303), 0, "pause silences every channel at once");
+  for (let i = 0; i < 300; i++) assert.equal(vm.peek(0x3000 + i), data[i], "file load between pause and resume");
+  assert.equal(vm.peek(R2.MUS_IER), 0xc0, "resume restarts the timer");
+  const ramp = vm.peek(R2.CURVOL);
+  runFor(2);
+  assert.ok(ramp < 0xff && vm.peek(R2.CURVOL) === 0xff, `volume ramps back after resume (${ramp} -> ${vm.peek(R2.CURVOL)})`);
+  assert.equal(vm.peek(R2.CUR), 1, "still playing (song 1 chains to itself)");
+  vm.poke(0x308, 1);
+  for (let i = 0; i < 60 && vm.peek(0x300) !== 4; i++) runFor(0.1);
+  assert.equal(vm.peek(0x300), 4, "block read, then the song came back");
+  assert.deepEqual([vm.peek(0x304), vm.peek(0x305), vm.peek(0x306)], [0, 1, 0], "a block read drops the song and asks for it again");
+  assert.equal(vm.peek(0x309), 0, "the chips are silenced before the block read");
+  assert.equal(vm.peek(0x307), 1, "reloaded with its second part");
+  console.log(`PASS Mockingboard music: ${info.songs.get(1).length}-byte SONG01 (${info.partA.get(1)} in the block buffer) loaded on demand, played from the timer IRQ in bank 2, pause/load/resume, reload after a block read (scale ${CLOCK_SCALE.toFixed(4)})`);
+}
+
+// ---------------------------------------------------------------------------
+// Repacking: phrase subroutines, re-encoded durations, the replay check.
+
+{
+  // One track with a 12-note phrase played 4 times and a phrase with a call.
+  const phrase = [0x48, 0x3c, 0x44, 0x3c, 0x4c, 0x38, 0x40, 0x44, 0x3c, 0x48, 0x40, 0x3c];
+  const t0 = [0, 0xd3, 1, ...phrase, ...phrase, 0x0f, ...phrase, 0x67, ...phrase, 0xf3, 1, 0xfb];
+  const t1 = [0, 0x40, 0x44, 0xf7];
+  const muff = Uint8Array.from([0, 1, 0, 4, 0, 1, 0, 2, 0, 8, 8 + t0.length >> 8, 8 + t0.length & 255, ...t0, ...t1]);
+  const instOff = new Map([[1, 0]]);
+  const big = repackSong(muff, 1, { base: 0xdc00, capB: 0x3ff, baseA: 0xd600, capA: 512 }, instOff);
+  const raw = 2 + 12 + 4 + t0.length - 1 + t1.length - 1;
+  assert.ok(big.bytes.length < raw - 20, `phrases become subroutines (${raw} -> ${big.bytes.length} bytes)`);
+  assert.ok(big.bytes.includes((KCALL << 2) | 3) && big.bytes.includes((KRET << 2) | 3), "uses the keep-state call and return");
+  const capB = big.bytes.length - 6;
+  const split = repackSong(muff, 1, { base: 0xe000 - capB, capB, baseA: 0xd600, capA: 512 }, instOff);
+  assert.ok(split.partA > 0 && split.bytes.length === capB + split.partA, "too big for the main buffer: continues in region A");
+  assert.throws(() => repackSong(muff, 1, { base: 0xdfe0, capB: 24, baseA: 0xd600, capA: 4 }, instOff), /buffers hold/);
+  console.log(`PASS song repacking: ${raw} -> ${big.bytes.length} bytes, two-region layout, replayed against the original`);
 }
 
 // ---------------------------------------------------------------------------
 // Optional: the real game boots to its title screen.
 
 if (process.env.U5_DISKS) {
-  const tree = buildTree(process.env.U5_DISKS);
+  const info = {};
+  const tree = buildTree(process.env.U5_DISKS, info);
   const vm = await bootGame(tree);
   for (let i = 0; i < 400; i++) vm.run(50000);
-  const serial = vm.drainOutput();
-  assert.match(serial, /FLOAD STARTUP 8000/);
-  assert.match(serial, /FLOAD MAINSUBS E000/);
-  assert.match(serial, /FLOAD VIEWTILE A800/);
   assert.ok(!vm.textMode(), "title is in graphics mode");
-  console.log("PASS original Ultima V disks boot to the animated title");
+  assert.equal(info.songs.size, 15, `songs built: ${[...info.songs.keys()]}`);
+  assert.equal(vm.peek(ram2Symbols().MUS_IER), 0xc0, "Mockingboard timer running");
+  console.log(`PASS original Ultima V disks boot to the animated title (songs ${[...info.songs.keys()].join(" ")})`);
 } else {
   console.log("SKIP real-disk boot (set U5_DISKS to the folder with the eight images)");
 }
