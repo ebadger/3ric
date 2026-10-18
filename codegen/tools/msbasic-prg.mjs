@@ -61,6 +61,7 @@ const ROUTINES = {
   fat32_opendirent: [0xa0, 0x1c, 0xb1, 0xb8, 0x8d, 0x10, 0xcc], // size -> fat32_bytesremaining
   fat32_file_readbyte: [0x38, 0xad, 0x10, 0xcc, 0x0d, 0x11, 0xcc, 0x0d, 0x12, 0xcc, 0x0d, 0x13, 0xcc],
   fat32_deletefile: [0x20, null, null, 0x9c, 0x14, 0xcc, 0x9c, 0x15, 0xcc],
+  fat32_markdeleted: [0xa0, 0x00, 0xa9, 0xe5, 0x91, 0xb8], // $E5 at (zp_sd_address), then write the sector
   fat32_allocatefile: [0xa9, 0x00, 0x8d, 0x14, 0xcc, 0x8d, 0x15, 0xcc, 0x8d, 0x16, 0xcc, 0x8d, 0x17, 0xcc],
   fat32_writedirent: [0x18, 0xa5, 0xb8, 0x69, 0x20, 0x85, 0xb8, 0xa5, 0xb9, 0x69, 0x00, 0x85, 0xb9],
   fat32_file_write: [0xad, 0x18, 0xcc, 0x8d, 0x0c, 0xcc, 0xad, 0x19, 0xcc, 0x8d, 0x0d, 0xcc],
@@ -151,20 +152,29 @@ ${d("DSDADDR", a.zp_sd_address, 2)}${d("DBYTES", a.fat32_bytesremaining)}${d("DF
 ${d("FOPENCD", a.fat32_open_cd)}${d("FFIND", a.fat32_finddirent)}${d("FOPEN", a.fat32_opendirent)}\
 ${d("FREADB", a.fat32_file_readbyte)}${d("FDELETE", a.fat32_deletefile)}${d("FALLOC", a.fat32_allocatefile)}\
 ${d("FWRITEDIR", a.fat32_writedirent)}${d("FWRITE", a.fat32_file_write)}${d("FPREP", a.fat32_prep_fileparam)}\
-${d("FSETBUF", a.fat32_set_readbuffer)}${d("FSETTGT", a.fat32_set_target)}\
+${d("FSETBUF", a.fat32_set_readbuffer)}${d("FSETTGT", a.fat32_set_target)}${d("FMARKDEL", a.fat32_markdeleted)}\
 ${d("DZPBASE", ZP_SAVE.start, 2)}${d("DZPLEN", ZP_SAVE.length, 2)}${d("DBADLEN", BAD_NAME_CHARS.length, 2)}
         .org ${hex(org)}
-; SAVE "NAME": replace NAME in the current directory with the program (TXTTAB..VARTAB).
+; SAVE "NAME": write the program (TXTTAB..VARTAB) as NAME in the current directory. The
+; new entry is appended after any existing ones, which are deleted only once it is
+; written, so a failed SAVE leaves the old file.
 dossave:
         jsr dsname
         jsr dsopen
+        stz dsold
         jsr dsfind
+dscount:
         bcs dsnew
         jsr dsisdir
-        beq dsdelete
-        jmp dstypezp        ; never delete a directory
-dsdelete:
-        jsr FDELETE
+        beq dscountfile
+        jmp dstypezp        ; never replace a directory
+dscountfile:
+        inc dsold
+        bne dscountnext
+        jmp dstypezp        ; 256 entries of one name: refuse
+dscountnext:
+        jsr FFIND           ; continue after this entry
+        bra dscount
 dsnew:
         jsr dssize
         jsr FALLOC
@@ -183,6 +193,28 @@ dsnew:
         sta DF32ADDR+1
         jsr FWRITE
         bcs dssaveio
+dsdelete:
+        lda dsold
+        beq dssaved
+        jsr dsfind          ; the first match is the oldest remaining old entry
+        bcs dssaved
+        ldy #20             ; start cluster: bytes 20-21 (high) and 26-27 (low)
+        lda (DSDADDR),y
+        iny
+        ora (DSDADDR),y
+        ldy #26
+        ora (DSDADDR),y
+        iny
+        ora (DSDADDR),y
+        bne dsdelchain
+        jsr FMARKDEL        ; an empty file owns no clusters: only mark the entry
+        bra dsdeleted
+dsdelchain:
+        jsr FDELETE
+dsdeleted:
+        dec dsold
+        bra dsdelete
+dssaved:
         jsr FOPENCD
         jmp dszprest        ; RTS to NEWSTT with CHRGET/TXTPTR restored
 dssaveio:
@@ -487,6 +519,7 @@ dsend:   .word 0
 dsstop:  .word 0
 dsdot:   .byte 0
 dsrun:   .byte 0
+dsold:   .byte 0
 dszpbuf: .res DZPLEN, 0
 `;
 }

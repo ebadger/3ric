@@ -53,7 +53,10 @@ console.log("PASS ROMs or debug symbols this port does not recognize are refused
 const README = Uint8Array.from("NOT A PROGRAM\r", char => char.charCodeAt(0));
 const card = (prg = built.prg) => buildSparseFat32({
   "ROOT.TXT": README,
-  PROGS: { "BASIC.PRG": prg, "README.TXT": README, "BIG.BIN": new Uint8Array(40000), DATA: { "X.TXT": README } },
+  PROGS: {
+    "BASIC.PRG": prg, "README.TXT": README, "BIG.BIN": new Uint8Array(40000), "EMPTY.BAS": new Uint8Array(0),
+    DATA: { "X.TXT": README },
+  },
 });
 const scrub = address => (address * 151 + 77) & 0xff;
 
@@ -163,19 +166,105 @@ try {
   assert.equal(command("LIST"), "", "a file that is not a program is not kept");
   assert.equal(command("PRINT 6*7"), " 42", "BASIC is healthy after every error");
   console.log("PASS missing files, directories, bad names, non-programs and oversized files fail cleanly");
+
+  // An empty file has start cluster 0; the ROM's fat32_deletefile would walk it and
+  // clear reserved FAT entry 0, so replacing one must only mark its entry deleted.
+  command("10 PRINT \"NOT EMPTY\"");
+  vm.addMappedBreakpoint(symbols.fat32_deletefile, vm.memoryMapping(symbols.fat32_deletefile));
+  assert.equal(command("SAVE \"EMPTY.BAS\""), "", "replacing an empty file never frees cluster 0");
   vm.clearBreakpoints();
+  command("NEW");
+  command("LOAD \"EMPTY.BAS\"");
+  assert.equal(command("RUN"), "NOT EMPTY");
+  console.log("PASS SAVE over an empty (cluster 0) file marks the old entry deleted without walking the FAT");
 
   vm.reset();
   until(() => /^>`?$/.test(screen().split("\n").filter(row => row.trim()).at(-1)), "the DOS prompt after reset");
   command("CD PROGS", ">");
   const dir = command("DIR", ">");
-  for (const name of ["HELLO", "P2", "BASIC"]) assert.equal(dir.split(/\s+/).filter(word => word.startsWith(name)).length, 1, `${name} listed once:\n${dir}`);
+  for (const name of ["HELLO", "P2", "BASIC", "EMPTY"]) assert.equal(dir.split(/\s+/).filter(word => word.startsWith(name)).length, 1, `${name} listed once:\n${dir}`);
   assert.ok(!/JUNK|TOOLONG|WILD/.test(dir), "rejected names were never created");
   command("CD ..", ">");
   assert.ok(!/HELLO|P2/.test(command("DIR", ">")), "the programs went to the current directory, not the root");
   console.log("PASS the DOS lists each saved program once, in the directory BASIC was started from");
 } finally {
   ok.vm.delete();
+}
+
+// --- programs spanning sectors and clusters -------------------------------------------------
+// A 5 KB program built from the ROM's own keyword table: line n is
+// PRINT "LINE n ABC...Z", linked for TXTTAB $0801, then the 00 00 end marker.
+const { segments } = readDbgSymbols(dbg);
+function keywordToken(word) {
+  const { start, size } = segments.KEYWORDS;
+  for (let at = start, token = 0x80, text = ""; at < start + size; at++) {
+    text += String.fromCharCode(rom[at] & 0x7f);
+    if (rom[at] & 0x80) {
+      if (text === word) return token;
+      token++;
+      text = "";
+    }
+  }
+  assert.fail(`${word} is not in the keyword table`);
+}
+const PRINT = keywordToken("PRINT");
+const TXTTAB = 0x0801;
+const bigLines = Array.from({ length: 120 }, (_, i) => (i + 1) * 10);
+const big = (() => {
+  const bytes = [];
+  for (const number of bigLines) {
+    const body = [PRINT, ...Buffer.from(`"LINE ${number} ABCDEFGHIJKLMNOPQRSTUVWXYZ"`), 0];
+    const next = TXTTAB + bytes.length + 4 + body.length;
+    bytes.push(next & 0xff, next >> 8, number & 0xff, number >> 8, ...body);
+  }
+  return Uint8Array.from([...bytes, 0, 0]);
+})();
+assert.ok(big.length > 4096 + 512, "BIG.BAS spans more than one 4 KB cluster");
+const programInRam = vm => {
+  const start = vm.peek(0x6a) | (vm.peek(0x6b) << 8), end = vm.peek(0x6c) | (vm.peek(0x6d) << 8);
+  return Uint8Array.from({ length: end - start }, (_, i) => vm.peek(start + i));
+};
+
+// The ROM's FAT32 writes (the shell's BSAVE too) do not complete on cards with clusters
+// larger than 512 bytes, so the 4 KB-cluster card is read-only here.
+for (const options of [{ fragment: ["BIG.BAS"] }, { sectorsPerCluster: 8, totalSectors: 540_000 }]) {
+  const writes = !options.sectorsPerCluster;
+  const layout = writes ? "512-byte clusters, fragmented input" : "4 KB clusters";
+  const session = await harness.boot({ sd: buildSparseFat32({ PROGS: { "BASIC.PRG": built.prg, "BIG.BAS": big } }, options) });
+  try {
+    const { vm, type, until, screen, command } = driver(session);
+    command("CD PROGS", ">");
+    // The shell's BSAVE does not check for an existing name: two entries called DUP.BAS.
+    // (It runs from the emulator's seeded copy of BASIC's CODE segment.)
+    if (writes) {
+      for (let i = 0; i < 2; i++) command("BSAVE DUP.BAS 0800 0010", ">");
+      assert.equal(command("DIR", ">").split(/\s+/).filter(word => word.startsWith("DUP")).length, 2);
+    }
+    for (let address = built.glueOrg; address < BASIC_END; address++) vm.poke(address, scrub(address));
+    type("BRUN BASIC.PRG 0800\r");
+    until(() => /MEMORY SIZE\?/.test(screen()), "MEMORY SIZE?");
+    command("");
+    assert.equal(vm.peek(0x6a) | (vm.peek(0x6b) << 8), TXTTAB);
+    command("LOAD \"BIG.BAS\"");
+    assert.deepEqual(programInRam(vm), big, `a ${big.length}-byte program loads intact (${layout})`);
+    assert.equal(command("GOTO 1200"), "LINE 1200 ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+    if (!writes) {
+      console.log(`PASS a ${big.length}-byte program loads intact (${layout})`);
+      continue;
+    }
+    command("SAVE \"DUP.BAS\"");
+    command("NEW");
+    command("LOAD \"DUP.BAS\"");
+    assert.deepEqual(programInRam(vm), big, `it saves and reloads intact (${layout})`);
+    vm.reset();
+    until(() => /^>`?$/.test(screen().split("\n").filter(row => row.trim()).at(-1)), "the DOS prompt after reset");
+    command("CD PROGS", ">");
+    assert.equal(command("DIR", ">").split(/\s+/).filter(word => word.startsWith("DUP")).length, 1,
+      "SAVE removed both older entries of the name");
+    console.log(`PASS a ${big.length}-byte program loads, saves over two duplicate entries and reloads (${layout})`);
+  } finally {
+    session.vm.delete();
+  }
 }
 
 const foreign = buildMsBasicPrg(variant(r => { r[GUARD_START + 0x123] ^= 0x5a; }), dbg);

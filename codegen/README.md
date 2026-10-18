@@ -86,7 +86,7 @@ program to that folder, replacing a file of the same name, and `LOAD "HELLO.BAS"
 back; any string expression works (`SAVE A$`). Names are FAT 8.3 and upper-cased. Errors:
 `?FILE NOT FOUND ERR`, `?FILE TYPE MISMATCH ERR` (a directory or not a BASIC program),
 `?BAD FILE NAME ERR`, `?OUT OF MEMORY ERR`, `?I/O ERR`. Use the shell for `DIR`, `CD` and
-`DEL`. Like the disk, the file refuses to start on a ROM other than the one it was built
+`DEL`. `SAVE` needs a card with 512-byte clusters, as the shell's `BSAVE` does. Like the disk, the file refuses to start on a ROM other than the one it was built
 from and contains Microsoft's BASIC, so keep it local.
 `node codegen/tools/msbasic-prg.test.mjs` verifies it on the WASM build.
 

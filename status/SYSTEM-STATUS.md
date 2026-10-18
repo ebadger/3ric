@@ -204,7 +204,8 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   writes a local `BASIC.PRG` (it contains the ROM's Microsoft BASIC; see `NOTICE`). Copy it
   to the SD card; at the shell `CD` to the folder for your programs, then
   `BRUN BASIC.PRG 0800` and Return at `MEMORY SIZE?` (`34047 BYTES FREE`). `SAVE "NAME"`
-  and `LOAD "NAME"` use that folder; names are 8.3. Emulator-verified, not yet run on the
+  and `LOAD "NAME"` use that folder; names are 8.3; `SAVE` (like `BSAVE`) needs 512-byte
+  clusters. Emulator-verified, not yet run on the
   board.
 - **MS-BASIC boot disk:** `node codegen\tools\msbasic-woz.mjs codegen\out\basic.woz` writes
   a local WOZ that loads the ROM's own Microsoft BASIC into the RAM under `$9000–$BFFF`;
