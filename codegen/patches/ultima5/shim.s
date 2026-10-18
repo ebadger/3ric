@@ -25,14 +25,16 @@
 ; resident's rom_call (ROM reads, bank-1 writes), in the current disk's
 ; directory only, so a missing file fails here exactly as on the floppy.
 ; A load reads bytes [0, size-1] (the ROM's end offset is inclusive); a
-; write rewrites the file's sectors in place, as OWRITE does. The ProDOS
-; load address (aux type) of each name is looked up in auxtab by a 16-bit
-; hash of the key. Selecting a disk sets the ROM's current-directory cluster
+; write rewrites the file's sectors in place, as OWRITE does. Each file is
+; named KEY.X, X a letter naming its ProDOS load address (aux type) in the
+; auxl/auxh tables the tool appends (no extension: 0); lookups match
+; "KEY.*". Selecting a disk sets the ROM's current-directory cluster
 ; from voltab, which the loader filled in. The disk's blocks are exported as
 ; RAW00-RAW22 (eight blocks, 4 KB, each); a block read loads 512 bytes of
 ; RAWnn into $D600, and a one-block cache absorbs the game's habit of
-; reading every block twice (once per 256-byte half). Each ROM session
-; saves the ROM's zero page $B0-$BF and holds off the music timer.
+; reading every block twice (once per 256-byte half). The largest song may
+; borrow the block buffer while no block is read (see music.s). Each ROM
+; session saves the ROM's zero page $B0-$BF and holds off the music timer.
 ;
 ; Uses only DINKEYDOS's zero page ($52-$55, $60-$7F).
 
@@ -59,6 +61,8 @@ FAT_END     = $CC35             ; fat32_file_read_part last byte (inclusive)
 FAT_OFFSET  = $CC3B             ; fat32_file_read_part first byte
 FAT_NAME    = $CD70             ; 8.3 name fat32_finddirent matches
 FAT_DEST    = $BC               ; fat32_file_read_part destination
+DIRENT      = $B8               ; fat32_finddirent: the entry found
+BLOCKBUF    = $D600             ; block buffer (DINKEYDOS contract)
 
         .org $D000
 
@@ -292,39 +296,22 @@ kh_nc:
         bne kh_loop
         rts
 
-; ZP_ADDR = the key's ProDOS aux type (0 if not listed). auxtab holds groups
-; [count, aux low, aux high, count x (hash low, hash high)], then 0.
+; ZP_ADDR = the load address named by the file's extension: A for auxl/auxh
+; entry 0, B for 1, ...; none = 0 (port-ultima5.mjs names the files).
 aux_lookup:
-        jsr key_hash
-        ldx #0
-al_group:
-        lda auxtab,x
-        beq al_none
-        sta ZP_CNT
-        lda auxtab+1,x
-        sta ZP_ADDR
-        lda auxtab+2,x
-        sta ZP_ADDR+1
-        inx
-        inx
-        inx
-al_ent:
-        lda auxtab,x
-        cmp ZP_TMP
-        bne al_skip
-        lda auxtab+1,x
-        cmp ZP_TMP+1
-        beq al_found
-al_skip:
-        inx
-        inx
-        dec ZP_CNT
-        bne al_ent
-        bra al_group
-al_none:
         stz ZP_ADDR
         stz ZP_ADDR+1
-al_found:
+        lda extc
+        sec
+        sbc #'A'
+        cmp #NAUX
+        bcs al_none
+        tax
+        lda auxl,x
+        sta ZP_ADDR
+        lda auxh,x
+        sta ZP_ADDR+1
+al_none:
         rts
 
 ; ---------------------------------------------------------------------------
@@ -358,15 +345,15 @@ re_rest:
 re_done:
         rts
 
-; Find key in the current directory: carry clear and the file open
-; (FAT_SIZE etc. set) if found.
+; Find key (any extension) in the current directory: carry clear, the file
+; open (FAT_SIZE etc. set) and its extension's first letter in extc if found.
 open_key:
         ldx #<ROM_OPEN_CD
         ldy #>ROM_OPEN_CD
         jsr ROM_CALL
         ldx #10
 ok_name:
-        lda #' '
+        lda #'*'                ; "KEY.*"
         cpx #8
         bcs ok_store
         lda key,x
@@ -378,6 +365,9 @@ ok_store:
         ldy #>ROM_FINDDIRENT
         jsr ROM_CALL
         bcs ok_done
+        ldy #8
+        lda (DIRENT),y
+        sta extc
         ldx #<ROM_OPENDIRENT
         ldy #>ROM_OPENDIRENT
         jsr ROM_CALL
@@ -385,12 +375,14 @@ ok_store:
 ok_done:
         rts
 
-; Read the whole open file to X (low) / Y (high).
+; Read the whole open file to X (low) / Y (high); read_rest reads from
+; FAT_OFFSET to the end.
 read_file:
-        stx FAT_DEST
-        sty FAT_DEST+1
         stz FAT_OFFSET
         stz FAT_OFFSET+1
+read_rest:
+        stx FAT_DEST
+        sty FAT_DEST+1
         lda FAT_SIZE
         sec
         sbc #1
@@ -490,6 +482,7 @@ e_rdblk:
         bne rb_miss
         jmp ok
 rb_miss:
+        jsr a_lose              ; a song part in the buffer is about to go
         lda #$FF
         sta lastblk+1
         ldx #2                  ; key = "RAWnn", nn = block / 8 in hex
@@ -530,9 +523,9 @@ rb_open:
         sta FAT_END+1           ; last byte = offset + 511
         lda #$FF
         sta FAT_END
-        lda #<$D600
+        lda #<BLOCKBUF
         sta FAT_DEST
-        lda #>$D600
+        lda #>BLOCKBUF
         sta FAT_DEST+1
         jsr read_part
         jsr rom_end
@@ -607,6 +600,7 @@ e_wrblk:
         jmp io_error            ; never used by the game
 
 zsave:      .res 16
+extc:       .byte 0             ; extension letter of the file opened last
 ; ---------------------------------------------------------------------------
 ; SNES controllers. The resident's pad_key calls this (bank 1 mapped) in
 ; place of the game's keyboard reads. Both pads are read straight from VIA1

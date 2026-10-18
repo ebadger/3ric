@@ -203,12 +203,14 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   Running on the board (owner, 2026-10-17). Both SNES pads play the game (D-pad
   moves, A Return, B pass, X talk, Y attack, L Esc, R enter, Start Ztats, Select
   save; emulator-tested, board trial pending). Mockingboard music: a compact 64 KB
-  player plays 11 of the 15 songs (title, shrine/death, underworld and Blackthorn
-  do not fit its 804-byte buffer), bit-exact per tick against the reverse-engineered
+  player plays all 15 songs (losslessly compressed by the tool; the title theme
+  borrows the block buffer), bit-exact per tick against the reverse-engineered
   driver after clock scaling; emulator-tested, board trial pending. WASM play
   reached character creation, save, the overworld, combat and a towne; dialogue and
-  dungeons are unverified. Missing files are detected; copy the whole folder. New
-  overworld blocks cost ~1.1 s each.
+  dungeons are unverified. Missing files are detected. To update a card, delete the
+  old `U5` folder first (the loader reports leftovers). New overworld blocks cost
+  ~1.1 s each.
+
 
   See [`docs/porting-logs/ultima-v.md`](../docs/porting-logs/ultima-v.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`

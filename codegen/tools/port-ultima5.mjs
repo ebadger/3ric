@@ -15,7 +15,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { assemble } from "./asm6502.mjs";
 import { readProdosImage } from "./ultima5/prodos.mjs";
-import { buildMusic, scaleLatch, NOTE_LO, NOTES, INST_SIZE } from "./ultima5/music.mjs";
+import { buildMusic, scaleLatch, INST_SIZE } from "./ultima5/music.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const patchDir = path.join(root, "codegen", "patches", "ultima5");
@@ -55,11 +55,12 @@ const ROM_IMAGE = path.join(root, "emulator", "Data", "badger6502.bin");
 // RAM2 the ROM only uses at boot or from the DOS prompt (see ram2.inc):
 // the player's tables live there to leave bank 1 room for a song.
 const RAM2_TABLES = [
-  { org: "MS_END", end: 0xcafe, labels: ["NOISE", "DURTAB"] },
-  { org: 0xcc3d, end: 0xcd00, labels: ["PERL", "PERH"] },
-  { org: 0xcd00, end: 0xcd6c, labels: ["VOLTAB", "VPER", "VVOL", "VR6", "VMIX"] },
+  { org: "MS_END", end: 0xcafe, labels: ["NOISE"] },
+  { org: 0xcc3d, end: 0xcd00, labels: ["PERL", "PERH", "AUXL", "AUXH"] },
+  { org: 0xcd00, end: 0xcd6c, labels: ["VOLTAB", "VPER", "VVOL", "VR6", "VMIX", "DURTAB"] },
   { org: 0xce24, end: 0xcee0, labels: ["INSTAB"] },
 ];
+const BLOCKBUF = 0xd600;             // DINKEYDOS block buffer; the largest song borrows it
 // Voice v -> AY register shadow index (AY0 regs 0-10, AY1 11-21): MUDI's
 // two-chip map v0 AY0 A, v1 AY1 A, v2 AY0 B, v3 AY1 B, v4 AY1 C, v5 AY0 C.
 const VOICE_CHIP = [0, 1, 0, 1, 1, 0], VOICE_CH = [0, 0, 1, 1, 2, 2];
@@ -198,35 +199,18 @@ function fileTable(volumes) {
   return [...table.values()];
 }
 
-/** auxtab (shim.s aux_lookup): groups [count, aux, count x key hash]. */
+/** Load addresses by file extension (shim.s aux_lookup): the distinct
+ *  nonzero ProDOS aux types, letter A for the first. */
 function auxTable(table) {
   const auxOf = new Map();
   for (const e of table) {
     if (auxOf.has(e.key) && auxOf.get(e.key) !== e.aux) throw new Error(`${e.name}: different load addresses on different disks`);
     auxOf.set(e.key, e.aux);
   }
-  const hashes = new Map();
-  for (const [key, aux] of auxOf) {
-    const h = keyHash(key);
-    if (hashes.has(h) && auxOf.get(hashes.get(h)) !== aux) throw new Error(`keys ${key} and ${hashes.get(h)} share hash $${h.toString(16)}`);
-    hashes.set(h, key);
-  }
-  const groups = new Map();
-  for (const [key, aux] of auxOf) if (aux) {
-    if (!groups.has(aux)) groups.set(aux, new Set());
-    groups.get(aux).add(keyHash(key));
-  }
-  const bytes = [];
-  for (const [aux, hs] of [...groups].sort((a, b) => a[0] - b[0])) {
-    for (let i = 0; i < hs.size; i += 255) {
-      const part = [...hs].slice(i, i + 255);
-      bytes.push(part.length, aux & 255, aux >> 8);
-      for (const h of part) bytes.push(h & 255, h >> 8);
-    }
-  }
-  bytes.push(0);
-  if (bytes.length > 256) throw new Error(`auxtab is ${bytes.length} bytes (the shim indexes 256)`);
-  return bytes;
+  const values = [...new Set([...auxOf.values()].filter((a) => a))].sort((a, b) => a - b);
+  if (values.length > 26) throw new Error(`${values.length} load addresses (letters A-Z)`);
+  const name = (key) => (auxOf.get(key) ? `${key}.${String.fromCharCode(65 + values.indexOf(auxOf.get(key)))}` : key);
+  return { values, name };
 }
 
 function asmText(bytes) {
@@ -250,32 +234,39 @@ export function buildLoader(table, music = null) {
   const ram2 = assemble(ram2Src()).symbols;
   const r = resident.symbols;
 
-  // Fixed table addresses (sizes do not depend on the data).
-  const sizes = { NOISE: 32, DURTAB: 24, PERL: NOTES, PERH: NOTES, VOLTAB: 48, VPER: 6, VVOL: 6, VR6: 6, VMIX: 6, INSTAB: 0 };
-  const tabAddr = {};
-  for (const region of RAM2_TABLES) {
-    let a = typeof region.org === "string" ? ram2[region.org] : region.org;
-    region.start = a;
-    for (const l of region.labels) { tabAddr[l] = a; a += sizes[l]; }
-  }
-
-  const common = ram2Src() + equates({ ...ROM_ROUTINES, ...SLOTS, ROM_CALL: r.ROM_CALL, MUSIC_HI, NOTE_LO, NOTES, ...tabAddr });
+  // RAM2 table addresses: sizes depend on the music (note range, NAUX).
   const aux = auxTable(table);
-  const shimSrc = (consts) => common + equates(consts)
+  const layout = (notes) => {
+    const sizes = { NOISE: 32, DURTAB: 24, PERL: notes, PERH: notes, AUXL: aux.values.length, AUXH: aux.values.length,
+      VOLTAB: 48, VPER: 6, VVOL: 6, VR6: 6, VMIX: 6, INSTAB: 0 };
+    const tabAddr = {};
+    for (const region of RAM2_TABLES) {
+      let a = typeof region.org === "string" ? ram2[region.org] : region.org;
+      region.start = a;
+      for (const l of region.labels) { tabAddr[l] = a; a += sizes[l]; }
+    }
+    return tabAddr;
+  };
+  const common = (m) => ram2Src() + equates({ ...ROM_ROUTINES, ...SLOTS, ROM_CALL: r.ROM_CALL, MUSIC_HI,
+    NOTE_LO: m.noteLo, NOTES: m.notes, NAUX: aux.values.length, ...layout(m.notes) });
+  const shimSrc = (m, consts) => common(m) + equates(consts)
     + fs.readFileSync(path.join(patchDir, "shim.s"), "utf8") + "shim_code_end:\n"
     + fs.readFileSync(path.join(patchDir, "music.s"), "utf8")
-    + `\ncode_end:\nauxtab:\n${asmText(aux)}\nSONGBUF:\n`;
-  const probe = assemble(shimSrc({ DEFLATCH: 0, SONGMAX: 0 }));
+    + `\ncode_end:\nSONGBUF:\n`;
+  const none = {
+    noteLo: 21, notes: 1, perl: [0], perh: [0], durtab: new Array(24).fill(1),
+    noise: new Array(32).fill(0), defLatch: scaleLatch(0x429a), instab: new Array(INST_SIZE).fill(0), zeroInst: 0,
+    songs: new Map(), partA: new Map(), skipped: [],
+  };
+  const probe = assemble(shimSrc(none, { DEFLATCH: 0, SONG_CAP: 0, SONG_LIMIT: 0 }));
   const songbuf = probe.symbols.SONGBUF;
   const capacity = 0xdfff - songbuf;
-  const m = music ? buildMusic(music, songbuf, capacity) : {
-    perl: new Array(NOTES).fill(0), perh: new Array(NOTES).fill(0), durtab: new Array(24).fill(1),
-    noise: new Array(32).fill(0), defLatch: scaleLatch(0x429a), instab: new Array(INST_SIZE).fill(0), zeroInst: 0, songs: new Map(), skipped: [],
-  };
-  const shim = assemble(shimSrc({ DEFLATCH: m.defLatch, SONGMAX: capacity + 1 }));
+  const regions = { base: songbuf, capB: capacity, baseA: BLOCKBUF, capA: 512 };
+  const m = music ? buildMusic(music, regions) : none;
+  const shim = assemble(shimSrc(m, { DEFLATCH: m.defLatch, SONG_CAP: capacity, SONG_LIMIT: capacity + regions.capA }));
   const s = shim.symbols;
-  if (shim.org !== 0xd000 || s.MUSIC_LO_END > 0xd600) throw new Error(`shim code ($${s.MUSIC_LO_END.toString(16)}) overlaps the $D600 block buffer`);
-  if (s.MUS_TICK < MUSIC_HI || s.SONGBUF !== songbuf || capacity < 1) throw new Error("player layout");
+  if (shim.org !== 0xd000 || s.MUSIC_LO_END > BLOCKBUF) throw new Error(`shim code ($${s.MUSIC_LO_END.toString(16)}) overlaps the $D600 block buffer`);
+  if (s.MUS_TICK < MUSIC_HI || s.SONGBUF !== songbuf || capacity < 1 || s.BLOCKBUF !== BLOCKBUF) throw new Error("player layout");
   for (const [name, slot] of Object.entries(SLOTS))
     if (shim.bytes[slot - 0xd000] !== 0x4c || (shim.bytes[slot - 0xcfff] | shim.bytes[slot - 0xcffe] << 8) !== s[name.toUpperCase()])
       throw new Error(`${name} slot does not jump to ${name}`);
@@ -288,6 +279,7 @@ export function buildLoader(table, music = null) {
     NOISE: m.noise, DURTAB: m.durtab, PERL: m.perl, PERH: m.perh, VOLTAB: [],
     VPER: VOICE_CHIP.map((c, v) => c * 11 + 2 * VOICE_CH[v]), VVOL: VOICE_CHIP.map((c, v) => c * 11 + 8 + VOICE_CH[v]),
     VR6: VOICE_CHIP.map((c) => c * 11 + 6), VMIX: VOICE_CH.map((ch) => 0x09 << ch), INSTAB: m.instab,
+    AUXL: aux.values.map((a) => a & 255), AUXH: aux.values.map((a) => a >> 8),
   };
   for (const [name] of VOLUMES) { const h = keyHash(sdKey(name)); data.VOLTAB.push(h & 255, h >> 8, 0, 0, 0, 0); }
   if (new Set(VOLUMES.map(([name]) => keyHash(sdKey(name)))).size !== VOLUMES.length) throw new Error("volume key hashes collide");
@@ -307,9 +299,9 @@ export function buildLoader(table, music = null) {
   const romsig = Object.values(ROM_ROUTINES).flatMap((a) => [a & 255, a >> 8, ...romImage.subarray(a, a + 8)]);
   const segtab = segs.flatMap((g) => [g.dst & 255, g.dst >> 8, g.src & 255, g.src >> 8, (g.len || g.bytes.length) & 255]);
   const dirnames = VOLUMES.flatMap(([, dir]) => [...Buffer.from(dir.padEnd(8, " "), "ascii")]);
-  const loader = assemble(common + equates({
+  const loader = assemble(common(m) + equates({
     SHIM_SRC: shimSrcAddr, SHIM_PAGES: shimPages, BANKSIG_VALUE, NMI_ENTRY: r.NMI_ENTRY, IRQ_ENTRY: r.IRQ_ENTRY, IRQ_MB_OP: r.IRQ_MB + 1,
-    ZERO_INST: m.zeroInst, DEFLATCH: m.defLatch,
+    ZERO_INST: m.zeroInst, DEFLATCH: m.defLatch, EXTC: s.EXTC,
   }) + fs.readFileSync(path.join(patchDir, "loader.s"), "utf8")
     + `\nromsig:\n${asmText(romsig)}\n        .byte 0,0\nsegtab:\n${asmText(segtab)}\n        .byte 0,0\ndirnames:\n${asmText(dirnames)}\nloader_end:\n`);
   if (loader.org !== LOADER_ORG || loader.org + loader.bytes.length > PAYLOAD) throw new Error("loader overlaps its payload");
@@ -318,10 +310,11 @@ export function buildLoader(table, music = null) {
   prg.set(loader.bytes, 0);
   for (const g of segs) prg.set(g.bytes, g.src - LOADER_ORG);
   prg.set(shimImage.subarray(0, shimPages * 256), shimSrcAddr - LOADER_ORG);
-  return { prg, resident, glue, shim, shimImage, segs, loader, music: m, songs: m.songs, skipped: m.skipped, capacity };
+  return { prg, resident, glue, shim, shimImage, segs, loader, music: m, songs: m.songs, partA: m.partA, skipped: m.skipped, capacity, fileName: aux.name };
 }
 
-/** Produce { "U5.PRG": bytes, ULTIMA5: { KEY: bytes, RAW00: ... }, ... }. */
+/** Produce { "U5.PRG": bytes, ULTIMA5: { "KEY.X": bytes, RAW00: ... }, ... }
+ *  (file names: see auxTable). */
 export function buildTree(diskDir, info = {}) {
   const volumes = loadVolumes(diskDir);
   applyPatches(volumes);
@@ -336,22 +329,24 @@ export function buildFromVolumes(volumes, info = {}) {
     throw new Error("HTXT (copied to bank 2 $D800-$DFFF) would match the bank-1 signature");
   const table = fileTable(volumes);
   const built = buildLoader(table, musicFiles(volumes));
-  const { prg, resident, songs } = built;
+  const { prg, resident, songs, fileName } = built;
   Object.assign(info, built, { nmiEntry: resident.symbols.NMI_ENTRY });
   const tree = { "U5.PRG": prg };
   for (const [name, dir] of VOLUMES) {
     const image = volumes.get(name);
     // Songs first: the ROM scans a directory in order, and they load mid-game.
-    const files = {};
-    for (const [n, bytes] of songs) files["SONG" + String(n).padStart(2, "0")] = bytes;
+    const files = {}, keys = new Set();
+    for (const [n, bytes] of songs) { const k = "SONG" + String(n).padStart(2, "0"); keys.add(k); files[k] = bytes; }
     for (const f of image.files) {
-      if (files[sdKey(f.name)]) throw new Error(`${name}: ${f.name} clashes with a song file`);
-      files[sdKey(f.name)] = f.data;
+      const k = sdKey(f.name);
+      if (keys.has(k)) throw new Error(`${name}: ${f.name} clashes with a song file`);
+      keys.add(k);
+      files[fileName(k)] = f.data;
     }
     for (let n = 0; n * RAW_BLOCKS * 512 < image.blocks.length; n++) {
       const raw = image.blocks.subarray(n * RAW_BLOCKS * 512, (n + 1) * RAW_BLOCKS * 512);
       const rawName = "RAW" + n.toString(16).toUpperCase().padStart(2, "0");
-      if (files[rawName]) throw new Error(`${name}: a game file already uses the name ${rawName}`);
+      if (keys.has(rawName)) throw new Error(`${name}: a game file already uses the name ${rawName}`);
       files[rawName] = raw;
     }
     tree[dir] = files;
@@ -376,7 +371,8 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
   const info = {};
   const tree = buildTree(diskDir, info);
   writeTree({ U5: tree }, outDir);
-  console.log(`music: songs ${[...info.songs.keys()].join(", ")} (${info.capacity}-byte buffer)`);
+  console.log(`music: songs ${[...info.songs.keys()].join(", ")} (${info.capacity}-byte buffer`
+    + `${info.partA.size ? `; ${[...info.partA].map(([n, a]) => `song ${n} borrows ${a} bytes of the block buffer`).join(", ")}` : ""})`);
   for (const { n, why } of info.skipped) console.log(`  song ${n} left out: ${why}`);
   console.log(`wrote ${path.join(outDir, "U5")}: copy the U5 folder to the SD card root, then CD U5 and BRUN U5.PRG 0800`);
 }

@@ -5,15 +5,21 @@
 ; shadow + flush, request interface $80-$83); see docs/porting-logs/
 ; ultima-v.md. Differences, all forced by the 64K machine: one song is held
 ; at a time (SONGBUF), loaded by the foreground (mus_fg, from pad_poll) when
-; the tick asks for it - the tick stays silent until then and a song that
-; does not fit the buffer is simply not played; pause silences at once
-; instead of fading; note periods, the noise period and the timer latch are
-; pre-scaled for 3RIC's 1.5734 MHz Mockingboard clock by the tool.
+; the tick asks for it - the tick stays silent until then; a song larger
+; than SONGBUF continues in the shim's block buffer (BLOCKBUF), which a
+; block read takes back (a_lose: the song is dropped and loaded again);
+; pause silences at once instead of fading; note periods, the noise period
+; and the timer latch are pre-scaled for 3RIC's 1.5734 MHz Mockingboard
+; clock by the tool.
 ;
-; SONGBUF: +0 voices played (1-6), +1 tracks, +2 six voice start pointers,
-; +14 track pointers, then the event streams (pointers absolute). Events are
+; SONGBUF: +0 voices played (1-6), +1 entries, +2 six voice start pointers,
+; +14 entry pointers (Origin's tracks, then phrase subroutines), then the
+; event streams (pointers absolute, into SONGBUF or BLOCKBUF). Events are
 ; the original's except: $32 (tempo) carries the scaled T1 latch (2 bytes),
-; $34 (instrument) carries the record offset in INSTAB, $38/$3F are dropped.
+; $34 (instrument) carries the record offset in INSTAB, $38/$3F are dropped,
+; and $39 n / $3A call and return from entry n keeping pitch and durations
+; ($3C/$3D reset them). Calls of both kinds share a 3-level stack per voice.
+; The file is SONG_CAP bytes for SONGBUF followed by the BLOCKBUF part.
 ;
 ; State lives in RAM2 (ram2.inc). The tick runs from the resident IRQ with
 ; bank 1 mapped and uses $F8/$F9 (saved) as the event pointer.
@@ -136,11 +142,100 @@ mc_done:
         plp
         rts
 
+rd:
+        lda (P)
+        inc P
+        bne rd_done
+        inc P+1
+rd_done:
+        rts
+
+reset_pd:                       ; pitch $3C, duration indices 3 / 4
+        lda #$3C
+        sta V_PITCH,x
+        lda #3
+        sta V_DURA,x
+        lda #4
+        sta V_DURB,x
+        rts
+
+; The game reads a disk block into the block buffer: a song part there is
+; lost. If that song is still wanted, silence it and load it again (it
+; restarts). Called with the music timer running; clobbers A and X.
+a_lose:
+        lda ASONG
+        beq al_out
+        stz ASONG
+        php
+        sei
+        cmp LOADED
+        bne al_done
+        stz LOADED
+        stz CUR
+        cmp IF80+2
+        bne al_done
+        sta WANT
+        ldx #2
+al_mute:
+        stz SHADOW+8,x
+        stz SHADOW+11+8,x
+        dex
+        bpl al_mute
+al_done:
+        plp
+al_out:
+        rts
+
+; Voice X: push P and continue at the entry named by the next byte.
+call:
+        jsr rd
+        asl
+        pha
+        jsr stk_y
+        lda P
+        sta STKL,y
+        lda P+1
+        sta STKH,y
+        inc V_DEPTH,x
+        ply
+        lda SONGBUF+14,y
+        sta P
+        lda SONGBUF+15,y
+        sta P+1
+        rts
+
+; Voice X: P = the innermost return address.
+ret:
+        dec V_DEPTH,x
+        jsr stk_y
+        lda STKL,y
+        sta P
+        lda STKH,y
+        sta P+1
+        rts
+
+stk_y:                          ; Y = V_DEPTH * NV + X
+        lda V_DEPTH,x
+        asl
+        adc V_DEPTH,x
+        asl
+        stx VT_T
+        adc VT_T
+        tay
+        rts
+
+music_lo_end:
+        .org MUSIC_HI
+
+; ---- high code region ($D800-) ----
+
 ; Load the song the tick is waiting for (from pad_poll: X and Y are saved
 ; there; only the ROM's zero page is used, and rom_begin/rom_end keep it).
 mus_fg:
         lda WANT
-        beq mf_out
+        bne mf_go
+        rts
+mf_go:
         php
         sei
         lda WANT
@@ -149,6 +244,7 @@ mus_fg:
         stz CUR
         plp
         sta mf_song
+        stz ASONG               ; the block buffer holds no song part
         ldx #3
 mf_name:
         lda s_song,x
@@ -170,20 +266,51 @@ mf_tens:
         sta key+7
         jsr rom_begin
         jsr open_key
-        bcs mf_end
-        lda FAT_SIZE+1          ; a stale SD card's song must still fit
-        cmp #>SONGMAX
-        bcc mf_read
-        bne mf_end
-        lda FAT_SIZE
-        cmp #<SONGMAX
-        bcs mf_end
-mf_read:
+        bcs mf_fail
+        sec                     ; a stale SD card's song must still fit
+        lda #<SONG_LIMIT
+        sbc FAT_SIZE
+        lda #>SONG_LIMIT
+        sbc FAT_SIZE+1
+        bcc mf_fail
+        lda #<SONG_CAP          ; larger than the main buffer?
+        cmp FAT_SIZE
+        lda #>SONG_CAP
+        sbc FAT_SIZE+1
+        bcc mf_two
         ldx #<SONGBUF
         ldy #>SONGBUF
         jsr read_file
+        bra mf_ok
+mf_two:
+        lda #<SONGBUF           ; bytes [0, SONG_CAP-1] to the main buffer
+        sta FAT_DEST
+        lda #>SONGBUF
+        sta FAT_DEST+1
+        stz FAT_OFFSET
+        stz FAT_OFFSET+1
+        lda #<(SONG_CAP-1)
+        sta FAT_END
+        lda #>(SONG_CAP-1)
+        sta FAT_END+1
+        jsr read_part
+        jsr open_key            ; the read used up the open file
+        bcs mf_fail
+        lda #<SONG_CAP          ; the rest to the block buffer
+        sta FAT_OFFSET
+        lda #>SONG_CAP
+        sta FAT_OFFSET+1
+        ldx #<BLOCKBUF
+        ldy #>BLOCKBUF
+        jsr read_rest
+        lda mf_song
+        sta ASONG
+        lda #$FF                ; and it no longer holds a disk block
+        sta lastblk+1
+mf_ok:
         lda mf_song
         sta LOADED
+mf_fail:
 mf_end:
         jsr rom_end
 mf_out:
@@ -191,28 +318,6 @@ mf_out:
 
 mf_song:    .byte 0
 s_song:     .text "SONG"
-
-rd:
-        lda (P)
-        inc P
-        bne rd_done
-        inc P+1
-rd_done:
-        rts
-
-reset_pd:                       ; pitch $3C, duration indices 3 / 4
-        lda #$3C
-        sta V_PITCH,x
-        lda #3
-        sta V_DURA,x
-        lda #4
-        sta V_DURB,x
-        rts
-
-music_lo_end:
-        .org MUSIC_HI
-
-; ---- high code region ($D800-) ----
 
 ; Resident timer IRQ: one tick of the driver.
 mus_tick:
@@ -495,8 +600,12 @@ ps_c2:
         beq ps_inst
         cmp #$3C-$34
         beq ps_call
+        cmp #$39-$34
+        beq ps_kcall
         cmp #$3D-$34
         beq ps_ret
+        cmp #$3A-$34
+        beq ps_kret
         cmp #$3E-$34
         beq ps_end
         jmp ps_next             ; the tool rejects other commands
@@ -529,29 +638,21 @@ ps_inst:
         eor SHADOW+1,y
         sta SHADOW+1,y
         jmp ps_next
-ps_call:
-        jsr rd
-        asl
-        tay
-        lda P
-        sta V_SPL,x
-        lda P+1
-        sta V_SPH,x
-        inc V_DEPTH,x
-        lda SONGBUF+14,y
-        sta P
-        lda SONGBUF+15,y
-        bra ps_jump
+ps_call:                        ; Origin's call: pitch and durations reset
+        jsr call
+        bra ps_reset
+ps_kcall:                       ; phrase call: they carry on
+        jsr call
+        jmp ps_next
 ps_ret:
         lda V_DEPTH,x
         beq ps_end
-        dec V_DEPTH,x
-        lda V_SPL,x
-        sta P
-        lda V_SPH,x
-ps_jump:
-        sta P+1
+        jsr ret
+ps_reset:
         jsr reset_pd
+        jmp ps_next
+ps_kret:
+        jsr ret
         jmp ps_next
 ps_end:
         lda #$FF

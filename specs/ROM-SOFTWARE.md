@@ -95,7 +95,10 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     `$D000` by a shim with the same 14-entry jump table, inline parameters, zero
     page (`$52-$55`, `$60-$7F`), `$D600` block buffer and return codes. Each disk is a
     folder; ProDOS names become dot-less 8-character keys looked up only among the
-    current disk's files. The shim calls the ROM's FAT32 routines directly (the calls
+    current disk's files, as `KEY.*`: a one-letter extension names the file's load
+    address (aux type) in a table the loader installs (no extension = 0); the loader
+    refuses a card where `STARTUP` has none (files left from an older folder). The
+    shim calls the ROM's FAT32 routines directly (the calls
     `FLOAD`/`OWRITE` make: `fat32_open_cd $ECEA`, `fat32_finddirent $E9A0`,
     `fat32_opendirent $E7B4`, `fat32_file_read_part $EB69`, `fat32_file_write $EBB5`;
     the loader also uses `fat32_readdirent $E96D`) and the loader refuses a ROM whose
@@ -117,17 +120,23 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     a card answers) and runs one music tick with bank 1 mapped; other IRQs go to the
     ROM as above.
   - **RAM2 use (this profile only, not a general free-RAM declaration):** `$CF00-$CFFF`
-    resident; `$CD80-$CDFF` music glue; `$CA00-$CABD` player state; player tables in
-    `$CABE-$CAFD`, `$CC3D-$CCFF`, `$CD00-$CD6B`, `$CE24-$CEDF` - areas the ROM writes
+    resident; `$CD80-$CDFF` music glue; `$CA00-$CAD6` player state; player and
+    load-address tables in `$CAD7-$CAFD`, `$CC3D-$CCFF`, `$CD00-$CD6B`,
+    `$CE24-$CEDF` - areas the ROM writes
     only at boot (`$CC00`/`$CE00` page clears) or from the DOS prompt (command line
     `$CD00`), found by scanning the ROM for absolute references
     (`codegen/patches/ultima5/ram2.inc`).
   - **Music:** a compact player (`music.s`, bank 1) re-implements the 128K edition's
     Mockingboard driver per tick (sequencer, two envelopes, register shadow + flush,
-    `$80-$83` request interface) for one song at a time (804-byte buffer; 11 of 15
-    songs fit). The tool repacks songs into `SONGnn` in every disk folder and
-    pre-scales periods, noise and timer latches by 1.5734/1.0227 MHz from the user's
-    `MUDR`. 46 guarded patches open the game's `LDA $EC / LSR / BCC` music gates,
+    `$80-$83` request interface) for one song at a time; all 15 songs. The tool
+    repacks songs into `SONGnn` in every disk folder, re-encodes durations with the
+    fewest bytes and turns repeated phrases into subroutines (player commands `$39 n`
+    call / `$3A` return, keeping pitch and durations; calls nest 3 deep), replays
+    every voice against Origin's original before writing it, and pre-scales periods,
+    noise and timer latches by 1.5734/1.0227 MHz from the user's `MUDR`. Songs fill an
+    869-byte buffer after the player; the one song still larger (1, the title theme)
+    continues in the `$D600` block buffer, which a block read takes back (the shim
+    drops the song, and the player reloads and restarts it). 46 guarded patches open the game's `LDA $EC / LSR / BCC` music gates,
     replace `STA $C009`/`STA $C008` with `JSR mus_in`/`mus_out` (swap `$80-$83` with
     the player's copy), `TEMP.SUBS $15B9` with `mus_setx`, and the `MAIN.SUBS $EE46`
     pause/resume dispatcher with `mus_ctl` (pause silences at once). A song not in
@@ -475,7 +484,8 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
-| Ultima V SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima5.test.mjs` drives the real loader/resident/shim on the ROM DOS with synthetic volumes (and boots the original disks to the title with `U5_DISKS`); `port-ultima5.native.ps1` decodes real PS/2 frames at 94-160-cycle periods with language-card RAM mapped, including Caps Lock LED exchanges and a `$C010` strobe on a stop-bit edge. The suite also plays a synthetic song end to end (on-demand `SONG01` load, timer-IRQ ticks in bank 2, pause/load/resume) and checks the 46 music-site patches; a session-only py65 harness matched the player to the reverse-engineered driver per tick for all 11 built songs. Manual WASM play covered creation, save, overworld, combat, towne entry, pad-only menu/walking/Ztats, and in-game music (huts song on *Journey Onward*, on-demand song switches). Board: running after the PS/2 fix; pads and music not yet tried on the board. Dialogue, dungeons and endgame are open; 4 songs do not fit; block reads cost ~1.7 M cycles. |
+| Ultima V SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima5.test.mjs` drives the real loader/resident/shim on the ROM DOS with synthetic volumes (and boots the original disks to the title with `U5_DISKS`); `port-ultima5.native.ps1` decodes real PS/2 frames at 94-160-cycle periods with language-card RAM mapped, including Caps Lock LED exchanges and a `$C010` strobe on a stop-bit edge. The suite also plays a synthetic two-region song end to end (on-demand `SONG01` load, timer-IRQ ticks in bank 2, pause/load/resume, reload after a block read), tests the song packer (phrase subroutines, two-region layout, replay check) and the stale-folder check, and checks the 46 music-site patches; a session-only py65 harness matched the player to the reverse-engineered driver per tick for all 15 songs. Manual WASM play covered creation, save, overworld, combat, towne entry, pad-only menu/walking/Ztats, and music (title theme at the title, huts song on *Journey Onward*, on-demand song switches). Board: running after the PS/2 fix; pads and music not yet tried on the board. Dialogue, dungeons and endgame are open; block reads cost ~1.7 M cycles. |
+
 
 | ROM `BLOAD` stores one byte past EOF | Known gap (ROM) | Observed in `fat32_file_read`; programs loading below live data must use `FLOAD 0000 eof-1`. ROM source is not in this repository. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |

@@ -305,10 +305,21 @@ no_timer:
         jsr $D006
         .asciiz "STARTUP"
         .word $8000
+        bcs boot_fail
+        lda EXTC                ; named by this build (STARTUP.x), not a
+        cmp #'A'                ; leftover from an older U5 folder
+        bcc stale
         lda $8000               ; STARTUP begins with JMP
         cmp #$4C
         bne boot_fail
         jmp $8000
+stale:
+        sei
+        lda $C082
+        jsr $FE93
+        ldx #<msg_stale
+        ldy #>msg_stale
+        jmp fail
 boot_fail:
         sei
         lda $C082               ; ROM back, report and stop in the monitor
@@ -330,6 +341,11 @@ msg_boot:   .byte $8D
             .byte $8D,0
 msg_dir:    .byte $8D
             .text "U5: A DISK FOLDER IS MISSING"
+            .byte $8D,0
+msg_stale:  .byte $8D
+            .text "U5: OLD FILES FOUND - DELETE THE U5"
+            .byte $8D
+            .text "FOLDER ON THE CARD, THEN COPY IT AGAIN"
             .byte $8D,0
 vnum:       .byte 0
 vfound:     .byte 0

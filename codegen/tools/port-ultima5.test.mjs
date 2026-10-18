@@ -12,7 +12,7 @@ import harness from "./harness.cjs";
 import { readProdosImage } from "./ultima5/prodos.mjs";
 import { buildSparseFat32 } from "./ultima5/fat32.mjs";
 import { VOLUMES, BANKSIG_VALUE, PATCHES, applyPatches, assembleResident, buildFromVolumes, buildTree, keyHash, patchSymbols, ram2Symbols, sdKey } from "./port-ultima5.mjs";
-import { CLOCK_SCALE, driverTables, scaleLatch, tempoLatch } from "./ultima5/music.mjs";
+import { CLOCK_SCALE, KCALL, KRET, driverTables, repackSong, scaleLatch, tempoLatch } from "./ultima5/music.mjs";
 
 // ---------------------------------------------------------------------------
 // ProDOS reader on a synthetic image (seedling + sapling + unowned blocks).
@@ -291,7 +291,8 @@ async function bootGame(tree) {
   assert.ok(tree["U5.PRG"].length < 0x1800, `U5.PRG stops at the empty song buffer (${tree["U5.PRG"].length})`);
   assert.deepEqual(Object.keys(tree).slice(1), VOLUMES.map(([, dir]) => dir));
   assert.equal(Object.keys(tree.ULTIMA5).filter((k) => k.startsWith("RAW")).length, 35);
-  assert.equal(tree.ULTIMA5.DATAONE.length, 300);
+  assert.equal(tree.ULTIMA5["DATAONE.A"].length, 300, "file name carries its load address ($3400 = A)");
+  assert.ok(tree.ULTIMA5["STARTUP.D"] && tree.BRITANIA["SAVEDAT.B"], "letters follow the sorted load addresses");
 
   const vm = await bootGame(tree);
   let nmis = 0;
@@ -326,6 +327,20 @@ async function bootGame(tree) {
   assert.ok(nmis >= 2, `keyboard-strobe NMIs went through the language-card forwarder (${nmis})`);
   assert.doesNotMatch(serial, /ERR|NOT FOUND|MISSING/, "the ROM printed no error");
   console.log(`PASS shim on the ROM FAT32 routines: loads, block reads, writes, volumes, errors, ${nmis} forwarded NMIs`);
+}
+
+// An older U5 folder copied under the new one: STARTUP without an extension
+// would be found first; the loader must refuse it.
+{
+  const { volumes } = synthVolumes();
+  const tree = buildFromVolumes(volumes);
+  tree.ULTIMA5 = { STARTUP: tree.ULTIMA5["STARTUP.D"], ...tree.ULTIMA5 };
+  const vm = await bootGame(tree);
+  let screen = "";
+  for (let r = 0; r < 24; r++) for (let c = 0; c < 40; c++) screen += String.fromCharCode(vm.peek(0x400 + (r & 7) * 0x80 + (r >> 3) * 0x28 + c) & 0x7f);
+  assert.match(screen + vm.drainOutput(), /OLD FILES FOUND/, "stale folder reported");
+  assert.notEqual(vm.peek(RES + 30), 0xaa, "the game did not start");
+  console.log("PASS a leftover file from an older U5 folder stops the loader with a message");
 }
 
 // ---------------------------------------------------------------------------
@@ -392,10 +407,24 @@ use2:   lda $C083
   const muin = new Uint8Array(256);
   [0x400, 0xf00, 0x40, 0x800, 0x80, 2].forEach((v, k) => { muin[32 + 2 * k] = v & 255; muin[33 + 2 * k] = v >> 8; });
   muin[32 + 28] = 0x38;                     // instrument 1: tone only
-  // Voice 0: instrument 1, tempo 120, notes +0 and +1, call track 1, end.
+  // Voice 0: instrument 1, tempo 120, notes +0 and +1, 762 notes that do
+  // not repeat (so the song outgrows the main buffer; the last two thirds
+  // in called tracks 2 and 3), call track 1, end.
   // Voice 1: track 1 = instrument 1, note -1, return (= end at depth 0).
-  const t0 = [0, 0xd3, 1, 0xcb, 120, 0x40, 0x44, 0xf3, 1, 0xfb], t1 = [0, 0xd3, 1, 0x3c, 0xf7];
-  const song = [0, 2, 0, 1, 2, 0, 9, 0, 9 + t0.length, ...t0, ...t1];
+  const DUR = [0, 1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23];
+  const wander = [];
+  for (let i = 0, seed = 7, pitch = 61; i < 762; i++) {
+    seed = (seed * 1103515245 + 12345) >>> 0;
+    let d = ((seed >>> 16) % 15) - 7;
+    if (pitch + d < 45 || pitch + d > 75) d = -d;
+    pitch += d;
+    wander.push(((16 + d) << 2) | 1, DUR[(seed >>> 8) % DUR.length]);
+  }
+  const third = wander.length / 3;
+  const t0 = [0, 0xd3, 1, 0xcb, 120, 0x40, 0x44, ...wander.slice(0, third), 0xf3, 2, 0xf3, 3, 0xf3, 1, 0xfb];
+  const t1 = [0, 0xd3, 1, 0x3c, 0xf7], t2 = [0, ...wander.slice(third, 2 * third), 0xf7], t3 = [0, ...wander.slice(2 * third), 0xf7];
+  const o0 = 13, o1 = o0 + t0.length, o2 = o1 + t1.length, o3 = o2 + t2.length;
+  const song = [0, 2, 0, 1, 4, o0 >> 8, o0 & 255, o1 >> 8, o1 & 255, o2 >> 8, o2 & 255, o3 >> 8, o3 & 255, ...t0, ...t1, ...t2, ...t3];
   const muff = Uint8Array.from([0, 1, 0, 4, ...song]);
   const R2 = ram2Symbols();
   const prog = assemble(`
@@ -440,9 +469,35 @@ vols:   ora $${(R2.WRITTEN + 8).toString(16)},x
         jsr $${syms.MUS_CTL.toString(16)}
         lda #3
         sta $0300
+wait4:  stz $B8
+        jsr $${syms.PAD_KEY.toString(16)}
+        lda $0308
+        beq wait4
+        lda $C08B               ; the game reads a disk block: song part lost
+        lda $C08B
+        jsr $D024
+        .word blk
+        lda $C083
+        lda $C083
+        lda $${R2.ASONG.toString(16)}
+        sta $0304
+        lda $${R2.WANT.toString(16)}
+        sta $0305
+        lda $${R2.CUR.toString(16)}
+        sta $0306
+wait5:  stz $B8
+        jsr $${syms.PAD_KEY.toString(16)}   ; ... and loaded again
+        lda $${R2.CUR.toString(16)}
+        cmp #1
+        bne wait5
+        lda $${R2.ASONG.toString(16)}
+        sta $0307
+        lda #4
+        sta $0300
 hang:   stz $B8
         jsr $${syms.PAD_KEY.toString(16)}
         bra hang
+blk:    .word 200
 `).bytes;
   const { volumes, data } = synthVolumes();
   const u5 = volumes.get("ULTIMA5").files;
@@ -450,13 +505,15 @@ hang:   stz $B8
   for (const [name, bytes] of [["MUFF", muff], ["MUIN", muin], ["MUDR", mudr]]) u5.push({ name, aux: 0x6000, eof: bytes.length, data: bytes });
   const info = {};
   const tree = buildFromVolumes(volumes, info);
-  assert.deepEqual([...info.songs.keys()], [1]);
+  assert.deepEqual([...info.songs.keys()], [1], JSON.stringify(info.skipped));
+  assert.ok(info.partA.get(1) > 0, `the song continues in the block buffer (${info.songs.get(1).length} bytes, main buffer ${info.capacity})`);
   for (const [, dir] of VOLUMES) assert.ok(tree[dir].SONG01, `SONG01 in ${dir}`);
   const vm = await bootGame(tree);
   const second = 1573438;
   const runFor = (s) => vm.runCycles(Math.round(s * second));
   for (let i = 0; i < 40 && vm.peek(0x300) !== 1; i++) runFor(0.1);
   assert.equal(vm.peek(0x300), 1, `song 1 started (LOADED ${vm.peek(R2.LOADED)}, PC $${vm.pc().toString(16)})`);
+  assert.equal(vm.peek(R2.ASONG), 1, "its second part is in the block buffer");
   const { perl, perh } = driverTables(mudr);
   const per = (note) => [perl[note - 21], perh[note - 21]];
   const W = (r) => vm.peek(R2.WRITTEN + r);
@@ -479,7 +536,33 @@ hang:   stz $B8
   runFor(2);
   assert.ok(ramp < 0xff && vm.peek(R2.CURVOL) === 0xff, `volume ramps back after resume (${ramp} -> ${vm.peek(R2.CURVOL)})`);
   assert.equal(vm.peek(R2.CUR), 1, "still playing (song 1 chains to itself)");
-  console.log(`PASS Mockingboard music: SONG01 loaded on demand, played from the timer IRQ in bank 2, pause/load/resume (scale ${CLOCK_SCALE.toFixed(4)})`);
+  vm.poke(0x308, 1);
+  for (let i = 0; i < 60 && vm.peek(0x300) !== 4; i++) runFor(0.1);
+  assert.equal(vm.peek(0x300), 4, "block read, then the song came back");
+  assert.deepEqual([vm.peek(0x304), vm.peek(0x305), vm.peek(0x306)], [0, 1, 0], "a block read drops the song and asks for it again");
+  assert.equal(vm.peek(0x307), 1, "reloaded with its second part");
+  console.log(`PASS Mockingboard music: ${info.songs.get(1).length}-byte SONG01 (${info.partA.get(1)} in the block buffer) loaded on demand, played from the timer IRQ in bank 2, pause/load/resume, reload after a block read (scale ${CLOCK_SCALE.toFixed(4)})`);
+}
+
+// ---------------------------------------------------------------------------
+// Repacking: phrase subroutines, re-encoded durations, the replay check.
+
+{
+  // One track with a 12-note phrase played 4 times and a phrase with a call.
+  const phrase = [0x48, 0x3c, 0x44, 0x3c, 0x4c, 0x38, 0x40, 0x44, 0x3c, 0x48, 0x40, 0x3c];
+  const t0 = [0, 0xd3, 1, ...phrase, ...phrase, 0x0f, ...phrase, 0x67, ...phrase, 0xf3, 1, 0xfb];
+  const t1 = [0, 0x40, 0x44, 0xf7];
+  const muff = Uint8Array.from([0, 1, 0, 4, 0, 1, 0, 2, 0, 8, 8 + t0.length >> 8, 8 + t0.length & 255, ...t0, ...t1]);
+  const instOff = new Map([[1, 0]]);
+  const big = repackSong(muff, 1, { base: 0xdc00, capB: 0x3ff, baseA: 0xd600, capA: 512 }, instOff);
+  const raw = 2 + 12 + 4 + t0.length - 1 + t1.length - 1;
+  assert.ok(big.bytes.length < raw - 20, `phrases become subroutines (${raw} -> ${big.bytes.length} bytes)`);
+  assert.ok(big.bytes.includes((KCALL << 2) | 3) && big.bytes.includes((KRET << 2) | 3), "uses the keep-state call and return");
+  const capB = big.bytes.length - 6;
+  const split = repackSong(muff, 1, { base: 0xe000 - capB, capB, baseA: 0xd600, capA: 512 }, instOff);
+  assert.ok(split.partA > 0 && split.bytes.length === capB + split.partA, "too big for the main buffer: continues in region A");
+  assert.throws(() => repackSong(muff, 1, { base: 0xdfe0, capB: 24, baseA: 0xd600, capA: 4 }, instOff), /buffers hold/);
+  console.log(`PASS song repacking: ${raw} -> ${big.bytes.length} bytes, two-region layout, replayed against the original`);
 }
 
 // ---------------------------------------------------------------------------
@@ -491,7 +574,7 @@ if (process.env.U5_DISKS) {
   const vm = await bootGame(tree);
   for (let i = 0; i < 400; i++) vm.run(50000);
   assert.ok(!vm.textMode(), "title is in graphics mode");
-  assert.ok(info.songs.size >= 9, `songs built: ${[...info.songs.keys()]}`);
+  assert.equal(info.songs.size, 15, `songs built: ${[...info.songs.keys()]}`);
   assert.equal(vm.peek(ram2Symbols().MUS_IER), 0xc0, "Mockingboard timer running");
   console.log(`PASS original Ultima V disks boot to the animated title (songs ${[...info.songs.keys()].join(" ")})`);
 } else {
