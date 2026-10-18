@@ -58,13 +58,13 @@ scan_bit:
         cmp #$30
         beq sb_up
         lda prev,x
-        bne sb_clock            ; still held (or a press not yet sent)
-        lda #$81                ; a new press
+        cmp #1
+        beq sb_clock            ; still held
+        lda #$81                ; down, not yet sent (new, or pressed again)
         bra sb_store
 sb_up:
         lda prev,x
-        bmi sb_clock            ; released but not yet sent: keep it
-        lda #0
+        and #$80                ; up; an unsent press stays unsent ($80)
 sb_store:
         sta prev,x
 sb_clock:
@@ -99,8 +99,9 @@ pp_held:
         sta repeat
         bra pp_send
 pp_press:
-        lda #1                  ; sent: now just held
+        and #1                  ; sent: held (1) or already up (0)
         sta prev,x
+        beq pp_send             ; released: no repeat
         cpx #4                  ; D-pad: 4-7
         bcc pp_send
         cpx #8
@@ -120,7 +121,7 @@ pp_none:
 
 ; Button order of the ROM's tables: B Y Select Start Up Down Left Right A X L R
 keytab:     .byte $C5,$D4,$DA,$A0,$8B,$8A,$88,$95,$C1,$D8,$CB,$C6
-prev:       .res 12             ; 0 up, 1 held, $81 pressed and not yet sent
+prev:       .res 12             ; 0 up, 1 held; bit 7 = pressed, not yet sent ($81 down, $80 up)
 lastdir:    .byte $FF           ; D-pad index that may repeat, $FF none
 repeat:     .byte 0
 pad_end:

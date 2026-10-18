@@ -100,7 +100,8 @@ D-pad sends those and works for walking, the dungeon view and character creation
   throughout. See below for why not `PTRIG`.
 - Each button sends one key on its own press, however buttons overlap (a 12-byte
   state table: up, held, or pressed-not-yet-sent - a press that has to wait is kept
-  even if the button is let go first). The last D-pad direction repeats
+  even if the button is let go first, and is then sent as released, so pressing it
+  again at once counts). The last D-pad direction repeats
   while held - after 12 scans, then every 8 (≈0.3 s, then ≈5 steps a second, measured
   walking) - and only while the type-ahead count is zero, so letting go never leaves
   queued steps.
@@ -109,7 +110,7 @@ D-pad sends those and works for walking, the dungeon view and character creation
 - `$0300-$03BF` was chosen by measurement: with pages 2-3 filled with a marker before
   `BRUN`, play through creation, save, continue, a town, a castle and a dungeon left
   `$0300-$03CD` untouched (`U1.INTRO` writes `$03CE`); the static hits in other
-  overlays are data bytes, not instructions. The glue is 169 bytes.
+  overlays are data bytes, not instructions. The glue is 171 bytes.
 **ProDOS stand-in** (`codegen/patches/ultima1/prodos.s`). Only ProDOS is replaced;
 `U1.SYSTEM`, Origin's layer and the game run unmodified.
 
@@ -204,7 +205,9 @@ off (`$C007`), installs the stand-in, captures the command collector, then loads
   sends its key, controller 2 works, a held button sends one key, a lower button
   pressed under a held one still sends and releases send nothing, a held D-pad waits
   while the type-ahead count is non-zero and repeats once it is zero, a typed key wins
-  over a held pad - also when it is decoded during a scan, without losing the press -
+  over a held pad - also when it is decoded during a scan, without losing the press
+  even if the button is released before the next poll, and an immediate re-press of
+  that button still sends -
   X/Y are preserved, and the ROM's NMI nest count and BASIC overlay are untouched.
 
 `pwsh codegen\tools\port-ultima1.native.ps1` (Visual Studio C++ tools): builds the

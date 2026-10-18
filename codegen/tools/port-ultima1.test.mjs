@@ -312,7 +312,7 @@ regok:  plp
         bpl padloop
         sta RES+$7D             ; last key
         inc RES+$7C             ; keys seen
-        bit $C010
+stored: bit $C010
         bra padloop`;
 
 const sys = assemble(sysSrc).bytes;
@@ -484,10 +484,19 @@ async function bootU1(tree) {
   assert.equal(vm.peek(pad.symbols.PREV + 9), 0x81, "the press is marked, not yet sent");
   vm.keyDown("W".charCodeAt(0));
   press(0, 0);                                           // released before the next poll
-  for (let c = 0; c < HZ && seen() < n + 2;) c += vm.runCycles(500);
-  runFor(20000);
+  vm.addBreakpoint(sym.STORED);                          // stop as each key is stored
+  for (let c = 0; c < HZ && seen() < n + 2;) {
+    do c += vm.runCycles(500); while (c < HZ && !vm.breakpointHit());
+    if (seen() < n + 2) c += vm.step();                  // past the breakpoint
+  }
+  vm.removeBreakpoint(sym.STORED);
   assert.equal(seen(), n + 2, "both the typed key and the pad key arrive");
   assert.equal(last(), 0xd8, "the pad press (X) is kept and follows the typed W, though already released");
+  assert.equal(vm.peek(pad.symbols.PREV + 9), 0, "a delivered press already released is not left 'held'");
+  press(0, 1 << 9);                                      // pressed again right away
+  for (let c = 0; c < HZ && seen() < n + 3;) c += vm.runCycles(500);
+  press(0, 0); runFor(20000);
+  assert.deepEqual([seen() - n, last()], [3, 0xd8], "an immediate re-press sends again");
 
   assert.equal(vm.peek(RES + 0x7e), 0, "padpoll preserves X and Y");
   press(0, 1 << 5); runFor(200000); press(0, 0); runFor(20000);    // scans happened
