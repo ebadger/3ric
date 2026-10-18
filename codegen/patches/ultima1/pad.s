@@ -49,6 +49,7 @@ scan:
         stz PADPORT
         lda #$40                ; latch both pads
         sta PADPORT
+        nop                     ; latch held 8 cycles, as the ROM does
         ldx #0
 scan_bit:
         stz PADPORT             ; latch and clock low: bit X on the data pins
@@ -61,6 +62,8 @@ scan_bit:
         lda #$81                ; a new press
         bra sb_store
 sb_up:
+        lda prev,x
+        bmi sb_clock            ; released but not yet sent: keep it
         lda #0
 sb_store:
         sta prev,x

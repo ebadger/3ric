@@ -160,15 +160,17 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     newly pressed button's key with bit 7 set, so the game buffers it like a typed key.
     A typed key always wins, including one decoded during a scan; X/Y are preserved.
     The view-animation read at `$1C59` is left alone. Each poll clocks both pads itself
-    on VIA1 port B exactly as the ROM's `@joystick_gamepads` does (latch bit 6, clock
-    bit 7, data bits 5/4 active low, 12 buttons; ~400 cycles, ~1% of the CPU). It does
+    on VIA1 port B exactly as the ROM's `@joystick_gamepads` does (latch bit 6 held 8
+        cycles, clock bit 7, data bits 5/4 active low, 12 buttons; ~400 cycles, ~1% of the CPU). It does
     **not** use `PTRIG $C070` or call that routine: a `PTRIG` scan runs inside a
     ~1,500-cycle NMI, and the routine leaves through the ROM NMI exit whose blanket
     VIA1 IFR clear drops PS/2 and `$C010` edges - both corrupt real keyboard frames
     (A2Robots on the board; reproduced by `port-ultima1.native.ps1`). Mapping: D-pad =
     arrows (`$0B/$0A/$08/$15`, the codes the game itself maps Return / `/` / `;` / `'`
     to); A Attack, B Enter, X eXit, Y Transact, L Klimb, R Fire, Select Ztats, Start
-    Space. Each button sends one key on its own press, however buttons overlap; the
+    Space. Each button sends one key on its own press, however buttons overlap (a press
+    that has to wait for a typed key is kept even if released first; both controllers
+    share one state per button); the
     last D-pad direction repeats while held (first after 12 scans, then every 8, ≈0.3 s
     then ≈5 steps/s) and only while the game's type-ahead count (`$78`) is 0, so
     releasing never leaves queued moves.

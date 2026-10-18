@@ -93,12 +93,14 @@ D-pad sends those and works for walking, the dungeon view and character creation
 
 - Either controller works; X/Y are preserved; a typed key always wins, including one
   decoded while the pads were being read (the press is then sent on the next poll).
-- **The glue reads the pads itself**: 12 clocks on VIA1 port B, the same sequence as
-  the ROM's `@joystick_gamepads` (latch bit 6, clock bit 7, data bits 5/4, active low),
+- **The glue reads the pads itself**: 12 clocks on VIA1 port B, the same sequence and
+  latch length (8 cycles) as the ROM's `@joystick_gamepads` (latch bit 6, clock bit 7,
+  data bits 5/4, active low),
   ~400 cycles on every input-wait poll (~1% of the CPU). Keyboard NMIs are served
   throughout. See below for why not `PTRIG`.
 - Each button sends one key on its own press, however buttons overlap (a 12-byte
-  state table: up, held, or pressed-not-yet-sent). The last D-pad direction repeats
+  state table: up, held, or pressed-not-yet-sent - a press that has to wait is kept
+  even if the button is let go first). The last D-pad direction repeats
   while held - after 12 scans, then every 8 (≈0.3 s, then ≈5 steps a second, measured
   walking) - and only while the type-ahead count is zero, so letting go never leaves
   queued steps.
@@ -107,7 +109,7 @@ D-pad sends those and works for walking, the dungeon view and character creation
 - `$0300-$03BF` was chosen by measurement: with pages 2-3 filled with a marker before
   `BRUN`, play through creation, save, continue, a town, a castle and a dungeon left
   `$0300-$03CD` untouched (`U1.INTRO` writes `$03CE`); the static hits in other
-  overlays are data bytes, not instructions. The glue is 163 bytes.
+  overlays are data bytes, not instructions. The glue is 169 bytes.
 **ProDOS stand-in** (`codegen/patches/ultima1/prodos.s`). Only ProDOS is replaced;
 `U1.SYSTEM`, Origin's layer and the game run unmodified.
 
@@ -208,9 +210,13 @@ off (`$C007`), installs the stand-in, captures the command collector, then loads
 `pwsh codegen\tools\port-ultima1.native.ps1` (Visual Studio C++ tools): builds the
 shared VM natively and types `BRITISH ULTIMA` twice plus Caps Lock as real PS/2 frames
 (bit periods 94/120/160 cycles, DATA held 80) at drifting offsets while a loop polls
-the glue like `STUPH`. All three pass: ~1,800-1,900 scans, 38-671 keyboard NMIs taken
+the glue like `STUPH` (with the machine as the loader leaves it and a Y sentinel
+reloaded every poll). All three pass: ~2,050-2,150 scans, 52-878 keyboard NMIs taken
 *inside* a scan, the LED exchange completes, every character arrives, and every NMI
-returns with A/X, flags and overlay intact (Y excepted on the ROM's LED-command NMIs).
+returns with A/X/Y, flags and overlay intact (Y excepted, and counted, on the ROM's
+LED-command NMIs). A second phase types `BRITISH` while Right on pad 1 and Start on
+pad 2 are pressed and released between letters: all seven letters arrive in order with
+exactly 4 Right and 3 Start keys.
 With `-Pad` pointing at the first, `PTRIG` glue, the same harness fails all three.
 
 Manual emulator sessions on the original disk (scripted keys, screenshots): the
@@ -247,7 +253,10 @@ performance on a real card's cluster size.
 - **Lock keys.** The ROM's Caps/Num Lock LED handling changes the Y register of
   whatever it interrupts (above); a lock-key press mid-game could disturb the game.
 - **Controller keys reach the game only at input waits**, like the game's own key
-  handling; a tap shorter than a slow redraw can be missed.
+  handling; a tap that starts and ends during a slow redraw can be missed.
+- **Both pads share one state per button**: pressing a button on controller 2 while
+  the same button is held on controller 1 sends nothing (single-player game; noted
+  in review and left as is).
 
 ## Next steps worth discussing
 

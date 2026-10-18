@@ -55,14 +55,12 @@ const program = assemble(`
         .org $0800
         stz $CAFE               ; as the loader leaves the machine
         bit $C007
-        lda #$60
-        sta $C20E
-        stz $CE15
         stz $78
         ldx #0
         lda #1
         sta $03FD
-loop:   jsr $0300               ; STUPH $1D64, patched
+loop:   ldy #$77                ; a Y the NMI checks can see change
+        jsr $0300               ; STUPH $1D64, patched
         bpl loop
         sta $0400,x
         bit $C010

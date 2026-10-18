@@ -420,7 +420,7 @@ async function bootU1(tree) {
   assert.doesNotMatch(serial, /NOPE|BLOAD|EH\?|NOFIND/, "only well-formed commands for known files reach the ROM");
   console.log("PASS ProDOS stand-in on the ROM DOS: info, open/read/mark/EOF, write/read-back, errors, registers, zero page, NMI");
 
-  // SNES pads through the ROM's PTRIG scan, as STUPH's patched polls see them.
+  // SNES pads (clocked by the glue on VIA1 port B), as STUPH's patched poll sees them.
   const seen = () => vm.peek(RES + 0x7c);
   const runFor = (cycles) => { for (let c = 0; c < cycles;) c += vm.runCycles(2000); };
   const press = (pad, mask) => vm.setGamepadState(pad, mask);
@@ -470,19 +470,24 @@ async function bootU1(tree) {
   assert.deepEqual([seen() - n, last()], [2, 0xc1], "B then A across both controllers");
 
 
-  // A key decoded while the pad scan runs wins, and the press is not lost.
+  // A key decoded while the pad scan runs wins, and the press is not lost -
+  // even when the button is released before the next poll.
   const { pad } = buildLoader([{ name: "X", type: 6, aux: 0, eof: 1 }]);
   n = seen();
   press(0, 1 << 9);                                      // X button down
-  vm.addBreakpoint(pad.symbols.SCAN_RET);
-  for (let c = 0; c < HZ && !vm.breakpointHit();) c += vm.runCycles(500);
-  assert.ok(vm.breakpointHit(), "pad scan returned to scan_ret");
-  vm.removeBreakpoint(pad.symbols.SCAN_RET);
+  for (const at of [pad.symbols.SCAN, pad.symbols.SCAN_RET]) { // a scan that latched it
+    vm.addBreakpoint(at);
+    let c = 0;
+    do c += vm.runCycles(500); while (c < HZ && !vm.breakpointHit());
+    vm.removeBreakpoint(at);
+  }
+  assert.equal(vm.peek(pad.symbols.PREV + 9), 0x81, "the press is marked, not yet sent");
   vm.keyDown("W".charCodeAt(0));
+  press(0, 0);                                           // released before the next poll
   for (let c = 0; c < HZ && seen() < n + 2;) c += vm.runCycles(500);
-  press(0, 0); runFor(20000);
+  runFor(20000);
   assert.equal(seen(), n + 2, "both the typed key and the pad key arrive");
-  assert.equal(last(), 0xd8, "pad key (X) follows the typed W");
+  assert.equal(last(), 0xd8, "the pad press (X) is kept and follows the typed W, though already released");
 
   assert.equal(vm.peek(RES + 0x7e), 0, "padpoll preserves X and Y");
   press(0, 1 << 5); runFor(200000); press(0, 0); runFor(20000);    // scans happened

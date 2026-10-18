@@ -2,12 +2,13 @@
 // Built and run by codegen/tools/port-ultima1.native.ps1.
 //
 // A small 6502 program polls the pad glue the way STUPH's patched keyboard
-// read does (JSR $0300, store a ready key, touch $C010), so the glue scans
-// both SNES pads every fourth poll while real PS/2 frames arrive on VIA1
+// read does (JSR $0300, store a ready key, touch $C010), so the glue clocks
+// both SNES pads on every poll while real PS/2 frames arrive on VIA1
 // CA2/PA7 at a given bit period, with DATA changing a given number of cycles
 // after each falling clock edge. Caps Lock must complete the ROM's LED command
 // exchange, every typed key must arrive, and every NMI must return with A/X/Y,
 // flags and the BASIC overlay unchanged - including NMIs taken during a scan.
+// A second phase types while buttons are pressed and released on both pads.
 #include "SDCard.h"
 #include "vm.h"
 #include <array>
@@ -289,12 +290,41 @@ int main(int argc, char** argv)
         require(got == expected, "Typed '" + expected + "' but the game received '" + got + "'");
         require(m.scans > 100, "The pad glue did not scan while keys arrived");
         require(m.nmisInScan > 0, "No keyboard NMI landed inside a pad scan (test too weak)");
+        require(m.ledYChanges > 0, "The Caps Lock LED path never ran with a visible Y (test too weak)");
+
+        // Phase 2: type while buttons are pressed and released on both pads.
+        // Right (pad 1) on even letters, Start (pad 2) on odd ones; the game's
+        // type-ahead count stays non-zero, so only presses send (no repeats).
+        m.vm->WriteData(0x78, 1);
+        const size_t start = got.size();
+        const std::array<uint8_t, 7> word2{0x32, 0x2d, 0x43, 0x2c, 0x43, 0x1b, 0x33}; // BRITISH
+        for (size_t i = 0; i < word2.size(); ++i)
+        {
+            m.vm->SetGamepadState(0, i % 2 == 0 ? 1u << 7 : 0);
+            m.vm->SetGamepadState(1, i % 2 == 1 ? 1u << 3 : 0);
+            m.key(word2[i], n++);
+        }
+        m.vm->SetGamepadState(0, 0);
+        m.vm->SetGamepadState(1, 0);
+        m.run(100000);
+        std::string letters;
+        unsigned rights = 0, starts = 0;
+        for (uint16_t a = uint16_t(0x0400 + start); a < 0x0500 && m.vm->PeekData(a); ++a)
+        {
+            const uint8_t c = m.vm->PeekData(a) & 0x7f;
+            if (c == 0x15) ++rights;
+            else if (c == ' ') ++starts;
+            else letters += char(c >= 'a' && c <= 'z' ? c - 32 : c);
+        }
+        require(letters == "BRITISH", "Typed BRITISH with the pads in use but the game received '" + letters + "'");
+        require(rights == 4 && starts == 3, "Expected 4 Right and 3 Start presses, got " + std::to_string(rights)
+            + " and " + std::to_string(starts));
         require(m.vm->PeekData(0xcafe) == 0, "ROM NMI nest count not back to zero");
         require(!m.vm->IsROMVisible(0x9000), "BASIC ROM left in after the scans");
         std::cout << "PASS native PS/2 " << period << "/" << hold << " with pad scans: Caps Lock LEDs, "
                   << got << ", " << m.scans << " scans, " << m.nmisInScan << " NMIs inside scans, "
                   << m.checkedInterrupts << " NMIs preserved registers, flags and overlay (Y excepted on "
-                  << m.ledYChanges << " ROM LED-command NMIs)\n";
+                  << m.ledYChanges << " ROM LED-command NMIs); BRITISH typed with 4 Right + 3 Start presses on two pads\n";
         return 0;
     }
     catch (const std::exception& e)
