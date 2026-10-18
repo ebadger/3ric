@@ -112,6 +112,17 @@ client-side so GitHub Pages can host it as static files.
   downloads are aborted, reported visibly, and startup controls are released in
   cleanup so a failed launch can be reset or replaced without a page reload.
   An embedded **Restart** retries the configured WOZ URL when no disk has loaded.
+- **Non-resetting disk swap:** the ordinary workbench's **Swap .woz** picker replaces
+  drive 1's media through the existing `insertDisk(0, bytes)` bridge call. Unlike
+  **Insert .woz** / **Boot Disk**, it does not reload ROM, reset/run the CPU, change
+  RAM/banks, clear queued input, or alter speed, audio or debugger pause/breakpoints.
+  Use it at a game's disk prompt, then confirm in the game. The picker participates
+  in startup/reset control disabling and shares boot's WOZ2/header/8 MiB guards;
+  oversized files are rejected before reading. Cancellation is a no-op; both file
+  read and insertion failures are visible and allow retrying the same file.
+  A parser rejection can eject the previous media, so the error tells the user to
+  reinsert it. Swapping does not replace the cached boot disk used by embedded
+  **Restart**, change ordinary **Reset**, or add floppy writes, saving or disk export.
 - **Fullscreen:** the fullscreen button requests the entire player, including its
   controls, through the browser Fullscreen API. Entry requires a user gesture; it is
   not attempted automatically. Exit (button or browser Escape) restores the prior
@@ -405,6 +416,9 @@ virtual-keyboard button→shared input queue→strobe-clear frame→keyDown()→
 Boot Disk/Mount SD →
 insertDisk()/loadSD() → MON + C600G / EC5CG`.
 
+Disk swap: `Swap .woz file picker -> checked local bytes -> insertDisk(0, bytes) ->
+existing guest disk-read routine`, with the running machine otherwise preserved.
+
 Embedding: `host iframe URL -> embed presentation + selected launch target -> browser
 fetch of WOZ (normal CORS) -> bootDisk/loadRom/insertDisk -> queued MON then C600G ->
 shared Disk II/65C02 -> framebuffer/audio -> aspect-preserving player`. Fullscreen:
@@ -457,6 +471,7 @@ on the emulator whether it succeeds, is blocked, or 404s.
 | Mobile virtual keyboard | Shipped | Exact 1983 Apple IIe Figure 2-1 key order/widths below the canvas, minus Reset and both Apple keys; full emulator character set, one-shot Shift/Control, the same strobe-aware `$C000` queue as physical input, and viewport-fitting rows without phone-width horizontal scrolling. |
 | USB/Bluetooth gamepads | Shipped | Two stable player slots through the standard Gamepad API and shared SNES/VIA peripheral; covered by browser-mapping, serial-protocol, and ROM-table tests. |
 | Disk II WOZ boot + micro-SD DOS shell | Shipped | **Boot Disk** / **Mount SD** buttons. |
+| Non-resetting Disk II swap | Implemented | Separate workbench **Swap .woz** control; `test_embed.cjs` covers live CPU/RAM/bank/input/audio/debugger preservation, readable replacement media, size/format errors, cancellation/retry, and unchanged boot/restart behavior. |
 | Embeddable/fullscreen player + automatic WOZ boot | Implemented | `?embed=1` minimal viewport-fitting player; `?woz=` direct disk fetch and real `MON`/`C600G` Disk II boot; shared WOZ2 validation, 8 MiB/30-second limits, cached restart/failed-download retry, and actual markup/CSS assertions alongside real-WASM page tests. |
 | In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; built-in games, demos, and tutorials; `?src=`. Sample sources fetched with `cache:"no-cache"` (revalidate) so a new deploy isn't masked by the browser cache. |
 | Source debugger | Shipped | Browser-assembled source listing with bank-qualified instruction breakpoints/highlighting, pause/continue, bank-aware step into/over, register and raw-memory inspection, plus lazy ca65 ROM symbol/file:line correlation; covered by `test_debugger.cjs`. |

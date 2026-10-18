@@ -48,7 +48,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node codegen/tools/hackaday.test.mjs # Built from Bits scenes, music, timing, controls, WOZ boot
 & $node web/test_hackaday_page.cjs      # showcase page, source links, and committed preview
 & $node web/test_boot.cjs                # ROM boots, sane PC, video RAM written
-& $node web\test_embed.cjs              # iframe player, real URL disk boot/restart, fullscreen state, errors
+& $node web\test_embed.cjs              # iframe player, disk boot/restart/swap, fullscreen state, errors
 & $node web\test_woz_validation.cjs     # native-parser bounds/CRC/formats, 8 MiB boundary, safe recovery
 & $node web/test_render.cjs              # framebuffer has lit pixels
 & $node web/test_keyboard.cjs            # monitor echoes typed commands
@@ -179,6 +179,11 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   Fullscreen and sound still need a visitor gesture; the iframe must delegate
   fullscreen/autoplay/gamepad permissions. Copyable embed/full-viewport examples
   are in `web/README.md`. Without `embed=1`, the normal workbench remains available.
+- **Disk changes:** the workbench's **Swap .woz** control changes drive 1's media
+  without resetting the current program. Use it at in-game disk prompts;
+  **Insert .woz** / **Boot Disk** still reboot. WOZ2/8 MiB limits are unchanged,
+  and invalid-container insertion may require swapping the previous disk back in.
+  This does not add emulator floppy writes or save persistence.
 - **In-browser assembler:** assembles 65C02 source client-side with the project's own
   `asm6502.mjs` and runs it like `BRUN`; ships ~11 sample programs; deep-linkable via `?src=`.
   Exports the assembled program as a raw **.PRG** or a bootable **.woz** disk image
