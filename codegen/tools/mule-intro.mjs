@@ -34,7 +34,7 @@ F0 BEQ 12 2|F1 SBC 11 5|F5 SBC 4 4|F6 INC 4 6|F8 SED 0 2|F9 SBC 8 4|FD SBC 7 4|F
 const LEN = [1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 2, 2, 2];
 
 /** NMOS 6502 core (documented opcodes; others stop the run). */
-class Cpu {
+export class Cpu {
   constructor(rd, wr) { Object.assign(this, { rd, wr, a: 0, x: 0, y: 0, s: 0xff, pc: 0, c: 0, z: 0, i: 1, d: 0, v: 0, n: 0 }); }
   p() { return (this.n << 7) | (this.v << 6) | 0x30 | (this.d << 3) | (this.i << 2) | (this.z << 1) | this.c; }
   setp(p) { this.n = (p >> 7) & 1; this.v = (p >> 6) & 1; this.d = (p >> 3) & 1; this.i = (p >> 2) & 1; this.z = (p >> 1) & 1; this.c = p & 1; }
