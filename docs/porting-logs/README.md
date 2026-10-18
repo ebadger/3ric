@@ -24,6 +24,7 @@ below as working on the physical machine.
 | [Ultima II](ultima-ii.md) (2026-10-15) | A game that only speaks DOS 3.3 through Ctrl-D text needs a command translator on `CSW`, not a loader rewrite; patch "insert disk" prompts into folder switches; feed SNES pads in as keystrokes from a timer IRQ | Converter, translator and patch tests on synthetic disks; real-disk WASM play through creation, save, overworld, dungeon entry, reload, both space disk swaps and SNES-pad keys; no board trial yet |
 | [Ultima III](ultima-iii.md) (2026-10-15) | When a game checksums its loader, keep the loader and replace the layer under it; move whole files on the first sector call | Converter, glue and synthetic RWTS test; WASM play of the original disks through set-up, creation, world, castle, combat, dungeon and save/resume with retimed music, plus SNES pad input; board: music confirmed working on a later run, gamepad untried |
 | [Adventure](adventure.md) (2026-10-08) | Relocate 3ric's MSBASIC (`+$4000`) into Language Card RAM above DOS 3.3, bridge Applesoft tokens/boolean/formatting semantics, and fix the 1977 KIM-1 `FMULT` bug (`ROR RESULT+2`) | Reproducible DSK/WOZ patcher verified in WASM across cold boot, `CHAIN`, hi-res title, underground traversal, bird capture, `POP`, `SCORE`, `SAVE`, and NMI bank preservation; physical-board confirmation remains open |
+| [Wizardry I](wizardry-i.md) (2026-10-16) | An Apple Pascal game ports at the BIOS block interface: one combined volume, direct ROM sector I/O through a cluster table, and the empty language card it maps on purpose needs the resident's vectors | Converter, glue, synthetic-volume tests on three cluster layouts, native PS/2 test; WASM play from title through castle, tavern write and maze entry; no board trial yet |
 
 ## Scope and evidence
 
@@ -39,7 +40,7 @@ are included or offered for download here. Short instruction changes describe th
 engineering intervention, not a redistribution of the games.
 
 Historical patchers and runbooks named in the four September logs are **not present
-in this checkout**. The newer Archon, Ultima V, Ultima I, Ultima II and Ultima III experiments include their own
+in this checkout**. The newer Archon, Ultima V, Ultima I, Ultima II, Ultima III and Wizardry I experiments include their own
 converters and tests, but none of the original or converted game data. Local commit IDs identify retained development history;
 they may not be reachable from `origin` or available in a fresh clone. They are
 intentionally not GitHub commit links. The offsets, transformations, hashes, and
