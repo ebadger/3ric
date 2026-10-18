@@ -25,7 +25,7 @@ graphics / registers → produce a `.PRG` that also `BRUN`s on real hardware.
 | `run6502.mjs` | CLI: assemble/load → run → apply checks → emit `.PRG` + verdict (exit 0 only if it halted cleanly and every check passed). |
 | `gen_platform_ref.mjs` | Regenerates `platform/platform-ref.{md,json}` from `vm.h` + `badger6502.dbg`. |
 | `patch-archon.mjs` | Exact-image local WOZ compatibility patcher; see `ROM-SOFTWARE.md`. Contains only adapter code and guarded replacements, never downloads game assets, and refuses input overwrite or fingerprint/sector validation failure. |
-| `port-ultima5.mjs` | Converts the eight Ultima V ProDOS disk sides into a micro-SD `U5/` folder (`U5.PRG` + one folder per disk); see `ROM-SOFTWARE.md`. Uses `ultima5/prodos.mjs` (read-only ProDOS reader) and, for tests, `ultima5/fat32.mjs` (builds a sparse FAT32 card for the WASM SD mock). Game data never enters the repository. |
+| `port-ultima5.mjs` | Converts the eight Ultima V ProDOS disk sides into a micro-SD `U5/` folder (`U5.PRG` + one folder per disk, with repacked `SONGnn` music files); see `ROM-SOFTWARE.md`. Uses `ultima5/prodos.mjs` (read-only ProDOS reader), `ultima5/music.mjs` (repacks and losslessly compresses the 128K edition's songs - duration re-encoding, phrase subroutines, a replay check against the original - and derives the player's tables from the user's `MUDR`) and, for tests, `ultima5/fat32.mjs` (builds a sparse FAT32 card for the WASM SD mock). Game data never enters the repository. |
 | `wozedit.mjs` | Node-only checked WOZ2 sector reading/editing, reusing the dual-use `wozgen.mjs` CRC and 6-and-2 codec. Preserves non-edited bitstream and metadata bytes. |
 
 **Platform reference (`codegen/platform/`)** — the generator's machine/human contract:
@@ -119,6 +119,8 @@ breakpoints and current-PC highlighting.
 | `harness` + `run6502` validation loop | Shipped | serial/text/gfx/register checks + `.PRG`. |
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Archon local WOZ patching | Experimental / emulator-verified | `patch-archon.test.mjs` covers synthetic editor fixtures and optional owner-supplied-disk gameplay; `patch-archon.test.ps1` covers native PS/2 timing and LED commands. Both game images stay outside the repository. |
-| Ultima V SD-card converter | Experimental / emulator-verified | `port-ultima5.test.mjs` covers the ProDOS reader, the guarded patch and the full shim on the ROM DOS with synthetic volumes; `U5_DISKS` adds an original-disk title boot. `port-ultima5.native.ps1` builds the VM with MSVC and checks the resident's PS/2 fast path against real keyboard frames, Caps Lock LED exchanges and a stop-bit strobe collision. |
+| Ultima V SD-card converter | Experimental / emulator-verified | `port-ultima5.test.mjs` covers the ProDOS reader, the guarded patches (keyboard and 46 music sites), the full shim on the ROM FAT32 routines with synthetic volumes, SNES pads, a synthetic two-region song played end to end, the song packer and the stale-folder check;
+ `U5_DISKS` adds an original-disk title boot with the music timer running.
+ `port-ultima5.native.ps1` builds the VM with MSVC and checks the resident's PS/2 fast path against real keyboard frames, Caps Lock LED exchanges and a stop-bit strobe collision. |
 | Sample programs | Shipped | `codegen/programs/hello.s`; games under `emulator/AICodeGen/`. |
 | AI-contributor entry point | Shipped | `web/llms.txt` + `CONTRIBUTING.md`; `prompt-system.md` closes the loop to the gallery. |
