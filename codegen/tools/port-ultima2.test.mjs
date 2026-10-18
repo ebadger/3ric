@@ -270,6 +270,7 @@ for (const [cmds, message] of [
   assert.match(serial, harness.MONITOR_DUMP, "stops in the monitor");
   assert.ok(s.textScreen().some((l) => l.includes(message)), `screen says ${message}: ${s.textScreen().join("|")}`);
   assert.ok(vm.textMode(), "text mode for the message");
+  assert.equal(vm.readBus(0xc40e) & 0x40, 0, "the gamepad timer is off in the monitor");
   assert.doesNotMatch(serial, /OWRITE|FLOAD DATAONE/, "the ROM never saw the bad command");
 }
 console.log("PASS missing file, partial BSAVE and unknown commands stop in the monitor with a message");
@@ -282,9 +283,16 @@ const TICK = 52448;                                 // ~30 Hz Mockingboard T1 pe
 const runFor = (vm, n) => { let c = 0; while (c < n) c += vm.run(Math.min(20000, n - c)) || 1; };
 const padSrc = prelude + `
 KEYS = $3000
+        jsr pr                  ; pads keep working after a ROM DOS command
+        .byte $04,"DISK 2",$0D,$04,"BLOAD MAP 00",$0D,0
         ldx #$5A                ; X/Y must survive every pad IRQ
         ldy #$A5
-loop:   cpx #$5A
+loop:   lda #$3C                ; so must A and the flags
+        sec
+        bcc bad
+        cmp #$3C
+        bne bad
+        cpx #$5A
         bne bad
         cpy #$A5
         bne bad
@@ -339,22 +347,24 @@ hang:   jmp hang
   vm.setGamepadState(1, 0);
   runFor(vm, 3 * TICK);
   assert.deepEqual(keys(), [0xd1, 0xc5], "the pad key follows once the latch is free");
-  assert.equal(vm.peek(RES + 21), 0, "X and Y survive the pad IRQ");
+  assert.equal(vm.peek(RES + 21), 0, "A, X, Y and the flags survive the pad IRQ");
 
-  let irqs = 0, cycles = 0, inLoop = 0;
+  let irqs = 0, scanNmis = 0, cycles = 0, inLoop = 0;
   vm.setGamepadState(0, 1 << 4);                     // a pressed pad: full IRQ path
   while (cycles < 30 * TICK) {
     const pc = vm.pc();
     if (pc === R.PAD_IRQ) irqs++;
+    if (pc === 0xf1bb && (vm.readBus(0xc20d) & 0x68)) scanNmis++;   // CB2 scan, T1/T2 paddle timers (CB1 is our $C010)
     const c = vm.step();
     cycles += c;
     if (pc >= 0x6000 && pc < 0x6100) inLoop += c;
   }
   vm.setGamepadState(0, 0);
   assert.ok(irqs >= 29 && irqs <= 31, `~30 Hz poll (${irqs} ticks in 30 periods)`);
+  assert.equal(scanNmis, 0, "polling raises no scan or paddle-timer NMIs (no $C070)");
   const overhead = 1 - inLoop / cycles;
-  assert.ok(overhead < 0.05, `poller costs ${(overhead * 100).toFixed(1)}% of the CPU`);
-  console.log(`PASS SNES pads: 12-button map on both pads, D-pad repeat, pending keys kept, X/Y safe, ${irqs} ticks/s, ${(overhead * 100).toFixed(1)}% CPU`);
+  assert.ok(overhead < 0.03, `poller costs ${(overhead * 100).toFixed(1)}% of the CPU`);
+  console.log(`PASS SNES pads: 12-button map on both pads, D-pad repeat, pending keys kept, registers safe, no scan NMIs, ${irqs} ticks/s, ${(overhead * 100).toFixed(1)}% CPU`);
 }
 
 {
@@ -362,11 +372,12 @@ hang:   jmp hang
   const tree = buildFromDisks(disks);
   delete tree.PROGRAM.HELLO;                       // an incomplete card
   const s = await bootGame(tree);
-  for (let i = 0; i < 200; i++) s.vm.run(20000);
-  const m = s.textScreen().join("\n").match(harness.MONITOR_DUMP);   // CSW is still the translator: screen only
-  assert.ok(m, `a HELLO that did not load stops in the monitor: ${s.textScreen().join("|")}`);
-  assert.equal(parseInt(m[1], 16) & 0xfff0, 0x6000, `BRK at $6000, not stale code (${m[0]})`);
-  console.log("PASS a card without HELLO stops at $6000 instead of running stale memory");
+  let serial = "";
+  for (let i = 0; i < 300 && !harness.MONITOR_DUMP.test(serial); i++) { s.vm.run(20000); serial += s.vm.drainOutput(); }
+  assert.match(serial, harness.MONITOR_DUMP, "a HELLO that did not load stops in the monitor");
+  assert.ok(s.textScreen().some((l) => l.includes("HELLO DID NOT LOAD")), `instead of running stale memory: ${s.textScreen().join("|")}`);
+  assert.equal(s.vm.readBus(0xc40e) & 0x40, 0, "with the gamepad timer off");
+  console.log("PASS a card without HELLO stops with a message instead of running stale memory");
 }
 
 // ---------------------------------------------------------------------------

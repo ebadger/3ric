@@ -52,57 +52,96 @@ curdisk:    .byte $FF           ; $960A: $FF = still in the U2 folder
 
 ; ---------------------------------------------------------------------------
 ; SNES gamepads -> keystrokes. The loader points the ROM's IRQ vector ($03FE)
-; here and runs the Mockingboard's first VIA Timer 1 at ~30 Hz; a tick costs
-; about 1,600 cycles, mostly the ROM's scan. The ROM's IRQ entry has saved A
-; in $45. Each tick asks the ROM for a fresh pad scan and
-; turns a new press (both pads ORed) into a key in the $C000 latch, exactly
-; where a typed key lands, so every input path in the game sees it. A press
-; that finds a key still pending retries on the next tick; D-pad keys repeat
-; while held.
+; here and runs the Mockingboard's first VIA Timer 1 at ~30 Hz. The ROM's IRQ
+; entry has saved A in $45. Each tick clocks both pads on VIA1 port B with
+; the ROM scan's own pin sequence ($B99B) but without touching PTRIG $C070:
+; the ROM's $C070 path also arms VIA1's paddle timers, whose NMIs dropped
+; PS/2 keys on the board (A2Robots). No NMI is raised here. A new press (both
+; pads ORed) becomes a key in the $C000 latch, exactly where a typed key
+; lands, so every input path in the game sees it. The latch is checked just
+; before the store and a press counts as sent only once stored, so a busy
+; latch retries on the next tick; D-pad keys repeat while held. A tick costs
+; about 1,000 cycles.
 
 MB_T1CL     = $C404             ; Mockingboard VIA 1 (slot 4)
+MB_IFR      = $C40D
 MB_IER      = $C40E
-PTRIG       = $C070             ; ROM SNES scan trigger (NMI)
-GAMEPAD1    = $CEE0             ; ROM pad tables: 1 = pressed
-GAMEPAD2    = $CEF0
+VIA1_ORB    = $C200             ; latch $40, clock $80; data pad 1 $20, pad 2 $10
+ACIA_DATA   = $C100
+ACIA_STATUS = $C101
 KBD         = $C000
 IRQ_SAVEA   = $45               ; where the ROM's IRQ entry saved A
 REPEAT_FIRST = 10               ; ticks (~0.33 s) before a held D-pad key repeats
 REPEAT_GAP  = 4                 ; ticks (~0.13 s) between repeats
 
 pad_irq:
+        bit MB_IFR              ; V = Timer 1
+        bvs pi_tick
+        lda ACIA_STATUS         ; the emulator routes ACIA receive to IRQ
+        and #$08                ; (the board: NMI, where the ROM does this)
+        beq pi_done
+        lda ACIA_DATA
+        ora #$80
+        sta KBD
+pi_done:
+        lda IRQ_SAVEA
+        rti
+pi_tick:
         lda MB_T1CL             ; acknowledge Timer 1
         phx
-        bit PTRIG               ; ROM scan NMI runs before the next instruction
+        stz VIA1_ORB            ; latch the pads (ROM scan sequence)
+        lda #$40
+        sta VIA1_ORB
+        ldx #0
+pi_bit:
+        stz VIA1_ORB
+        nop                     ; same settle time as the ROM scan's
+        nop                     ; two table stores before its read
+        nop
+        nop
+        nop
+        lda VIA1_ORB
+        eor #$FF                ; active low
+        and #$30                ; either pad's data bit
+        beq pi_clear
+        lda #1
+pi_clear:
+        cpx #12
+        bcs pi_clock            ; bits 12-15 are unused
+        sta padnow,x
+pi_clock:
+        lda #$80
+        sta VIA1_ORB
+        inx
+        cpx #16
+        bne pi_bit
+        stz VIA1_ORB
         ldx #11
 pi_button:
-        lda GAMEPAD1,x
-        ora GAMEPAD2,x
+        lda padnow,x
         beq pi_up
         lda padheld,x
-        beq pi_fire             ; new press
+        beq pi_new
         cpx #4                  ; D-pad (4-7) repeats while held
         bcc pi_next
         cpx #8
         bcs pi_next
-        inc padheld,x
         lda padheld,x
         cmp #REPEAT_FIRST
-        bcc pi_next
+        bcs pi_repeat
+        inc padheld,x
+        bra pi_next
+pi_repeat:
+        jsr pad_inject
+        bcs pi_next             ; latch busy: try again next tick
         lda #REPEAT_FIRST-REPEAT_GAP
         sta padheld,x
-        bra pi_send
-pi_fire:
-        bit KBD                 ; a key is pending: try again next tick
-        bmi pi_next
+        bra pi_next
+pi_new:
+        jsr pad_inject
+        bcs pi_next             ; latch busy: still a new press next tick
         lda #1
         sta padheld,x
-pi_send:
-        lda padkeys,x
-        beq pi_next
-        bit KBD                 ; never overwrite a pending key
-        bmi pi_next
-        sta KBD
         bra pi_next
 pi_up:
         stz padheld,x
@@ -113,9 +152,28 @@ pi_next:
         lda IRQ_SAVEA
         rti
 
+; Key for button X into the $C000 latch if no key is pending: carry clear.
+pad_inject:
+        lda padkeys,x
+        bit KBD
+        bmi pinj_busy
+        sta KBD
+        clc
+        rts
+pinj_busy:
+        sec
+        rts
+
 ;                 B    Y    SEL  START UP   DOWN LEFT RIGHT A    X    L    R
 padkeys:    .byte $C5, $C7, $9B, $A0, $8D, $AF, $88, $95, $C1, $D4, $DA, $C9
 padheld:    .res 12
+padnow:     .res 12
+
+; HELLO did not load: the loader leaves JMP no_hello at $6000.
+no_hello:
+        ldx #<msg_hello
+        ldy #>msg_hello
+        jmp fail
 
 ; ---------------------------------------------------------------------------
 ; Output hook.
@@ -815,6 +873,7 @@ msg_head:   .asciiz "ULTIMA II PORT: "
 msg_cmd:    .asciiz "UNKNOWN DOS COMMAND"
 msg_file:   .asciiz "FILE NOT ON THIS DISK"
 msg_bsave:  .asciiz "BSAVE NOT A WHOLE FILE"
+msg_hello:  .asciiz "HELLO DID NOT LOAD"
 
 sva:        .byte 0
 svx:        .byte 0

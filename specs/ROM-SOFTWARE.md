@@ -138,19 +138,29 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     change. The ROM stays mapped (no language-card use), so keyboard NMIs reach the
     unmodified ROM handler. `$9600-$AFFF` is reserved for this profile only.
   - **SNES gamepads:** the loader points the ROM's IRQ vector `$03FE` at the
-    resident and runs the slot-4 Mockingboard's first VIA (`$C400`) Timer 1 free
-    running at ~30 Hz (latch `$CCDE`; the game never uses the Mockingboard). A tick costs ~1,600 cycles (mostly the ROM scan), about 3.5% of the CPU. Each
-    tick acknowledges T1, touches `PTRIG $C070` (fresh ROM pad scan), ORs
-    `GAMEPAD1 $CEE0` and `GAMEPAD2 $CEF0`, and turns a new press into a keystroke
-    written to the `$C000` latch when no key is pending (bit 7 clear); a press that
-    finds a key pending retries next tick, so the game reads pad keys exactly like
-    typed ones (`$C000`/`$C010`, `RDKEY`). Mapping: D-pad = Return/`/`/←/→
-    (north/south/west/east, also direction answers), repeating after ~0.33 s every
-    ~0.13 s while held; A = `A`ttack, B = `E`nter, X = `T`ransact, Y = `G`et,
-    L = `Z`tats, R = `I`gnite torch, Select = ESC, Start = Space. The ROM's IRQ entry
-    stores A in `$45` (unused by the game) and the handler returns with `LDA $45`,
-    `RTI`, preserving X/Y. ROM DOS commands run with IRQs masked so a pad scan never
-    interleaves with SD bit-banging on VIA1; an error stop disables the timer.
+    resident, clears both Mockingboard VIAs' interrupt enables and runs the first
+    VIA's (`$C400`) Timer 1 free running at ~30 Hz (latch `$CCDE`; the game never
+    uses the Mockingboard). On a Timer 1 IRQ the resident clocks both pads itself on
+    VIA1 port B with the ROM scan's exact pin sequence (`$B99B`: latch `$40`, clock
+    `$80`, pad 1 data bit 5, pad 2 bit 4, active low, 16 bits). It never touches
+    `PTRIG $C070`: the ROM's `$C070` scan also arms VIA1's paddle timers, and those
+    NMIs dropped PS/2 keys on the board in the A2Robots port. No NMI is raised. A
+    new press (both pads ORed) becomes a keystroke written to the `$C000` latch
+    only if bit 7 is clear, checked just before the store and recorded as sent only
+    when stored, so a busy latch retries next tick and a pending key is not
+    overwritten (a PS/2 key decoded within those two instructions can still be).
+    The game reads pad keys exactly like typed ones (`$C000`/`$C010`, `RDKEY`).
+    Mapping: D-pad = Return/`/`/←/→ (north/south/west/east, also direction
+    answers), repeating after ~0.33 s every ~0.13 s while held; A = `A`ttack,
+    B = `E`nter, X = `T`ransact, Y = `G`et, L = `Z`tats, R = `I`gnite torch,
+    Select = ESC, Start = Space. Any other IRQ: an ACIA received byte (the
+    emulator routes the ACIA to IRQ; the board routes it to NMI, where the ROM does
+    the same) is delivered to `$C000` as a key; anything else returns. The ROM's IRQ
+    entry stores A in `$45` (unused by the game); the handler returns with
+    `LDA $45`, `RTI`, preserving X/Y. ROM DOS commands run with IRQs masked so the
+    poller never interleaves with SD bit-banging; an error stop (including a
+    `HELLO` that did not load) disables the timer first. A tick costs about 1,000
+    cycles.
   - **Known issues (shipped by owner decision after review):** `BSAVE` passes the
     file length to `OWRITE`, so every 4 KB map save writes one extra sector past the
     file's cluster chain (fix: pass `len-1`); multi-sector saves need a card with
@@ -492,7 +502,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | Ultima V SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima5.test.mjs` drives the real loader/resident/shim on the ROM DOS with synthetic volumes (and boots the original disks to the title with `U5_DISKS`); `port-ultima5.native.ps1` decodes real PS/2 frames at 94-160-cycle periods with language-card RAM mapped, including Caps Lock LED exchanges and a `` strobe on a stop-bit edge. Manual WASM play covered creation, save, overworld, combat, towne entry. First board trial: title shown, keyboard failed (fixed since, re-trial pending). Dialogue, dungeons, endgame and music (needs 128 KB) are open; ROM DOS command failures are not detected (card contents trusted); block reads cost ~1.7 M cycles. |
-| Ultima II SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima2.test.mjs` drives the real loader and DOS 3.3 translator on the ROM DOS with synthetic disks (BLOAD/BRUN/BSAVE, folder switches, exact lengths, register preservation, fail-loud errors); with `U2_DISKS` it plays the original disks through title, character creation and save, the overworld and both patched space disk swaps, plus a D-pad move; SNES pads are covered through the real ROM scan (12-button map on both pads, D-pad repeat, pending keys kept, X/Y preserved, 30 Hz at 3.8% CPU, IRQs masked during ROM DOS commands). Manual WASM play also covered movement, Z-stats, quit-save, dungeon entry, reloading a saved character and the demo slideshow. No physical-board trial yet; towns/dialogue, combat depth, space flight and the endgame were not played through; the game runs ~1.54x faster than on a 1.02 MHz Apple II. Known issue (shipped by owner decision): `OWRITE` gets the file length, so 4 KB map saves write one extra SD sector; saves need 512-byte clusters. |
+| Ultima II SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima2.test.mjs` drives the real loader and DOS 3.3 translator on the ROM DOS with synthetic disks (BLOAD/BRUN/BSAVE, folder switches, exact lengths, register preservation, fail-loud errors); with `U2_DISKS` it plays the original disks through title, character creation and save, the overworld and both patched space disk swaps, plus a D-pad move; SNES pads are covered through the real ROM scan (12-button map on both pads, D-pad repeat, pending keys kept, X/Y preserved, 30 Hz at 2.1% CPU with no scan or paddle-timer NMIs, IRQs masked during ROM DOS commands, timer off at every error stop). Manual WASM play also covered movement, Z-stats, quit-save, dungeon entry, reloading a saved character and the demo slideshow. No physical-board trial yet; towns/dialogue, combat depth, space flight and the endgame were not played through; the game runs ~1.54x faster than on a 1.02 MHz Apple II. Known issue (shipped by owner decision): `OWRITE` gets the file length, so 4 KB map saves write one extra SD sector; saves need 512-byte clusters. |
 | ROM `BLOAD` stores one byte past EOF | Known gap (ROM) | Observed in `fat32_file_read`; programs loading below live data must use `FLOAD 0000 eof-1`. ROM source is not in this repository. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |

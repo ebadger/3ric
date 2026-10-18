@@ -81,7 +81,8 @@ copy_res:
         lda #>RES_PADIRQ
         sta $03FF
         lda #$7F
-        sta $C40E               ; IER: all sources off
+        sta $C40E               ; IER: all sources off, both Mockingboard VIAs
+        sta $C48E
         lda #$40
         sta $C40B               ; ACR: T1 continuous, PB7 untouched
         lda #<PAD_LATCH
@@ -98,7 +99,12 @@ copy_res:
         bit $C054
         lda #1                  ; PROGRAM folder
         jsr RES_ORG+3
-        stz $6000               ; if HELLO fails to load, BRUN meets a BRK
+        lda #$4C                ; if HELLO fails to load, BRUN meets
+        sta $6000               ; JMP no_hello: timer off, message, monitor
+        lda #<RES_NOHELLO
+        sta $6001
+        lda #>RES_NOHELLO
+        sta $6002
         ldx #0
 boot:                           ; Ctrl-D BRUN HELLO through the translator
         lda cmd_hello,x

@@ -71,9 +71,10 @@ program `$500D` (player), `CREATE` `$600D` (player) and `$6586` (program),
 **Loader** (`loader.s`): checks that `COUT` is `JMP ($0036)` and the `$03EA` hook
 exists, zeroes the ROM NMI nest counter `$CAFE` and turns the BASIC overlay off,
 copies the translator to `$9600`, records the previous and ROM-collector `CSW`,
-starts the gamepad timer (below), selects `PROGRAM`, zeroes `$6000` (so a failed
-`HELLO` load stops at a `BRK` rather than running stale memory) and prints
-`BRUN HELLO` through the translator, as the boot disk's DOS did.
+starts the gamepad timer (below), selects `PROGRAM`, plants `JMP no_hello` at
+`$6000` (so a failed `HELLO` load stops with a message and the timer off rather
+than running stale memory) and prints `BRUN HELLO` through the translator, as the
+boot disk's DOS did.
 
 ## SNES gamepads (added 2026-10-17)
 
@@ -84,12 +85,17 @@ reads the `$C000` latch directly, and the ROM's own keyboard decoder writes ther
 so a key the resident writes into `$C000` is indistinguishable from a typed one.
 
 The loader points the ROM's Apple-style IRQ vector (`$03FE`; the ROM's entry saves
-A in `$45`) at the resident and runs the slot-4 Mockingboard's first VIA Timer 1
-free-running at ~30 Hz. The game never uses the Mockingboard or `$45`. Each tick
-touches `PTRIG $C070` (the ROM scans both pads in an NMI before the next
-instruction), ORs `GAMEPAD1 $CEE0`/`GAMEPAD2 $CEF0`, and turns a new press into
-its key when `$C000` bit 7 is clear; otherwise it retries next tick, so a pending
-key is never overwritten. The D-pad repeats after ~0.33 s, every ~0.13 s.
+A in `$45`) at the resident, clears both Mockingboard VIAs' interrupt enables and
+runs the first VIA's Timer 1 free-running at ~30 Hz. The game never uses the
+Mockingboard or `$45`. On a Timer 1 IRQ the resident clocks both pads itself on
+VIA1 port B, copying the ROM scan's pin sequence (`$B99B`: latch, then 16 clock
+pulses, data on bits 5 and 4, active low, with the same settle time before each
+read), ORs the two pads, and turns a new press into its key when `$C000` bit 7 is
+clear. The latch is checked immediately before the store and a press counts as
+sent only once stored, so a busy latch retries next tick and a pending key is not
+overwritten. The D-pad repeats after ~0.33 s, every ~0.13 s. Any other IRQ is an
+ACIA received byte in the emulator (the board routes the ACIA to NMI, where the
+ROM does the same): it is delivered to `$C000` as a key rather than left asserted.
 
 | Pad | Key | Ultima II |
 |-----|-----|-----------|
@@ -103,15 +109,22 @@ key is never overwritten. The D-pad repeats after ~0.33 s, every ~0.13 s.
 | Select | ESC | dismiss prompts |
 | Start | Space | pass / continue |
 
-ROM DOS commands run with IRQs masked, so a pad scan never interleaves with SD
-bit-banging on VIA1. A tick costs ~1,600 cycles (mostly the ROM scan): 3.8% of the
-CPU measured. The first rate tried, 60 Hz, cost ~7% and interrupts the game's
-speaker tone loops twice as often.
+ROM DOS commands run with IRQs masked, so the poller never interleaves with SD
+bit-banging. A tick costs about 1,000 cycles: 2.1% of the CPU measured, with no
+NMI raised.
 
-**Detour:** the first overhead figure read 52% because `vm.run()` budgets do not
-map to executed cycles while interrupts are active; a per-instruction `vm.step()`
-profile gave the real number. A "pending key overwritten" failure was a test race
-(the consumer read the typed key before its pause took effect), not the poller.
+**Detours:**
+- The first version touched `PTRIG $C070` and read the ROM's pad tables. The review
+  panel found that the ROM's `$C070` path also arms VIA1's paddle timers: three NMIs
+  per tick, each ending in a blanket VIA1 `IFR` clear that can drop a PS/2 edge -
+  the failure the A2Robots port hit on the board. It also cost 3.8% of the CPU.
+  Clocking the pads directly removed every scan NMI. A rate of 60 Hz had cost ~7%.
+- The first overhead figure read 52% because `vm.run()` budgets do not map to
+  executed cycles while interrupts are active; a per-instruction `vm.step()`
+  profile gave the real number.
+- A "pending key overwritten" failure was a test race (the consumer read the typed
+  key before its pause took effect), and stray NMIs in the profile were the test's
+  own `$C010` strobes (CB1), not the poller.
 
 ## Why it was simpler than Ultima V
 
@@ -146,13 +159,16 @@ profile gave the real number. A "pending key overwritten" failure was a test rac
   after `DISK 2` and `DISK 3`; `BSAVE` rewrites a file that reads back identically;
   `BRUN` runs; BASIC stays off; A/X/Y survive `COUT`; the file table is intact.
   A missing file, a partial `BSAVE` and `CATALOG` each stop in the monitor with
-  their message, in text mode, without reaching the ROM. A card missing `HELLO`
-  stops at the loader's `BRK` at `$6000` instead of running stale memory.
-- Gamepads through the real ROM scan (`setGamepadState`): all twelve buttons on
-  either pad type their mapped key once; a held D-pad repeats (5-8 keys a second),
-  a held A does not; a pending typed key survives and the pad key follows; X/Y
-  survive the IRQ; 30 ticks per 30 timer periods; 3.8% CPU; ROM `FLOAD` is entered
-  with IRQs masked. On the real disks a D-pad press walks the party south.
+  their message, in text mode, with the gamepad timer off, without reaching the
+  ROM. A card missing `HELLO` stops with "HELLO DID NOT LOAD" instead of running
+  stale memory.
+- Gamepads on the emulated SNES pads (`setGamepadState`), after a ROM DOS command:
+  all twelve buttons on either pad type their mapped key once; a held D-pad repeats
+  (5-8 keys a second), a held A does not; a pending typed key survives and the pad
+  key follows; A, X, Y and flags survive the IRQ; 30 ticks per 30 timer periods;
+  2.1% CPU; no CB2 scan or T1/T2 paddle-timer NMI; ROM `FLOAD` is entered with IRQs
+  masked. On the real disks a D-pad press walks the party south. The ACIA-receive
+  branch is not exercised (the bridge has no serial-input call).
 - With `U2_DISKS=<folder>`: the original disks run through the intro to the menu,
   create a character (saved to `PLAYER`, then back to `PROGRAM` and `HELLO`),
   start play on Earth's map in mixed hi-res with the character loaded, and run the
@@ -205,8 +221,11 @@ native PS/2-frame test was run for this port.
 - **Gamepads need the slot-4 Mockingboard.** Its VIA supplies the poll timer; on a
   board without it the pads are ignored and the keyboard still works. With the
   timer running, the ROM's IRQ entry overwrites `$45` (unused by the game). Only
-  emulator-tested; the poller adds ~1,600-cycle pauses to speaker tones 30 times a
-  second.
+  emulator-tested: the browser injects keys without the PS/2 receiver, so the
+  board's keyboard-plus-pad interaction is unproven, and no native PS/2-frame test
+  was run. A PS/2 key decoded between the poller's latch check and its store (two
+  instructions) can still be overwritten by a pad key. The poller adds ~1,000-cycle
+  pauses to speaker tones 30 times a second.
 - **Speed.** 3RIC runs at 1.573 MHz, so the game and its speaker sounds run about
   1.54x faster than on a 1.02 MHz Apple II, including the idle timer that makes
   the party "PASS".
