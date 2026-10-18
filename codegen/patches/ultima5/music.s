@@ -105,10 +105,10 @@ mc_pr:
         beq mc_resume
         cmp #$C0                ; pause, unless already paused
         bne mc_done
+        lda IF80+3              ; resume restores this either way
+        sta SAVE83
         lda IF80+2
         beq mc_off
-        lda IF80+3
-        sta SAVE83
         stz IF80+3
         stz CURVOL
         ldx #2
@@ -323,6 +323,7 @@ sq_rts:
         rts
 sq_stop:
         stz IF80
+        stz WANT                ; nothing to load for a stopped player
         lda IF80+2
         beq sq_rts
         stz IF80+2
@@ -348,6 +349,7 @@ start_song:
         rts
 ss_go:
         sta CUR
+        stz WANT                ; cancel a load asked for meanwhile
         lda SONGBUF
         sta NPLAY
         tax

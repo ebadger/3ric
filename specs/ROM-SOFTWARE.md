@@ -124,7 +124,7 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     (`codegen/patches/ultima5/ram2.inc`).
   - **Music:** a compact player (`music.s`, bank 1) re-implements the 128K edition's
     Mockingboard driver per tick (sequencer, two envelopes, register shadow + flush,
-    `$80-$83` request interface) for one song at a time (810-byte buffer; 11 of 15
+    `$80-$83` request interface) for one song at a time (804-byte buffer; 11 of 15
     songs fit). The tool repacks songs into `SONGnn` in every disk folder and
     pre-scales periods, noise and timer latches by 1.5734/1.0227 MHz from the user's
     `MUDR`. 46 guarded patches open the game's `LDA $EC / LSR / BCC` music gates,

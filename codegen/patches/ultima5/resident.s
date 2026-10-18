@@ -139,6 +139,7 @@ irq_entry:
         phy
 irq_mb: bit mb_none             ; loader: BIT $C40D (VIA IFR, T1 = bit 6)
         bvc irq_rom
+        bpl irq_rom             ; T1 flag set but not enabled (paused)
         lda BANKSIG
         cmp #BANKSIG_VALUE
         beq irq_b1

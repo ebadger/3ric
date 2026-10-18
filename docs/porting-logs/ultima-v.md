@@ -133,7 +133,7 @@ envelopes, a register shadow flushed on change, the `$80-$83` request interface)
 this port plays the songs with a compact re-implementation (`music.s`, ~1.3 KB):
 
 - **Memory.** Bank 1 holds the shim, the player and one song buffer (`SONGBUF`,
-  810 bytes). The player's state is in RAM2 `$CA00-$CABD`; its tables (period,
+  804 bytes). The player's state is in RAM2 `$CA00-$CABD`; its tables (period,
   duration, noise, instrument records, voice map) are in RAM2 the ROM uses only at
   boot or from the DOS prompt (`$CABE-$CAFD`, `$CC3D-$CCFF`, `$CD00-$CD6B`,
   `$CE24-$CEDF`); the game-side glue is at `$CD80` (`ram2.inc` has the map).
@@ -189,7 +189,7 @@ this port plays the songs with a compact re-implementation (`music.s`, ~1.3 KB):
 - **The first music layout did not fit.** Shim, player and tables left 62 bytes for
   a song. Calling the ROM's FAT32 routines directly instead of building DOS command
   lines, and moving the tables into RAM2 that only the ROM's boot code and DOS prompt
-  touch (found by scanning the ROM for absolute references), left 810.
+  touch (found by scanning the ROM for absolute references), left 804.
 - **Block reads are slow.** One 512-byte read measured **1.71 M cycles (≈1.1 s at
   1.573 MHz)** on a 512-byte-cluster card: ~82% is the bit-banged SPI byte loop over
   ~13 sectors (directory scan, FAT hops, and the sectors `FLOAD` skips byte by byte
@@ -259,7 +259,7 @@ cluster size.
 
 ## Known limits
 
-- **Music:** 4 of 15 songs do not fit the 810-byte buffer (title, shrine/death,
+- **Music:** 4 of 15 songs do not fit the 804-byte buffer (title, shrine/death,
   underworld, Blackthorn). A song change mid-game pauses the game briefly while
   `SONGnn` loads at the next keyboard scan. Pause is immediate rather than a fade.
   The player depends on the RAM2 areas above staying unused by the ROM during play,

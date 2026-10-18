@@ -204,7 +204,7 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   moves, A Return, B pass, X talk, Y attack, L Esc, R enter, Start Ztats, Select
   save; emulator-tested, board trial pending). Mockingboard music: a compact 64 KB
   player plays 11 of the 15 songs (title, shrine/death, underworld and Blackthorn
-  do not fit its 810-byte buffer), bit-exact per tick against the reverse-engineered
+  do not fit its 804-byte buffer), bit-exact per tick against the reverse-engineered
   driver after clock scaling; emulator-tested, board trial pending. WASM play
   reached character creation, save, the overworld, combat and a towne; dialogue and
   dungeons are unverified. Missing files are detected; copy the whole folder. New
