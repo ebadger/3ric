@@ -72,6 +72,8 @@ CHECK_VALID_DATA_DISK = $807F
 PS_NOTES    = $8815
 PS_NONOTES  = $8832
 VALID_KEYS  = $6A0B             ; I J K L O U space
+HI_SCORE_MARKER = $63A8         ; "LODE RUNNER", 11 bytes
+HI_SCORE_DATA = $1F00
 IOB_TRACK   = $B7EC
 IOB_SECTOR  = $B7ED
 IOB_BUF     = $B7F0
@@ -146,6 +148,7 @@ tm_hi       = VARS+98
 pc_c        = VARS+99           ; 2 bytes
 chk         = VARS+101          ; 2 bytes
 chk_len     = VARS+103
+ed_row      = VARS+104
 PAD_PERIOD  = 6293              ; pads scanned at most every 4 ms
 SYNC_COST   = 140               ; pace_sync's own time, measured
 SCAN_CYCLES = 760               ; a scanning pad_poll, measured: not Apple II work
@@ -191,7 +194,8 @@ lr_init:
         lda #2                  ; the first pad poll scans at once
         sta MB1+MB_T1CL
         stz MB1+MB_T1CH
-        jmp pace_mark
+        jsr pace_mark
+        jmp load_scores         ; the card's scores, not the file's
 
 irq_ret:
         lda $45                 ; the ROM's IRQ entry saved A here
@@ -748,16 +752,20 @@ pad_check_delay:
         ora cur_hi
         beq pcd_delay
         jsr held_as_last
+        jsr pcd_wait            ; the blink delay either way
         sec
         rts
 pcd_delay:
+        jsr pcd_wait
+        clc
+        rts
+pcd_wait:
         ldx #$02
 pcd_loop:
         dey
         bne pcd_loop
         dex
         bne pcd_loop
-        clc
         rts
 
 ; CHECK_FOR_INPUT with no key waiting ($6A22).
@@ -1085,6 +1093,8 @@ hs_write:
         jsr chk_hs1
         jsr dos_check
         bcs hw_ret
+        jsr ensure_cache        ; the erased map to keep
+        bcs hw_ret
         lda s_buf
         sta sm_hw+1
         lda s_buf+1
@@ -1106,6 +1116,11 @@ format:
         jsr DONT_MANIPULATE     ; as the original master-disk check did
         jmp START_LEVEL_EDITOR
 fm_data:
+        jsr cb_reset            ; HISCORE must exist before anything changes
+        jsr cb_hs_probe
+        jsr chk_hs1
+        jsr dos_check
+        bcs fm_ret
         ldx #19
         lda #$FF
 fm_map: sta erased,x
@@ -1113,15 +1128,16 @@ fm_map: sta erased,x
         bpl fm_map
         lda #1
         sta cache_ok
-        jsr cb_reset
-        jsr cb_hs_probe
-        jsr chk_hs1
-        jsr dos_check
-        bcs fm_ret
         ldx #0
 fm_clr: stz HSBUF,x
         inx
         bne fm_clr
+        ldx #10                 ; keep the disk a data disk: the marker
+fm_mark:
+        lda HI_SCORE_MARKER,x
+        sta HSBUF+244,x
+        dex
+        bpl fm_mark
         jsr put_map
         jsr cb_hs_write
         jsr dos_exec
@@ -1500,6 +1516,8 @@ ep_rest:
 ed_wait:
         lda GAME_COLNUM
         sta ed_col
+        lda GAME_ROWNUM
+        sta ed_row
 ew_loop:
         lda #0
         jsr WAIT_KEY_CURSOR1
@@ -1512,6 +1530,7 @@ ew_loop:
         sta KBDSTRB
         lda SAVED_INPUT_MODE
         sta INPUT_MODE
+        jsr load_scores         ; the title shows this disk's scores
         jmp RESET_GAME
 ew_ret:
         stz ed_top
@@ -1523,6 +1542,17 @@ ew_swap:
         beq ew_show
         jmp EDITOR_COMMAND_LOOP
 ew_show:
+        lda ed_col              ; no room after the prompt (28 columns):
+        cmp #21                 ; show the disk on the next line
+        bcc ew_put
+        jsr PUT_STRING
+        .byte $8D,0
+        lda GAME_COLNUM
+        sta ed_col
+        lda GAME_ROWNUM
+        sta ed_row
+ew_put: lda ed_row
+        sta GAME_ROWNUM
         lda ed_col
         sta GAME_COLNUM
         lda disk
@@ -1596,4 +1626,11 @@ chk_hs1:                        ; one byte at HSBUF
         lda #<HSBUF
         ldx #>HSBUF
         bra chk_ax
+; Read the current disk's HISCORE into the game's table.
+load_scores:
+        lda #<HI_SCORE_DATA
+        sta s_buf
+        lda #>HI_SCORE_DATA
+        sta s_buf+1
+        jmp hs_read
 resident2_end:

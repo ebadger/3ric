@@ -249,21 +249,31 @@ function writeTree(dir, tree, only = null) {
   }
 }
 
+/** Write the tree to <outRoot>/LODERUN. An existing folder holds the player's
+ *  scores and levels: refused, or with update only LR.PRG and GAME.BIN change. */
+export function writeOutput(outRoot, tree, update = false) {
+  const out = path.join(outRoot, FOLDER);
+  const exists = fs.existsSync(out);
+  if (exists && !update)
+    throw new Error(`${out} exists (its high scores and DATA levels are kept); use --update to rewrite LR.PRG and GAME.BIN only`);
+  writeTree(out, tree, exists ? ["LR.PRG", "GAME.BIN"] : null);
+  return out;
+}
+
 function main(argv) {
   const args = argv.filter((a) => !a.startsWith("--"));
-  const update = argv.includes("--update");
   if (args.length !== 2) {
     console.error("usage: node codegen/tools/port-loderunner.mjs <lode_runner.dsk[.gz]> <output-dir> [--update]");
     process.exit(2);
   }
   const { tree } = buildTree(fs.readFileSync(args[0]));
-  const out = path.join(args[1], FOLDER);
-  if (fs.existsSync(out) && !update) {
-    console.error(`${out} exists (its high scores and DATA levels are kept); use --update to rewrite LR.PRG and GAME.BIN only`);
+  try {
+    const out = writeOutput(args[1], tree, argv.includes("--update"));
+    console.log(`wrote ${out}: copy it to the SD card, then CD ${FOLDER} and BRUN LR.PRG 0800`);
+  } catch (e) {
+    console.error(e.message);
     process.exit(1);
   }
-  writeTree(out, tree, fs.existsSync(out) ? ["LR.PRG", "GAME.BIN"] : null);
-  console.log(`wrote ${out}: copy it to the SD card, then CD ${FOLDER} and BRUN LR.PRG 0800`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) main(process.argv.slice(2));

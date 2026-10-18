@@ -359,8 +359,8 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     Other tracks read as zeros and ignore writes. Two folders are the two floppies:
     `MASTER` (the 150 levels and the master high scores; the game itself refuses to edit
     it, and the shim never writes its levels) and `DATA` (a Lode Runner data disk for the
-    board editor). Formatting `DATA` is lazy: bytes 80-99 of its `HISCORE` (unused by the
-    game) are an erased-level bitmap; an erased level reads as zeros without a card
+    board editor). Formatting `DATA` is lazy: it rewrites only `HISCORE` (no scores, the
+    marker, every level marked erased) - bytes 80-99 (unused by the game) are an erased-level bitmap; an erased level reads as zeros without a card
     access and its bit clears when it is written. A missing file is detected by an `$A5`
     sentinel in the destination (the ROM reports it only as text) and returns C = 1;
     `OWRITE` is only issued after an `FLOAD` of the same file succeeded.
@@ -368,8 +368,10 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     and shows that disk's high scores; the high-score screen names the disk. `Ctrl-E`
     enters the editor on `DATA`; its prompt reads `(MASTER) COMMAND>` / `(DATA) COMMAND>`;
     `Ctrl-D` there swaps, and inside a command (e.g. `SOURCE/DESTINATION DISKETTE`) shows
-    the new disk at the cursor. Move level may read from the master. `Esc` at the editor
-    prompt returns to the title (the Apple editor had no exit).
+    the new disk at the cursor (on the next line when the prompt fills the row). Move level
+    may read from the master. `Esc` at the editor prompt returns to the title (the Apple
+    editor had no exit). The current disk's `HISCORE` is read at start-up and on leaving
+    the editor, so the attract cycle shows the card's scores.
   - **Memory:** the resident uses `$9000-$9AFF` (unused data in the image; the attract
     demo moves start at `$9B00`) and the replaced RWTS's space: buffers `$B800-$BCFF`,
     variables `$BD00-$BD67`, code `$BE00-$BFFF`; the IOB `$B7E8-$B7FF` is kept. The game

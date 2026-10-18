@@ -117,6 +117,11 @@ the Apple's three speaker notes per 100 points; it is silent but timed with Ctrl
 - **A test jumped in mid-command.** Starting the test program while the ROM was still
   executing a typed `CD` left the SD card mid-transaction ("SD READ FAILED"); the tests
   wait for the prompt.
+- **Review round.** The two reviewers found that the lazy format left `DATA/HISCORE`
+  without its marker until the editor rewrote it (now written with it), that the attract
+  cycle showed the scores baked into `GAME.BIN` (the card's are now read at start-up and on
+  leaving the editor), that the disk name after `DESTINATION DISKETTE` ran past column 27
+  (it now goes on the next line), and that the loader had no test without the real disk.
 - **Emulator finding (not changed here):** the VM's branch timing differs from the 65C02
   datasheet - a not-taken branch costs 3 cycles and a taken backward branch 4 (a
   `DEY/BNE` loop measures 6 cycles per pass instead of 5): `BranchOnFlag` adds the
@@ -132,6 +137,12 @@ the Apple's three speaker notes per 100 points; it is silent but timed with Ctrl
 - Converter on a synthetic DOS 3.3 disk: the catalog file, gzip, the relocation map,
   level files, the data-disk and master high-score sectors, every patch exact and guarded,
   the resident's two regions and buffers clear of the IOB.
+- The output folder: an existing `LODERUN` is refused; `--update` rewrites `LR.PRG` and
+  `GAME.BIN` and keeps the scores and levels.
+- The real loader with a **synthetic** `GAME.BIN`: it loads at `$0800`, checks the sum and both
+  `HISCORE` markers, hands the resident the collector, turns the BASIC overlay off and enters
+  `$2800`; a changed `GAME.BIN`, a missing `GAME.BIN` and a missing or markerless `HISCORE`
+  each stop with a message.
 - The real resident on a generated FAT32 card with **synthetic** level files: master
   reads (`FLOAD L02 0D00 0100 01FF` for sector 5), zero page preserved, master level writes
   and formatting refused, the disk swap, data-disk read-modify-write leaving the partner

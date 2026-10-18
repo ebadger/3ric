@@ -11,6 +11,8 @@
 // unpatched game (takes several minutes).
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import zlib from "node:zlib";
 import { assemble } from "./asm6502.mjs";
 import harness from "./harness.cjs";
@@ -108,6 +110,28 @@ function synthDisk(file, levels = null) {
   console.log("PASS guarded patches and the resident layout");
 }
 
+{
+  // The output folder: never overwritten; --update replaces only the program files.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lr-"));
+  try {
+    const tree = { "LR.PRG": Uint8Array.of(1), "GAME.BIN": Uint8Array.of(2), MASTER: { HISCORE: Uint8Array.of(3) }, DATA: { HISCORE: Uint8Array.of(4), L00: Uint8Array.of(5) } };
+    const out = P.writeOutput(root, tree);
+    assert.equal(fs.readFileSync(path.join(out, "DATA", "L00"))[0], 5);
+    fs.writeFileSync(path.join(out, "DATA", "HISCORE"), Uint8Array.of(44));       // the player's
+    fs.writeFileSync(path.join(out, "DATA", "L00"), Uint8Array.of(55));
+    const newer = { ...tree, "LR.PRG": Uint8Array.of(11), "GAME.BIN": Uint8Array.of(22) };
+    assert.throws(() => P.writeOutput(root, newer), /exists/);
+    assert.equal(fs.readFileSync(path.join(out, "LR.PRG"))[0], 1, "refused: nothing written");
+    P.writeOutput(root, newer, true);
+    assert.deepEqual([fs.readFileSync(path.join(out, "LR.PRG"))[0], fs.readFileSync(path.join(out, "GAME.BIN"))[0]], [11, 22]);
+    assert.deepEqual([fs.readFileSync(path.join(out, "DATA", "HISCORE"))[0], fs.readFileSync(path.join(out, "DATA", "L00"))[0],
+      fs.readFileSync(path.join(out, "MASTER", "HISCORE"))[0]], [44, 55, 3], "--update keeps scores and levels");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+  console.log("PASS output folder: refused when present, --update keeps scores and levels");
+}
+
 // ---------------------------------------------------------------------------
 // The real resident on the ROM DOS, with synthetic level files.
 
@@ -140,6 +164,7 @@ vm.loadData(0x8098, [0x60]);                         // DONT_MANIPULATE_MASTER_D
 vm.loadData(0x7bb2, [0x4c, 0xb2, 0x7b]);             // START_LEVEL_EDITOR: stop here
 vm.loadData(0x6a76, [0x4c, 0x76, 0x6a]);             // ESC_HANDLER: stop here
 vm.loadData(0x6a0b, [0xc9, 0xca, 0xcb, 0xcc, 0xcf, 0xd5, 0xa0]);
+vm.loadData(0x63a8, P.MARKER);                       // HI_SCORE_DATA_MARKER
 const DONE = 0x0340;
 function call(addr, { a = 0, x = 0, y = 0, max = 30 * HZ } = {}) {
   const prog = assemble(`.org $0300\n lda #${a}\n ldx #${x}\n ldy #${y}\n jsr $${addr.toString(16)}\n php\n sta $02F0\n stx $02F1\n sty $02F2\n pla\n sta $02F3\n jmp $${DONE.toString(16)}\n .org $${DONE.toString(16)}\nhere: jmp here\n`);
@@ -238,6 +263,7 @@ const loc = (t, s_) => (t - 3) * 16 + s_;
   r = shim(12, 15, 0x1f00, 1);
   assert.deepEqual(peekN(0x1f00 + 80, 20), new Array(20).fill(0xff), "every level marked erased");
   assert.deepEqual(peekN(0x1f00, 80), new Array(80).fill(0), "no scores");
+  assert.deepEqual(peekN(0x1f00 + 244, 12), [...P.MARKER, 0], "still a data disk");
   vm.loadData(0x0e00, new Uint8Array(256).fill(0x33));
   r = shim(3, 7, 0x0e00, 1);
   assert.equal(serial, "", "an erased level costs no card access");
@@ -418,6 +444,52 @@ function padCommand(mask) {
   assert.ok(vm.drainAudio().every((v) => Math.abs(v) < 0.02), "sound off (Ctrl-S): no tones, same timing");
   vm.disableAudio();
   console.log(`PASS Mockingboard tally: 15 tones, ${(total / HZ).toFixed(3)} s, Atari pitches on both AYs`);
+}
+
+// ---------------------------------------------------------------------------
+// The real loader (LR.PRG + stage 2) on the ROM DOS with a synthetic GAME.BIN.
+
+{
+  const sum16 = (b) => b.reduce((a, x) => (a + x) & 0xffff, 0);
+  const game = Uint8Array.from({ length: P.FILE_LEN }, (_, i) => (i * 7 + 3) & 255);
+  game[0] = 0x4c;
+  game.set([0x4c, 0x00, 0x28], 0x2000);              // loaded at $2800: JMP $2800 (stands in for RELOCATE0)
+  const hs = P.dataHiscore();
+  async function brun(tree) {
+    const sl = await harness.boot({ sd: buildSparseFat32({ LODERUN: tree }) });
+    const v = sl.vm;
+    let out = "";
+    for (const line of ["CD LODERUN\r", "BRUN LR.PRG 0800\r"]) {
+      for (const ch of line) { v.keyDown(ch === "\r" ? 13 : ch.charCodeAt(0)); v.runCycles(40000); }
+      for (let i = 0; i < 40; i++) v.runCycles(50000);
+    }
+    for (let c = 0; c < 40 * HZ && v.pc() !== 0x2800 && !/\x07\r\*/.test(out); c += 100000) { v.runCycles(100000); out += v.drainOutput(); }
+    for (let i = 0; i < 10; i++) v.runCycles(50000);
+    out += v.drainOutput();
+    for (let r = 0; r < 24; r++)                       // and the text screen: failures print with COUT1
+      out += "\n" + Array.from({ length: 40 }, (_, c) => String.fromCharCode(v.peek(0x400 + harness.TEXT_SCANLINES[r] + c) & 0x7f)).join("");
+    return { v, out };
+  }
+  const g = P.buildGlue(sum16(game));
+  const tree = { "LR.PRG": g.loader.bytes, "GAME.BIN": game, MASTER: { HISCORE: hs }, DATA: { HISCORE: hs } };
+  let { v, out } = await brun(tree);
+  assert.equal(v.pc(), 0x2800, `the loader enters the game's relocator (${JSON.stringify(out.slice(-200))})`);
+  assert.match(out, /FLOAD GAME\.BIN 0800 0000 80FF\r.*CD DATA\r.*FLOAD HISCORE 8E00 0000 00FF\r.*CD MASTER\r.*FLOAD HISCORE/s);
+  assert.equal(v.peek(0xcafe), 0, "ROM NMI nest count zeroed");
+  assert.equal(v.memoryMapping(0x9000) === v.memoryMapping(0x0800), true, "BASIC overlay off: $9000 is RAM");
+  const csw = P.loadAddress(g.resident.symbols.ROMCSW);
+  assert.ok((v.peek(csw) | (v.peek(csw + 1) << 8)) >= 0xc000, "the resident got the ROM DOS collector");
+  const bad = Uint8Array.from(game); bad[0x1234] ^= 1;
+  ({ v, out } = await brun({ ...tree, "GAME.BIN": bad }));
+  assert.match(out, /LR: GAME\.BIN DOES NOT MATCH LR\.PRG/, "a changed GAME.BIN is refused");
+  ({ v, out } = await brun({ ...tree, DATA: { L00: new Uint8Array(512) } }));
+  assert.match(out, /LR: DATA\/HISCORE NOT FOUND/);
+  ({ v, out } = await brun({ ...tree, MASTER: { HISCORE: new Uint8Array(256) } }));
+  assert.match(out, /LR: MASTER\/HISCORE NOT FOUND/, "a HISCORE without the marker is refused");
+  const { "GAME.BIN": _, ...noGame } = tree;
+  ({ v, out } = await brun(noGame));
+  assert.match(out, /LR: GAME\.BIN NOT FOUND/);
+  console.log("PASS loader: GAME.BIN sum, both HISCORE files, collector, overlay off, entry at $2800");
 }
 
 // ---------------------------------------------------------------------------
