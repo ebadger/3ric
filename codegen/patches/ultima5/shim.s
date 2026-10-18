@@ -14,18 +14,27 @@
 ;   JSR $D024        .word blockptr        read ProDOS block into $D600
 ;   JSR $D027        .word blockptr        write block (never used: error)
 ;
+; plus $D02A pad_poll (resident pad_key), $D02D mus_tick (resident IRQ) and
+; $D030 mus_ctl_b1 (glue.s mus_ctl), see music.s.
+;
 ; Return: carry clear and A=0 on success, carry set and A=ProDOS-style error
 ; otherwise. Load+run jumps to the load address. Each disk is a directory
 ; under the folder the loader ran from; ProDOS names become 8-character keys
-; (dots removed) and are looked up only among the current disk's files, so
-; a missing file fails here exactly as it did on the floppy (the ROM's
-; OWRITE would otherwise fall back to BSAVE code in the BASIC ROM bank).
-; Loads use FLOAD name addr 0000 eof-1: FLOAD's end operand is inclusive,
-; and BLOAD stores one byte past EOF. The disk's blocks are exported as
-; RAW00-RAW22 (eight blocks, 4 KB, each); a block read becomes
-; FLOAD RAWnn D600 start end. FLOAD skips to its start byte by byte, so
-; small chunks keep reads short, and a one-block cache absorbs the game's
-; habit of reading every block twice (once per 256-byte half).
+; (dots removed). Files are found, read and written with the ROM's own FAT32
+; routines - the calls its FLOAD and OWRITE commands make - through the
+; resident's rom_call (ROM reads, bank-1 writes), in the current disk's
+; directory only, so a missing file fails here exactly as on the floppy.
+; A load reads bytes [0, size-1] (the ROM's end offset is inclusive); a
+; write rewrites the file's sectors in place, as OWRITE does. Each file is
+; named KEY.X, X a letter naming its ProDOS load address (aux type) in the
+; auxl/auxh tables the tool appends (no extension: 0); lookups match
+; "KEY.*". Selecting a disk sets the ROM's current-directory cluster
+; from voltab, which the loader filled in. The disk's blocks are exported as
+; RAW00-RAW22 (eight blocks, 4 KB, each); a block read loads 512 bytes of
+; RAWnn into $D600, and a one-block cache absorbs the game's habit of
+; reading every block twice (once per 256-byte half). The largest song may
+; borrow the block buffer while no block is read (see music.s). Each ROM
+; session saves the ROM's zero page $B0-$BF and holds off the music timer.
 ;
 ; Uses only DINKEYDOS's zero page ($52-$55, $60-$7F).
 
@@ -35,10 +44,9 @@ ZP_P        = $68               ; inline parameter pointer
 ZP_NAME     = $6A               ; file/volume name pointer
 ZP_ADDR     = $6C               ; explicit address (0 = use aux type)
 ZP_FLAGS    = $70
-ZP_ENT      = $72               ; table entry pointer
-ZP_EOF      = $74               ; write length
-ZP_TMP      = $76
-ZP_CMD      = $71               ; cmdbuf index ($7F stays DINKEYDOS's slot byte)
+ZP_CNT      = $71
+ZP_TMP      = $76               ; block number / key hash
+ZP_SUM      = $74               ; Fletcher sums
 
 F_PTR       = $01
 F_ADDR      = $02
@@ -46,9 +54,15 @@ F_SKIP2     = $04
 F_RUN       = $08
 F_WRITE     = $10
 
-CTRL_D      = $84
-CR          = $8D
-MUTE_OUTPUT = $CE09             ; ROM: suppress screen echo of DOS output
+FAT_SIZE    = $CC10             ; file size (fat32_opendirent)
+FAT_CD      = $CC20             ; current directory cluster
+FAT_ADDR    = $CC30             ; fat32_file_write source
+FAT_END     = $CC35             ; fat32_file_read_part last byte (inclusive)
+FAT_OFFSET  = $CC3B             ; fat32_file_read_part first byte
+FAT_NAME    = $CD70             ; 8.3 name fat32_finddirent matches
+FAT_DEST    = $BC               ; fat32_file_read_part destination
+DIRENT      = $B8               ; fat32_finddirent: the entry found
+BLOCKBUF    = $D600             ; block buffer (DINKEYDOS contract)
 
         .org $D000
 
@@ -66,8 +80,9 @@ MUTE_OUTPUT = $CE09             ; ROM: suppress screen echo of DOS output
         jmp e_vol_p             ; $D021
         jmp e_rdblk             ; $D024
         jmp e_wrblk             ; $D027
-
-curvol:     .byte $FF           ; current volume index, $FF = loader folder
+        jmp pad_poll            ; $D02A: SNES pads (resident pad_key)
+        jmp mus_tick            ; $D02D: music timer tick (resident IRQ)
+        jmp mus_ctl_b1          ; $D030: music pause / resume (glue.s)
 
 e_load_i:   lda #0
             bra file_op
@@ -88,96 +103,63 @@ e_run_pa:   lda #F_RUN+F_PTR+F_ADDR
 e_write_i:  lda #F_WRITE+F_ADDR+F_SKIP2
             bra file_op
 e_write_p:  lda #F_WRITE+F_ADDR+F_SKIP2+F_PTR
-            bra file_op
 
 ; ---------------------------------------------------------------------------
-; Parameter parsing. Called with the caller's return address on the stack.
-; Leaves ZP_NAME, ZP_ADDR set and the corrected return address re-pushed.
+; Load / load+run / write a file of the current disk.
 
 file_op:
         sta ZP_FLAGS
         jsr take_params
         jsr make_key
-        jsr find_file
-        bcc fo_found
-        jmp no_file             ; not on this disk: DINKEYDOS fails as well
-fo_found:
+        jsr rom_begin
+        jsr open_key
+        bcs fo_missing
         lda ZP_ADDR
         ora ZP_ADDR+1
-        bne have_addr
-        ldy #8
-        lda (ZP_ENT),y
-        sta ZP_ADDR
-        iny
-        lda (ZP_ENT),y
-        sta ZP_ADDR+1
-have_addr:
+        bne fo_addr
+        jsr aux_lookup
+fo_addr:
         lda ZP_ADDR
         sta ZP_LOADADR
         lda ZP_ADDR+1
         sta ZP_LOADADR+1
-        ldy #10
-        lda (ZP_ENT),y
-        sta ZP_EOF
-        iny
-        lda (ZP_ENT),y
-        sta ZP_EOF+1
         lda ZP_FLAGS
         and #F_WRITE
-        bne do_write
-        ; The ROM's BLOAD stores one byte past EOF, so load exactly
-        ; [0, eof-1] with FLOAD (its end operand is inclusive).
-        lda ZP_EOF
-        bne fo_dec
-        dec ZP_EOF+1
-fo_dec:
-        dec ZP_EOF
-        jsr cmd_start
-        ldx #<s_fload
-        ldy #>s_fload
-        jsr cmd_str
-        jsr cmd_key
-        jsr cmd_space
-        lda ZP_ADDR+1
-        jsr cmd_hex
-        lda ZP_ADDR
-        jsr cmd_hex
-        ldx #<s_zero
-        ldy #>s_zero
-        jsr cmd_str
-        lda ZP_EOF+1
-        jsr cmd_hex
-        lda ZP_EOF
-        jsr cmd_hex
-        jsr cmd_run
+        bne fo_write
+        ldx ZP_ADDR
+        ldy ZP_ADDR+1
+        jsr read_file
+        jsr rom_end
         lda ZP_FLAGS
         and #F_RUN
         beq ok
         jmp (ZP_LOADADR)
-
-do_write:                       ; OWRITE writes whole sectors in place
-        jsr cmd_start
-        ldx #<s_owrite
-        ldy #>s_owrite
-        jsr cmd_str
-        jsr cmd_key
-        jsr cmd_space
-        lda ZP_ADDR+1
-        jsr cmd_hex
+fo_write:
         lda ZP_ADDR
-        jsr cmd_hex
-        jsr cmd_space
-        lda ZP_EOF+1
-        jsr cmd_hex
-        lda ZP_EOF
-        jsr cmd_hex
-        jsr cmd_run
+        sta FAT_ADDR
+        lda ZP_ADDR+1
+        sta FAT_ADDR+1
+        ldx #<ROM_FILE_WRITE
+        ldy #>ROM_FILE_WRITE
+        jsr ROM_CALL
+        bcs fo_ioerr
+        ldx #<ROM_OPEN_CD       ; as OWRITE does afterwards
+        ldy #>ROM_OPEN_CD
+        jsr ROM_CALL
+        jsr rom_end
 ok:
         lda #0
         clc
         rts
-no_file:
+fo_missing:
+        jsr rom_end
         lda #$46                ; ProDOS "file not found"
+        sec
+        rts
+fo_ioerr:
+        jsr rom_end
+io_error:
+        lda #$27                ; ProDOS "I/O error"
         sec
         rts
 
@@ -258,7 +240,8 @@ p_inc_done:
         rts
 
 ; ---------------------------------------------------------------------------
-; ProDOS name at ZP_NAME -> 8-byte key (dots removed, space padded).
+; ProDOS name at ZP_NAME -> 8-byte key (dots removed, upper case, space
+; padded; NUL or '/' ends the name).
 
 make_key:
         ldx #0
@@ -266,6 +249,8 @@ make_key:
 mk_loop:
         lda (ZP_NAME),y
         and #$7F
+        beq mk_pad
+        cmp #'/'
         beq mk_pad
         iny
         cmp #'.'
@@ -287,51 +272,132 @@ mk_pad:
         bne mk_pad
         rts
 
-; Find key in filetab among files on the current disk. Carry clear and
-; ZP_ENT set if found.
-find_file:
-        ldx curvol
-        cpx #8
-        bcs ff_missing          ; still in the loader folder
-        lda volbit,x
-        sta ZP_TMP
-        lda #<filetab
-        sta ZP_ENT
-        lda #>filetab
-        sta ZP_ENT+1
-ff_next:
+; key -> ZP_TMP: h = rotate_left(h, 3) xor c over the eight key bytes
+; (port-ultima5.mjs keyHash computes the same).
+key_hash:
+        stz ZP_TMP
+        stz ZP_TMP+1
         ldy #0
-        lda (ZP_ENT),y
-        beq ff_missing
-ff_cmp:
-        lda (ZP_ENT),y
-        cmp key,y
-        bne ff_skip
+kh_loop:
+        ldx #3
+kh_rot:
+        asl ZP_TMP
+        rol ZP_TMP+1
+        bcc kh_nc
+        inc ZP_TMP
+kh_nc:
+        dex
+        bne kh_rot
+        lda key,y
+        eor ZP_TMP
+        sta ZP_TMP
         iny
         cpy #8
-        bne ff_cmp
-        ldy #12
-        lda (ZP_ENT),y
-        and ZP_TMP
-        beq ff_skip
-        clc
-        rts
-ff_skip:
-        clc
-        lda ZP_ENT
-        adc #13
-        sta ZP_ENT
-        bcc ff_next
-        inc ZP_ENT+1
-        bra ff_next
-ff_missing:
-        sec
+        bne kh_loop
         rts
 
-volbit:     .byte $01,$02,$04,$08,$10,$20,$40,$80
+; ZP_ADDR = the load address named by the file's extension: A for auxl/auxh
+; entry 0, B for 1, ...; none = 0 (port-ultima5.mjs names the files).
+aux_lookup:
+        stz ZP_ADDR
+        stz ZP_ADDR+1
+        lda extc
+        sec
+        sbc #'A'
+        cmp #NAUX
+        bcs al_none
+        tax
+        lda auxl,x
+        sta ZP_ADDR
+        lda auxh,x
+        sta ZP_ADDR+1
+al_none:
+        rts
 
 ; ---------------------------------------------------------------------------
-; Volume selection: "/NAME" (optionally "/NAME/") -> CD into its directory.
+; ROM FAT32 sessions. Between rom_begin and rom_end the ROM owns the
+; interrupt vectors, so the Mockingboard timer is held off.
+
+rom_begin:
+        ldx #$0F
+rb_save:
+        lda $B0,x               ; ROM DOS / FAT32 zero page
+        sta zsave,x
+        dex
+        bpl rb_save
+        lda MUS_IER
+        beq rb_done             ; no Mockingboard
+        lda #$40
+        sta MB_IER
+rb_done:
+        rts
+
+rom_end:
+        ldx #$0F
+re_rest:
+        lda zsave,x
+        sta $B0,x
+        dex
+        bpl re_rest
+        lda MUS_IER
+        beq re_done
+        sta MB_IER
+re_done:
+        rts
+
+; Find key (any extension) in the current directory: carry clear, the file
+; open (FAT_SIZE etc. set) and its extension's first letter in extc if found.
+open_key:
+        ldx #<ROM_OPEN_CD
+        ldy #>ROM_OPEN_CD
+        jsr ROM_CALL
+        ldx #10
+ok_name:
+        lda #'*'                ; "KEY.*"
+        cpx #8
+        bcs ok_store
+        lda key,x
+ok_store:
+        sta FAT_NAME,x
+        dex
+        bpl ok_name
+        ldx #<ROM_FINDDIRENT
+        ldy #>ROM_FINDDIRENT
+        jsr ROM_CALL
+        bcs ok_done
+        ldy #8
+        lda (DIRENT),y
+        sta extc
+        ldx #<ROM_OPENDIRENT
+        ldy #>ROM_OPENDIRENT
+        jsr ROM_CALL
+        clc
+ok_done:
+        rts
+
+; Read the whole open file to X (low) / Y (high); read_rest reads from
+; FAT_OFFSET to the end.
+read_file:
+        stz FAT_OFFSET
+        stz FAT_OFFSET+1
+read_rest:
+        stx FAT_DEST
+        sty FAT_DEST+1
+        lda FAT_SIZE
+        sec
+        sbc #1
+        sta FAT_END
+        lda FAT_SIZE+1
+        sbc #0
+        sta FAT_END+1
+read_part:
+        ldx #<ROM_READ_PART
+        ldy #>ROM_READ_PART
+        jmp ROM_CALL
+
+; ---------------------------------------------------------------------------
+; Volume selection: "/NAME" (optionally "/NAME/") -> that disk's directory.
+; voltab: 8 x [key hash low, high, directory cluster (4 bytes)].
 
 e_vol_i:
         lda #0
@@ -341,8 +407,7 @@ e_vol_p:
 vol_op:
         sta ZP_FLAGS
         jsr take_params
-        ldy #0
-        lda (ZP_NAME),y
+        lda (ZP_NAME)
         and #$7F
         cmp #'/'
         beq vol_find
@@ -350,81 +415,45 @@ vol_op:
         sec
         rts
 vol_find:
-        lda #<voltab
-        sta ZP_ENT
-        lda #>voltab
-        sta ZP_ENT+1
-        ldx #0                  ; volume index
+        inc ZP_NAME
+        bne vf_key
+        inc ZP_NAME+1
+vf_key:
+        jsr make_key
+        jsr key_hash
+        ldx #0
 vf_next:
-        ldy #0
-        lda (ZP_ENT),y
-        beq vf_missing
-vf_cmp:
-        iny                     ; name byte y (after '/') vs table byte y-1
-        lda (ZP_NAME),y
-        and #$7F
-        cmp #'/'                ; a trailing '/' ends the name like NUL
-        bne vf_chr
-        lda #0
-vf_chr:
-        dey
-        cmp (ZP_ENT),y
+        lda voltab,x
+        cmp ZP_TMP
         bne vf_skip
-        lda (ZP_ENT),y          ; both ended together: match
+        lda voltab+1,x
+        cmp ZP_TMP+1
         beq vf_found
-        iny
-        cpy #11
-        bne vf_cmp
 vf_skip:
+        txa
         clc
-        lda ZP_ENT
-        adc #19
-        sta ZP_ENT
-        bcc vf_inc
-        inc ZP_ENT+1
-vf_inc:
-        inx
-        bra vf_next
-vf_missing:
+        adc #6
+        tax
+        cpx #48
+        bne vf_next
         lda #$45                ; ProDOS "volume not found"
         sec
         rts
 vf_found:
-        cpx curvol
-        beq vol_ok
-        stx ZP_TMP
-        lda curvol
-        cmp #$FF
-        beq vol_cd
-        jsr cmd_start
-        ldx #<s_cdup
-        ldy #>s_cdup
-        jsr cmd_str
-        jsr cmd_run
-vol_cd:
-        jsr cmd_start
-        ldx #<s_cd
-        ldy #>s_cd
-        jsr cmd_str
-        ldy #11
-vol_dir:
-        lda (ZP_ENT),y
-        cmp #' '
-        beq vol_go
-        jsr cmd_char
-        iny
-        cpy #19
-        bne vol_dir
-vol_go:
-        jsr cmd_run
-        lda ZP_TMP
-        sta curvol
+        ldy #0
+vf_cd:
+        lda voltab+2,x
+        cmp FAT_CD,y
+        beq vf_same
+        sta FAT_CD,y
         lda #$FF                ; block numbers are per disk: drop the cache
         sta lastblk+1
-vol_ok:
-        lda #0
-        clc
-        rts
+vf_same:
+        inx
+        iny
+        cpy #4
+        bne vf_cd
+        jmp ok
 
 ; ---------------------------------------------------------------------------
 ; Block read: block number word at pointer -> 512 bytes at $D600 (bank 1).
@@ -433,10 +462,9 @@ e_rdblk:
         lda #F_PTR
         sta ZP_FLAGS
         jsr take_params
-        ldy #0
-        lda (ZP_NAME),y         ; block low
+        lda (ZP_NAME)           ; block low
         sta ZP_TMP
-        iny
+        ldy #1
         lda (ZP_NAME),y         ; block high
         sta ZP_TMP+1
         ; TEMP.SUBS reads each block twice in a row (once per 256-byte half).
@@ -452,54 +480,82 @@ e_rdblk:
         bne rb_miss
         cpy lastsum+1
         bne rb_miss
-        lda #0
-        clc
-        rts
+        jmp ok
 rb_miss:
+        jsr a_lose              ; a song part in the buffer is about to go
+        lda #$FF
+        sta lastblk+1
+        ldx #2                  ; key = "RAWnn", nn = block / 8 in hex
+rb_raw:
+        lda s_raw,x
+        sta key,x
+        dex
+        bpl rb_raw
+        lda ZP_TMP+1
+        asl
+        asl
+        asl
+        asl
+        asl
+        sta ZP_CNT
+        lda ZP_TMP
+        lsr
+        lsr
+        lsr
+        ora ZP_CNT
+        ldx #3
+        jsr key_hex
+        lda #' '
+        sta key+5
+        sta key+6
+        sta key+7
+        jsr rom_begin
+        jsr open_key
+        bcc rb_open
+        jmp fo_ioerr
+rb_open:
+        stz FAT_OFFSET          ; offset = (block & 7) * 512
+        lda ZP_TMP
+        and #$07
+        asl
+        sta FAT_OFFSET+1
+        inc a
+        sta FAT_END+1           ; last byte = offset + 511
+        lda #$FF
+        sta FAT_END
+        lda #<BLOCKBUF
+        sta FAT_DEST
+        lda #>BLOCKBUF
+        sta FAT_DEST+1
+        jsr read_part
+        jsr rom_end
         lda ZP_TMP
         sta lastblk
         lda ZP_TMP+1
         sta lastblk+1
-        jsr cmd_start
-        ldx #<s_fraw
-        ldy #>s_fraw
-        jsr cmd_str
-        lda ZP_TMP+1            ; file = RAW(block / 8), two hex digits
-        asl
-        asl
-        asl
-        asl
-        asl
-        sta ZP_TMP+1
-        lda ZP_TMP
-        lsr
-        lsr
-        lsr
-        ora ZP_TMP+1
-        jsr cmd_hex
-        ldx #<s_d600
-        ldy #>s_d600
-        jsr cmd_str
-        lda ZP_TMP              ; start offset = (block & 7) * 512
-        and #$07
-        asl
-        sta ZP_TMP
-        jsr cmd_hex
-        ldx #<s_00
-        ldy #>s_00
-        jsr cmd_str
-        lda ZP_TMP              ; FLOAD's last operand is the inclusive end
-        inc a
-        jsr cmd_hex
-        ldx #<s_ff
-        ldy #>s_ff
-        jsr cmd_str
-        jsr cmd_run
         jsr buf_sum
         stx lastsum
         sty lastsum+1
-        lda #0
-        clc
+        jmp ok
+
+; A -> two hex digits at key+X, key+X+1.
+key_hex:
+        pha
+        lsr
+        lsr
+        lsr
+        lsr
+        jsr kx_nyb
+        pla
+        and #$0F
+kx_nyb:
+        ora #'0'
+        cmp #'9'+1
+        bcc kx_store
+        adc #6
+kx_store:
+        sta key,x
+        inx
         rts
 
 ; Fletcher-16 of $D600-$D7FF -> X (sum), Y (sum of sums).
@@ -509,146 +565,213 @@ buf_sum:
         lda #>$D600
         sta ZP_RET+1
         ldx #0
-        stx ZP_EOF
-        stx ZP_EOF+1
+        stx ZP_SUM
+        stx ZP_SUM+1
 bs_page:
         ldy #0
 bs_loop:
         lda (ZP_RET),y
         clc
-        adc ZP_EOF
+        adc ZP_SUM
         adc #0
-        sta ZP_EOF
+        sta ZP_SUM
         clc
-        adc ZP_EOF+1
+        adc ZP_SUM+1
         adc #0
-        sta ZP_EOF+1
+        sta ZP_SUM+1
         iny
         bne bs_loop
         inc ZP_RET+1
         inx
         cpx #2
         bne bs_page
-        ldx ZP_EOF
-        ldy ZP_EOF+1
+        ldx ZP_SUM
+        ldy ZP_SUM+1
         rts
 
 lastblk:    .word $FFFF
 lastsum:    .word 0
+s_raw:      .text "RAW"
 
 e_wrblk:
         lda #F_PTR
         sta ZP_FLAGS
         jsr take_params
-        lda #$27                ; ProDOS "I/O error": never used by the game
-        sec
-        rts
+        jmp io_error            ; never used by the game
 
+zsave:      .res 16
+extc:       .byte 0             ; extension letter of the file opened last
 ; ---------------------------------------------------------------------------
-; Command buffer helpers (cmdbuf lives in the resident page).
+; SNES controllers. The resident's pad_key calls this (bank 1 mapped) in
+; place of the game's keyboard reads. Both pads are read straight from VIA1
+; port B, as the ROM's own scan does but without $C070 and its timer NMIs:
+; PB6 latch, PB7 clock, PB5/PB4 pad 1/2 data (active low), SNES bit order
+; B Y Select Start Up Down Left Right A X L R. The pads are merged.
+; A new press types its mapped key into $C000 (as the ROM does for a PS/2
+; key), only when no key is pending. A held direction repeats after
+; PAD_DELAY, then every PAD_REPEAT, and only while the game's key queue
+; ($B8, MAIN.SUBS and STARTUP) is empty, so releasing the pad stops at once.
+; Time comes from VIA1 Timer 2 (one-shot mode keeps counting down; read-only
+; use of T2H, 256 cycles per unit). Preserves X and Y.
 
-cmd_start:
-        lda #CTRL_D
-        stz ZP_CMD
-        bra cmd_char
-cmd_space:
-        lda #' '
-cmd_char:
+PORTB       = $C200
+VIA_T2H     = $C209
+KEYQ_LEN    = $B8
+PAD_MIN     = 8                 ; ~1.3 ms between pad reads
+PAD_DELAY   = 2400              ; ~0.39 s before a held direction repeats
+PAD_REPEAT  = 1100              ; ~0.18 s between repeats
+
+pad_poll:
         phx
-        ldx ZP_CMD
-        sta CMDBUF,x
-        inc ZP_CMD
+        phy
+        cld
+        jsr mus_fg              ; load a song the player is waiting for
+        ldy VIA_T2H             ; elapsed = last - now (T2 counts down)
+        tya
+        eor #$FF
+        sec
+        adc pad_t2
+        sty pad_t2
+        clc
+        adc pad_since
+        bcc pp_sum
+        lda #$FF
+pp_sum:
+        sta pad_since
+        cmp #PAD_MIN
+        bcs pp_time
+pp_out:
+        ply
         plx
         rts
-cmd_str:                        ; NUL-terminated string at X/Y
-        stx ZP_RET
-        sty ZP_RET+1
-        ldy #0
-cs_loop:
-        lda (ZP_RET),y
-        beq cs_done
-        jsr cmd_char
-        iny
-        bne cs_loop
-cs_done:
+pp_time:
+        sec                     ; repeat countdown -= time since last read
+        lda pad_rpt
+        sbc pad_since
+        sta pad_rpt
+        lda pad_rpt+1
+        sbc #0
+        sta pad_rpt+1
+        stz pad_since
+        bit $C000               ; a key is still pending: try again later
+        bmi pp_out
+        jsr pad_read
+        lda pad_prev            ; released buttons may fire again
+        and pad_cur
+        sta pad_prev
+        lda pad_prev+1
+        and pad_cur+1
+        sta pad_prev+1
+        lda pad_prev            ; first new press
+        eor #$FF
+        and pad_cur
+        sta pad_new
+        lda pad_prev+1
+        eor #$FF
+        and pad_cur+1
+        sta pad_new+1
+        ldx #0
+pp_find:
+        lsr pad_new+1
+        ror pad_new
+        bcs pp_new
+        inx
+        cpx #12
+        bne pp_find
+        lda pad_cur             ; no new press: repeat a held direction
+        and #$F0
+        beq pp_done
+        lda KEYQ_LEN
+        bne pp_done
+        lda pad_rpt+1
+        bpl pp_done
+        lda pad_cur
+        lsr a
+        lsr a
+        lsr a
+        lsr a
+        ldx #4
+pp_dir:
+        lsr a
+        bcs pp_held
+        inx
+        bra pp_dir
+pp_held:
+        lda #<PAD_REPEAT
+        sta pad_rpt
+        lda #>PAD_REPEAT
+        sta pad_rpt+1
+        bra pp_type
+pp_new:
+        lda bitmask,x
+        cpx #8
+        bcs pp_hi
+        ora pad_prev
+        sta pad_prev
+        bra pp_mark
+pp_hi:
+        ora pad_prev+1
+        sta pad_prev+1
+pp_mark:
+        cpx #4
+        bcc pp_type
+        cpx #8
+        bcs pp_type
+        lda #<PAD_DELAY
+        sta pad_rpt
+        lda #>PAD_DELAY
+        sta pad_rpt+1
+pp_type:
+        lda padmap,x
+        sta $C000
+pp_done:
+        ply
+        plx
         rts
-cmd_key:
-        ldy #0
-ck_loop:
-        lda key,y
-        cmp #' '
-        beq ck_done
-        jsr cmd_char
-        iny
-        cpy #8
-        bne ck_loop
-ck_done:
-        rts
-cmd_hex:
-        pha
-        lsr
-        lsr
-        lsr
-        lsr
-        jsr cmd_nyb
-        pla
-        and #$0F
-cmd_nyb:
-        ora #'0'
-        cmp #'9'+1
-        bcc cn_store
-        adc #6
-cn_store:
-        jmp cmd_char
-cmd_run:
-        lda #CR
-        jsr cmd_char
-        ldx #$0F
-cr_save:
-        lda $B0,x               ; ROM DOS / FAT32 zero page
-        sta zsave,x
-        dex
-        bpl cr_save
-        lda $36
-        sta zsave+16
-        lda $37
-        sta zsave+17
-        lda romcsw              ; COUT -> ROM DOS command collector
-        sta $36
-        lda romcsw+1
-        sta $37
+
+; pad_cur = buttons held on either pad (bit n = SNES bit n, 1 = pressed)
+pad_read:
+        stz PORTB
+        lda #$40
+        sta PORTB               ; latch
+        ldx #16
+pr_bit:
+        stz PORTB               ; latch low, clock low: data valid
+        lda PORTB
+        and #$30
+        eor #$30
+        cmp #1                  ; carry = either pad pulls its data low
+        ror pad_cur+1
+        ror pad_cur
         lda #$80
-        sta MUTE_OUTPUT
-        jsr ROM_SEND
-        lda zsave+16
-        sta $36
-        lda zsave+17
-        sta $37
-        ldx #$0F
-cr_restore:
-        lda zsave,x
-        sta $B0,x
+        sta PORTB               ; clock high: next bit
         dex
-        bpl cr_restore
+        bne pr_bit
+        stz PORTB
+        lda pad_cur+1
+        and #$0F
+        sta pad_cur+1
         rts
 
-romcsw:     .word 0             ; captured by the loader from the $03EA hook
-zsave:      .res 18
+; Key typed for each SNES bit (high bit set, as in $C000).
+padmap:     .byte $A0           ; B      Space (pass / continue)
+            .byte $C1           ; Y      A (attack)
+            .byte $D1           ; Select Q (quit & save)
+            .byte $DA           ; Start  Z (Ztats)
+            .byte $8B           ; Up     up arrow
+            .byte $8A           ; Down   down arrow
+            .byte $88           ; Left   left arrow
+            .byte $95           ; Right  right arrow
+            .byte $8D           ; A      Return
+            .byte $D4           ; X      T (talk)
+            .byte $9B           ; L      Esc
+            .byte $C5           ; R      E (enter / klimb)
+bitmask:    .byte $01,$02,$04,$08,$10,$20,$40,$80,$01,$02,$04,$08
+pad_t2:     .byte 0
+pad_since:  .byte 0
+pad_rpt:    .word 0
+pad_cur:    .word 0
+pad_new:    .word 0
+pad_prev:   .word $0FFF         ; ignore buttons already held at start
 
-s_fload:    .asciiz "FLOAD "
-s_zero:     .asciiz " 0000 "
-s_owrite:   .asciiz "OWRITE "
-s_fraw:     .asciiz "FLOAD RAW"
-s_d600:     .asciiz " D600 "
-s_00:       .asciiz "00 "
-s_ff:       .asciiz "FF"
-s_cd:       .asciiz "CD "
-s_cdup:     .asciiz "CD .."
 key:        .res 8
-code_end:
-
-; $D600-$D7FF is the block buffer (callers copy from it). The tool appends
-; filetab (13-byte entries: key[8], aux, eof, volume mask) and voltab
-; (19-byte entries: volume name NUL-padded to 11, directory space-padded to
-; 8) at $D800, and stores BANKSIG_VALUE at $DFFF for the resident NMI test.
-        .org $D800

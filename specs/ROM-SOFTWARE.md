@@ -95,8 +95,17 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     `$D000` by a shim with the same 14-entry jump table, inline parameters, zero
     page (`$52-$55`, `$60-$7F`), `$D600` block buffer and return codes. Each disk is a
     folder; ProDOS names become dot-less 8-character keys looked up only among the
-    current disk's files. Loads use `FLOAD key addr 0000 eof-1`, writes use `OWRITE`
-    on existing files only, block `n` is bytes `(n&7)*512` of `RAWnn` (`n/8`, hex).
+    current disk's files, as `KEY.*`: a one-letter extension names the file's load
+    address (aux type) in a table the loader installs (no extension = 0); the loader
+    refuses a card where `STARTUP` has none (files left from an older folder). The
+    shim calls the ROM's FAT32 routines directly (the calls
+    `FLOAD`/`OWRITE` make: `fat32_open_cd $ECEA`, `fat32_finddirent $E9A0`,
+    `fat32_opendirent $E7B4`, `fat32_file_read_part $EB69`, `fat32_file_write $EBB5`;
+    the loader also uses `fat32_readdirent $E96D`) and the loader refuses a ROM whose
+    first 8 bytes of any of them differ from the repository ROM. Loads read bytes
+    `[0, size-1]`, writes rewrite existing files in place, a missing file fails with
+    `$46`; block `n` is bytes `(n&7)*512` of `RAWnn` (`n/8`, hex). A volume select
+    sets the current-directory cluster `$CC20` from a table the loader builds.
   - **Banking and interrupts:** the game runs with the BASIC overlay off (`$CAFE`
     nest count 0) and language-card RAM read/write in bank 1 or 2. The loader points
     the RAM `$FFFA/$FFFE` vectors at a resident in `$CF00-$CFFF`. PS/2 start/data/
@@ -105,14 +114,46 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     the bank switch would otherwise delay the DATA sample past the next bit. Other
     sources record the bank from a `$DFFF` signature, enter the ROM handler through
     a fake RTI frame, and restore `$C083`/`$C08B` and X/Y. The loader refuses a ROM
-    whose NMI proxy `$F1BB-$F1C5` differs. ROM DOS commands run with ROM reads and
-    bank-1 writes; `$B0-$BF` and `$36/$37` are preserved. `$CF00-$CFFF` is
-    reserved for this profile, not a general free-RAM declaration.
-  - **Trust:** ROM DOS command failures are not detected (the ROM reports them only
-    as text); the generated card contents are assumed complete.
-  - **Machine:** 64 KB play; the game's 128 KB music path stays off because `$FBB3` is
-    not `$06`. `STARTUP`'s unconditional IIe aux/RamWorks writes are removed by one
-    byte-verified patch. No ROM, VM, web bridge or hardware change is part of the port.
+    whose NMI proxy `$F1BB-$F1C5` differs. ROM FAT32 sessions run with ROM reads and
+    bank-1 writes and the music timer held off; `$B0-$BF` is preserved. The IRQ entry
+    first tests the Mockingboard T1 flag (`BIT $C40D`, patched in by the loader when
+    a card answers) and runs one music tick with bank 1 mapped; other IRQs go to the
+    ROM as above.
+  - **RAM2 use (this profile only, not a general free-RAM declaration):** `$CF00-$CFFF`
+    resident; `$CD80-$CDFF` music glue; `$CA00-$CAD6` player state; player and
+    load-address tables in `$CAD7-$CAFD`, `$CC3D-$CCFF`, `$CD00-$CD6B`,
+    `$CE24-$CEDF` - areas the ROM writes
+    only at boot (`$CC00`/`$CE00` page clears) or from the DOS prompt (command line
+    `$CD00`), found by scanning the ROM for absolute references
+    (`codegen/patches/ultima5/ram2.inc`).
+  - **Music:** a compact player (`music.s`, bank 1) re-implements the 128K edition's
+    Mockingboard driver per tick (sequencer, two envelopes, register shadow + flush,
+    `$80-$83` request interface) for one song at a time; all 15 songs. The tool
+    repacks songs into `SONGnn` in every disk folder, re-encodes durations with the
+    fewest bytes and turns repeated phrases into subroutines (player commands `$39 n`
+    call / `$3A` return, keeping pitch and durations; calls nest 3 deep), replays
+    every voice against Origin's original before writing it, and pre-scales periods,
+    noise and timer latches by 1.5734/1.0227 MHz from the user's `MUDR`. Songs fill an
+    865-byte buffer after the player; the one song still larger (1, the title theme)
+    continues in the `$D600` block buffer, which a block read takes back (the shim
+    drops the song, and the player reloads and restarts it). 46 guarded patches open the game's `LDA $EC / LSR / BCC` music gates,
+    replace `STA $C009`/`STA $C008` with `JSR mus_in`/`mus_out` (swap `$80-$83` with
+    the player's copy), `TEMP.SUBS $15B9` with `mus_setx`, and the `MAIN.SUBS $EE46`
+    pause/resume dispatcher with `mus_ctl` (pause silences at once). A song not in
+    the buffer is loaded by the foreground at the next keyboard scan.
+  - **Trust:** missing files and folders are detected; file contents are trusted.
+  - **SNES controllers:** three guarded patches turn the game's keyboard reads
+    (`MAIN.SUBS $EFC2`, `STARTUP $8B77`, `VIEW $A75A`, all `LDA $C000`) into
+    `JSR pad_key` in the resident. It reads both pads directly from VIA1 port B (no
+    `$C070`, so no paddle-timer NMIs) and writes the mapped key to `$C000` as the ROM
+    does for PS/2, only when no key is pending. D-pad = arrows (held repeat, only
+    while the game's queue `$B8` is empty), A Return, B Space, X T, Y A, L Esc, R E,
+    Start Z, Select Q. VIA1 T2 (read-only, one-shot mode) provides the time base.
+  - **Machine:** 64 KB play; the game's 128 KB aux-memory path stays off because
+    `$FBB3` is not `$06` (music runs on the port's own player instead). `STARTUP`'s
+    unconditional IIe aux/RamWorks writes are removed by one byte-verified patch. No
+    ROM, VM, web bridge or hardware change is part of the port.
+
   - **Acceptance and limits:** see [`docs/porting-logs/ultima-v.md`](../docs/porting-logs/ultima-v.md).
 - **Seven Cities of Gold SD-card port:** `codegen/tools/port-sevencities.mjs` turns the
   owner-supplied program and map disk images into a `7CITIES/` folder (`CD 7CITIES`,
@@ -133,10 +174,10 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   - **Loader:** refuses a ROM whose SD routines (`$E141-$E279` checksum) or NMI proxy
     differ; learns each file's first cluster from the ROM FAT32 variables (`$CC00`,
     `$CC04`, `$CC18`, `$CC32`) after an `FLOAD` of 256 bytes, verifies that sector's
-        content, and requires an unbroken FAT chain (entries masked to 28 bits; no fallback
-        for fragmented files). An unrecognized program-disk release is converted with a
-        warning; the code regions the shims replace are not verified for it (owner decision). Its
-    final stage runs in `$CA00-$CABF` (no ROM references) while `GAME.BIN` overwrites it.
+    content, and requires an unbroken FAT chain (entries masked to 28 bits; no fallback
+    for fragmented files). An unrecognized program-disk release is converted with a
+    warning; the code regions the shims replace are not verified for it (owner decision).
+    Its final stage runs in `$CA00-$CABF` (no ROM references) while `GAME.BIN` overwrites it.
   - **Banking and interrupts:** the Ultima V resident at `$CF00`, signatures `$A5`/`$5A`
     at bank 1/2 `$DFFF`; the game's IRQ vector and RESET writes are redirected so the LC
     vectors stay the resident's and the ROM's. Three button tests get a `$C070` scan
@@ -472,7 +513,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
-| Ultima V SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima5.test.mjs` drives the real loader/resident/shim on the ROM DOS with synthetic volumes (and boots the original disks to the title with `U5_DISKS`); `port-ultima5.native.ps1` decodes real PS/2 frames at 94-160-cycle periods with language-card RAM mapped, including Caps Lock LED exchanges and a `` strobe on a stop-bit edge. Manual WASM play covered creation, save, overworld, combat, towne entry. First board trial: title shown, keyboard failed (fixed since, re-trial pending). Dialogue, dungeons, endgame and music (needs 128 KB) are open; ROM DOS command failures are not detected (card contents trusted); block reads cost ~1.7 M cycles. |
+| Ultima V SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima5.test.mjs` drives the real loader/resident/shim on the ROM DOS with synthetic volumes (and boots the original disks to the title with `U5_DISKS`); `port-ultima5.native.ps1` decodes real PS/2 frames at 94-160-cycle periods with language-card RAM mapped, including Caps Lock LED exchanges and a `$C010` strobe on a stop-bit edge. The suite also plays a synthetic two-region song end to end (on-demand `SONG01` load, timer-IRQ ticks in bank 2, pause/load/resume, reload after a block read), tests the song packer (phrase subroutines, two-region layout, replay check) and the stale-folder check, and checks the 46 music-site patches; a session-only py65 harness matched the player to the reverse-engineered driver per tick for all 15 songs. Manual WASM play covered creation, save, overworld, combat, towne entry, pad-only menu/walking/Ztats, and music (title theme at the title, huts song on *Journey Onward*, on-demand song switches). Board: running after the PS/2 fix; pads and music not yet tried on the board. Dialogue, dungeons and endgame are open; block reads cost ~1.7 M cycles. |
 | Seven Cities of Gold SD-card port | Experimental / emulator-verified | `codegen/tools/port-sevencities.test.mjs` runs the real loader, resident and both shim copies on the ROM DOS/SD emulation with synthetic disks at 512-byte and 4 KB clusters, plus missing/fragmented/ROM refusals (`SEVENCITIES_DISKS` adds an original-disk boot to the title); `port-ultima5.native.ps1 -Resident codegen\patches\sevencities\resident.s` passes the native PS/2 checks. Scripted WASM play: menus, sailing, landing, natives; World Maker created a world that then played. A save at the Pub, resume, and the physical board are open; requires contiguous files and the current ROM's SD routines. |
 | ROM `BLOAD` stores one byte past EOF | Known gap (ROM) | Observed in `fat32_file_read`; programs loading below live data must use `FLOAD 0000 eof-1`. ROM source is not in this repository. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
