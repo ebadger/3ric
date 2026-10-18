@@ -137,7 +137,7 @@ envelopes, a register shadow flushed on change, the `$80-$83` request interface)
 this port plays the songs with a compact re-implementation (`music.s`, ~1.3 KB):
 
 - **Memory.** Bank 1 holds the shim, the player and one song buffer (`SONGBUF`,
-  869 bytes). The player's state is in RAM2 `$CA00-$CAD6`; its tables (period,
+  865 bytes). The player's state is in RAM2 `$CA00-$CAD6`; its tables (period,
   duration, noise, instrument records, voice map, load addresses) are in RAM2 the
   ROM uses only at boot or from the DOS prompt (`$CAD7-$CAFD`, `$CC3D-$CCFF`,
   `$CD00-$CD6B`, `$CE24-$CEDF`); the game-side glue is at `$CD80` (`ram2.inc` has
@@ -160,7 +160,7 @@ this port plays the songs with a compact re-implementation (`music.s`, ~1.3 KB):
   and tie; rests; transposes, levels, instruments, tempi; the end) and refuses to
   write a song that differs.
 - **The block buffer as a second region.** Only song 1 is still larger than the main
-  buffer. Its remaining 371 bytes go to `$D600-$D7FF`, the DINKEYDOS block buffer,
+  buffer. Its remaining 375 bytes go to `$D600-$D7FF`, the DINKEYDOS block buffer,
   which only block reads (`$D024`) write. The title requests song 1 after its last disk
   access and never reads a block while it plays (traced in the emulator). If a block
   read does come (leaving combat after the victory theme, say), the shim drops the

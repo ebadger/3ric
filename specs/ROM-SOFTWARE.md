@@ -134,7 +134,7 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     call / `$3A` return, keeping pitch and durations; calls nest 3 deep), replays
     every voice against Origin's original before writing it, and pre-scales periods,
     noise and timer latches by 1.5734/1.0227 MHz from the user's `MUDR`. Songs fill an
-    869-byte buffer after the player; the one song still larger (1, the title theme)
+    865-byte buffer after the player; the one song still larger (1, the title theme)
     continues in the `$D600` block buffer, which a block read takes back (the shim
     drops the song, and the player reloads and restarts it). 46 guarded patches open the game's `LDA $EC / LSR / BCC` music gates,
     replace `STA $C009`/`STA $C008` with `JSR mus_in`/`mus_out` (swap `$80-$83` with

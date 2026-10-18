@@ -181,6 +181,7 @@ al_mute:
         stz SHADOW+11+8,x
         dex
         bpl al_mute
+        jsr flush               ; now: the block read holds the timer off
 al_done:
         plp
 al_out:
@@ -238,7 +239,11 @@ mus_fg:
 mf_go:
         php
         sei
-        lda WANT
+        lda WANT                ; the tick may have cancelled it meanwhile
+        bne mf_take
+        plp
+        rts
+mf_take:
         stz WANT
         stz LOADED              ; the buffer is ours until LOADED is set
         stz CUR

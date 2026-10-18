@@ -485,6 +485,13 @@ wait4:  stz $B8
         sta $0305
         lda $${R2.CUR.toString(16)}
         sta $0306
+        ldx #2
+        lda #0
+mute:   ora $${(R2.WRITTEN + 8).toString(16)},x
+        ora $${(R2.WRITTEN + 19).toString(16)},x
+        dex
+        bpl mute
+        sta $0309
 wait5:  stz $B8
         jsr $${syms.PAD_KEY.toString(16)}   ; ... and loaded again
         lda $${R2.CUR.toString(16)}
@@ -540,6 +547,7 @@ blk:    .word 200
   for (let i = 0; i < 60 && vm.peek(0x300) !== 4; i++) runFor(0.1);
   assert.equal(vm.peek(0x300), 4, "block read, then the song came back");
   assert.deepEqual([vm.peek(0x304), vm.peek(0x305), vm.peek(0x306)], [0, 1, 0], "a block read drops the song and asks for it again");
+  assert.equal(vm.peek(0x309), 0, "the chips are silenced before the block read");
   assert.equal(vm.peek(0x307), 1, "reloaded with its second part");
   console.log(`PASS Mockingboard music: ${info.songs.get(1).length}-byte SONG01 (${info.partA.get(1)} in the block buffer) loaded on demand, played from the timer IRQ in bank 2, pause/load/resume, reload after a block read (scale ${CLOCK_SCALE.toFixed(4)})`);
 }
