@@ -344,6 +344,61 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     repeats after ~0.3 s every ~0.15 s), B Space, A `A`ttack, X `E`nter, Y `T`ransact,
     L `K`limb, R `D`escend, Select `I`gnite, Start `G`et. Keyboard input is unchanged.
   - **Acceptance and limits:** see [`docs/porting-logs/ultima-iii.md`](../docs/porting-logs/ultima-iii.md).
+- **Lode Runner SD-card port:** `codegen/tools/port-loderunner.mjs` converts the
+  owner-supplied DOS 3.3 disk of Lode Runner (Broderbund 1983; the `LODE RUNNER` file
+  must match a recorded SHA-256) into a `LODERUN/` folder (`CD LODERUN`,
+  `BRUN LR.PRG 0800`). The game data stays local; the repository holds the converter and
+  glue (`codegen/patches/loderunner/`).
+  - **Disk contract:** the game reaches the disk only through its RWTS entry `$B7B5` with
+    the IOB at `$B7E8`; that entry jumps to a shim that keeps the IOB contract (read,
+    write, format; C = 1 makes the game reset, as for a disk error) and moves data with
+    ROM DOS `FLOAD`/`OWRITE` through the command collector, with all of zero page saved.
+    Tracks 3-12 (160 sectors) are the level area: `HISCORE` is T12 S15 (256 bytes) and
+    `Lnn` (512 bytes, `nn` hex `00-4F`) holds sectors `2nn` and `2nn+1`, so every write is
+    one SD sector and correct on any cluster size; a level write is a read-modify-write.
+    Other tracks read as zeros and ignore writes. Two folders are the two floppies:
+    `MASTER` (the 150 levels and the master high scores; the game itself refuses to edit
+    it, and the shim never writes its levels) and `DATA` (a Lode Runner data disk for the
+    board editor). Formatting `DATA` is lazy: bytes 80-99 of its `HISCORE` (unused by the
+    game) are an erased-level bitmap; an erased level reads as zeros without a card
+    access and its bit clears when it is written. A missing file is detected by an `$A5`
+    sentinel in the destination (the ROM reports it only as text) and returns C = 1;
+    `OWRITE` is only issued after an `FLOAD` of the same file succeeded.
+  - **Disk swap (`Ctrl-D`):** at the title it swaps folders (`CD ..`, `CD MASTER|DATA`)
+    and shows that disk's high scores; the high-score screen names the disk. `Ctrl-E`
+    enters the editor on `DATA`; its prompt reads `(MASTER) COMMAND>` / `(DATA) COMMAND>`;
+    `Ctrl-D` there swaps, and inside a command (e.g. `SOURCE/DESTINATION DISKETTE`) shows
+    the new disk at the cursor. Move level may read from the master. `Esc` at the editor
+    prompt returns to the title (the Apple editor had no exit).
+  - **Memory:** the resident uses `$9000-$9AFF` (unused data in the image; the attract
+    demo moves start at `$9B00`) and the replaced RWTS's space: buffers `$B800-$BCFF`,
+    variables `$BD00-$BD67`, code `$BE00-$BFFF`; the IOB `$B7E8-$B7FF` is kept. The game
+    keeps the ROM mapped (no language card), so the unmodified ROM NMI handler serves PS/2,
+    `$C010` and the ACIA; it runs with `SEI`, the BASIC overlay off (`$CAFE` = 0) and its
+    tiny stack (`S = $07`, wrapping in page 1, which neither the game nor the port uses).
+    `$03FE` points at an `LDA $45 / RTI` stub. The loader (`$0800`, stage 2 at `$8C00`)
+    checks the ROM's `COUT`/`$03EA`/NMI proxy and that both Mockingboard VIAs answer,
+    loads `GAME.BIN` at `$0800` as DOS 3.3's `BRUN` did (16-bit sum checked), checks both
+    `HISCORE` files, and enters the game's own relocator at `$2800`.
+  - **Speed:** the game is paced to a 1.023 MHz Apple II. Mockingboard VIA 2 Timer 2
+    (one-shot, no interrupt) counts CPU time from each frame point (`PLAY_SOUND`, the
+    input-wait delay, every iris step, the game-over spin); `pace_sync` then waits 0.539x
+    that time (less its own ~140 cycles and the credited pad scans). `PLAY_NOTE` and
+    `BEEP` are re-timed on the same timer from the original loops' 6502 cycle counts
+    (10 per iteration, 14 per click), so speaker pitch and length match the Apple.
+  - **SNES pads:** clocked directly on VIA1 port B (the ROM scan's pins: PB6 latch, PB7
+    clock, PB5/PB4 data, active low) at most every 4 ms (Mockingboard VIA 1 Timer 1);
+    never through `PTRIG $C070`. Joystick mode: D-pad = I/J/K/L, Y/X/L dig left (`U`),
+    B/A/R dig right (`O`), Start pauses and resumes (as Esc), Select gives up the life
+    (as Ctrl-A); buttons start a game, skip the demo and the high-score wait. Pad input
+    selects joystick mode (not in the editor); I J K L U O or space select keyboard mode;
+    `Ctrl-J`/`Ctrl-K` still work. Keys read by the game are folded to upper case.
+  - **Level clear:** the three speaker notes per 100 points become the Atari version's
+    tally on the Mockingboard: 15 square-wave tones on channel A of both AYs, each two
+    Atari NTSC frames on and two off (1.0 s), periods `3.0769 x (N+1)` for POKEY AUDF
+    `N` = 150, 145 ... 80 (211.7 to 394.6 Hz), volume 14; silent but timed with sound off.
+  - **No ROM, VM, web bridge, generated platform-reference or hardware change.**
+  - **Acceptance and limits:** see [`docs/porting-logs/lode-runner.md`](../docs/porting-logs/lode-runner.md).
 - **ROM DOS load/write semantics (observed, unchanged):** `FLOAD name addr start end`
   takes an inclusive end offset and skips to `start` byte by byte; `BLOAD` stores one
   byte past EOF; `OWRITE` writes whole sectors in place and, for a missing file, falls
@@ -729,6 +784,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Ultima I SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima1.test.mjs` drives the real loader and ProDOS stand-in through the ROM DOS with synthetic files (file info, open/read with marks and EOF, write/read-back, every error path, registers, zero page, NMI) and the SNES pad glue (all 12 buttons, both controllers, one key per press with overlapping buttons, D-pad repeat gated on the game's buffer, keyboard priority including a key decoded mid-scan); `codegen/tools/port-ultima1.native.ps1` clocks real PS/2 frames (94/120/160-cycle bits, Caps Lock LED exchange) while the glue scans, with hundreds of keyboard NMIs landing inside scans, and fails the earlier `PTRIG` version; with `U1_DISK` it plays the original disk through intro, character creation and save, continue, quick-save and Lord British's castle (entered with the pad's B) and checks the stand-in and pad glue stayed intact. Manual WASM play also covered a town, overworld combat and the Dungeon of Doubt (entered and walked with the pad). Space flight, the time machine and the endgame are unverified; the owner's first SD-card run loaded the game and went through character creation (saving, play and the pads not yet confirmed outside the emulator); ROM DOS command failures are not detected (card contents trusted); loads cost ~0.45 s/KB. |
 | Ultima II SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima2.test.mjs` drives the real loader and DOS 3.3 translator on the ROM DOS with synthetic disks (BLOAD/BRUN/BSAVE, folder switches, exact lengths, register preservation, fail-loud errors); with `U2_DISKS` it plays the original disks through title, character creation and save, the overworld and both patched space disk swaps, plus a D-pad move; SNES pads are covered on the emulated pads with the resident clocking VIA1 port B directly (12-button map on both pads, D-pad repeat after 10 ticks then every 4, pending keys kept, A/X/Y/flags preserved, 30 Hz at 2.1% CPU with no scan or paddle-timer NMIs, IRQs masked during ROM DOS commands, timer off at every error stop). Manual WASM play also covered movement, Z-stats, quit-save, dungeon entry, reloading a saved character and the demo slideshow. No physical-board trial yet; towns/dialogue, combat depth, space flight and the endgame were not played through; the game runs ~1.54x faster than on a 1.02 MHz Apple II. Known issue (shipped by owner decision): `OWRITE` gets the file length, so 4 KB map saves write one extra SD sector; saves need 512-byte clusters. |
 | Ultima III SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima3.test.mjs` reconstructs a synthetic boot image and drives the real loader/RWTS shim on the ROM DOS (whole-file loads, zero-page load, write and read-back, IOB/flag state); with `U3_DISKS` it plays the original disks through Mockingboard set-up, title, character creation, party, world, Lord British's castle, a dungeon and an autosave resume after reset, and checks the 61.5 Hz music IRQ; the gamepad tick is checked synthetically (buttons type keys, held directions repeat) and SNES Up walks the real party north. Talking, shops, Moongates, the endgame and the physical board (including pad scans alongside PS/2 typing) are open; ROM DOS command failures are not detected (card contents trusted); loads run ~2 KB/s in the emulator (boot ~30 s). |
+| Lode Runner SD-card port | Experimental / emulator-verified | `codegen/tools/port-loderunner.test.mjs` drives the real resident on the ROM DOS with synthetic level files (master reads, refused master writes and format, data-disk read-modify-write, lazy-format bitmap, score writes, missing files, zero page kept), checks pacing (work x1.539, `PLAY_NOTE`/`BEEP` against the original loops' 6502 cycle counts), both SNES pads and the Mockingboard tally (15 tones in 1.002 s at the Atari pitches); with `LR_DISK` it plays the original disk: loader, attract demo, high scores and `Ctrl-D` per disk, editor draw/save/play on the data disk to a Mockingboard level clear, a recorded high score, Move from the master, Initialize, `Esc` out of the editor, and a pad-started master game; `LR_TIMING` compares the demo's first level with the unpatched game (within 1%). No physical-board trial yet. |
 | ROM `BLOAD` stores one byte past EOF | Known gap (ROM) | Observed in `fat32_file_read`; programs loading below live data must use `FLOAD 0000 eof-1`. ROM source is not in this repository. |
 | Adventure disk-only compatibility adapter | Experimental / emulator-verified | Exact-image `.dsk`/`.woz` patcher (`patch-adventure.mjs`); relocates MSBASIC to LC `$D000-$F0FF`, patches DOS 3.3 + `CHAIN` + Applesoft dialect + KIM-1 `FMULT` `ROR RESULT+2` bug (`$E5C7`), retokenizes `ADVENTURE` and `ADVENTURE^Q PART TWO`, and boots through `CHAIN` into full above-ground and underground gameplay. Physical board confirmation and Disk II write support for `SAVE` remain open; see [`docs/porting-logs/adventure.md`](../docs/porting-logs/adventure.md). |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |

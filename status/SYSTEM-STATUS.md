@@ -77,6 +77,7 @@ pwsh codegen\tools\port-ultima5.native.ps1  # Ultima V resident: real PS/2 frame
 & $node codegen\tools\port-ultima1.test.mjs # Ultima I ProDOS stand-in + SNES pads on ROM DOS (set U1_DISK to also play the real disk)
 pwsh codegen\tools\port-ultima1.native.ps1  # Ultima I pad glue: real PS/2 frames while the pads are scanned (MSVC)
 & $node codegen\tools\port-ultima2.test.mjs # Ultima II DOS 3.3 translator on ROM DOS (set U2_DISKS to also play the real disks)
+& $node codegen\tools\port-loderunner.test.mjs # Lode Runner SD shim, pacing, pads, Mockingboard tally (LR_DISK plays the real disk; +LR_TIMING=1 compares demo timing)
 ```
 
 C++ CPU unit tests (`emulator/Badger6502VMTest`, MSTest): **Test → Run All Tests** in
