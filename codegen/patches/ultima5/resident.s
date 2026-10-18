@@ -22,10 +22,10 @@
 ; language card read/write, so that restores its state. The ROM handler
 ; saves A and X but can change Y, so Y is saved here.
 ;
-; rom_send runs the ROM DOS command in cmdbuf through COUT with ROM reads and
-; bank-1 writes (the shim prepares CSW and zero page around it).
+; rom_call runs one ROM FAT32 routine for the shim with ROM reads and bank-1
+; writes. b1_call lets game code that runs in bank 2 (pad_key, the music
+; pause/resume hook in glue.s) reach the bank-1 shim.
 
-COUT        = $FDED
 VIA_IFR     = $C20D
 VIA_PA_NH   = $C20F             ; PORTA without handshake (PS/2 DATA = PA7)
 KBSTATE     = $CE00             ; ROM PS/2 receiver: 0 start, 1 data, 2 parity, 3 stop
@@ -102,14 +102,16 @@ nmi_more:
 nmi_rom:
         phx
         phy
+        ldx #0                  ; JMP ($FFFA)
+lc_forward:
         lda BANKSIG
         cmp #BANKSIG_VALUE
-        beq nmi_bank1
+        beq lc_bank1
         lda #$83
-        bra nmi_save
-nmi_bank1:
+        bra lc_save
+lc_bank1:
         lda #$8B
-nmi_save:
+lc_save:
         pha                     ; mode to restore
         lda #>lc_resume
         pha
@@ -118,7 +120,7 @@ nmi_save:
         lda #$04                ; fake P: I set, B clear
         pha
         lda LC_ROM
-        jmp ($FFFA)             ; ROM NMI handler; its RTI returns below
+        jmp ($FFFA,x)           ; ROM handler; its RTI returns below
 lc_resume:
         pla                     ; saved mode ($83 or $8B)
         tax
@@ -126,52 +128,79 @@ lc_resume:
         lda $C000,x             ; second read enables writes
         ply
         plx
-        bra nmi_more
+        bra nmi_more            ; also catches a VIA source that raised no edge
 
+; Mockingboard music: the timer tick (VIA $C400 T1) runs the bank-1 player
+; with the game's bank restored afterwards; any other IRQ goes to the ROM.
+; With no Mockingboard the loader leaves the BIT on mb_none (bit 6 clear).
 irq_entry:
         pha
+        phx
+        phy
+irq_mb: bit mb_none             ; loader: BIT $C40D (VIA IFR, T1 = bit 6)
+        bvc irq_rom
+        bpl irq_rom             ; T1 flag set but not enabled (paused)
         lda BANKSIG
         cmp #BANKSIG_VALUE
-        beq irq_bank1
-        lda #$83
-        bra irq_save
-irq_bank1:
-        lda #$8B
-irq_save:
-        pha
-        lda #>irq_resume
-        pha
-        lda #<irq_resume
-        pha
-        lda #$04
-        pha
-        lda LC_ROM
-        jmp ($FFFE)
-irq_resume:
-        pla
-        phx
-        tax
-        lda $C000,x
-        lda $C000,x
+        beq irq_b1
+        lda LC_RW_B1            ; game in bank 2: borrow bank 1
+        lda LC_RW_B1
+        jsr MUS_TICK
+        lda $C083
+        lda $C083
+        bra irq_out
+irq_b1:
+        jsr MUS_TICK
+irq_out:
+        ply
         plx
         pla
         rti
+irq_rom:
+        ldx #4                  ; JMP ($FFFE)
+        bra lc_forward
 
-; Send cmdbuf (Ctrl-D ... CR) through COUT with ROM reads and bank-1 writes.
-; Called from the shim in bank 1; returns with bank 1 read/write again.
-rom_send:
-        lda LC_ROM_WB1
-        lda LC_ROM_WB1
-        ldx #0
-rs_loop:
-        lda cmdbuf,x
-        jsr COUT
-        inx
-        cmp #$8D
-        bne rs_loop
-        lda LC_RW_B1
-        lda LC_RW_B1
+; Replaces the game's LDA $C000 keyboard reads (see port-ultima5.mjs).
+; Lets the SNES pads type a mapped key into $C000, then reads it like the
+; original instruction. Preserves X, Y and all flags except N and Z.
+pad_key:
+        php
+        lda #<PAD_POLL
+        jsr b1_call
+        plp
+        lda $C000
         rts
 
-cmdbuf:     .res 32
+; Game foreground calls into bank 1: A = low byte of a $D0xx jump-table
+; slot. Maps bank 1 if the game is in bank 2 and restores it afterwards.
+; Preserves X and Y. Not used by the IRQ path (b1_jmp is modified here).
+b1_call:
+        sta b1_jmp+1
+        lda BANKSIG
+        cmp #BANKSIG_VALUE
+        beq b1_jmp
+        lda LC_RW_B1
+        lda LC_RW_B1
+        jsr b1_jmp
+        lda $C083
+        lda $C083
+        rts
+b1_jmp: jmp $D000
+
+; JSR the ROM routine at X (low) / Y (high) with ROM reads and bank-1
+; writes; called from the shim in bank 1, returns with bank 1 read/write
+; again and the routine's carry.
+rom_call:
+        stx rc_jsr+1
+        sty rc_jsr+2
+        lda LC_ROM_WB1
+        lda LC_ROM_WB1
+rc_jsr: jsr $FFFF
+        php
+        lda LC_RW_B1
+        lda LC_RW_B1
+        plp
+        rts
+
+mb_none:    .byte 0
 resident_end:

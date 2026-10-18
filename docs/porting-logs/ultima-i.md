@@ -247,8 +247,10 @@ performance on a real card's cluster size.
 
 - **Speed.** The game runs at 3RIC's clock (≈1.54x an Apple II) with no VBL pacing on
   the II+ path, and loads are slow (above). Neither is changed by the port.
-- **The card's contents are trusted.** As in Ultima V, the ROM DOS reports a failed
-  command only as text, which the stand-in does not read. With the tool's complete
+- **The card's contents are trusted.** The ROM DOS reports a failed command only as
+  text, which the stand-in does not read (the Ultima V port has since moved to the
+  ROM's FAT32 routines and detects missing files; this port still uses ROM DOS
+  commands). With the tool's complete
   folder every command succeeds; a missing or renamed file would leave stale memory.
 - **One save slot.** The player disk is one file, `U1VARS`, as on the floppy. Back it
   up by copying the file.
