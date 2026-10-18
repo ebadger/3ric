@@ -21,16 +21,17 @@ assert.equal(sdKey("MI.U1"), "MIU1");
 {
   const stuph = new Uint8Array(0x1800);
   for (const p of PATCHES) stuph.set(p.before, p.address - 0x800);
+  stuph.set([0xad, 0x00, 0xc0], 0x1c59 - 0x800);
   const files = [{ name: "STUPH", type: 6, aux: 0x800, eof: stuph.length, data: stuph }];
   applyPatches(files);
   const at = (addr, n) => Array.from(stuph.subarray(addr - 0x800, addr - 0x800 + n));
   assert.deepEqual(at(0x178c, 2), [0x80, 0x2d], "LDX #$C7 -> BRA $17BB");
   assert.deepEqual(at(0x1d64, 3), [0x20, 0x00, 0x03], "input-wait poll -> JSR padpoll");
-  assert.deepEqual(at(0x1c59, 3), [0x20, 0x00, 0x03], "view-draw poll -> JSR padpoll");
+  assert.deepEqual(at(0x1c59, 3), [0xad, 0x00, 0xc0], "view-animation read left alone");
   applyPatches(files); // idempotent
   stuph[0x1d64 - 0x800] = 0;
   assert.throws(() => applyPatches(files), /unexpected bytes/);
-  console.log("PASS STUPH patches (mouse probe, two pad polls) are exact and guarded");
+  console.log("PASS STUPH patches (mouse probe, input-wait pad poll) are exact and guarded");
 }
 
 // ---------------------------------------------------------------------------
@@ -300,7 +301,7 @@ zok:    dex
 padloop:                        ; poll like STUPH $1D64 (JSR padpoll)
         ldx #$11
         ldy #$22
-        jsr $0300
+padjsr: jsr $0300
         php
         cpx #$11
         bne regbad
@@ -452,9 +453,46 @@ async function bootU1(tree) {
   vm.keyDown("Q".charCodeAt(0)); runFor(100000);
   press(0, 0); runFor(20000);
   assert.equal(vm.peek(RES + 0x7d), 0xd1, "a typed key wins over a held pad");
+
+  // Overlapping buttons: each sends on its own press, releases send nothing.
+  const last = () => vm.peek(RES + 0x7d);
+  n = seen();
+  press(0, 1 << 7); runFor(60000);                       // Right down
+  press(0, (1 << 7) | (1 << 3)); runFor(60000);          // + Start (lower index)
+  assert.equal(last(), 0xa0, "a lower button pressed under a held one still sends");
+  press(0, 1 << 7); runFor(60000);                       // Start up, Right still down
+  press(0, 0); runFor(60000);
+  assert.equal(seen(), n + 2, "releasing a button sends nothing");
+  n = seen();
+  press(0, 1 << 0); runFor(60000);                       // B down
+  press(1, 1 << 8); runFor(60000);                       // + A on the other pad
+  press(0, 0); press(1, 0); runFor(60000);
+  assert.deepEqual([seen() - n, last()], [2, 0xc1], "B then A across both controllers");
+
+
+  // A key decoded while the pad scan runs wins, and the press is not lost.
+  const { pad } = buildLoader([{ name: "X", type: 6, aux: 0, eof: 1 }]);
+  n = seen();
+  press(0, 1 << 9);                                      // X button down
+  vm.addBreakpoint(pad.symbols.SCAN_RET);
+  for (let c = 0; c < HZ && !vm.breakpointHit();) c += vm.runCycles(500);
+  assert.ok(vm.breakpointHit(), "pad scan returned to scan_ret");
+  vm.removeBreakpoint(pad.symbols.SCAN_RET);
+  vm.keyDown("W".charCodeAt(0));
+  for (let c = 0; c < HZ && seen() < n + 2;) c += vm.runCycles(500);
+  press(0, 0); runFor(20000);
+  assert.equal(seen(), n + 2, "both the typed key and the pad key arrive");
+  assert.equal(last(), 0xd8, "pad key (X) follows the typed W");
+
   assert.equal(vm.peek(RES + 0x7e), 0, "padpoll preserves X and Y");
-  assert.equal(vm.peek(0xce15), 0, "ROM in SNES-pad mode");
-  console.log(`PASS SNES pads: 12 buttons, both controllers, one key per press, D-pad repeat (delays ${PAD_DELAYS.first}/${PAD_DELAYS.repeat} scans), keyboard priority`);
+  press(0, 1 << 5); runFor(200000); press(0, 0); runFor(20000);    // scans happened
+  vm.addBreakpoint(sym.PADJSR);                                    // between polls
+  for (let c = 0; c < HZ && !vm.breakpointHit();) c += vm.runCycles(500);
+  vm.removeBreakpoint(sym.PADJSR);
+  assert.equal(vm.peek(0xcafe), 0, "ROM NMI nest count untouched by scans");
+  vm.poke(0x9000, 0x5a);
+  assert.equal(vm.readBus(0x9000), 0x5a, "BASIC ROM stays out during play with pads");
+  console.log(`PASS SNES pads: 12 buttons, both controllers, one key per press with overlaps, D-pad repeat (delays ${PAD_DELAYS.first}/${PAD_DELAYS.repeat} scans), keyboard priority incl. mid-scan, ROM NMI state untouched`);
 }
 
 {
@@ -501,7 +539,7 @@ if (process.env.U1_DISK) {
     assert.equal(vm.peek(a), prg[0x0200 + a - 0xbb00], `stand-in byte $${a.toString(16)} intact`);
   }
   const { pad } = buildLoader([{ name: "X", type: 6, aux: 0, eof: 1 }]);
-  for (let a = 0x300; a < pad.symbols.HELD; a++)    // then its held/repeat/skip state
+  for (let a = 0x300; a < pad.symbols.PREV; a++)    // then its state bytes
     assert.equal(vm.peek(a), pad.bytes[a - 0x300], `pad glue byte $${a.toString(16)} intact`);
   assert.doesNotMatch(serial, /EH\?|NOFIND|BLOAD/);
   console.log("PASS original Ultima I: intro, character creation + save, continue, quick-save, castle via SNES B; stand-in and pad glue intact");

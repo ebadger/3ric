@@ -17,7 +17,6 @@ SETVID      = $FE93
 DOS_HOOK    = $03EA             ; ROM DOS: JSR hook_buffer_no_output; RTS
 MUTE_OUTPUT = $CE09
 NMI_NEST    = $CAFE             ; ROM NMI proxy nest count
-JOYSTICK_MODE = $CE15           ; ROM: 0 = scan SNES pads on PTRIG
 MLI         = $BF00
 
         .org $0800
@@ -68,7 +67,6 @@ copy_pad:
         dex
         cpx #$FF
         bne copy_pad
-        stz JOYSTICK_MODE       ; ROM scans SNES pads (its power-on default)
 
         lda MUTE_OUTPUT
         pha

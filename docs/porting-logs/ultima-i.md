@@ -67,23 +67,22 @@ the volume and the `U1.SYSTEM` fingerprint, and writes `<out-dir>/U1/`:
 - `U1VARS`, the player disk's save, created zero-filled (the game reads that as "no
   character": *Please put in the Player disk.*). The ROM's `OWRITE` can only rewrite
   an existing file, so it must exist. Re-running the tool keeps an existing save.
-- Three verified STUPH patches. `$178C` `LDX #$C7` → `BRA $17BB` skips the mouse
+- Two verified STUPH patches. `$178C` `LDX #$C7` → `BRA $17BB` skips the mouse
   probe: 3RIC has no mouse card, and the probe reads `$Cn0C/$Cn11/$CnFB` of every slot,
   including the live ACIA and VIA pages; on undecoded slot space a false match would
-  send the game into mouse firmware that is not there. `$1D64` and `$1C59`
-  `LDA $C000` → `JSR $0300` add the SNES controllers (below).
+  send the game into mouse firmware that is not there. `$1D64` `LDA $C000` →
+  `JSR $0300` adds the SNES controllers (below).
 
 Copy `U1` to the card root, then at the DOS prompt: `CD U1`, `BRUN U1.PRG 0800`.
 
 **SNES controllers** (`codegen/patches/ultima1/pad.s`, added at the owner's request
-after the first board run). The game reads the keyboard in exactly two places in
-`STUPH`, both `LDA $C000` feeding its 4-key type-ahead buffer (`$74-$77`, count `$78`):
-`$1D64` on every input wait and `$1C59` while the view is drawn. Both now call
-`padpoll` at `$0300`, which returns what `LDA $C000` would - unless no key is waiting
-and a button is down, in which case it returns that button's key with bit 7 set and
-the game buffers it like a typed one. The game itself turns Return, `/`, `;` and `'`
-into the arrow codes `$0B/$0A/$08/$15`, so the D-pad sends those and works for
-walking, the dungeon view and character creation alike.
+after the first SD-card run). `STUPH` reads the keyboard with `LDA $C000` at `$1D64` on
+every input wait, putting a ready key in its 4-key type-ahead buffer (`$74-$77`, count
+`$78`). That read now calls `padpoll` at `$0300`, which returns what `LDA $C000` would -
+unless no key is waiting and a button has just been pressed, in which case it returns
+that button's key with bit 7 set and the game buffers it like a typed one. The game
+itself turns Return, `/`, `;` and `'` into the arrow codes `$0B/$0A/$08/$15`, so the
+D-pad sends those and works for walking, the dungeon view and character creation alike.
 
 | Pad | Key | | Pad | Key |
 |-----|-----|-|-----|-----|
@@ -92,19 +91,23 @@ walking, the dungeon view and character creation alike.
 | B | `E` Enter | | R | `F` Fire |
 | X | `X` eXit | | Select / Start | `Z` Ztats / Space (pass) |
 
-- Either controller works; a typed key always wins; X/Y are preserved.
-- One `PTRIG` scan costs ~1,500 cycles and the game polls ~127 times a second while
-  it waits (measured), so only every 4th poll scans (~3% of the CPU instead of 12%).
-- A press sends one key. A held D-pad repeats after 10 scans, then every 6 (≈0.3 s,
-  then ≈5 steps a second), and only while the type-ahead count is zero: the first
-  try at 3 scans ran ~8 tiles a second, and without the count check a release could
-  leave up to four queued steps.
+- Either controller works; X/Y are preserved; a typed key always wins, including one
+  decoded while the pads were being read (the press is then sent on the next poll).
+- **The glue reads the pads itself**: 12 clocks on VIA1 port B, the same sequence as
+  the ROM's `@joystick_gamepads` (latch bit 6, clock bit 7, data bits 5/4, active low),
+  ~400 cycles on every input-wait poll (~1% of the CPU). Keyboard NMIs are served
+  throughout. See below for why not `PTRIG`.
+- Each button sends one key on its own press, however buttons overlap (a 12-byte
+  state table: up, held, or pressed-not-yet-sent). The last D-pad direction repeats
+  while held - after 12 scans, then every 8 (≈0.3 s, then ≈5 steps a second, measured
+  walking) - and only while the type-ahead count is zero, so letting go never leaves
+  queued steps.
+- `STUPH`'s other read, `LDA $C000` at `$1C59` (it buffers typed keys while the view
+  animates), is left alone: the game acts on keys only at input waits.
 - `$0300-$03BF` was chosen by measurement: with pages 2-3 filled with a marker before
   `BRUN`, play through creation, save, continue, a town, a castle and a dungeon left
   `$0300-$03CD` untouched (`U1.INTRO` writes `$03CE`); the static hits in other
-  overlays are data bytes, not instructions. The loader also sets the ROM's
-  `JOYSTICK_MODE $CE15` to 0, its power-on default, so the pads are scanned.
-
+  overlays are data bytes, not instructions. The glue is 163 bytes.
 **ProDOS stand-in** (`codegen/patches/ultima1/prodos.s`). Only ProDOS is replaced;
 `U1.SYSTEM`, Origin's layer and the game run unmodified.
 
@@ -151,12 +154,32 @@ off (`$C007`), installs the stand-in, captures the command collector, then loads
   16 with 19 bytes to spare; the converter refuses a build that would spill.
 - **Harness timing.** The bridge's `run(n)` counts instructions, not cycles. The
   test keeps the Ultima V test's key pacing; cycle measurements use `runCycles`.
-
+- **The first controller glue dropped keyboard input.** It touched `PTRIG $C070` so the
+  ROM's NMI scanned the pads - ~1,500 cycles inside an NMI, during which PS/2 clock
+  edges are not served. Both reviewers flagged it, and the A2Robots board history
+  recorded the same failure. A native harness that clocks real PS/2 frames while the
+  glue scans (`port-ultima1.native.ps1`) reproduced it: `BRITISH ULTIMA` arrived as
+  `BRITI0ZZ.X6OGGSP$$<RQNIMA`, or the Caps Lock LED exchange timed out.
+- **Calling the ROM's scan routine was not enough either.** `@joystick_gamepads`
+  (`$B99B`, in the BASIC bank) was called with a fake NMI frame and a nested `$CAFE`
+  count, keeping keyboard NMIs live. It still garbled frames at a 160-cycle bit and
+  corrupted an LED command: the routine leaves through the ROM's NMI exit, which writes
+  `$7F` to VIA1's IFR and discards a PS/2 or strobe edge that arrived just before (the
+  collision the Archon log describes). Clocking port B directly passes every case.
+- **Pacing followed the wrong poll.** Scanning on every 4th call of *both* keyboard
+  reads tied the D-pad repeat to how often the view animated; suppressing repeats at
+  the animation read then left a held direction waiting ~1.3 s. Reading the pads only
+  at input waits - every one, now that a scan is cheap - restored ≈0.3 s / 5 steps a
+  second.
+- **The ROM's LED path changes Y.** The native harness showed an NMI returning with Y
+  changed whenever the ROM sent a Caps Lock LED command (its delay loops at
+  `$BC14-$BC30` use Y). That is ROM behavior for every program, not the glue's; the
+  harness exempts Y on exactly those NMIs and counts them.
 ## Evidence (WASM emulator, real ROM DOS and SD emulation)
 
 `node codegen/tools/port-ultima1.test.mjs` (after `web/build.ps1`):
 
-- Converter: the STUPH patch is exact, idempotent and refuses other bytes; the tree
+- Converter: the STUPH patches are exact, idempotent and refuse other bytes; the tree
   has `U1.PRG`, no `PRODOS`, a zero-filled `U1VARS`; key collisions are refused; 16
   files fit.
 - A **synthetic** `U1.SYSTEM` calls every MLI function through the real loader and
@@ -176,17 +199,27 @@ off (`$C007`), installs the stand-in, captures the command collector, then loads
   is byte-identical to the image apart from the stand-in's own state and the bytes
   `U1.SYSTEM` writes (`$BF6E/F`, `$BFFC/D`), as is the pad code at `$0300`.
 - SNES pads (synthetic loop calling `padpoll` like STUPH): each of the 12 buttons
-  sends its key, controller 2 works, a held button sends one key, a held D-pad waits
+  sends its key, controller 2 works, a held button sends one key, a lower button
+  pressed under a held one still sends and releases send nothing, a held D-pad waits
   while the type-ahead count is non-zero and repeats once it is zero, a typed key wins
-  over a held pad, X/Y are preserved, and the ROM is in pad mode.
+  over a held pad - also when it is decoded during a scan, without losing the press -
+  X/Y are preserved, and the ROM's NMI nest count and BASIC overlay are untouched.
+
+`pwsh codegen\tools\port-ultima1.native.ps1` (Visual Studio C++ tools): builds the
+shared VM natively and types `BRITISH ULTIMA` twice plus Caps Lock as real PS/2 frames
+(bit periods 94/120/160 cycles, DATA held 80) at drifting offsets while a loop polls
+the glue like `STUPH`. All three pass: ~1,800-1,900 scans, 38-671 keyboard NMIs taken
+*inside* a scan, the LED exchange completes, every character arrives, and every NMI
+returns with A/X, flags and overlay intact (Y excepted on the ROM's LED-command NMIs).
+With `-Pad` pointing at the first, `PTRIG` glue, the same harness fails all three.
 
 Manual emulator sessions on the original disk (scripted keys, screenshots): the
 title text, the animated intro, the menu, character generation, the city of Britain,
 an overworld fight with bears, a quick-save, and **the Dungeon of Doubt** (`DNG`,
 3D view, moving forward), with the stand-in checked intact after each. With the
 controller only: Select showed Ztats, the D-pad walked to the dungeon, B entered it
-and Up moved forward; holding the D-pad walked ≈5 tiles a second and stopped on
-release.
+and Up moved forward (tap-length presses); holding the D-pad walked ≈5 tiles a second
+and stopped on release.
 
 Measured load cost (`runCycles`, 512-byte-cluster test card): `U1.SYSTEM` 1.3 s,
 `MAKE.INDATA` 6.3 s, the whole start-up ≈22 s, `OUT` 2.6 s, `DNG` 4.6 s, a town or
@@ -211,6 +244,10 @@ performance on a real card's cluster size.
 - **One save slot.** The player disk is one file, `U1VARS`, as on the floppy. Back it
   up by copying the file.
 - **Speaker only.** Ultima I has no Mockingboard music; its effects use `$C030`.
+- **Lock keys.** The ROM's Caps/Num Lock LED handling changes the Y register of
+  whatever it interrupts (above); a lock-key press mid-game could disturb the game.
+- **Controller keys reach the game only at input waits**, like the game's own key
+  handling; a tap shorter than a slow redraw can be missed.
 
 ## Next steps worth discussing
 

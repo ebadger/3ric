@@ -153,19 +153,28 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     One byte-verified patch: `STUPH $178C` skips the mouse-card probe (3RIC has none;
     the probe reads `$Cn0C/$Cn11/$CnFB` of every slot, including live ACIA/VIA pages).
     `U1.SYSTEM` must match a recorded SHA-256 (the stand-in emulates exactly its calls).
-  - **SNES controllers:** two more byte-verified STUPH patches turn the game's only
-    keyboard reads (`LDA $C000` at `$1D64`, every input wait, and `$1C59`, polled while
-    the view draws) into `JSR $0300`. That pad glue (`codegen/patches/ultima1/pad.s`,
-    `$0300-$03BF`, measured unused by the game and the ROM; the loader also sets
-    `JOYSTICK_MODE $CE15 = 0`) returns what `LDA $C000` would, except that with no key
-    waiting it returns a pressed button's key with bit 7 set, so the game buffers it like
-    a typed key. A typed key always wins; X/Y are preserved. Every 4th poll touches
-    `PTRIG $C070` and reads `GAMEPAD1/2` (either controller). Mapping: D-pad = arrows
-    (`$0B/$0A/$08/$15`, the codes the game itself maps Return / `/` / `;` / `'` to);
-    A Attack, B Enter, X eXit, Y Transact, L Klimb, R Fire, Select Ztats, Start Space.
-    A press sends one key; a held D-pad repeats (first after 10 scans, then every 6,
-    ≈0.3 s then ≈5 steps/s) and only while the game's type-ahead count (`$78`) is 0,
-    so releasing never leaves queued moves.
+  - **SNES controllers:** one more byte-verified STUPH patch turns the game's input-wait
+    keyboard read (`LDA $C000` at `$1D64`) into `JSR $0300`. That pad glue
+    (`codegen/patches/ultima1/pad.s`, `$0300-$03BF`, measured unused by the game and the
+    ROM) returns what `LDA $C000` would, except that with no key waiting it returns a
+    newly pressed button's key with bit 7 set, so the game buffers it like a typed key.
+    A typed key always wins, including one decoded during a scan; X/Y are preserved.
+    The view-animation read at `$1C59` is left alone. Each poll clocks both pads itself
+    on VIA1 port B exactly as the ROM's `@joystick_gamepads` does (latch bit 6, clock
+    bit 7, data bits 5/4 active low, 12 buttons; ~400 cycles, ~1% of the CPU). It does
+    **not** use `PTRIG $C070` or call that routine: a `PTRIG` scan runs inside a
+    ~1,500-cycle NMI, and the routine leaves through the ROM NMI exit whose blanket
+    VIA1 IFR clear drops PS/2 and `$C010` edges - both corrupt real keyboard frames
+    (A2Robots on the board; reproduced by `port-ultima1.native.ps1`). Mapping: D-pad =
+    arrows (`$0B/$0A/$08/$15`, the codes the game itself maps Return / `/` / `;` / `'`
+    to); A Attack, B Enter, X eXit, Y Transact, L Klimb, R Fire, Select Ztats, Start
+    Space. Each button sends one key on its own press, however buttons overlap; the
+    last D-pad direction repeats while held (first after 12 scans, then every 8, ≈0.3 s
+    then ≈5 steps/s) and only while the game's type-ahead count (`$78`) is 0, so
+    releasing never leaves queued moves.
+  - **ROM limitation (not changed here):** the ROM NMI handler's Caps/Num Lock
+    LED-command path changes Y and does not restore it (for any program on this ROM);
+    pressing a lock key mid-game can disturb whatever code it interrupts.
   - **Trust:** as with Ultima V, ROM DOS command failures are not detected; the
     generated folder is assumed complete. The game runs ~1.54x Apple II speed (3RIC
     clock, no VBL sync on the II+ path). Loads cost ~0.45 s per KB through the ROM's
@@ -501,7 +510,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | Ultima V SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima5.test.mjs` drives the real loader/resident/shim on the ROM DOS with synthetic volumes (and boots the original disks to the title with `U5_DISKS`); `port-ultima5.native.ps1` decodes real PS/2 frames at 94-160-cycle periods with language-card RAM mapped, including Caps Lock LED exchanges and a `` strobe on a stop-bit edge. Manual WASM play covered creation, save, overworld, combat, towne entry. First board trial: title shown, keyboard failed (fixed since, re-trial pending). Dialogue, dungeons, endgame and music (needs 128 KB) are open; ROM DOS command failures are not detected (card contents trusted); block reads cost ~1.7 M cycles. |
-| Ultima I SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima1.test.mjs` drives the real loader and ProDOS stand-in through the ROM DOS with synthetic files (file info, open/read with marks and EOF, write/read-back, every error path, registers, zero page, NMI) and the SNES pad glue (all 12 buttons, both controllers, one key per press, D-pad repeat gated on the game's buffer, keyboard priority); with `U1_DISK` it plays the original disk through intro, character creation and save, continue, quick-save and Lord British's castle (entered with the pad's B) and checks the stand-in and pad glue stayed intact. Manual WASM play also covered a town, overworld combat and the Dungeon of Doubt (entered and walked with the pad). Space flight, the time machine and the endgame are unverified; the owner's first SD-card run loaded the game and went through character creation (saving, play and the pads not yet confirmed outside the emulator); ROM DOS command failures are not detected (card contents trusted); loads cost ~0.45 s/KB. |
+| Ultima I SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima1.test.mjs` drives the real loader and ProDOS stand-in through the ROM DOS with synthetic files (file info, open/read with marks and EOF, write/read-back, every error path, registers, zero page, NMI) and the SNES pad glue (all 12 buttons, both controllers, one key per press with overlapping buttons, D-pad repeat gated on the game's buffer, keyboard priority including a key decoded mid-scan); `codegen/tools/port-ultima1.native.ps1` clocks real PS/2 frames (94/120/160-cycle bits, Caps Lock LED exchange) while the glue scans, with hundreds of keyboard NMIs landing inside scans, and fails the earlier `PTRIG` version; with `U1_DISK` it plays the original disk through intro, character creation and save, continue, quick-save and Lord British's castle (entered with the pad's B) and checks the stand-in and pad glue stayed intact. Manual WASM play also covered a town, overworld combat and the Dungeon of Doubt (entered and walked with the pad). Space flight, the time machine and the endgame are unverified; the owner's first SD-card run loaded the game and went through character creation (saving, play and the pads not yet confirmed outside the emulator); ROM DOS command failures are not detected (card contents trusted); loads cost ~0.45 s/KB. |
 | ROM `BLOAD` stores one byte past EOF | Known gap (ROM) | Observed in `fat32_file_read`; programs loading below live data must use `FLOAD 0000 eof-1`. ROM source is not in this repository. |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |
 | Bouncing Ball | Implemented / cycle-guarded | 5,376-byte standalone image; 419,704 mean / 438,580 worst cycles over 128 pixel-identical frames, an 11.47x mean speedup over PR #58 and 14% faster than the first optimized version. `codegen/tools/bouncing-ball.test.mjs` covers motion/page history, all signed-byte products, 4,096 independent angle pairs, 512 independent complete rasters, every restore alignment, extreme positions, memory boundaries, keyboard exit, and ROM WOZ boot. |

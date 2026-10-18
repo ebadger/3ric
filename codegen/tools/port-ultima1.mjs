@@ -7,9 +7,9 @@
 // then at the ROM DOS prompt:  CD U1   then   BRUN U1.PRG 0800
 //
 // Only ProDOS is replaced (codegen/patches/ultima1/prodos.s); U1.SYSTEM,
-// Origin's file layer and the game run unmodified except three verified
-// patches to STUPH (mouse probe skipped; both keyboard polls also read the
-// SNES pads via pad.s). The disk image and the generated folder contain
+// Origin's file layer and the game run unmodified except two verified
+// patches to STUPH (mouse probe skipped; the input-wait keyboard read also
+// reads the SNES pads via pad.s). The disk image and the generated folder contain
 // Origin's copyrighted game; keep them local - this repository holds only
 // the tool and the glue code.
 
@@ -26,9 +26,9 @@ const patchDir = path.join(root, "codegen", "patches", "ultima1");
 export const VOLUME = "U1";
 const LOADER_ORG = 0x0800, MLI_IMAGE = 0x0a00, MLI_ORG = 0xbb00, MLI_END = 0xc000;
 const PAD_IMAGE = 0x0f00, PAD_ORG = 0x0300, PAD_SIZE = 0xc0;
-// SNES D-pad auto-repeat, in pad scans (~32 a second while the game waits):
-// first repeat after ~0.3 s, then ~5 steps a second (measured in the emulator).
-export const PAD_DELAYS = { first: 10, repeat: 6 };
+// SNES D-pad auto-repeat, in pad scans (one per input-wait poll): first repeat
+// after ~0.3 s, then ~5 steps a second (measured walking in the emulator).
+export const PAD_DELAYS = { first: 12, repeat: 8 };
 
 // The stand-in emulates exactly the MLI calls this U1.SYSTEM (and the file
 // layer it relocates to $B700) makes, so other builds are refused.
@@ -49,11 +49,7 @@ export const PATCHES = [
   },
   {
     file: "STUPH", address: 0x1d64, before: [0xad, 0x00, 0xc0], after: [0x20, 0x00, 0x03],
-    why: "Keyboard poll on every input wait: LDA $C000 -> JSR padpoll ($0300), which adds SNES controller buttons as keys.",
-  },
-  {
-    file: "STUPH", address: 0x1c59, before: [0xad, 0x00, 0xc0], after: [0x20, 0x00, 0x03],
-    why: "Keyboard poll while the view is drawn: LDA $C000 -> JSR padpoll.",
+    why: "Keyboard poll on every input wait: LDA $C000 -> JSR $0300 (padpoll), which adds SNES controller buttons as keys.",
   },
 ];
 
