@@ -73,6 +73,8 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 
 pwsh codegen\tools\port-ultima5.native.ps1  # Ultima V resident: real PS/2 frames with language-card RAM mapped (MSVC)
 & $node codegen\tools\port-sevencities.test.mjs # Seven Cities SD port on ROM DOS/SD (SEVENCITIES_DISKS boots the real disks)
+& $node codegen\tools\port-ultima1.test.mjs # Ultima I ProDOS stand-in + SNES pads on ROM DOS (set U1_DISK to also play the real disk)
+pwsh codegen\tools\port-ultima1.native.ps1  # Ultima I pad glue: real PS/2 frames while the pads are scanned (MSVC)
 ```
 
 C++ CPU unit tests (`emulator/Badger6502VMTest`, MSTest): **Test → Run All Tests** in
@@ -224,6 +226,25 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   sailing, landing and natives; the World Maker built a new world that then played
   (it overwrites `MAP.DSK`: keep a copy). Saving at the Pub and the board are untried.
   See [`docs/porting-logs/seven-cities-of-gold.md`](../docs/porting-logs/seven-cities-of-gold.md).
+- **Ultima I (SD-card port, experimental):** `node codegen\tools\port-ultima1.mjs <u1.dsk> <out>`
+  converts the owner's ProDOS disk (`/U1`) into a `U1\` folder; copy it to the card,
+  then `CD U1` and `BRUN U1.PRG 0800`. Game data stays local. Only ProDOS is replaced:
+  a stand-in global page and MLI at `$BB00-$BFFF` turn file reads/writes into
+  `FLOAD`/`OWRITE`; `U1.SYSTEM`, Origin's file layer and the game run unmodified apart
+  from two STUPH patches: one skips the mouse-card probe, one routes the game's
+  input-wait keyboard read through `$0300` glue that also reads the **SNES
+  controllers** (D-pad moves, A Attack, B Enter, X eXit, Y Transact, L Klimb, R Fire,
+  Select Ztats, Start pass; either port). The glue clocks the pads itself on VIA1
+  port B - not through `PTRIG`, whose NMI-time scan corrupts PS/2 keyboard frames
+  (native PS/2 harness). The language card is never mapped, so the ROM's
+  own keyboard NMI path serves the game. WASM play covered the intro, character
+  creation and save, continue, quick-save, a town, a castle, overworld combat and a
+  dungeon (also with the pad only); space, the time machine and the endgame are
+  unverified. The owner's first SD-card run loaded the game and went through character
+  creation; saving, play and the pads are not yet confirmed outside the emulator.
+  Loads cost ~0.45 s/KB (startup ~22 s, a town ~8 s). The save is
+  `U1\U1VARS` (the converter keeps an existing one). Card contents are trusted.
+  See [`docs/porting-logs/ultima-i.md`](../docs/porting-logs/ultima-i.md).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**
