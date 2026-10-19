@@ -1131,9 +1131,7 @@ sk_cmp: lda fcbs+F_IDX+1,x      ; can we go on from the current cluster?
         bcc sk_walk
         bne sk_reset
         jmp sk_here
-sk_reset: stz fcbs+F_IDX,x
-        stz fcbs+F_IDX+1,x
-        lda fcbs+F_FIRST,x
+sk_reset: lda fcbs+F_FIRST,x       ; F_IDX stays invalid until F_CUR is set
         ora fcbs+F_FIRST+1,x
         ora fcbs+F_FIRST+2,x
         ora fcbs+F_FIRST+3,x
@@ -1152,6 +1150,8 @@ sk_new: lda newcl,y
         bne sk_new
         jsr setdirty
 sk_first: ldx fx
+        stz fcbs+F_IDX,x
+        stz fcbs+F_IDX+1,x
         ldy #0
 sk_f1:  lda fcbs+F_FIRST,x
         sta fcbs+F_CUR,x

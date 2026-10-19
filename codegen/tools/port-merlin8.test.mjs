@@ -945,23 +945,55 @@ fc_add: adc HINT,x
         sta RES+$167
         lda mval+1
         sta RES+$168
+        lda #<p_empty           ; 114 CREATE EMPTY.BIN on the full card
+        ldy #>p_empty
+        jsr setcr
+        jsr MLI
+        .byte $C0
+        .word create
+        jsr rec
+        lda #<p_empty           ; 115 OPEN it
+        ldy #>p_empty
+        jsr setopen
+        jsr MLI
+        .byte $C8
+        .word open
+        jsr rec
+        lda #<$3000             ; 116, 117 WRITE twice: full both times
+        ldy #>$3000
+        jsr setrd
+        lda #10
+        sta rreq
+        stz rreq+1
+        jsr MLI
+        .byte $CB
+        .word rd
+        jsr rec
+        jsr MLI
+        .byte $CB
+        .word rd
+        jsr rec
+        lda rgot
+        sta RES+$16B
+        lda rgot+1
+        sta RES+$16C
         ldx #3
 fc_rs:  lda maxsv,x
         sta MAXCL,x
         dex
         bpl fc_rs
-        jsr MLI                 ; 114 CLOSE
+        jsr MLI                 ; 118 CLOSE 0 (both files)
         .byte $CC
-        .word cl
+        .word cl0
         jsr rec
-        lda #<p_huge            ; 115 CREATE HUGE.BIN
+        lda #<p_huge            ; 119 CREATE HUGE.BIN
         ldy #>p_huge
         jsr setcr
         jsr MLI
         .byte $C0
         .word create
         jsr rec
-        lda #<p_huge            ; 116 its entry is now in the cache
+        lda #<p_huge            ; 120 its entry is now in the cache
         ldy #>p_huge
         jsr setinfo
         jsr MLI
@@ -970,7 +1002,7 @@ fc_rs:  lda maxsv,x
         jsr rec
         lda #$01                ; size 16 MB (entry byte 31)
         jsr hugeset
-        jsr MLI                 ; 117 GET_FILE_INFO: largest ProDOS EOF
+        jsr MLI                 ; 121 GET_FILE_INFO: largest ProDOS EOF
         .byte $C4
         .word info
         jsr rec
@@ -978,14 +1010,14 @@ fc_rs:  lda maxsv,x
         sta RES+$169
         lda info+9
         sta RES+$16A
-        lda #<p_huge            ; 118 OPEN: refused
+        lda #<p_huge            ; 122 OPEN: refused
         ldy #>p_huge
         jsr setopen
         jsr MLI
         .byte $C8
         .word open
         jsr rec
-        lda #<p_huge            ; 119 GET_FILE_INFO again (cache)
+        lda #<p_huge            ; 123 GET_FILE_INFO again (cache)
         ldy #>p_huge
         jsr setinfo
         jsr MLI
@@ -994,7 +1026,7 @@ fc_rs:  lda maxsv,x
         jsr rec
         lda #0
         jsr hugeset
-        lda #<p_huge            ; 120 DESTROY HUGE.BIN
+        lda #<p_huge            ; 124 DESTROY HUGE.BIN
         ldy #>p_huge
         jsr setp1
         jsr MLI
@@ -1124,6 +1156,8 @@ p_absb: .byte 20
         .text "/SD/MERLIN8/MANY/SUB"
 p_full: .byte 8
         .text "FULL.BIN"
+p_empty: .byte 9
+        .text "EMPTY.BIN"
 p_huge: .byte 8
         .text "HUGE.BIN"
 ren3:   .byte 2
@@ -1366,11 +1400,14 @@ async function standinRun(cardOpts, label) {
   okCall(110, "SET_MARK"); err(111, 0x48, "SET_EOF past a full card");
   okCall(112, "GET_EOF"); assert.deepEqual([word(RES + 0x164), vm.peek(RES + 0x166)], [wrote, 0], "a failed SET_EOF keeps the EOF");
   okCall(113, "GET_MARK"); assert.equal(word(RES + 0x167), 100, "and the mark");
-  okCall(114, "CLOSE");
-  okCall(115, "CREATE HUGE.BIN"); okCall(116, "GET_FILE_INFO"); okCall(117, "GET_FILE_INFO 16 MB");
+  okCall(114, "CREATE EMPTY.BIN on a full card"); okCall(115, "OPEN EMPTY.BIN");
+  err(116, 0x48, "WRITE to an empty file on a full card"); err(117, 0x48, "and again");
+  assert.equal(word(RES + 0x16b), 0, "nothing was written");
+  okCall(118, "CLOSE 0");
+  okCall(119, "CREATE HUGE.BIN"); okCall(120, "GET_FILE_INFO"); okCall(121, "GET_FILE_INFO 16 MB");
   assert.equal(word(RES + 0x169), 0x8001, "a 16 MB file shows the largest ProDOS size: 32768 blocks + index");
-  err(118, 0x4d, "OPEN a 16 MB file"); okCall(119, "GET_FILE_INFO"); okCall(120, "DESTROY HUGE.BIN");
-  okCall(121, "MLI from bank 2 read-only"); okCall(122, "MLI from bank 1 read/write");
+  err(122, 0x4d, "OPEN a 16 MB file"); okCall(123, "GET_FILE_INFO"); okCall(124, "DESTROY HUGE.BIN");
+  okCall(125, "MLI from bank 2 read-only"); okCall(126, "MLI from bank 1 read/write");
   assert.deepEqual([vm.peek(RES + 0x15a), vm.peek(RES + 0x15b), vm.peek(RES + 0x15c)], [0x60, 0x05, 0x60], "bank signatures at $DFFF intact");
   assert.deepEqual([0x129, 0x12a, 0x12b, 0x12c, 0x12d, 0x12e].map((o) => vm.peek(RES + o)), [0xb2, 0xb2, 0xb1, 0xb2, 0xb2, 0xb3],
     "language-card bank and write state survive MLI calls and forwarded NMIs");
@@ -1391,6 +1428,7 @@ async function standinRun(cardOpts, label) {
   assert.ok(!fat.files.has("MERLIN8/HUGE.BIN") && !fat.files.has("MERLIN8/MANY/SUB/") && !fat.files.has("MERLIN8/MANY/FILE00"), "destroyed and renamed entries are gone");
   assert.equal(fat.files.get("MERLIN8/LOCKD.S").entry[11] & 1, 1, "CREATE with no write access is read-only");
   assert.equal(fat.files.get("MERLIN8/FULL.BIN").size, wrote, "FULL.BIN on the card holds what was written");
+  assert.deepEqual([fat.files.get("MERLIN8/EMPTY.BIN").size, fat.files.get("MERLIN8/EMPTY.BIN").first], [0, 0], "EMPTY.BIN stayed empty");
   assert.ok(!fat.files.has("MERLIN8/NEW.S") && !fat.files.has("MERLIN8/SUBDIR/"), "renamed and destroyed entries are gone");
   assert.deepEqual(Array.from(fat.content("MERLIN8/RENAMED.S")), Array.from(w.subarray(0, 2000)), "RENAMED.S content on the card");
   assert.deepEqual(Array.from(fat.content("MERLIN8/BIG.BIN")), Array.from(BIG));
