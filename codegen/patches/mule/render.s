@@ -481,6 +481,7 @@ mode_nb: .byte    0, 0,40,40,40,40,20,20,10,10,20,20,20,40,40,40
 ; drawn, so the rest of the picture never blinks (there is no second page
 ; to flip to) and a moving sprite redraws only the bands it is on.
 draw_lines:
+        jsr ov_init
         jsr pm_init
         lda #$FF                ; every RR_EVERY renders, one line is redrawn
         sta r_rr                ; regardless (a missed change heals)
@@ -1019,10 +1020,6 @@ rb2:    lda r_gl
         bne rb1
         rts
 
-; 8 pixels -> 14: widths 2,2,2,1 per half (bit 0 = leftmost on the hi-res)
-
-; 8 pixels -> 14: widths 2,2,2,1 per half (bit 0 = leftmost on the hi-res)
-t6_l:   .byte $00,$40,$30,$70,$0C,$4C,$3C,$7C,$03,$43,$33,$73,$0F,$4F,$3F,$7F
 ; ---------------------------------------------------------------- players
 ; Players 0-3 (single-line P/M at PMBASE+$400) and the missiles
 ; (PMBASE+$300) are ORed into each row as it is drawn, in the band's place,
@@ -1142,8 +1139,8 @@ ds1:    clc
         adc lt_line,x
         sta r_L
 ; every sprite's pixels on line r_L, ORed into row zhr: the missiles first,
-; then players 3 to 0 (the river, player 3, then sees the plot frames'
-; missiles and keeps off them)
+; then players 0 to 3 (the river, player 3, then sees everything else on
+; the row - plot frames' missiles, the players - and keeps off it)
 row_spr:
         lda #4
         sta r_o
@@ -1161,8 +1158,14 @@ rs_o:   ldy r_o
         jsr ob_get
         bcs rs_n
         jsr sp_wide             ; (RAM2) by SIZEP: 1, 2 or 4 runs
-rs_n:   dec r_o
-        bpl rs_o
+rs_n:   lda r_o                 ; 4, 0, 1, 2, 3
+        inc a
+        cmp #5
+        bcc rs_1
+        lda #0
+rs_1:   sta r_o
+        cmp #4
+        bne rs_o
         rts
 rs_m:   ldx #4                  ; the missiles, 2 bits each, missile 0 lowest
 rm1:    lda r_src
@@ -1724,6 +1727,8 @@ t20_bk: lda r_x
         and #$80
 tb0:    sta zt0
         rts
+; 8 pixels -> 14: widths 2,2,2,1 per half (bit 0 = leftmost on the hi-res)
+t6_l:   .byte $00,$40,$30,$70,$0C,$4C,$3C,$7C,$03,$43,$33,$73,$0F,$4F,$3F,$7F
 ram2_r_end:
 
         .org r_rrc              ; the first forced redraw after RR_EVERY
@@ -1817,8 +1822,11 @@ om_x:   rts
 ; ---- draw_lines: entry r_i's hash against the last frame's. Carry set
 ; when it is to be drawn, dm_* then its columns: all of them, or (only
 ; its sprites changed) the groups its sprites cover now or did before.
-ov_cmp: ldx ov_ini
-        bne oc0
+; ---- draw_lines' start: on the first redraw, set up the data (R_DAT is
+; not loaded)
+ov_init:
+        ldx ov_ini
+        bne oc_r
         inc ov_ini
 oci:    lda #$FF                ; every band's sprite columns all: on its
         sta om_lo,x             ; first change it is drawn whole
@@ -1830,7 +1838,8 @@ oci:    lda #$FF                ; every band's sprite columns all: on its
 oci2:   inx
         cpx #NL
         bne oci
-oc0:    ldx r_i
+oc_r:   rts
+ov_cmp: ldx r_i
         lda r_hlo
         cmp pv_lo,x
         bne oc_ch
