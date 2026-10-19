@@ -449,6 +449,7 @@
     let activeDisk = null;
     let maxWozFileSize = 0;
     let initialLoading = true;
+    let machineActionBusy = false;
     let audioContext = null;
     let audioNode = null;
     let soundRequested = true;
@@ -466,12 +467,32 @@
     }
 
     function setBootControlsDisabled(disabled) {
-      for (const id of ["reset", "bootdisk", "diskfile", "diskswap", "mountsd", "prgfile"]) {
+      for (const id of ["reset", "bootdisk", "diskfile", "diskswap", "mountsd", "prgfile", "assemble"]) {
         document.getElementById(id).disabled = disabled;
       }
     }
     setBootControlsDisabled(true);
     if (embedded) document.getElementById("reset").textContent = "Restart";
+
+    async function runMachineAction(errorLabel, action) {
+      if (initialLoading || machineActionBusy) {
+        const error = new Error("Another machine action is in progress; try again when it finishes.");
+        statusEl.textContent = error.message;
+        console.error(error);
+        return;
+      }
+      machineActionBusy = true;
+      setBootControlsDisabled(true);
+      try {
+        await action();
+      } catch (error) {
+        statusEl.textContent = errorLabel + ": " + error.message;
+        console.error(error);
+      } finally {
+        machineActionBusy = false;
+        setBootControlsDisabled(false);
+      }
+    }
 
     function updateFullscreenButton() {
       const active = document.fullscreenElement === emulatorEl;
@@ -1487,9 +1508,13 @@
         }
       }
 
-      asmBtn.addEventListener("click", assembleRun);
+      const assembleFromInput = () => runMachineAction("Assembly run failed", assembleRun);
+      asmBtn.addEventListener("click", assembleFromInput);
       srcEl.addEventListener("keydown", (e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); assembleRun(); }
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+          e.preventDefault();
+          return assembleFromInput();
+        }
       });
       srcEl.addEventListener("input", save);
       addrEl.addEventListener("change", save);
@@ -1673,9 +1698,8 @@
         if (b !== null) { inputQueue.push(b); e.preventDefault(); }
       });
 
-      document.getElementById("reset").addEventListener("click", async () => {
-        setBootControlsDisabled(true);
-        try {
+      document.getElementById("reset").addEventListener("click", () =>
+        runMachineAction("Reset failed", async () => {
           if (embedded && activeDisk) {
             await bootDisk(activeDisk.bytes, activeDisk.label);
           } else if (embedded && launchParams.has("woz")) {
@@ -1686,79 +1710,62 @@
             statusEl.textContent = "running";
           }
           canvas.focus();
-        } catch (error) {
-          statusEl.textContent = "Reset failed: " + error.message;
-          console.error(error);
-        } finally {
-          setBootControlsDisabled(false);
-        }
-      });
+        }));
 
       // Mount the micro-SD card and drop into the ROM's DOS shell. "EC5CG" is
       // the monitor's Go command pointed at $EC5C (the `dos` routine), which
       // mounts the FAT32 card (fat32_start) and shows the ">" prompt; the
       // trailing DIR lists the root directory. From there: CAT, CD <dir>,
       // BLOAD/BRUN <file>, etc.
-      document.getElementById("mountsd").addEventListener("click", async () => {
-        statusEl.textContent = "loading SD image\u2026";
-        const ok = await ensureSD();
-        if (!ok) { statusEl.textContent = "SD image unavailable (run build.ps1)"; return; }
-        inputQueue.length = 0;
-        typeString("EC5CG\rDIR\r");
-        statusEl.textContent = "SD mounted \u2014 DOS shell";
-        canvas.focus();
-      });
+      document.getElementById("mountsd").addEventListener("click", () =>
+        runMachineAction("SD load failed", async () => {
+          statusEl.textContent = "loading SD image\u2026";
+          const ok = await ensureSD();
+          if (!ok) { statusEl.textContent = "SD image unavailable (run build.ps1)"; return; }
+          inputQueue.length = 0;
+          typeString("EC5CG\rDIR\r");
+          statusEl.textContent = "SD mounted \u2014 DOS shell";
+          canvas.focus();
+        }));
 
       // Warm the SD image in the background so the first "Mount SD" is instant.
       if (!embedded) ensureSD();
 
       // Boot the bundled demo floppy (data/disk.woz, staged by build.ps1).
-      document.getElementById("bootdisk").addEventListener("click", async () => {
-        statusEl.textContent = "loading disk\u2026";
-        try {
+      document.getElementById("bootdisk").addEventListener("click", () =>
+        runMachineAction("Disk load failed", async () => {
+          statusEl.textContent = "loading disk\u2026";
           if (!demoDisk) demoDisk = await fetchBytes("data/disk.woz", { maxBytes: maxWozFileSize });
           await bootDisk(demoDisk, "floppy");
-        } catch (err) {
-          console.error(err);
-          statusEl.textContent = "Disk load failed: " + err.message;
-        }
-      });
+        }));
 
       // Boot a user-chosen .woz from disk.
       document.getElementById("diskfile").addEventListener("change", async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        statusEl.textContent = "reading " + file.name + "\u2026";
-        try {
+        await runMachineAction("Disk load failed", async () => {
+          statusEl.textContent = "reading " + file.name + "\u2026";
           if (file.size > maxWozFileSize) {
             throw new Error(`WOZ image exceeds the ${maxWozFileSize / (1024 * 1024)} MiB limit`);
           }
           const bytes = new Uint8Array(await file.arrayBuffer());
           await bootDisk(bytes, file.name);
-        } catch (error) {
-          statusEl.textContent = "Disk load failed: " + error.message;
-          console.error(error);
-        } finally {
-          e.target.value = ""; // allow re-selecting the same file
-        }
+        });
+        e.target.value = ""; // allow re-selecting the same file
       });
 
       document.getElementById("diskswap").addEventListener("change", async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        statusEl.textContent = "reading " + file.name + "\u2026";
-        try {
+        await runMachineAction("Disk swap failed", async () => {
+          statusEl.textContent = "reading " + file.name + "\u2026";
           if (file.size > maxWozFileSize) {
             throw new Error(`WOZ image exceeds the ${maxWozFileSize / (1024 * 1024)} MiB limit`);
           }
           const bytes = new Uint8Array(await file.arrayBuffer());
           swapDisk(bytes, file.name);
-        } catch (error) {
-          statusEl.textContent = "Disk swap failed: " + error.message;
-          console.error(error);
-        } finally {
-          e.target.value = "";
-        }
+        });
+        e.target.value = "";
       });
 
       // Load a user-chosen .PRG at the hex address in the adjacent field, the
@@ -1766,10 +1773,12 @@
       document.getElementById("prgfile").addEventListener("change", async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        const org = parseAddr(document.getElementById("prgaddr").value, 0x0800);
-        statusEl.textContent = "reading " + file.name + "\u2026";
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        await loadPrg(bytes, org, file.name);
+        await runMachineAction(".PRG load failed", async () => {
+          const org = parseAddr(document.getElementById("prgaddr").value, 0x0800);
+          statusEl.textContent = "reading " + file.name + "\u2026";
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          await loadPrg(bytes, org, file.name);
+        });
         e.target.value = ""; // allow re-selecting the same file
       });
 

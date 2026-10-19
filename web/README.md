@@ -168,6 +168,10 @@ It accepts the same single-sided 5.25-inch WOZ2 images and 8 MiB limit as bootin
 If an invalid container ejects the old disk, reinsert it with **Swap .woz…**.
 This adds neither floppy writing nor save/export support. Ordinary **Reset**
 still returns to the ROM; embedded **Restart** retains its original boot disk.
+Reset, disk, SD, PRG-load and Assemble & Run controls wait for any active machine
+action to finish. Overlapping requests, including the assembly keyboard shortcut,
+report that the machine is busy rather than queueing a delayed reset or disk swap.
+Controls become available again on success or failure.
 
 ## Embed a player and auto-boot your own WOZ
 

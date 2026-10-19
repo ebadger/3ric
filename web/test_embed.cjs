@@ -312,6 +312,113 @@ async function testDiskSwaps(Module, disk, replacement, maximum, malformed, woz1
   console.log("PASS: disk swap preserves CPU/RAM/banks/input/audio/debugger; replacement media, cancellation, limits, errors and retry");
 }
 
+async function testOverlappingActions(Module, disk, replacement, marker) {
+  const controls = ["reset", "bootdisk", "diskfile", "diskswap", "mountsd", "prgfile", "assemble"];
+  const assertDisabled = (page, disabled) => {
+    for (const id of controls) assert.equal(page.document.getElementById(id).disabled, disabled, id);
+  };
+  const machineState = vm => ({
+    pc: vm.pc(), sp: vm.sp(), a: vm.regA(), x: vm.regX(), y: vm.regY(), p: vm.status(),
+    memory: Buffer.from(Array.from({ length: 65536 }, (_, address) => vm.peekMapped(address))),
+  });
+  for (const kind of ["diskswap", "diskfile", "prgfile", "bootdisk"]) {
+    let release, reads = 0;
+    const gate = new Promise(resolve => { release = resolve; });
+    const page = mountPage(Module, {
+      search: "?woz=boot.woz", disk,
+      diskResponse: url => {
+        if (kind === "bootdisk" && url.pathname.endsWith("/data/disk.woz")) {
+          reads++;
+          return gate;
+        }
+        return new Response(disk);
+      },
+    });
+    const bytes = kind === "prgfile"
+      ? Uint8Array.of(0xa9, 0xd6, 0x8d, 0x00, 0x04, 0x4c, 0x05, 0x08) : replacement;
+    const result = kind === "bootdisk" ? new Response(bytes) : Uint8Array.from(bytes).buffer;
+    let pending;
+    try {
+      await page.ready;
+      assertBooted(page, marker);
+      const vm = page.window.vm;
+      const before = machineState(vm);
+      const target = {
+        value: "pending",
+        files: [{ name: "pending", size: bytes.length, arrayBuffer: () => { reads++; return gate; } }],
+      };
+      pending = kind === "bootdisk"
+        ? page.document.getElementById(kind).dispatch("click")
+        : page.document.getElementById(kind).dispatch("change", { target });
+      assert.equal(reads, 1, `${kind} must reach its deferred read`);
+      assertDisabled(page, true);
+      const requestCount = page.requests.length;
+      let rejectedReads = 0;
+      const rejectedTarget = () => ({
+        value: "rejected",
+        files: [{ name: "rejected", size: disk.length, arrayBuffer: async () => {
+          rejectedReads++;
+          return Uint8Array.from(disk).buffer;
+        } }],
+      });
+      for (const [id, event, detail] of [
+        ["reset", "click", {}], ["bootdisk", "click", {}],
+        ["diskfile", "change", { target: rejectedTarget() }],
+        ["diskswap", "change", { target: rejectedTarget() }],
+        ["prgfile", "change", { target: rejectedTarget() }],
+        ["mountsd", "click", {}], ["assemble", "click", {}],
+        ["src", "keydown", { ctrlKey: true, key: "Enter" }],
+        ["src", "keydown", { metaKey: true, key: "Enter" }],
+      ]) {
+        const errors = page.errors.length;
+        await page.document.getElementById(id).dispatch(event, detail);
+        assert.match(page.document.getElementById("status").textContent, /Another machine action is in progress/);
+        assert.equal(page.errors.length, errors + 1, "rejected actions must be reported");
+        assertDisabled(page, true);
+        assert.equal(page.requests.length, requestCount, "a rejected action started a download");
+        assert.equal(rejectedReads, 0, "a rejected action read a file");
+        assert.deepEqual(machineState(vm), before, "an overlapping action changed the VM");
+      }
+      release(result);
+      await pending;
+      assertDisabled(page, false);
+      if (kind === "diskswap") {
+        assert.deepEqual(machineState(vm), before);
+        assert.equal(page.document.getElementById("status").textContent, "inserted pending without reset");
+      } else {
+        assertBooted(page, 0xd6);
+      }
+      await pickSwap(page, localDisk(disk));
+      assert.equal(page.document.getElementById("status").textContent, "inserted map.woz without reset");
+    } finally {
+      release(result);
+      await pending;
+      page.dispose();
+    }
+  }
+
+  const editor = mountPage(Module, { search: "?woz=boot.woz", disk });
+  try {
+    await editor.ready;
+    assertBooted(editor, marker);
+    editor.document.getElementById("src").value = ".org $0800\nlda #$D6\nsta $0400\nloop: jmp loop";
+    const assembling = editor.document.getElementById("assemble").dispatch("click");
+    const errors = editor.errors.length;
+    await pickSwap(editor, localDisk(replacement));
+    assert.equal(editor.errors.length, errors + 1, "assembly must also guard its asynchronous module/program load");
+    await assembling;
+    assertDisabled(editor, false);
+    assertBooted(editor, 0xd6);
+    await pickSwap(editor, { name: "bad-read.woz", size: 1, arrayBuffer: async () => { throw new Error("read failed"); } });
+    assertDisabled(editor, false);
+    await pickSwap(editor, localDisk(disk));
+    assert.equal(editor.document.getElementById("status").textContent, "inserted map.woz without reset");
+  } finally {
+    editor.dispose();
+  }
+  console.log("PASS: deferred swap/insert/PRG/download actions exclude reset, disk, SD and assembly races; completion/failure releases the guard");
+}
+
 async function main() {
   const Module = await createBadgerVM({ print() {}, printErr() {} });
   const { buildBootableWoz } = await import(pathToFileURL(
@@ -375,6 +482,9 @@ async function main() {
   player.window.vm.poke(0x0400, 0);
   const restarting = player.document.getElementById("reset").dispatch("click");
   assert.equal(player.document.getElementById("diskswap").disabled, true);
+  const errorsBeforeOverlap = player.errors.length;
+  await pickSwap(player, localDisk(replacement));
+  assert.equal(player.errors.length, errorsBeforeOverlap + 1, "a swap cannot interrupt Restart");
   await restarting;
   assert.equal(player.document.getElementById("diskswap").disabled, false);
   assertBooted(player, marker);
@@ -494,6 +604,7 @@ async function main() {
   console.log("PASS: one-byte network fragments reconstruct the exact bootable disk without retaining a chunk list");
 
   await testDiskSwaps(Module, disk, replacement, maximum, malformed, woz1, marker);
+  await testOverlappingActions(Module, disk, replacement, marker);
 
   const workbench = mountPage(Module, { search: "?woz=games/own.woz&src=ignored.s#ide", disk });
   await workbench.ready;

@@ -183,6 +183,8 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   without resetting the current program. Use it at in-game disk prompts;
   **Insert .woz** / **Boot Disk** still reboot. WOZ2/8 MiB limits are unchanged,
   and invalid-container insertion may require swapping the previous disk back in.
+  Reset/disk/SD/PRG/assembly actions share a busy guard so delayed reads cannot
+  overwrite another action; controls recover on completion or failure.
   This does not add emulator floppy writes or save persistence.
 - **In-browser assembler:** assembles 65C02 source client-side with the project's own
   `asm6502.mjs` and runs it like `BRUN`; ships ~11 sample programs; deep-linkable via `?src=`.

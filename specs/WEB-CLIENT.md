@@ -123,6 +123,13 @@ client-side so GitHub Pages can host it as static files.
   A parser rejection can eject the previous media, so the error tells the user to
   reinsert it. Swapping does not replace the cached boot disk used by embedded
   **Restart**, change ordinary **Reset**, or add floppy writes, saving or disk export.
+  User-triggered reset, boot, insert, swap, SD mount, PRG load and Assemble & Run
+  share one busy guard spanning their asynchronous reads and VM changes. Related
+  controls are disabled until the active action completes or fails; attempted
+  overlapping actions (including Ctrl/Cmd+Enter) are rejected visibly, not queued.
+  A rejected action cannot release another action's guard. Automatic startup
+  remains sequential and blocks user actions until it finishes. This prevents a
+  delayed file read or disk download from replacing a later action's media/state.
 - **Fullscreen:** the fullscreen button requests the entire player, including its
   controls, through the browser Fullscreen API. Entry requires a user gesture; it is
   not attempted automatically. Exit (button or browser Escape) restores the prior
@@ -471,7 +478,7 @@ on the emulator whether it succeeds, is blocked, or 404s.
 | Mobile virtual keyboard | Shipped | Exact 1983 Apple IIe Figure 2-1 key order/widths below the canvas, minus Reset and both Apple keys; full emulator character set, one-shot Shift/Control, the same strobe-aware `$C000` queue as physical input, and viewport-fitting rows without phone-width horizontal scrolling. |
 | USB/Bluetooth gamepads | Shipped | Two stable player slots through the standard Gamepad API and shared SNES/VIA peripheral; covered by browser-mapping, serial-protocol, and ROM-table tests. |
 | Disk II WOZ boot + micro-SD DOS shell | Shipped | **Boot Disk** / **Mount SD** buttons. |
-| Non-resetting Disk II swap | Implemented | Separate workbench **Swap .woz** control; `test_embed.cjs` covers live CPU/RAM/bank/input/audio/debugger preservation, readable replacement media, size/format errors, cancellation/retry, and unchanged boot/restart behavior. |
+| Non-resetting Disk II swap | Implemented | Separate workbench **Swap .woz** control; `test_embed.cjs` covers live CPU/RAM/bank/input/audio/debugger preservation, readable replacement media, size/format errors, cancellation/retry, unchanged boot/restart behavior, and exclusion of overlapping asynchronous machine actions. |
 | Embeddable/fullscreen player + automatic WOZ boot | Implemented | `?embed=1` minimal viewport-fitting player; `?woz=` direct disk fetch and real `MON`/`C600G` Disk II boot; shared WOZ2 validation, 8 MiB/30-second limits, cached restart/failed-download retry, and actual markup/CSS assertions alongside real-WASM page tests. |
 | In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; built-in games, demos, and tutorials; `?src=`. Sample sources fetched with `cache:"no-cache"` (revalidate) so a new deploy isn't masked by the browser cache. |
 | Source debugger | Shipped | Browser-assembled source listing with bank-qualified instruction breakpoints/highlighting, pause/continue, bank-aware step into/over, register and raw-memory inspection, plus lazy ca65 ROM symbol/file:line correlation; covered by `test_debugger.cjs`. |
