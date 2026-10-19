@@ -73,7 +73,7 @@ pad2h       = RTVARS+16
 snd_ch      = RTVARS+17
 snd_c       = RTVARS+18
 snd_f       = RTVARS+19
-snd_n       = RTVARS+20
+snd_n0      = RTVARS+20        ; (unused)
 snd_p       = RTVARS+21         ; 2 bytes
 snd_mix     = RTVARS+23         ; 2 bytes (one per AY)
 col_m       = RTVARS+25
@@ -83,12 +83,26 @@ ay_val      = RTVARS+28
 ay_reg      = RTVARS+29
 ay_chip     = RTVARS+30
 snd_t      = RTVARS+31
+snd_cm      = RTVARS+115
+snd_k       = RTVARS+116
+snd_np      = RTVARS+117
+snd_m       = RTVARS+118
+snd_q       = RTVARS+119       ; 2
+snd_fast    = RTVARS+121
+kb_t        = RTVARS+122       ; keys: up, down, left, right latches,
+                                ; fire, start, select, option timers (8)
+snd_n       = RTVARS+130       ; 2: divider count
+jw_n        = RTVARS+132       ; jiffy waits (main code only)
+jw_s        = RTVARS+133
+jp_n        = RTVARS+134       ; jwait_poll's own (its poll could jwait)
+jp_s        = RTVARS+135
 ay_cache    = RTVARS+32         ; 32 bytes: AY 1 regs 0-15, AY 2 regs 0-15
 snap_g      = RTVARS+64         ; 32: GTIA registers for the renderer
 snap_a      = RTVARS+96         ; 16: ANTIC registers
 snap_v      = RTVARS+112        ; 2: VDSLST
-vct         = RTVARS+114        ; VCOUNT compare scratch (main code only)
-RTVARS_END  = RTVARS+115
+vc_t        = RTVARS+114        ; VCOUNT compare scratch (main code only;
+                                ; not "vct": symbols ignore case, VCT is a table)
+RTVARS_END  = RTVARS+136
 
 ; =====================================================================
 ; Bank-neutral part (RAM2): entered with either language-card bank mapped
@@ -271,18 +285,18 @@ vc_ldy: php                     ; LDY VCOUNT
 vc_cmp: php                     ; CMP VCOUNT (V kept, own scratch)
         pha
         jsr vc_get
-        sta vct
+        sta vc_t
         pla
         plp
-        cmp vct
+        cmp vc_t
         rts
 vc_cpy: php                     ; CPY VCOUNT
         pha
         jsr vc_get
-        sta vct
+        sta vc_t
         pla
         plp
-        cpy vct
+        cpy vc_t
         rts
 
 ; ---- CONSOL ($D01F) stores: bit 3 drives the console speaker
@@ -360,6 +374,10 @@ bf4:    sta $FF00,x
         sta $0230
         lda #>blank_dl
         sta $0231
+        ldx #7                  ; no keys held
+bf5:    stz kb_t,x
+        dex
+        bpl bf5
         lda #$FF
         sta vc_fake
         lda #1
@@ -419,6 +437,37 @@ bf9:    lda #$FF
         jmp ($000A)
 bf_ini: jmp ($000C)
 blank_dl: .byte $70,$70,$70,$41,<blank_dl,>blank_dl
+; ---- the game's jiffy waits ($1310, and the one at $3926 that also polls
+; the players) loop until RTCLOK equals start + n. The redraw runs inside
+; the tick and can take a few ticks, so the main code may never see that
+; exact value; these wait until n ticks have elapsed instead.
+jwait:  cmp #0                  ; A = ticks; returns A = start + n
+        beq jw_x
+        sta jw_n
+        lda $14
+        sta jw_s
+jw1:    lda $14
+        sec
+        sbc jw_s
+        cmp jw_n
+        bcc jw1
+        lda jw_s
+        clc
+        adc jw_n
+        sec
+jw_x:   rts
+jwait_poll:                     ; ... stopping early when the game's
+        sta jp_n                ; player poll ($373C, moved) returns Z set
+        lda $14
+        sta jp_s
+jp1:    lda $14
+        sec
+        sbc jp_s
+        cmp jp_n
+        bcs jp_x
+        jsr $373C+$C000
+        bne jp1
+jp_x:   rts
 ; ---- SETVBV ($E45C): A = 6 immediate / 7 deferred VBI, X = high, Y = low
 setvbv: php
         sei
@@ -452,6 +501,7 @@ rt_ram2_end:
         .org RT_B2
 
 vbi_rt: jsr pad_scan
+        jsr key_scan
         jsr map_input
         jsr sound
         jsr collide
@@ -561,7 +611,17 @@ trig_of:                        ; B, Y or A pressed -> 0, else 1
 to0:    lda #0
         rts
 
-; ---- POKEY -> AY. Channels 1/3 on AY 1 tones A/B, 2/4 on AY 2 tones A/B.
+; ---- POKEY -> AY. Channel 1 (the game's bass) sounds on both chips' A,
+; channel 2 on AY 1 B, channel 3 on AY 2 B, channel 4 (noise drums) on both
+; chips' C, so the lead and the drums are centred.
+;   pitch: 64 kHz clock -> AY period (f+1)*3.06, 15 kHz x4, 1.79 MHz on
+;   channel 1/3 (f+4)/8. POKEY distortion C (4-bit polynomial) repeats every
+;   m divider pulses (m = 15/gcd(n,15), n = f+1 or f+4; 15 kHz: 5) rather than
+;   2, so it sounds m/2 times lower; m = 1 is silence.
+;   volume: POKEY is linear, the AY logarithmic (volmap).
+snd_chips:  .byte 3,1,2,3       ; bit 0 AY 1, bit 1 AY 2
+snd_tone:   .byte 0,1,1,2       ; AY channel A/B/C
+
 sound:  stz snd_mix
         stz snd_mix+1
         stz snd_ch
@@ -573,138 +633,24 @@ snd_loop:
         sta snd_f
         lda AUDF1+1,x
         sta snd_c
-        lda snd_f               ; 64 kHz clock: period = (f+1) * 3.06
-        clc
-        adc #1
-        sta snd_n
-        lda #0
-        rol a
-        sta snd_p+1
-        sta vt
-        lda snd_n
-        sta snd_p
-        asl snd_p
-        rol snd_p+1
-        clc
-        lda snd_p
-        adc snd_n
-        sta snd_p
-        lda snd_p+1
-        adc vt
-        sta snd_p+1
-        lda snd_n
-        lsr vt
-        ror a
-        lsr a
-        lsr a
-        lsr a
-        clc
-        adc snd_p
-        sta snd_p
-        bcc sn1
-        inc snd_p+1
-sn1:    lda AUDCTL              ; 15 kHz clock: four times longer
-        and #$01
-        beq sn2
-        asl snd_p
-        rol snd_p+1
-        asl snd_p
-        rol snd_p+1
-sn2:    lda snd_ch              ; 1.79 MHz on channel 1 or 3: (f+4) / 8
-        and #$01
-        bne sn4
-        lda snd_ch
-        bne sn3
-        lda AUDCTL
-        and #$40
-        beq sn4
-        bne sn3a
-sn3:    lda AUDCTL
-        and #$20
-        beq sn4
-sn3a:   lda snd_f
-        clc
-        adc #4
-        lsr a
-        lsr a
-        lsr a
-        sta snd_p
-        stz snd_p+1
-sn4:    lda snd_p+1             ; clamp to 12 bits
-        cmp #$10
-        bcc sn5
-        lda #$FF
-        sta snd_p
-        lda #$0F
-        sta snd_p+1
-sn5:    lda snd_ch              ; chip X = ch & 1, tone T = ch >> 1
-        and #$01
-        tax
-        lda snd_ch
-        lsr a
+        jsr snd_calc
+        ldx snd_ch
+        lda snd_tone,x
         sta snd_t
-        lda snd_c
-        and #$10                ; volume-only: silent here
-        bne sn_mute
-        lda snd_c
-        and #$0F
-        beq sn_mute
-        sta snd_v
-        lda snd_t
-        asl a
-        tay
-        lda snd_p
-        jsr ay_set
-        iny
-        lda snd_p+1
-        jsr ay_set
-        lda snd_t
-        clc
-        adc #8
-        tay
-        lda snd_v
-        jsr ay_set
-        lda snd_c               ; pure tones and the buzz tones stay tones
-        and #$E0
-        cmp #$A0
-        beq sn_tone
-        cmp #$E0
-        beq sn_tone
-        cmp #$C0
-        beq sn_tone
-        cmp #$40
-        beq sn_tone
-        lda snd_f               ; noise, period from the divider
-        lsr a
-        lsr a
-        lsr a
-        ldy #6
-        jsr ay_set
-        ldy snd_t
-        lda noise_bit,y
-        bra sn_mixin
-sn_tone:
-        ldy snd_t
-        lda tone_bit,y
-sn_mixin:
-        ora snd_mix,x
-        sta snd_mix,x
-        bra sn_next
-sn_mute:
-        lda snd_t
-        clc
-        adc #8
-        tay
-        lda #0
-        jsr ay_set
-sn_next:
+        lda snd_chips,x
+        sta snd_cm
+        ldx #0
+sl1:    lsr snd_cm
+        bcc sl2
+        jsr snd_put
+sl2:    inx
+        cpx #2
+        bne sl1
         inc snd_ch
         lda snd_ch
         cmp #4
-        beq sn_done
-        jmp snd_loop
-sn_done:
-        ldx #0                  ; mixer: enables are active low on the AY
+        bne snd_loop
+        ldx #0                  ; mixers (enables are active low)
         lda snd_mix
         eor #$3F
         ldy #7
@@ -714,8 +660,223 @@ sn_done:
         eor #$3F
         ldy #7
         jmp ay_set
-tone_bit:   .byte $01,$02
-noise_bit:  .byte $08,$10
+
+; Registers of AY X (0/1) for the channel in snd_t.
+snd_put:
+        lda snd_t
+        clc
+        adc #8
+        tay
+        lda snd_v
+        jsr ay_set              ; volume (0 = silent)
+        lda snd_v
+        beq sq_x
+        lda snd_k
+        bne sq_noise
+        lda snd_t
+        asl a
+        tay
+        lda snd_p
+        jsr ay_set
+        iny
+        lda snd_p+1
+        jsr ay_set
+        ldy snd_t
+        lda tone_bit,y
+        bra sq_mix
+sq_noise:
+        lda snd_np
+        ldy #6
+        jsr ay_set
+        ldy snd_t
+        lda noise_bit,y
+sq_mix: ora snd_mix,x
+        sta snd_mix,x
+sq_x:   rts
+tone_bit:   .byte $01,$02,$04
+noise_bit:  .byte $08,$10,$20
+
+; snd_f/snd_c of channel snd_ch -> snd_v (AY volume), snd_k (0 tone,
+; 1 noise), snd_p (tone period), snd_np (noise period).
+snd_calc:
+        stz snd_v
+        lda snd_c
+        and #$10                ; volume-only output: not reproduced
+        bne sc_x
+        lda snd_c
+        and #$0F
+        beq sc_x
+        tay
+        lda volmap,y
+        sta snd_v
+        lda snd_c
+        and #$E0
+        cmp #$A0                ; pure tones
+        beq sc_tone
+        cmp #$E0
+        beq sc_tone
+        cmp #$C0                ; 4-bit polynomial: a lower buzz
+        beq sc_tone
+        lda #1                  ; the rest: noise, sampled once per divider
+        sta snd_k               ; pulse (twice the tone rate): AY noise
+        jsr sc_period           ; period = tone period / 2, 1-31
+        lda snd_p+1
+        bne sn_max
+        lda snd_p
+        lsr a
+        bne sn1
+        lda #1
+sn1:    cmp #32
+        bcc sn2
+sn_max: lda #31
+sn2:    sta snd_np
+sc_x:   rts
+sc_tone:
+        stz snd_k
+        jsr sc_period
+        lda snd_c
+        and #$E0
+        cmp #$C0
+        bne sc_clamp
+        jsr sc_poly             ; A = m
+        cmp #1
+        bne sc_m
+        stz snd_v               ; m = 1: the polynomial never changes
+        rts
+sc_m:   sta snd_m               ; p = p * m / 2
+        lda snd_p
+        sta snd_q
+        lda snd_p+1
+        sta snd_q+1
+        stz snd_p
+        stz snd_p+1
+        ldy snd_m
+sc_mul: clc
+        lda snd_p
+        adc snd_q
+        sta snd_p
+        lda snd_p+1
+        adc snd_q+1
+        sta snd_p+1
+        dey
+        bne sc_mul
+        lsr snd_p+1
+        ror snd_p
+sc_clamp:
+        lda snd_p+1             ; 12 bits at most
+        cmp #$10
+        bcc sc_ok
+        lda #$FF
+        sta snd_p
+        lda #$0F
+        sta snd_p+1
+sc_ok:  rts
+
+; Tone period for snd_f on channel snd_ch with AUDCTL's clocks; snd_n = the
+; divider count (f+1, or f+4 at 1.79 MHz), snd_fast = 1 at 1.79 MHz.
+sc_period:
+        stz snd_fast
+        lda snd_ch
+        bne sq1
+        lda AUDCTL
+        and #$40
+        bne sq_fast
+        bra sq_slow
+sq1:    cmp #2
+        bne sq_slow
+        lda AUDCTL
+        and #$20
+        beq sq_slow
+sq_fast:
+        inc snd_fast
+        lda snd_f
+        clc
+        adc #4
+        sta snd_n
+        lda #0
+        rol a
+        sta snd_n+1
+        lda snd_n               ; (f+4)/8
+        lsr snd_n+1
+        ror a
+        lsr a
+        lsr a
+        sta snd_p
+        stz snd_p+1
+        rts
+sq_slow:
+        lda snd_f               ; n = f+1, p = 3n + n/16
+        clc
+        adc #1
+        sta snd_n
+        lda #0
+        rol a
+        sta snd_n+1
+        lda snd_n
+        sta snd_p
+        lda snd_n+1
+        sta snd_p+1
+        asl snd_p
+        rol snd_p+1
+        clc
+        lda snd_p
+        adc snd_n
+        sta snd_p
+        lda snd_p+1
+        adc snd_n+1
+        sta snd_p+1
+        lda snd_n+1
+        lsr a
+        lda snd_n
+        ror a
+        lsr a
+        lsr a
+        lsr a
+        clc
+        adc snd_p
+        sta snd_p
+        bcc sq2
+        inc snd_p+1
+sq2:    lda AUDCTL              ; 15 kHz clock: four times longer
+        and #$01
+        beq sq3
+        asl snd_p
+        rol snd_p+1
+        asl snd_p
+        rol snd_p+1
+sq3:    rts
+
+; m for the 4-bit polynomial: 15 kHz -> 5 (1 if n is a multiple of 5);
+; otherwise from n mod 15.
+sc_poly:
+        lda snd_n               ; n mod 15 (n <= 259)
+        ldx snd_n+1
+spm0:   sec
+spm1:   sbc #15
+        bcs spm1
+        dex
+        bpl spm0
+        adc #15
+        tay
+        lda snd_fast
+        bne spm2
+        lda AUDCTL
+        and #$01
+        beq spm2
+        tya                     ; 15 kHz
+spm3:   cmp #5
+        bcc spm4
+        sbc #5
+        bra spm3
+spm4:   cmp #0
+        beq spm5
+        lda #5
+        rts
+spm5:   lda #1
+        rts
+spm2:   lda m15,y
+        rts
+
 chip_off:   .byte $00,$80
 
 ; A = value, Y = register, X = chip (0/1); X and Y preserved. Unchanged
@@ -814,3 +975,69 @@ ct5:    cmp #8
 ct_no:  rts
 col_bits:   .byte $00,$02,$04,$08
 rt_b2_end:
+
+; Bank 2 again, in the gap after the FP divide (FP_C).
+        .org RT_B2X
+; ---- keyboard, for play without a pad. The key in $C000 (typed in the
+; browser, or decoded by the ROM) gives characters only - no held state or
+; key release - so a direction latches: W/A/S/D or an arrow walks that way
+; until the same key is pressed again (another direction turns). Space is a
+; short fire press; Return or 1 START, Tab or 2 SELECT, 3 OPTION.
+KB_BUTTON    = 8                ; ticks a button key stays down
+NKEYS        = 14
+key_code:   .byte 'W','S','A','D',$0B,$0A,$08,$15,' ',$0D,'1',$09,'2','3'
+key_slot:   .byte 0,1,2,3,0,1,2,3,4,5,5,6,6,7
+slot_lo:    .byte $10,$20,$40,$80,$01,$08,$04,$00
+slot_hi:    .byte $00,$00,$00,$00,$00,$00,$00,$02
+
+key_scan:
+        ldx #7                  ; button holds run down
+ks1:    lda kb_t,x
+        beq ks2
+        dec kb_t,x
+ks2:    dex
+        cpx #4
+        bcs ks1
+        lda $C000
+        bpl ks_map
+        and #$7F
+        ldy $C010               ; take the key
+        cmp #'a'                ; fold lower case
+        bcc ks3a
+        and #$DF
+ks3a:   ldx #NKEYS-1
+ks3:    cmp key_code,x
+        beq ks4
+        dex
+        bpl ks3
+        bra ks_map
+ks4:    ldy key_slot,x
+        cpy #4
+        bcc ks5
+        lda #KB_BUTTON
+        sta kb_t,y
+        bra ks_map
+ks5:    lda kb_t,y              ; a direction: toggle it, drop the others
+        eor #1
+        ldx #3
+ks6:    stz kb_t,x
+        dex
+        bpl ks6
+        sta kb_t,y
+ks_map: ldx #7
+ks7:    lda kb_t,x
+        beq ks8
+        lda slot_lo,x
+        ora pad1
+        sta pad1
+        lda slot_hi,x
+        ora pad1h
+        sta pad1h
+ks8:    dex
+        bpl ks7
+        rts
+
+; sound tables (bank 2 proper is full)
+volmap:     .byte 0,7,9,10,11,12,12,13,13,13,14,14,14,15,15,15
+m15:        .byte 1,15,15,5,15,3,5,15,15,5,3,15,5,15,15   ; n mod 15 -> m
+rt_b2x_end:

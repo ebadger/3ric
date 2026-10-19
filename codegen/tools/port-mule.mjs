@@ -49,13 +49,16 @@ export const LAYOUT = {
   FONT: 0xc800,       // RAM2: 1 KB font in Atari character order
   RT_RAM2: 0xcc00,    // RAM2: interrupt entry, read helpers, boot stage
   RT_B2: 0xd500,      // bank 2: pads, sound, collisions
+  RT_B2X: 0xd0f0,     // bank 2, after FP_C: keyboard
   RENDER: 0xd500,     // bank 1: renderer
   FPW: 0xd4c0,        // bank 2: floating-point scratch (40 bytes)
   RG: 0x0300,         // GTIA read mirror (32), POKEY (16), PIA (4)
   RP: 0x0320,
   RA: 0x0330,
-  RTVARS: 0x0340,     // runtime variables (114 bytes)
+  RTVARS: 0x0340,     // runtime variables (136 bytes)
   SPRITES: 0x0600,    // reserved for player save-unders
+  RDATA: 0x0406,      // renderer scratch to $057F (the game uses $0400-$0405,
+                      // the FP package $0580-$05FF); row bitmaps after RTVARS
   T2TAB: 0x0800,      // 8 -> 7 pixel table for 40-column text
   CFG_STASH: 0x3000,  // loader staging (inside the hi-res page)
   RENDER_EVERY: 3,    // redraw every third 60 Hz tick
@@ -93,6 +96,12 @@ export const RELOC_PTR = hexList(`
 8D27 944B 96DF 9903 9EC5 A57A
 5D83 5D9F`);
 
+// High bytes the music player compares its four voice pointers with (each
+// voice's end or loop point in the tune data at $28B2-$2CDF): += $C0, or a
+// tune never ends (and the game waits for it) and the other voices play
+// past their data instead of looping.
+export const RELOC_CMP = hexList(`2655 26BF 2729 2D3A`);
+
 // Hardware reads (and CONSOL stores) the runtime has to answer.
 export const HW_SITES = hexList(`
 119A 1266 2F64 2F67 30D4 30D7 311E 3531 371C 38B9 396B 435C 436B 4391 43A5 43E2 4405 4AEB 5837 5840 5848 5BFB 5C34 5C3C
@@ -105,6 +114,10 @@ export const SETVBV_CALL = 0x42f5;                                             /
 // the moved block but end past $3FFF: copied whole and repointed. Each entry
 // is the LDY #high operand of an "LDA #low / LDY #high" pair.
 export const MOVED_STRINGS = [0x8c8e];
+// The game's waits for RTCLOK to equal start + n (see rt.s jwait): the
+// subroutine at $1310 and the inline loop at $3926 (CLC/ADC $14/TAY/CPY $14/
+// BEQ/JSR $373C/BNE), both made to wait for n elapsed ticks.
+export const JIFFY_WAIT = 0x1310, JIFFY_POLL = 0x3926;
 
 /** Sector n (1-based) of an ATR image. */
 export function readAtr(bytes) {
@@ -161,25 +174,29 @@ export function buildRuntime() {
   const L = LAYOUT;
   const b2 = new Uint8Array(0x10000), b1 = new Uint8Array(0x10000), shared = new Uint8Array(0x10000);
   // rt.s spans RAM2 (shared) and bank 2: assemble once, split by address.
-  const rtEq = equ({ RT_RAM2: L.RT_RAM2, RT_B2: L.RT_B2, FONT: L.FONT, RENDER: L.RENDER, RENDER_EVERY: L.RENDER_EVERY,
+  const rtEq = equ({ RT_RAM2: L.RT_RAM2, RT_B2: L.RT_B2, RT_B2X: L.RT_B2X, FONT: L.FONT, RENDER: L.RENDER, RENDER_EVERY: L.RENDER_EVERY,
     TIMER_LATCH: L.TIMER_LATCH, RG: L.RG, RP: L.RP, RA: L.RA, RTVARS: L.RTVARS, CFG_STASH: L.CFG_STASH });
   const tmp = new Uint8Array(0x10000);
   const rt = assembleInto(tmp, rtEq + src("rt.s"), "rt.s");
   const S = rt.symbols;
   shared.set(tmp.subarray(L.RT_RAM2, 0xd000), L.RT_RAM2);
   b2.set(tmp.subarray(L.RT_B2, 0xe000), L.RT_B2);
+  b2.set(tmp.subarray(L.RT_B2X, 0xd200), L.RT_B2X);
   if (S.RT_RAM2_END > 0xd000) throw new Error(`rt.s RAM2 part overflows (${h4(S.RT_RAM2_END)})`);
   if (S.RT_B2_END > 0xd8e6) throw new Error(`rt.s bank-2 part runs into the FP stubs (${h4(S.RT_B2_END)})`);
+  if (S.RT_B2X_END > 0xd200) throw new Error(`rt.s keyboard part overflows (${h4(S.RT_B2X_END)})`);
   if (S.RTVARS_END > 0x0400) throw new Error("runtime variables overflow page 3");
   const fp = assembleInto(b2, equ({ FPW: L.FPW }) + src("fp.s"), "fp.s");
   const F = fp.symbols;
-  for (const [a, e, lim, name] of [[F.FP_A, F.FP_A_END, 0xdd89, "A"], [F.FP_B, F.FP_END, 0xdfff, "B"], [F.FP_C, F.FP_C_END, 0xd200, "C"],
+  for (const [a, e, lim, name] of [[F.FP_A, F.FP_A_END, 0xdd89, "A"], [F.FP_B, F.FP_END, 0xdfff, "B"], [F.FP_C, F.FP_C_END, L.RT_B2X, "C"],
     [F.FP_D, F.FP_D_END, 0xda60, "D"], [F.FP_E, F.FP_E_END, 0xd9aa, "E"]]) {
     if (e > lim) throw new Error(`fp.s chunk ${name} ${h4(a)}-${h4(e)} passes ${h4(lim)}`);
   }
-  const rd = assembleInto(b1, equ({ RENDER: L.RENDER, FONT: L.FONT, T2TAB: L.T2TAB, SPRITES: L.SPRITES, SNAP_G: S.SNAP_G, SNAP_A: S.SNAP_A,
+  const rd = assembleInto(b1, equ({ RENDER: L.RENDER, FONT: L.FONT, T2TAB: L.T2TAB, SPRITES: L.SPRITES, RDATA: L.RDATA, RROWS: S.RTVARS_END, SNAP_G: S.SNAP_G, SNAP_A: S.SNAP_A,
     VC_FAKE: S.VC_FAKE }) + src("render.s"), "render.s");
-  if (rd.symbols.RENDER_END > 0xdfff) throw new Error(`render.s overflows bank 1 (${h4(rd.symbols.RENDER_END)})`);
+  if (rd.symbols.RENDER_END > rd.symbols.B1DATA) throw new Error(`render.s runs into its data (${h4(rd.symbols.RENDER_END)})`);
+  if (rd.symbols.RDATA_END > 0x0580) throw new Error(`render.s scratch runs into LBUFF (${h4(rd.symbols.RDATA_END)})`);
+  if (rd.symbols.RROWS_END > 0x0400) throw new Error(`render.s row bitmaps overflow page 3 (${h4(rd.symbols.RROWS_END)})`);
   b1[0xdfff] = 0xa5;                 // bank signatures
   b2[0xdfff] = 0x5a;
   shared.set(buildFont(), L.FONT);
@@ -219,6 +236,10 @@ export function buildGame(mem0, rt, { allowUnknown = false, strArea = 0, strLimi
   }
   for (const a of RELOC_PTR) {
     if (!inWin(mem[a])) throw new Error(`pointer source ${h4(a)}: not a $20-$3F high byte`);
+    mem[a] += (WIN_TO - WIN_LO) >> 8;
+  }
+  for (const a of RELOC_CMP) {
+    if (!inWin(mem[a]) || ![0xa9, 0xc9].includes(mem[a - 1])) throw new Error(`pointer compare ${h4(a)}: not LDA/CMP #$20-$3F`);
     mem[a] += (WIN_TO - WIN_LO) >> 8;
   }
   // strings that run past the end of the block get a contiguous copy
@@ -271,6 +292,13 @@ export function buildGame(mem0, rt, { allowUnknown = false, strArea = 0, strLimi
   }
   expect(SETVBV_CALL, [0x20, 0x5c, 0xe4], "SETVBV call");
   retarget(SETVBV_CALL, rt.SETVBV);
+  expect(JIFFY_WAIT, [0xc9, 0x00, 0xf0, 0x07, 0x18, 0x65, 0x14, 0xc5, 0x14, 0xd0, 0xfc, 0x60], "jiffy wait");
+  mem[JIFFY_WAIT] = 0x4c;
+  retarget(JIFFY_WAIT, rt.JWAIT);
+  expect(JIFFY_POLL, [0x18, 0x65, 0x14, 0xa8, 0xc4, 0x14, 0xf0, 0x05, 0x20, 0x3c, 0xf7, 0xd0, 0xf7], "jiffy poll");
+  jsr(JIFFY_POLL, rt.JWAIT_POLL);
+  mem[JIFFY_POLL + 3] = 0x80;        // BRA to the loop's exit (JMP $38E9)
+  mem[JIFFY_POLL + 4] = 0x08;
   // the window moves; $2000-$3FFF becomes the hi-res page
   mem.copyWithin(WIN_TO, WIN_LO, WIN_HI);
   mem.fill(0, WIN_LO, WIN_HI);

@@ -7,7 +7,8 @@
 ; would, so the colours, character sets and player positions they change
 ; per band are captured (the handlers' register stores land in this bank's
 ; copy of the register file at $D000/$D400). Phase 2, interrupts on: redraw
-; the lines whose contents changed into hi-res page 1 at $2000.
+; the lines whose contents changed into hi-res page 1 at $2000, and update
+; only the player rows that changed (see draw_lines).
 ;
 ; Mapping: one Atari character column = one hi-res byte (7 pixels for 8,
 ; or 14 for 16 in the 20-column modes); Atari colours become the nearest
@@ -82,6 +83,31 @@ r_nb    = $D4EE
 r_k     = $D4EF
 r_gl    = $D4F0
 r_cls   = $D4F1
+r_dc    = $D4FD                 ; changes this frame
+r_rrc   = $D4FE                 ; renders until the next forced redraw
+r_rrn   = $D4FF                 ; next entry to force
+RR_EVERY = 16
+
+B1DATA   = $DFF0                ; renderer data at the top of bank 1
+rd_bits  = B1DATA               ; 6: entries to redraw this frame
+rd_np    = B1DATA+6             ; player/entry pairs with pixels
+rd_k     = B1DATA+7
+rd_osn   = B1DATA+8             ; player records on the screen
+r_pcv    = B1DATA+9             ; COLPM of the player being compared
+r_shi    = B1DATA+10            ; player pixel shift index (0-3)
+; in main RAM (bank 1 is full of code): RROWS in page 3 after the runtime's
+; variables, RDATA in $0406-$057F (the game uses $0400-$0405; $0580 is the
+; floating-point package's LBUFF)
+rd_rows  = RROWS                ; 24: hi-res rows drawn afresh
+rd_srow  = RROWS+24             ; 24: hi-res rows whose players changed
+RROWS_END = RROWS+48
+pn_row   = RDATA                ; pending player records (the compare
+pn_y     = RDATA+80             ; pass's findings, drawn by spr_put),
+pn_d     = RDATA+160            ; SPRMAX each
+pn_c     = RDATA+240
+rd_pairs = RDATA+320            ; NPAIR: player << 6 | entry
+NPAIR    = 58
+RDATA_END = RDATA+378
 
         .org RENDER
 
@@ -429,8 +455,31 @@ mode_h:  .byte    1, 1, 8,10, 8,16, 8,16, 8, 4, 4, 2, 1, 2, 1, 1
 mode_nb: .byte    0, 0,40,40,40,40,20,20,10,10,20,20,20,40,40,40
 
 ; ---------------------------------------------------------------- phase 2
+; Nothing is written while the picture is unchanged: first every line's
+; hash, and every player row about to be drawn, are compared with what is
+; on the screen. Then the changed lines are redrawn (wiping the players on
+; them) and only the player rows that changed or were wiped are lifted and
+; put back, so the rest of the picture never blinks (there is no second
+; page to flip to).
 draw_lines:
-        jsr spr_erase
+        lda #$FF                ; every RR_EVERY renders, one line is redrawn
+        sta r_rr                ; regardless (a missed change heals)
+        dec r_rrc
+        bne dl_r1
+        lda #RR_EVERY
+        sta r_rrc
+        lda r_rrn
+        sta r_rr
+        inc a
+        cmp r_n
+        bcc dl_r0
+        lda #0
+dl_r0:  sta r_rrn
+dl_r1:  ldx #5
+dl_r2:  stz rd_bits,x
+        dex
+        bpl dl_r2
+        stz r_dc
         stz r_i
         stz r_end
 dl_loop:
@@ -439,20 +488,23 @@ dl_loop:
         bcs dl_done
         jsr entry_hash
         ldx r_i
-        cpx r_rr                ; one line per frame is always redrawn
-        beq dl_draw
+        cpx r_rr
+        beq dl_mark
         lda r_hlo
         cmp pv_lo,x
-        bne dl_draw
+        bne dl_mark
         lda r_hhi
         cmp pv_hi,x
         beq dl_skip
-dl_draw:
+dl_mark:
         lda r_hlo
         sta pv_lo,x
         lda r_hhi
         sta pv_hi,x
-        jsr draw_entry
+        jsr dirty_bit
+        ora rd_bits,y
+        sta rd_bits,y
+        inc r_dc
 dl_skip:
         ldx r_i                 ; r_end = max(hrow + rows)
         lda lt_hrow,x
@@ -468,24 +520,6 @@ dl_e2:  cmp r_end
 dl_e3:  inc r_i
         bra dl_loop
 dl_done:
-        inc r_rr
-        lda r_rr
-        cmp r_n
-        bcc dl_d1
-        stz r_rr
-dl_d1:  lda r_end               ; clear what an earlier, taller screen left
-        cmp r_pend
-        bcs dl_d2
-        sta zt4
-dl_clr: lda zt4
-        cmp r_pend
-        bcs dl_d2
-        jsr row_addr
-        jsr clear_row
-        inc zt4
-        bra dl_clr
-dl_d2:  lda r_end
-        sta r_pend
         ldx r_n                 ; entries gone from this frame: redraw them
 dl_iv:  cpx #NL                 ; when they come back
         bcs dl_iv2
@@ -494,7 +528,107 @@ dl_iv:  cpx #NL                 ; when they come back
         sta pv_hi,x
         inx
         bra dl_iv
-dl_iv2: jmp spr_draw
+dl_iv2: lda r_end
+        cmp r_pend
+        beq dl_s0
+        inc r_dc
+dl_s0:  jsr spr_scan            ; the players: which rows change?
+        ldx #23
+dl_s1:  stz rd_srow,x
+        stz rd_rows,x
+        dex
+        bpl dl_s1
+        lda r_spn
+        sta rd_osn
+        stz r_spn
+        jsr spr_draw
+        jsr spr_gone
+        lda r_dc
+        ldx #23
+dl_s4:  ora rd_srow,x
+        dex
+        bpl dl_s4
+        tax
+        bne dl_s5
+        rts
+dl_s5:
+        stz r_i
+dl_a1:  lda r_i
+        cmp r_n
+        bcs dl_d1
+        tax
+        jsr dirty_bit
+        and rd_bits,y
+        beq dl_a2
+        jsr draw_entry
+dl_a2:  inc r_i
+        bra dl_a1
+dl_d1:  lda r_end               ; clear what an earlier, taller screen left
+        cmp r_pend
+        bcs dl_d2
+        sta zt4
+dl_clr: lda zt4
+        cmp r_pend
+        bcs dl_d2
+        jsr mark_row
+        jsr clear_row
+        inc zt4
+        bra dl_clr
+dl_d2:  lda r_end
+        sta r_pend
+        jsr spr_erase           ; the players: lift, then draw what the
+        jmp spr_put             ; compare pass recorded (the game's VBI may
+                                ; have moved them since; next frame shows it)
+
+; records past the ones just compared are no longer drawn: lift their rows
+spr_gone:
+        ldx r_spn
+sg1:    cpx rd_osn
+        bcs sg2
+        lda spr_row,x
+        jsr srow_mark
+        inx
+        bra sg1
+sg2:    rts
+
+; entry X -> Y = its byte in rd_bits, A = its bit; X = r_i after
+dirty_bit:
+        txa
+        jsr row_bit
+        ldx r_i
+        rts
+; A -> Y = A / 8, A = bit A & 7 (X lost)
+row_bit:
+        pha
+        lsr a
+        lsr a
+        lsr a
+        tay
+        pla
+        and #$07
+        tax
+        lda bitv,x
+        rts
+; Row A is being drawn afresh: note it, then its address (as row_addr;
+; Y lost).
+mark_row:
+        phx
+        pha
+        jsr row_bit
+        ora rd_rows,y
+        sta rd_rows,y
+        pla
+        plx
+        jmp row_addr
+; Row A's players change: note it (A lost).
+srow_mark:
+        phx
+        jsr row_bit
+        ora rd_srow,y
+        sta rd_srow,y
+        plx
+        rts
+bitv:   .byte $01,$02,$04,$08,$10,$20,$40,$80
 
 ; 16-bit hash of an entry's layout, registers and screen bytes
 entry_hash:
@@ -520,6 +654,14 @@ entry_hash:
         lda lt_c3,x
         jsr hb
         lda lt_cbk,x
+        jsr hb
+        lda lt_pc0,x            ; player colours: a player record holds
+        jsr hb                  ; pixels and place, not colour
+        lda lt_pc1,x
+        jsr hb
+        lda lt_pc2,x
+        jsr hb
+        lda lt_pc3,x
         jsr hb
         lda lt_mode,x
         cmp #2
@@ -685,7 +827,7 @@ de_row: lda zt5
         bcs de_done
         cmp #192
         bcs de_done
-        jsr row_addr
+        jsr mark_row
         lda lt_mode,x
         cmp #2
         beq de_t40
@@ -736,11 +878,18 @@ de_done:
         rts
 
 ; glyph byte for character A (code & mask already applied) at row zrow
-glyph:  tay
-        lda m8lo,y
+glyph:  pha
+        asl a
+        asl a
+        asl a
         ora zrow
         sta zg
-        lda m8hi,y
+        pla
+        lsr a
+        lsr a
+        lsr a
+        lsr a
+        lsr a
         ora zcb
         sta zg+1
         lda (zg)
@@ -916,27 +1065,17 @@ rb2:    lda r_gl
 ; 8 pixels -> 14: widths 2,2,2,1 per half (bit 0 = leftmost on the hi-res)
 t6_l:   .byte $00,$40,$30,$70,$0C,$4C,$3C,$7C,$03,$43,$33,$73,$0F,$4F,$3F,$7F
 t6_r:   .byte $00,$40,$30,$70,$0C,$4C,$3C,$7C,$03,$43,$33,$73,$0F,$4F,$3F,$7F
-m8lo:   .byte $00,$08,$10,$18,$20,$28,$30,$38,$40,$48,$50,$58,$60,$68,$70,$78
-        .byte $80,$88,$90,$98,$A0,$A8,$B0,$B8,$C0,$C8,$D0,$D8,$E0,$E8,$F0,$F8
-        .byte $00,$08,$10,$18,$20,$28,$30,$38,$40,$48,$50,$58,$60,$68,$70,$78
-        .byte $80,$88,$90,$98,$A0,$A8,$B0,$B8,$C0,$C8,$D0,$D8,$E0,$E8,$F0,$F8
-        .byte $00,$08,$10,$18,$20,$28,$30,$38,$40,$48,$50,$58,$60,$68,$70,$78
-        .byte $80,$88,$90,$98,$A0,$A8,$B0,$B8,$C0,$C8,$D0,$D8,$E0,$E8,$F0,$F8
-        .byte $00,$08,$10,$18,$20,$28,$30,$38,$40,$48,$50,$58,$60,$68,$70,$78
-        .byte $80,$88,$90,$98,$A0,$A8,$B0,$B8,$C0,$C8,$D0,$D8,$E0,$E8,$F0,$F8
-m8hi:   .byte 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-        .byte 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
-        .byte 2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2
-        .byte 3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3
 ; ---------------------------------------------------------------- players
 ; Players 0-3 (single-line P/M at PMBASE+$400) are ORed onto the screen in
 ; their colour, each band with the position and colour the line table
-; captured for it (the game repositions players in its DLIs). The bytes
-; under them are saved and put back at the start of the next redraw.
+; captured for it (the game repositions players in its DLIs). Each player
+; row drawn is a record (row, column and pixel shift, the player byte, the
+; bytes under it), so the next frame can tell exactly which rows changed; a
+; player colour change redraws the entry instead (entry_hash).
 SPRMAX  = 80
-spr_lo  = SPRITES
-spr_hi  = SPRITES+80
-spr_y   = SPRITES+160
+spr_row = SPRITES               ; hi-res row
+spr_ck  = SPRITES+80            ; player byte
+spr_y   = SPRITES+160           ; column | shift index << 6
 spr_s0  = SPRITES+240
 spr_s1  = SPRITES+320
 spr_s2  = SPRITES+400
@@ -953,14 +1092,25 @@ r_b1    = $D4FB
 r_b2    = $D4FC
 
 spr_erase:
-        ldx r_spn
+        ldx rd_osn
         beq se_done
 se1:    dex
-        lda spr_lo,x
-        sta zhr
-        lda spr_hi,x
-        sta zhr+1
-        ldy spr_y,x
+        phx
+        lda spr_row,x
+        jsr row_bit
+        sta zt1
+        and rd_rows,y           ; drawn afresh: nothing to put back
+        bne se2
+        lda zt1
+        and rd_srow,y           ; unchanged: stays
+        beq se2
+        plx
+        phx
+        lda spr_row,x
+        jsr row_addr
+        lda spr_y,x
+        and #$3F
+        tay
         lda spr_s0,x
         sta (zhr),y
         iny
@@ -973,46 +1123,104 @@ se1:    dex
         bcs se2
         lda spr_s2,x
         sta (zhr),y
-se2:    cpx #0
+se2:    plx
         bne se1
-        stz r_spn
 se_done:
         rts
 
-spr_draw:
+; The (player, entry) pairs with pixels -> rd_pairs.
+spr_scan:
+        stz rd_np
         lda $D400               ; player DMA and GRACTL players
         and #$08
-        beq sd_x
+        beq ss_r
         lda $D01D
         and #$02
-        bne sd_go
-sd_x:   rts
-sd_go:  lda $D407
+        bne ss_go
+ss_r:   rts
+ss_go:  lda $D407
         and #$F8
         clc
         adc #4
         sta r_pg
         stz r_p
-sd_pl:  lda r_pg
+ss_pl:  lda r_pg
         clc
         adc r_p
         sta zg+1
         stz zg
         stz r_i
-sd_ent: ldx r_i
+ss_ent: ldx r_i
         cpx r_n
-        bcs sd_np
+        bcs ss_np
         lda lt_rows,x
-        beq sd_ne
+        beq ss_ne
         jsr sp_hpos
-        bcs sd_ne
-        jsr sp_color
-        ldx r_i
+        bcs ss_ne
+        jsr sd_lines
+        stz zt1
+ss_ln:  ldy r_L
+        lda (zg),y
+        beq ss_nl
+        sta zt1
+ss_nl:  inc r_L
+        lda r_L
+        cmp r_le
+        bne ss_ln
+        lda zt1
+        beq ss_ne
+        ldx rd_np
+        cpx #NPAIR
+        bcs ss_ne
+        lda r_p
+        lsr a
+        ror a
+        ror a
+        ora r_i
+        sta rd_pairs,x
+        inc rd_np
+ss_ne:  inc r_i
+        jmp ss_ent
+ss_np:  inc r_p
+        lda r_p
+        cmp #4
+        beq ss_x
+        jmp ss_pl
+ss_x:   rts
+
+; r_L/r_le = the entry's first and end Atari line (X = entry)
+sd_lines:
         lda lt_line,x
         sta r_L
         clc
         adc lt_h,x
         sta r_le
+        rts
+
+spr_draw:
+        stz rd_k
+sd_pl:  ldx rd_k
+        cpx rd_np
+        bcs sd_out
+        lda rd_pairs,x
+        and #$3F
+        sta r_i
+        lda rd_pairs,x
+        rol a
+        rol a
+        rol a
+        and #$03
+        sta r_p
+        clc
+        adc r_pg
+        sta zg+1
+        stz zg
+        ldx r_i
+        jsr sp_hpos
+        bcs sd_np
+        jsr sp_pcol
+        ldx r_i
+        jsr sd_lines
 sd_ln:  ldy r_L
         lda (zg),y
         beq sd_nl
@@ -1031,18 +1239,14 @@ sd_h1:  clc
         bcs sd_nl
         cmp #192
         bcs sd_nl
-        jsr sp_row
+        jsr sp_rec
         ldx r_i
 sd_nl:  inc r_L
         lda r_L
         cmp r_le
         bne sd_ln
-sd_ne:  inc r_i
-        bra sd_ent
-sd_np:  inc r_p
-        lda r_p
-        cmp #4
-        bne sd_pl
+sd_np:  inc rd_k
+        bra sd_pl
 sd_out: rts
 
 ; HPOS of player r_p in entry X -> byte column r_cb, pixel shift r_sh;
@@ -1066,6 +1270,7 @@ shc:    sec
         bcc sh_off
         pha
         and #$03
+        sta r_shi
         tay
         lda sh_tab,y
         sta r_sh
@@ -1080,8 +1285,9 @@ shc:    sec
 sh_off: sec
         rts
 sh_tab: .byte 0,1,3,5
+shi_hi: .byte $00,$40,$80,$C0
 
-sp_color:                       ; COLPMn of entry X -> r_cm/r_cm+1
+sp_pcol:                        ; COLPMn of entry X -> r_pcv
         lda r_p
         beq sc0
         cmp #1
@@ -1095,12 +1301,115 @@ sc0:    lda lt_pc0,x
 sc1:    lda lt_pc1,x
         bra scc
 sc2:    lda lt_pc2,x
-scc:    ldy #0
-        jmp cmask_fg
+scc:    sta r_pcv
+        rts
 
-; Draw player byte r_d on hi-res row A at column r_cb, shift r_sh.
-sp_row: jsr row_addr
-        lda r_d                 ; 8 pixels -> 14, as in the 20-column text
+; Player byte r_d on hi-res row A at column r_cb, shift r_shi: record it in
+; the pending list and compare it with the record on the screen at the same
+; index; a difference marks both rows. The record is exact (row, column |
+; shift << 6, player byte; a colour change redraws the entry, entry_hash).
+sp_rec: sta zt3
+        ldx r_spn
+        cpx #SPRMAX
+        bcs sp_rx
+        ldy r_shi
+        lda shi_hi,y
+        ora r_cb
+        sta zt4
+        sta pn_y,x
+        lda zt3
+        sta pn_row,x
+        lda r_d
+        sta pn_d,x
+        lda r_pcv
+        sta pn_c,x
+        cpx rd_osn
+        bcs sr_m1
+        lda spr_row,x
+        cmp zt3
+        bne sr_m0
+        lda spr_y,x
+        cmp zt4
+        bne sr_m0
+        lda spr_ck,x
+        cmp r_d
+        beq sr_n
+sr_m0:  lda spr_row,x
+        jsr srow_mark
+sr_m1:  lda zt3
+        jsr srow_mark
+sr_n:   inc r_spn
+sp_rx:  rts
+
+; Draw the pending records whose rows were lifted or drawn afresh (the
+; others are already on the screen, unchanged) and make them the records.
+spr_put:
+        stz rd_k
+pu_l:   ldx rd_k
+        cpx r_spn
+        bcc pu_c
+        rts
+pu_c:   lda pn_row,x
+        jsr row_bit
+        sta zt1
+        lda rd_rows,y
+        ora rd_srow,y
+        and zt1
+        bne pu_go
+        jmp pu_n
+pu_go:  ldx rd_k
+        lda pn_d,x
+        sta r_d
+        lda pn_y,x
+        sta zt4
+        and #$3F
+        sta r_cb
+        lda zt4
+        rol a
+        rol a
+        rol a
+        and #$03
+        tay
+        lda sh_tab,y
+        sta r_sh
+        lda pn_c,x
+        ldy #0
+        jsr cmask_fg
+        jsr sp_bits
+        ldx rd_k
+        lda pn_row,x
+        sta spr_row,x
+        jsr row_addr
+        lda r_d
+        sta spr_ck,x
+        lda zt4
+        sta spr_y,x
+        ldy r_cb
+        lda (zhr),y
+        sta spr_s0,x
+        lda r_b0
+        jsr sr_or
+        iny
+        cpy #40
+        bcs pu_n
+        lda (zhr),y
+        sta spr_s1,x
+        lda r_b1
+        jsr sr_or
+        iny
+        cpy #40
+        bcs pu_n
+        lda (zhr),y
+        sta spr_s2,x
+        lda r_b2
+        jsr sr_or
+pu_n:   inc rd_k
+        jmp pu_l
+
+; r_d, shift r_sh -> hi-res bytes r_b0-r_b2 (8 pixels -> 14, as in the
+; 20-column text, then r_sh pixels right across 7-bit bytes)
+sp_bits:
+        lda r_d
         lsr a
         lsr a
         lsr a
@@ -1115,8 +1424,8 @@ sp_row: jsr row_addr
         sta r_b1
         stz r_b2
         ldy r_sh
-        beq sr2
-sr1:    asl r_b2                ; one pixel right across 7-bit bytes
+        beq sb_x
+sr1:    asl r_b2
         asl r_b1
         lda r_b1
         bpl sr1a
@@ -1131,36 +1440,8 @@ sr1a:   asl r_b0
         inc r_b1
 sr1b:   dey
         bne sr1
-sr2:    ldx r_spn
-        cpx #SPRMAX
-        bcs sr_out
-        lda zhr
-        sta spr_lo,x
-        lda zhr+1
-        sta spr_hi,x
-        lda r_cb
-        sta spr_y,x
-        tay
-        lda (zhr),y
-        sta spr_s0,x
-        lda r_b0
-        jsr sr_or
-        iny
-        cpy #40
-        bcs sr3
-        lda (zhr),y
-        sta spr_s1,x
-        lda r_b1
-        jsr sr_or
-        iny
-        cpy #40
-        bcs sr3
-        lda (zhr),y
-        sta spr_s2,x
-        lda r_b2
-        jsr sr_or
-sr3:    inc r_spn
-sr_out: rts
+sb_x:   rts
+
 sr_or:  beq sro1                ; OR pixels A at column Y in its colour
         sta zt0
         tya
@@ -1179,3 +1460,6 @@ sr_or:  beq sro1                ; OR pixels A at column Y in its colour
 sro1:   rts
 
 render_end:
+
+        .org r_rrc              ; the first forced redraw after RR_EVERY
+        .byte RR_EVERY,0        ; renders (r_rrc, r_rrn), not 256

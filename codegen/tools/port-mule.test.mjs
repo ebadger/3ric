@@ -10,7 +10,9 @@
 // converts the disk (running the intro headlessly), boots the folder on the
 // WASM 3RIC from a generated SD card, presses the SNES pads and checks that
 // the main game reaches its status summary and the land grant, with the
-// hi-res page drawn. Set MULE_SHOTS=<dir> to keep PNG screenshots.
+// hi-res page drawn, that the status-summary music's POKEY registers come
+// out on the AY chips as documented, and that the keyboard drives the pad-1
+// stick and fire. Set MULE_SHOTS=<dir> to keep PNG screenshots.
 
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -191,13 +193,73 @@ async function testRealDisk(atrPath) {
     fs.mkdirSync(shots, { recursive: true });
     fs.writeFileSync(path.join(shots, name), Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ih), chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]));
   };
+  const checkSound = () => {
+    // sound: after each tick's sound pass, the AY registers match POKEY under
+    // the documented mapping (independent model below)
+    const volmap = [0, 7, 9, 10, 11, 12, 12, 13, 13, 13, 14, 14, 14, 15, 15, 15];
+    const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+    const model = (ch, f, c, audctl) => {
+      const vol = c & 0x10 || !(c & 15) ? 0 : volmap[c & 15];
+      const dist = c & 0xe0;
+      if (!vol) return { vol: 0 };
+      const fast = (ch === 0 && audctl & 0x40) || (ch === 2 && audctl & 0x20);
+      const slow = !fast && audctl & 1;
+      const n = fast ? f + 4 : f + 1;
+      let p = fast ? n >> 3 : 3 * n + (n >> 4);
+      if (slow) p *= 4;
+      // noise: POKEY samples its polynomial once per divider pulse, twice the
+      // tone rate for the same divider -> half the AY tone period, 1-31
+      if (![0xa0, 0xe0, 0xc0].includes(dist)) return { vol, noise: Math.min(31, Math.max(1, p >> 1)) };
+      if (dist === 0xc0) {
+        const m = slow ? (n % 5 ? 5 : 1) : 15 / gcd(n, 15);
+        if (m === 1) return { vol: 0 };
+        p = (p * m) >> 1;
+      }
+      return { vol, period: Math.min(p, 0xfff) };
+    };
+    const chans = [[[0, 0], [1, 0]], [[0, 1]], [[1, 1]], [[0, 2], [1, 2]]];  // [AY, tone] per POKEY channel
+    vm.addBreakpoint(conv.rt.rt.COLLIDE);
+    const cache = P.LAYOUT.RTVARS + 32;
+    const tones = new Set();
+    let checked = 0;
+    for (let n = 0; n < 20000 && checked < 600 && !(checked >= 60 && tones.has(0xc0) && tones.has(0xa0)); n++) {
+      vm.runCycles(26224);
+      if (!vm.breakpointHit() || vm.peekMapped(0xdfff) !== 0x5a) { if (vm.breakpointHit()) vm.step(); continue; }
+      const audctl = vm.peekMapped(0xd208);
+      for (let ch = 0; ch < 4; ch++) {
+        const want = model(ch, vm.peekMapped(0xd200 + ch * 2), vm.peekMapped(0xd201 + ch * 2), audctl);
+        for (const [ay, t] of chans[ch]) {
+          const reg = (r) => vm.peek(cache + ay * 16 + r);
+          assert.equal(reg(8 + t), want.vol, `POKEY ${ch + 1} volume on AY ${ay + 1}`);
+          if (!want.vol) continue;
+          const mix = reg(7);
+          if (want.noise !== undefined) {
+            assert.equal(mix & (8 << t), 0, "noise enabled");
+            assert.notEqual(mix & (1 << t), 0, "tone disabled on a noise channel");
+            assert.equal(reg(6), want.noise, "noise period");
+          } else {
+            assert.equal(mix & (1 << t), 0, "tone enabled");
+            assert.notEqual(mix & (8 << t), 0, "noise disabled on a tone channel");
+            assert.equal(reg(t * 2) | (reg(t * 2 + 1) << 8), want.period, `POKEY ${ch + 1} period`);
+            tones.add(vm.peekMapped(0xd201 + ch * 2) & 0xe0);
+          }
+        }
+      }
+      checked++;
+      vm.step();
+    }
+    vm.clearBreakpoints();
+    assert.ok(checked >= 60, `sound passes checked (${checked})`);
+    assert.ok(tones.has(0xc0) && tones.has(0xa0), "the summary music's buzz (distortion C) and pure tones were both checked");
+    ok(`sound: ${checked} ticks of POKEY -> AY (distortions ${[...tones].map((d) => "$" + d.toString(16)).join(" ")})`);
+  };
   const seen = new Set();
   for (let t = 0; t < 120 && !seen.has("land"); t++) {
     vm.setGamepadState(0, t % 3 === 0 ? 1 : 0);                  // B on pad 1
     vm.setGamepadState(1, t % 3 === 1 ? 1 : 0);                  // and pad 2
     for (let i = 0; i < 12; i++) vm.run(50000);
     const txt = atText();
-    if (/STATUS SUMMARY/.test(txt) && !seen.has("status")) { seen.add("status"); shot("mule-status.png"); }
+    if (/STATUS SUMMARY/.test(txt) && !seen.has("status")) { seen.add("status"); shot("mule-status.png"); vm.setGamepadState(0, 0); vm.setGamepadState(1, 0); checkSound(); }
     if (/LAND GRANT/.test(txt)) { seen.add("land"); for (let i = 0; i < 120; i++) vm.run(50000); shot("mule-land-grant.png"); }
   }
   assert.ok(seen.has("status"), "status summary reached");
@@ -205,6 +267,38 @@ async function testRealDisk(atrPath) {
   let lit = 0; for (let a = 0x2000; a < 0x4000; a++) if (vm.peek(a) & 0x7f) lit++;
   assert.ok(lit > 200, `hi-res page drawn (${lit} non-blank bytes)`);
   ok("original disk: intro hand-off, SD boot, status summary and land grant on the hi-res page");
+
+  // keyboard: Space is a short fire press; W latches the stick up until pressed again
+  const L = P.LAYOUT, tick = () => { for (let i = 0; i < 3; i++) vm.runCycles(26224); };
+  vm.setGamepadState(0, 0); vm.setGamepadState(1, 0); tick();
+  assert.equal(vm.peek(L.RG + 0x10), 1, "trigger up with no pad or key");
+  vm.keyDown(32); tick();
+  assert.equal(vm.peek(L.RG + 0x10), 0, "Space presses fire");
+  assert.equal(vm.peek(0xc000) & 0x80, 0, "the runtime takes the key");
+  for (let i = 0; i < 6; i++) tick();
+  assert.equal(vm.peek(L.RG + 0x10), 1, "fire lets go");
+  vm.keyDown("W".charCodeAt(0)); tick();
+  assert.equal(vm.peek(L.RA) & 0x01, 0, "W pushes stick 0 up");
+  for (let i = 0; i < 20; i++) tick();
+  assert.equal(vm.peek(L.RA) & 0x01, 0, "and holds it");
+  vm.keyDown("W".charCodeAt(0)); tick();
+  assert.equal(vm.peek(L.RA) & 0x0f, 0x0f, "W again centres it");
+  ok("keyboard: Space fires, W/A/S/D latch the stick");
+
+  // the game gets past the land grant (an exact RTCLOK wait the redraw could
+  // make it miss) and through a development round (a tune whose end check
+  // pointed at the old $2000-$3FFF addresses never ended)
+  const reached = [];
+  for (let t = 0; t < 300 && !reached.includes("PRODUCTION"); t++) {
+    vm.setGamepadState(0, t % 3 === 0 ? 1 : 0);
+    vm.setGamepadState(1, t % 3 === 1 ? 1 : 0);
+    for (let i = 0; i < 12; i++) vm.run(50000);
+    for (const w of ["DEVELOPMENT", "PRODUCTION"]) if (atText().includes(w) && !reached.includes(w)) reached.push(w);
+  }
+  assert.deepEqual(reached, ["DEVELOPMENT", "PRODUCTION"], "development and production rounds reached");
+  shot("mule-production.png");
+  ok("game rounds: land grant -> development -> production");
+
 
   const { buildWozFromDsk } = await import("./wozgen.mjs");
   const woz = P.buildWoz(conv.files, conv.rt.rt, buildWozFromDsk);
