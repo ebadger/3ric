@@ -1,7 +1,7 @@
 # M.U.L.E.: an Atari 8-bit game on the 3RIC
 
 **2026-10-18. Emulator-verified from the intro (the players choose on the 3RIC) through
-the production round; not yet tried on the board.**
+the random events into the second round; not yet tried on the board.**
 The owner supplied the Atari 800 disk image (ATR, 720 sectors) and asked for a port,
 knowing that graphics, sound and hardware differ far more than in the Apple II ports.
 The image and the generated SD folder contain the game; they stay local. This
@@ -41,31 +41,38 @@ survive it). Both loaders work through one piece table (`SEQUENCE`) in two phase
   `JSR (DOSINI)`, `JMP (DOSVEC)`), the OS VBI (RTCLOK, ATRACT, shadow registers to
   the register file, sticks and triggers, then VVBLKD) and the OS jump table at
   `$E450` in language-card RAM (SETVBV, SYSVBV, XITVBV; disk calls answer success;
-  WARMSV ends the intro). Patched in the intro: its 8 hardware reads and CONSOL
+  WARMSV ends the intro). Patched in the intro: its 10 hardware reads and CONSOL
   clicks, as in the game; its RTCLOK-equality waits (a delay subroutine, a delay that
   stops early, two timeout deadlines and the loader's one-tick wait) become
   elapsed-time waits; its loader skips the disk check and the reading of the main
-  game. Phase 1 of the loader loads the runtime, the intro's renderer and OS layer
+  game. The title's logo appears at once: on the Atari it is revealed pixel by
+  pixel for 47 seconds, and every revealed pixel made the renderer redraw the
+  banner, so the M.U.L.E. walking below it showed only now and then; both reveal
+  sweeps run straight away and `title_hold` keeps the title up until the Atari's
+  would end. Any key typed reaches the intro's `CH` (the OS keyboard handler's
+  job), so a key skips the title as on the Atari. Phase 1 of the loader loads the runtime, the intro's renderer and OS layer
   and the intro, saves what the ROM DOS (or the Disk II boot) needs (zero page, stack,
   pages 2-3 and 8-9, RAM2, the VIA's interrupt enables) and runs it. At the warm start
   `intro_done` stashes `$0000-$0FFF` (the configuration the intro wrote) at `$3000`,
   shows "LOADING" on the text page, puts the loader's state back and returns into it;
   phase 2 loads the main game as before and `boot_final` hands it the stash. The
-  intro uses none of `$1000-$6FFF`: `intro.s` and the intro renderer's player tables
-  live at `$1000`, the snapshot at `$6000`.
+  intro uses none of `$1000-$6FFF`: `intro.s` lives at `$1000`, the snapshot at
+  `$6000`.
 - **Memory.** The hi-res page must be `$2000` or `$4000`, both inside the game. The
   `$2000-$3FFF` block (about 3 KB of code, strings, the map screen, tables) moves to
-  language-card RAM at `$E000`. 322 absolute references were found by recursive
-  disassembly seeded from every instruction three long traced sessions executed; 80
+  language-card RAM at `$E000`. 325 absolute references were found by recursive
+  disassembly seeded from every instruction three long traced sessions executed (and
+  three more, in the random events, by a scan for JSR/JMP to the entry points the
+  others reach); 80
   pointer sources (string addresses, pointer tables, DLI vectors, the screen writer's
   base, two VBI jump-table entries) by tracking, in a reference emulator, which
   immediate or table byte produced the high byte of every pointer that reached the
   block, through arithmetic and self-modified code, and by a static scan of the three
   string routines' call sites. One message straddles `$3FFF/$4000`; it gets a
-  contiguous copy. The music player's end/loop checks compare its four voice
+  contiguous copy (in bank 2's free end). The music player's end/loop checks compare its four voice
   pointers with block addresses (`CMP #$29`...); those four immediates move too.
   Hardware **stores** need no patch: they land in a register file of
-  bank-2 RAM at the real addresses. The 52 hardware **reads** become a read mirror
+  bank-2 RAM at the real addresses. The 65 hardware **reads** become a read mirror
   (`$0300`) or helpers (RANDOM, VCOUNT, CONSOL clicks); the ROM-font copies read the
   port's font; `SETVBV` is replaced. The game's two waits for RTCLOK to *equal*
   start + n (`$1310`, and an inline one at `$3926` that also polls the players)
@@ -74,8 +81,12 @@ survive it). Both loaders work through one piece table (`SEQUENCE`) in two phase
 - **Runtime** (`rt.s`): a 60 Hz tick on the second Mockingboard VIA plays the Atari
   VBI NMI (pads and keyboard to sticks/triggers/console keys, POKEY to the two AYs,
   player-0 collisions (only players within 8 colour clocks of player 0 are scanned), then the game's VBI with the Atari stack frame, carrying the
-  interrupted code's `P`: the game skips its work when `I` was set). The first VIA's
-  Timer 1 runs in step and gives VCOUNT.
+  interrupted code's `P`: the game skips its work when `I` was set). The game's VBI
+  runs only while NMIEN enables it, as on the Atari: its pause screen turns NMIs
+  off and waits inside its VBI for START, which the tick keeps reading. The first VIA's
+  Timer 1 runs in step and gives VCOUNT. Code that only runs with bank 2 mapped
+  (`hw_init`, `boot_final`, the jiffy waits, SETVBV, the CONSOL clicks) sits in free
+  gaps between the FP package's entry points, leaving RAM2 to what both banks need.
 - **Sound.** POKEY channel 1 (the bass) plays on both AYs' A, channel 2 on AY 1 B,
   channel 3 on AY 2 B, channel 4 (noise drums) on both C. Pitch follows the
   64 kHz / 15 kHz / 1.79 MHz clocks; *distortion C* (`$Cx`, the 4-bit polynomial the
@@ -87,31 +98,41 @@ survive it). Both loaders work through one piece table (`SEQUENCE`) in two phase
 - **Keyboard** (when no pad is used): the key in `$C000` gives characters only (no
   key release), so **W/A/S/D or the arrows latch** pad 1's stick: press to walk, the
   same key again to stop (another direction turns). **Space** is a short fire press;
-  **Return or 1** = START, **Tab or 2** = SELECT, **3** = OPTION.
+  **Return or 1** = START, **Tab or 2** = SELECT, **3** = OPTION; any key passes the
+  title.
 - **Display** (`render.s`, bank 1): with interrupts off, walk the display list and
   call the game's DLI handlers where ANTIC would, recording per band the colours,
-  character set and player positions; then, interruptible, hash every line (with the
-  band's player colours) and record every player row (row, column and shift, the
-  player byte, its colour) in a pending list, comparing it exactly with the record
-  on the screen. If nothing changed nothing is written. Otherwise the changed lines
-  are redrawn (wiping the players on them), and only the player rows that changed
-  or were wiped are lifted (save-under) and drawn again from the pending list, so
-  the records always match the screen even when the game's VBI moves a player
-  mid-redraw (that shows next frame). There is no second page to flip to (both hi-res pages
-  are inside the game), so this stands in for double buffering: static screens never
-  blink, and a moving player is off the screen only for its own rows' update. One
-  Atari column per hi-res byte (four 2-bit pixels per byte in modes 4/5 and the
-  intro's mode D banner); colours to the nearest hi-res colour, never black on the
-  black screen. A line's colours are hashed as the hi-res colours they become, so an
-  Atari colour cycle the 3RIC cannot show redraws nothing; the second scan line of a
-  mode 5, 7 or D line is a copy of the first. Blank lines above the first mode line
-  that are on the screen become one entry, so players there (the intro's species
-  grid) are drawn. After a redraw the tick waits at least as long as the redraw took
-  (three ticks at least) before the next, so the main code keeps half the CPU on busy
-  screens. Renderer scratch beyond bank 1 sits in `$0406-$057F` (the game uses only
-  `$0400-$0405` there; `$0580` is the FP package's LBUFF), after the runtime's
-  variables in page 3, and for the intro build (twice the player records) at
-  `$1800-$1E7F`.
+  character set, player positions and colours, and (in the band's hi-res *screen
+  hole*, the 8 undisplayed bytes of hi-res block n) its missile positions and player
+  widths; then, interruptible, hash every band: its layout, colours as the hi-res
+  colours they become, screen bytes, and the bytes of every player and of the
+  missiles over its lines (with their line), plus, for each sprite with pixels there,
+  its position and width. If nothing changed nothing is written. A changed band is
+  redrawn row by row, each row's players and missiles ORed in as soon as its
+  playfield is drawn, so a sprite is off the screen only while its own row is
+  rewritten; nothing is kept between frames (no save-unders or row records, so
+  there is no limit on how many sprite rows a screen has: the map's mountains, river,
+  town and plot cursor need about 220). There is no second page to flip to (both
+  hi-res pages are inside the game), so this stands in for double buffering: static
+  screens never blink. One Atari column per hi-res byte (four 2-bit pixels per byte
+  in modes 4/5 and the intro's mode D banner); colours to the nearest hi-res colour,
+  never black on the black screen. The second scan line of a mode 5, 7 or D line is
+  a copy of the first, unless sprites were ORed into the first. Blank lines above
+  the first mode line that are on the screen become one entry, so sprites there (the
+  intro's species grid) are drawn. After a redraw the tick waits at least as long as
+  the redraw took (three ticks at least) before the next, so the main code keeps
+  half the CPU on busy screens. Renderer code that is the same in both builds also
+  uses RAM2's end; its variables sit after the runtime's in page 3.
+- **Sprites in colour cells.** The hi-res screen shows 140 colour cells across, the
+  Atari playfield 160 colour clocks, so a sprite's place is cell x * 7/8 (it keeps
+  its place on the map), but each of its pixels is a whole cell, two dots lit on its
+  colour's own dot (both for white): shapes keep every pixel and their colour wherever
+  they stand, one dot of width wider per 7 than the playfield's scale. (They were 2,
+  2, 2 and 1 dots per 4 pixels, ANDed with the colour's dot pattern, which dropped
+  pixels and shimmered as a sprite moved.) Double and quad players (SIZEP) are 2 or
+  4 cells a pixel; missiles 2, 4 or 8 cells (SIZEM), in COLPF3 when PRIOR selects the
+  fifth player (the title's and the town's mules have missile bodies), else their
+  player's colour. The map's river (player 3 in gold) is drawn blue: it is water.
 - **Floating point** (`fp.s`): written for the port to the documented interface
   (base-100 BCD, ten digits), stubs at the Atari addresses, code in gaps between them.
 - **Font** (`font.mjs`): drawn for the port, in Atari character order.
@@ -155,13 +176,33 @@ survive it). Both loaders work through one piece table (`SEQUENCE`) in two phase
   line-table entry, so no player was drawn there. That display list also overflowed
   the 48-entry line table (the last lines kept the previous screen's text), and the
   four tall players needed twice the game's 80 player-row records.
+- **Sprites that did not look right.** On the title only the mules' legs showed:
+  their bodies are the four missiles side by side as the fifth player, and missiles
+  were not drawn. The plot cursor is a double-width player (drawn single width); the
+  plot frames' sides and the production dots are missiles the display-list
+  interrupts move per band. With those in, the map needed about 220 player-row
+  records against 80, so the last players (the river, the town) were dropped:
+  records and save-unders went, and sprites are now composited as each band row is
+  drawn. A double-width player was still missing after that: its run routine tested
+  a flag the caller's `LDX` had just set.
+- **A development round that never ended**, once the river was blue (it was not the
+  colour). The random events' code read POKEY's RANDOM directly at 12 sites the
+  traced sessions never reached ("SUNSPOT ACTIVITY" waits for RANDOM to fall in
+  `$36-$C2`, and a constant may never), and the radiation event called two routines
+  of the moved block at their old addresses, so the CPU ran the hi-res page. The
+  game's VBI was also re-entered while its pause screen ran inside it with NMIs
+  off. A scan of every absolute hardware read and of every JSR/JMP to an entry point
+  of the moved block found them; the test now asserts that none is left. (The
+  river's blue had only changed the timing that led the test into those events.)
 
 ## Evidence
 
 `node codegen/tools/port-mule.test.mjs`: FP against an independent decimal reference
 (1,600 operations within one unit in the last place, IFP/FPI, FASC formats), runtime,
 both renderers, `intro.s` and loader layout, and font. With `MULE_ATR=<atr>` (after
-`web/build.ps1`): converts the original disk, boots the folder from a generated FAT32
+`web/build.ps1`): converts the original disk and checks that no absolute read of an
+Atari hardware register and no JSR/JMP to an entry point of the moved block is left
+in the game or the intro; boots the folder from a generated FAT32
 card on the WASM 3RIC and plays the intro on the pads by what its screen says (title,
 two players on the options screen, the controller check, colour and species for each
 player; the species grid must be drawn on hi-res page 2 and the intro's summary must
@@ -173,34 +214,42 @@ through the development and production rounds; then boots `MULE.WOZ` from the Di
 and plays the same intro into the game's status summary. Scripted WASM runs also
 showed moving the colour box changing the species shown and its description, and the
 transport ship, per-player status bands, mountains, plot markers, development, the
-pirate ship, the status after a round and the first auctions.
+pirate ship, the status after a round and the first auctions; then the title's
+walking mule with its body, any key passing the title, the map with mountains, a
+blue river, the town and the plot cursor, complete plot frames and production dots,
+and play on through the random events into the second round.
 
 **Not yet shown:** the town and mules with real play, later rounds and the end of a
 game on the 3RIC; sound by ear; anything on the physical board.
 
 ## Known limits
 
-- The planet surface and river are incomplete (background colours are not filled;
-  mode-6 map tiles in dark tones become white), and the playfield is redrawn every
-  third tick, so motion is choppier than the Atari.
-- Missiles, player sizes other than normal, playfield collisions (`P0PF` reads 0) and
-  player collisions from DLI-moved players are not modelled.
+- The planet surface is incomplete (background colours are not filled; mode-6 map
+  tiles in dark tones become white, dark sprites white), and the playfield is redrawn
+  every third tick, so motion is choppier than the Atari; a sprite that moves
+  redraws the bands it is on, which can tear for a moment mid-redraw.
+- Playfield collisions (`P0PF` reads 0), player collisions from DLI-moved players,
+  multicolour players (PRIOR bit 5), missile widths changed per band and the
+  missiles' own priority are not modelled.
 - The keyboard works where keys arrive in `$C000` (the browser emulator, the native
   emulator's direct path); the physical board's PS/2 keyboard is not decoded while the
   game runs (its NMIs are off and the ROM handler's RAM is the runtime's). Pads: B/A/Y
   fire, Start = START, Select = SELECT, X/L/R = OPTION.
 - Keyboard directions latch, so steering is coarser than with a pad.
-- The intro's horizontal fine scrolling (HSCROL) and player sizes are ignored; its
-  colour cycling shows only where it changes a hi-res colour. It still waits for
-  input more slowly than the Atari while its banner is being redrawn.
-- Relocation is complete for every path the static scan and three long sessions
-  reached; an untested path could still use a pointer the analysis missed.
+- The intro's horizontal fine scrolling (HSCROL) is ignored; its colour cycling
+  shows only where it changes a hi-res colour.
+- Relocation and hardware reads are complete for every path the static scans and
+  three long sessions reached; an untested path could still use a pointer the
+  analysis missed.
 - Only the release this port was built on is accepted (pinned main-image hash).
 
 ## Next steps worth discussing
 
-- Background colours for modes 2/6/7 and the river; play through a full game.
+- Background colours for modes 2/6/7 and the planet surface; play through a full game.
+- Sprite art redrawn for colour cells, with the C64 release's multicolour sprites as
+  a reference.
 - Tests that need no disk image: drive `key_scan`, the sound mapping, `jwait` and the
-  sprite records on the assembled runtime, and `buildGame`'s patches on a synthetic
-  image (deferred from the second-model review; today they run only with `MULE_ATR`).
+  sprite compositing on the assembled runtime, and `buildGame`'s patches on a
+  synthetic image (deferred from the second-model review; today they run only with
+  `MULE_ATR`).
 - A board trial.

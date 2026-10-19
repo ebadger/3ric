@@ -59,23 +59,14 @@ export const LAYOUT = {
   RG: 0x0300,         // GTIA read mirror (32), POKEY (16), PIA (4)
   RP: 0x0320,
   RA: 0x0330,
-  RTVARS: 0x0340,     // runtime variables (136 bytes)
-  SPRITES: 0x0600,    // player records with save-unders (6 x SPRMAX)
-  SPRMAX: 80,
-  PENDING: 0x0406,    // the compare pass's player records (4 x SPRMAX) and
-  PAIRS: 0x0546,      // the player/entry pairs, to $057F: the game uses only
-  NPAIR: 58,          // $0400-$0405 there, the FP package $0580-$05FF
+  RTVARS: 0x0340,     // runtime variables (138 bytes), then the renderer's
   T2TAB: 0x0800,      // 8 -> 7 pixel table for 40-column text
   HIRES: 0x20,        // the game's hi-res page
   CFG_STASH: 0x3000,  // the intro's $0000-$0FFF, for boot_final (hi-res page)
   TEMP: 0x4000,       // language-card images are staged here
   // while the intro runs (intro.s): it uses none of $1000-$6FFF
-  IRT: 0x1000,        // intro.s: 8 -> 7 table, code, then the renderer's
-  IRT_CODE: 0x1100,   // player tables (twice the game's: the species
-  IRT_SPRITES: 0x1800, // screen's players are tall)
-  IRT_SPRMAX: 160,
-  IRT_PENDING: 0x1bc0,
-  IRT_PAIRS: 0x1e40,
+  IRT: 0x1000,        // intro.s: 8 -> 7 table, then code
+  IRT_CODE: 0x1100,
   INTRO_HIRES: 0x40,  // hi-res page 2: page 1 holds the loader and the stash
   STAGE_R2_I: 0x4000, // RAM2 and page-3 images for the intro's launch
   STAGE_LOW_I: 0x4800,
@@ -99,7 +90,7 @@ const w16 = (v) => [v & 0xff, v >> 8];
 export const INTRO_PATCHES = [
   ...[0x8a41, 0x8a4d, 0xa75c].map((a) => [a, [0x8d, 0x1f, 0xd0], (S) => [0x20, ...w16(S.SPK_A)]]),       // STA CONSOL
   ...[0x8a44, 0x8a50, 0xa75f].map((a) => [a, [0xad, 0x1f, 0xd0], (S) => [0xad, ...w16(S.RG + 0x1f)]]),  // LDA CONSOL
-  ...[0x888c, 0x8898, 0xbb66].map((a) => [a, [0xad, 0x0a, 0xd2], (S) => [0x20, ...w16(S.RND_A)]]),      // LDA RANDOM
+  ...[0x888c, 0x8898, 0xa1f4, 0xa470, 0xbb66].map((a) => [a, [0xad, 0x0a, 0xd2], (S) => [0x20, ...w16(S.RND_A)]]),      // LDA RANDOM
   ...[0x88f7, 0x8ac2].map((a) => [a, [0xcd, 0x0b, 0xd4], (S) => [0x20, ...w16(S.VC_CMP)]]),             // CMP VCOUNT
   // CLC / ADC RTCLOK / CMP RTCLOK / BNE / RTS: wait A ticks
   [0x90cf, [0x18, 0x65, 0x14, 0xc5, 0x14, 0xd0, 0xfc, 0x60], (S) => [0x4c, ...w16(S.JWAIT)]],
@@ -130,7 +121,10 @@ export const INTRO_PATCHES = [
 const hexList = (s) => s.trim().split(/\s+/).map((h) => parseInt(h, 16));
 
 // Instructions whose absolute operand points into $2000-$3FFF (static
-// disassembly from every traced instruction): high byte += $C0.
+// disassembly from every traced instruction): high byte += $C0. The last
+// three (a JSR/JMP pair in the radiation event, which sent the CPU into the
+// hi-res page, and a routine's JSR) came from a later scan for JSR/JMP to
+// entry points the others reach.
 export const RELOC_ABS = hexList(`
 2529 2532 2535 2538 253B 2546 254B 254E 2560 2569 2570 2578 257F 2587 258E 2599 25A1 25A4 25A9 25AC 25B1 25B4 25B7 25BA
 25BE 25C3 25C6 25CD 25E2 25E9 25EC 25EF 25F2 25F5 25FC 2602 2608 2610 261F 2626 2629 262C 262F 2632 2635 2638 263B 263E
@@ -145,7 +139,8 @@ export const RELOC_ABS = hexList(`
 38DE 38E1 38E9 390E 392E 3933 3938 3963 39B1 39B9 39BC 4531 478C 4803 480F 483F 486B 4C3C 4C4E 4E8B 4EA2 4ED8 4EE4 4FCA
 5A54 5A5A 5D3A 5E0A 5F91 600B 6010 6057 6387 638C 656D 66FA 672D 67D3 67E3 6AD4 6F43 6F54 6F5D 6F62 7086 71E1 7CF6 7E07
 80B7 80BC 8179 8A75 8D00 8D05 8D08 8D0D 920D 9212 9269 92CD 931A 936A 936F 9461 9466 946B 946E 9474 9479 947E 9484 9489
-9C2E 9C35 9C51 9C58 9E18 9EBD 9F0A A532 A8BB AD12`);
+9C2E 9C35 9C51 9C58 9E18 9EBD 9F0A A532 A8BB AD12
+711E 7F45 7FB8`);
 
 // Bytes that become the high byte of a pointer into $2000-$3FFF (string,
 // table and display-list-interrupt addresses, the screen writer's base,
@@ -164,11 +159,16 @@ export const RELOC_PTR = hexList(`
 // past their data instead of looping.
 export const RELOC_CMP = hexList(`2655 26BF 2729 2D3A`);
 
-// Hardware reads (and CONSOL stores) the runtime has to answer.
+// Hardware reads (and CONSOL stores) the runtime has to answer. The second
+// group came from a later scan of every absolute read of a hardware
+// register: the random events' RANDOM reads ($7A54-$7F40: "SUNSPOT
+// ACTIVITY" waited for RANDOM to fall in $36-$C2 and, reading a constant,
+// hung the development round) and a display-list interrupt's VCOUNT reads.
 export const HW_SITES = hexList(`
 119A 1266 2F64 2F67 30D4 30D7 311E 3531 371C 38B9 396B 435C 436B 4391 43A5 43E2 4405 4AEB 5837 5840 5848 5BFB 5C34 5C3C
 5C4B 5C66 5CA9 5CB0 5DDA 5DF5 5DF8 5E03 5E1B 5E22 6C49 6E7B 7244 728A 7655 7667 766C 7C84 80A1 8BD6 8BE1 8C11 8CE0 8CF1
-8CF9 A43D A4D6 AC57 ACDF ADAD AE1E AE3B`);
+8CF9 A43D A4D6 AC57 ACDF ADAD AE1E AE3B
+2F9E 2FBA 7A54 7A5F 7BAF 7BC1 7BD1 7BDE 7BEF 7BF7 7F0E 7F1B 7F40`);
 
 export const FONT_READS = [[0x59b3, 0xbd, 0xe000], [0x5a95, 0xb9, 0xe028]]; // LDA $E000,X / LDA $E028,Y
 export const SETVBV_CALL = 0x42f5;                                             // JSR $E45C
@@ -263,30 +263,21 @@ export function buildRuntime() {
     [F.FP_D, F.FP_D_END, 0xda60, "D"], [F.FP_E, F.FP_E_END, 0xd9aa, "E"]]) {
     if (e > lim) throw new Error(`fp.s chunk ${name} ${h4(a)}-${h4(e)} passes ${h4(lim)}`);
   }
-  // the renderer twice: for the game (hi-res page 1, tables in pages 6-8)
-  // and for the intro (page 2, tables in intro.s's area)
+  // the renderer twice: for the game (hi-res page 1, its 8 -> 7 table in
+  // page 8) and for the intro (page 2, the table in intro.s's area)
   const renderer = (b1, v) => {
     const rd = assembleInto(b1, equ({ RENDER: L.RENDER, FONT: L.FONT, ...v, RROWS: S.RTVARS_END, SNAP_G: S.SNAP_G, SNAP_A: S.SNAP_A,
       VC_FAKE: S.VC_FAKE, COL_CLASS: S.COL_CLASS, COL_EVEN: S.COL_EVEN, COL_ODD: S.COL_ODD, RAM2_R: S.RT_RAM2_END }) + src("render.s"), "render.s");
     if (rd.symbols.RAM2_R_END > 0xd000) throw new Error(`render.s's RAM2 part overflows (${h4(rd.symbols.RAM2_R_END)})`);
     if (rd.symbols.RENDER_END > 0xdfff) throw new Error(`render.s runs into the bank signature (${h4(rd.symbols.RENDER_END)})`);
     if (rd.symbols.B1GAP_END > 0xd1d0) throw new Error(`render.s overflows the line table's gap (${h4(rd.symbols.B1GAP_END)})`);
-    if (rd.symbols.R_SHI !== 0xd3fe) throw new Error("render.s variables no longer sit in $D3F4-$D3FF");
-    if (rd.symbols.RROWS_END > 0x0400) throw new Error(`render.s row bitmaps overflow page 3 (${h4(rd.symbols.RROWS_END)})`);
+    if (rd.symbols.R_SZ !== 0xd3ff) throw new Error("render.s variables no longer sit in $D3F4-$D3FF");
+    if (rd.symbols.RROWS_END > 0x0400) throw new Error(`render.s variables overflow page 3 (${h4(rd.symbols.RROWS_END)})`);
     b1[0xdfff] = 0xa5;               // bank signature
     return rd;
   };
-  const game = { T2TAB: L.T2TAB, HIRES: L.HIRES, SPRITES: L.SPRITES, SPRMAX: L.SPRMAX, PENDING: L.PENDING, PAIRS: L.PAIRS, NPAIR: L.NPAIR };
-  const intro = { T2TAB: L.IRT, HIRES: L.INTRO_HIRES, SPRITES: L.IRT_SPRITES, SPRMAX: L.IRT_SPRMAX, PENDING: L.IRT_PENDING,
-    PAIRS: L.IRT_PAIRS, NPAIR: L.NPAIR };
-  // [table start, size, limit]: the game's tables end below T2TAB and LBUFF
-  // ($0580), the intro's below $2000
-  for (const [name, v, checks] of [
-    ["game", game, [[v => v.SPRITES, 6, L.T2TAB], [v => v.PENDING, 4, L.PAIRS], [v => v.PAIRS, 0, 0x0580]]],
-    ["intro", intro, [[v => v.SPRITES, 6, L.IRT_PENDING], [v => v.PENDING, 4, L.IRT_PAIRS], [v => v.PAIRS, 0, 0x2000]]]]) {
-    for (const [start, n, limit] of checks)
-      if (start(v) + (n ? n * v.SPRMAX : v.NPAIR) > limit || v.SPRMAX > 255) throw new Error(`the ${name} renderer's tables overlap`);
-  }
+  const game = { T2TAB: L.T2TAB, HIRES: L.HIRES };
+  const intro = { T2TAB: L.IRT, HIRES: L.INTRO_HIRES };
   const rd = renderer(b1, game);
   const b1i = new Uint8Array(0x10000);
   renderer(b1i, intro);
@@ -341,7 +332,6 @@ export function buildIrt(rt, intro) {
     HW_INIT: S.HW_INIT }) + src("intro.s"), "intro.s");
   const I = r.symbols;
   if (I.IRT_END > 0x2000) throw new Error(`intro.s overflows ${h4(L.IRT)}-$1FFF (${h4(I.IRT_END)})`);
-  if (I.IRT_END > L.IRT_SPRITES) throw new Error(`intro.s runs into the intro renderer's tables (${h4(I.IRT_END)})`);
   mem.set(t2Table(), L.IRT);
   return { bytes: mem.slice(L.IRT, I.IRT_END), symbols: I };
 }
@@ -430,6 +420,9 @@ export function buildGame(mem0, rt, { allowUnknown = false, strArea = 0, strLimi
   jsr(JIFFY_POLL, rt.JWAIT_POLL);
   mem[JIFFY_POLL + 3] = 0x80;        // BRA to the loop's exit (JMP $38E9)
   mem[JIFFY_POLL + 4] = 0x08;
+  // (the river's colour, PCOLR3 = $16 set at $4BB7, is changed to blue by the
+  // renderer, not here: the game's own code is only patched where the port
+  // needs it)
   // the window moves; $2000-$3FFF becomes the hi-res page
   mem.copyWithin(WIN_TO, WIN_LO, WIN_HI);
   mem.fill(0, WIN_LO, WIN_HI);

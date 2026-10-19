@@ -159,7 +159,7 @@ function testBuild() {
   assert.equal(rt.b1i[0xdfff], 0xa5, "intro renderer: bank 1 signature");
   const irt = P.buildIrt(rt, { bootInit: P.INTRO_LOAD + 6, dosini: 0x7c08 });
   assert.equal(irt.bytes[0x80], 0x01, "intro.s area starts with the 8 -> 7 table");
-  assert.ok(P.LAYOUT.IRT + irt.bytes.length <= P.LAYOUT.IRT_SPRITES, "intro.s ends below the intro renderer's tables");
+  assert.ok(P.LAYOUT.IRT + irt.bytes.length <= 0x2000, "intro.s ends below $2000");
   for (const sym of ["SNAP_TAKE", "INTRO_LAUNCH", "INTRO_DONE", "SYSVBV", "WAIT_E5", "DDL_84", "DDL_97"]) assert.ok(irt.symbols[sym], sym);
   const names = [...new Set(P.SEQUENCE.map(([n]) => n).filter(Boolean))];
   const files = Object.fromEntries(names.map((name, i) => [name, new Uint8Array(100 + i).fill(i + 1)]));
@@ -181,6 +181,34 @@ async function testRealDisk(atrPath) {
   const atr = fs.readFileSync(atrPath);
   const conv = P.convert(atr);
   assert.ok(conv.known, `known release (main image SHA-256 ${conv.hash})`);
+  // no absolute read of an Atari hardware register is left in the game or
+  // the intro: each one reads a constant on the 3RIC (a random event that
+  // waited for RANDOM to fall in a range hung the development round)
+  {
+    const readOps = new Set([0xad, 0xae, 0xac, 0xcd, 0xec, 0xcc, 0x2c, 0x2d, 0x0d, 0x4d, 0x6d, 0xed,
+      0xbd, 0xb9, 0xbe, 0xbc, 0xdd, 0xd9, 0x3d, 0x39, 0x1d, 0x19, 0x5d, 0x59, 0x7d, 0x79, 0xfd, 0xf9]);
+    const hw = (t) => (t >= 0xd000 && t < 0xd020) || (t >= 0xd200 && t < 0xd210) || (t >= 0xd300 && t < 0xd304) || (t >= 0xd400 && t < 0xd410);
+    const scan = (bytes, org, allow) => {
+      const left = [];
+      for (let i = 0; i + 2 < bytes.length; i++)
+        if (readOps.has(bytes[i]) && hw(bytes[i + 1] | (bytes[i + 2] << 8)) && !allow.includes(org + i)) left.push((org + i).toString(16));
+      return left;
+    };
+    const left = [...scan(conv.files["G1.BIN"], 0x1000, []), ...scan(conv.files["G2.BIN"], 0x4000, [0x8f48]),   // $8F48: inside CMP $00CC,Y
+      ...scan(conv.files["WIN.BIN"], 0xe000, []), ...scan(conv.files["INTRO.BIN"], P.INTRO_ORG, [])];
+    assert.deepEqual(left, [], `hardware reads left unpatched: ${left.join(" ")}`);
+    // and no JSR/JMP still goes to an entry point in the moved $2000-$3FFF
+    // block that relocated JSR/JMPs reach
+    const main = P.mainImage(atr), entries = new Set();
+    for (const a of P.RELOC_ABS) if (main[a] === 0x20 || main[a] === 0x4c) entries.add(main[a + 1] | (main[a + 2] << 8));
+    const stale = [];
+    for (const [name, org] of [["G1.BIN", 0x1000], ["G2.BIN", 0x4000]]) {
+      const b = conv.files[name];
+      for (let i = 0; i + 2 < b.length; i++)
+        if ((b[i] === 0x20 || b[i] === 0x4c) && entries.has(b[i + 1] | (b[i + 2] << 8))) stale.push((org + i).toString(16));
+    }
+    assert.deepEqual(stale, [], `JSR/JMP into the moved block left unrelocated: ${stale.join(" ")}`);
+  }
   const s = await harness.boot({ sd: buildSparseFat32({ [P.FOLDER]: conv.files }) });
   const vm = s.vm;
   for (const line of [`CD ${P.FOLDER}\r`, "BRUN MULE.PRG 2000\r"]) {
@@ -324,10 +352,11 @@ async function testRealDisk(atrPath) {
   checkIntro(playIntro(vm2, () => {}));
   let status = false;
   for (let t = 0; t < 80 && !status; t++) {
+    let txt = ""; for (let i = 0; i < 120; i++) { const c = vm2.peek(0xb500 + i) & 0x7f; txt += c < 64 ? String.fromCharCode(c + 32) : " "; }
+    status = /STATUS SUMMARY/.test(txt);                         // look before pressing (as above)
+    if (status) break;
     vm2.setGamepadState(0, t % 3 === 0 ? 1 : 0);
     for (let i = 0; i < 12; i++) vm2.run(50000);
-    let txt = ""; for (let i = 0; i < 120; i++) { const c = vm2.peek(0xb500 + i) & 0x7f; txt += c < 64 ? String.fromCharCode(c + 32) : " "; }
-    status = /STATUS SUMMARY/.test(txt);
   }
   assert.ok(status, "MULE.WOZ boots (C600G) to the status summary");
   ok("MULE.WOZ: Disk II boot, the intro, then the game to the status summary");

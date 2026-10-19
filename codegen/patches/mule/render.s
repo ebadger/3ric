@@ -4,24 +4,24 @@
 ; the game's own VBI. Phase 1, interrupts off: walk the ANTIC display list
 ; the game left in the register file, record every mode line in a line
 ; table, and call the game's display-list-interrupt handlers where ANTIC
-; would, so the colours, character sets and player positions they change
-; per band are captured (the handlers' register stores land in this bank's
-; copy of the register file at $D000/$D400). Phase 2, interrupts on: redraw
-; the lines whose contents changed into the hi-res page at HIRES*256 ($2000
-; for the game; $4000 for the intro, which runs while the loader and the
-; hand-off stash hold $2000-$3FFF), and update only the player rows that
-; changed (see draw_lines).
+; would, so the colours, character sets and player and missile positions
+; and widths they change per band are captured (the handlers' register
+; stores land in this bank's copy of the register file at $D000/$D400).
+; Phase 2, interrupts on: redraw the bands whose contents or sprites
+; changed into the hi-res page at HIRES*256 ($2000 for the game; $4000 for
+; the intro, which runs while the loader and the hand-off stash hold
+; $2000-$3FFF), each row with its sprites (see draw_lines).
 ;
 ; Mapping: one Atari character column = one hi-res byte (7 pixels for 8,
 ; or 14 for 16 in the 20-column modes; four 2-bit pixels per byte in modes
 ; 4/5 and D/E); Atari colours become the nearest
 ; hi-res colour. Lines keep their height; if a display list is taller than
 ; 192 lines its blank lines are halved. Addresses in $2000-$3FFF (moved to
-; $E000) are translated.
+; $E000) are translated. Sprites: see "players".
 ;
-; Prepended by the converter: RENDER, FONT, T2TAB, HIRES, SPRITES, SPRMAX,
-; PENDING, PAIRS, NPAIR, RROWS, VC_FAKE, rt.s's snap_g/snap_a as
-; SNAP_G/SNAP_A and its COL_CLASS, COL_EVEN, COL_ODD.
+; Prepended by the converter: RENDER, FONT, T2TAB, HIRES, RROWS, VC_FAKE,
+; RAM2_R, rt.s's snap_g/snap_a as SNAP_G/SNAP_A and its COL_CLASS,
+; COL_EVEN, COL_ODD.
 
 zdl     = $30                   ; display list pointer
 zsrc    = $32                   ; screen memory
@@ -95,27 +95,18 @@ RR_EVERY = 16
 
 B1DATA   = $D3F4                ; 12 bytes between lt_pc1 and the ANTIC copy
 rd_bits  = B1DATA               ; 6: entries to redraw this frame
-rd_np    = B1DATA+6             ; player/entry pairs with pixels
-rd_k     = B1DATA+7
-rd_osn   = B1DATA+8             ; player records on the screen
-r_pcv    = B1DATA+9             ; COLPM of the player being compared
-r_shi    = B1DATA+10            ; player dot offset / 2 (0-3)
-r_sz     = B1DATA+11            ; ms_draw: SIZEM, shifted per missile
-; in main RAM (bank 1 is full of code): RROWS in page 3 after the runtime's
-; variables; the pending records (PENDING, 4 x SPRMAX) and the player/entry
-; pairs (PAIRS, NPAIR) where the converter puts them for each build
-rd_rows  = RROWS                ; 24: hi-res rows drawn afresh
-rd_srow  = RROWS+24             ; 24: hi-res rows whose players changed
-r_par    = RROWS+48             ; the lit dot of a colour cell (pc_par)
-r_row    = RROWS+49             ; sp_wide/ms_draw: the record's row
-r_src    = RROWS+50             ;   and the player or missile byte
-r_hpg    = RROWS+51             ; HIRES, for the RAM2 code (the same in
-RROWS_END = RROWS+52            ; both builds)
-pn_row   = PENDING              ; pending player records (the compare
-pn_y     = pn_row+SPRMAX        ; pass's findings, drawn by spr_put)
-pn_d     = pn_y+SPRMAX
-pn_c     = pn_d+SPRMAX
-rd_pairs = PAIRS                ; player << 6 | entry
+r_pmf    = B1DATA+6             ; bit 1 players on, bit 0 missiles (pm_init)
+r_o      = B1DATA+7             ; sprite (0-3 players, 4 the missiles)
+r_ob     = B1DATA+8             ; sprite object being worked out (ob_get)
+r_pcv    = B1DATA+9             ; COLPM of the sprite being drawn
+                                ; (B1DATA+10 free)
+r_sz     = B1DATA+11            ; SIZEP/SIZEM of the sprite being drawn
+; in page 3, after the runtime's variables
+r_par    = RROWS                ; the lit dot of a colour cell (pc_par)
+r_src    = RROWS+1              ; the player or missile byte being drawn
+r_hpg    = RROWS+2              ; HIRES, for the RAM2 code (the same in
+                                ; both builds); then the c_* sprite cache
+RROWS_END = RROWS+51
 
         .org RENDER
 
@@ -479,13 +470,14 @@ mode_h:  .byte    1, 1, 8,10, 8,16, 8,16, 8, 4, 4, 2, 1, 2, 1, 1
 mode_nb: .byte    0, 0,40,40,40,40,20,20,10,10,20,20,20,40,40,40
 
 ; ---------------------------------------------------------------- phase 2
-; Nothing is written while the picture is unchanged: first every line's
-; hash, and every player row about to be drawn, are compared with what is
-; on the screen. Then the changed lines are redrawn (wiping the players on
-; them) and only the player rows that changed or were wiped are lifted and
-; put back, so the rest of the picture never blinks (there is no second
-; page to flip to).
+; Nothing is written while the picture is unchanged: every band's hash
+; (its layout, colours, screen bytes and the sprite bytes over it) is
+; compared with the last frame's, and only the bands that changed are
+; redrawn, each row with its players and missiles ORed in as soon as it is
+; drawn, so the rest of the picture never blinks (there is no second page
+; to flip to) and a moving sprite redraws only the bands it is on.
 draw_lines:
+        jsr pm_init
         lda #$FF                ; every RR_EVERY renders, one line is redrawn
         sta r_rr                ; regardless (a missed change heals)
         dec r_rrc
@@ -556,24 +548,7 @@ dl_iv2: lda r_end
         cmp r_pend
         beq dl_s0
         inc r_dc
-dl_s0:  jsr spr_scan            ; the players: which rows change?
-        ldx #23
-dl_s1:  stz rd_srow,x
-        stz rd_rows,x
-        dex
-        bpl dl_s1
-        lda r_spn
-        sta rd_osn
-        stz r_spn
-        jsr spr_draw
-        jsr ms_draw             ; (RAM2) the missiles
-        jsr spr_gone
-        lda r_dc
-        ldx #23
-dl_s4:  ora rd_srow,x
-        dex
-        bpl dl_s4
-        tax
+dl_s0:  lda r_dc
         bne dl_s5
         rts
 dl_s5:
@@ -595,26 +570,13 @@ dl_d1:  lda r_end               ; clear what an earlier, taller screen left
 dl_clr: lda zt4
         cmp r_pend
         bcs dl_d2
-        jsr mark_row
+        jsr row_addr
         jsr clear_row
         inc zt4
         bra dl_clr
 dl_d2:  lda r_end
         sta r_pend
-        jsr spr_erase           ; the players: lift, then draw what the
-        jmp spr_put             ; compare pass recorded (the game's VBI may
-                                ; have moved them since; next frame shows it)
-
-; records past the ones just compared are no longer drawn: lift their rows
-spr_gone:
-        ldx r_spn
-sg1:    cpx rd_osn
-        bcs sg2
-        lda spr_row,x
-        jsr srow_mark
-        inx
-        bra sg1
-sg2:    rts
+        rts
 
 ; entry X -> Y = its byte in rd_bits, A = its bit; X = r_i after
 dirty_bit:
@@ -634,28 +596,9 @@ row_bit:
         tax
         lda bitv,x
         rts
-; Row A is being drawn afresh: note it, then its address (as row_addr;
-; Y lost).
-mark_row:
-        phx
-        pha
-        jsr row_bit
-        ora rd_rows,y
-        sta rd_rows,y
-        pla
-        plx
-        jmp row_addr
-; Row A's players change: note it (A lost).
-srow_mark:
-        phx
-        jsr row_bit
-        ora rd_srow,y
-        sta rd_srow,y
-        plx
-        rts
 bitv:   .byte $01,$02,$04,$08,$10,$20,$40,$80
 
-; 16-bit hash of an entry's layout, registers and screen bytes
+; 16-bit hash of an entry's layout, registers, screen bytes and sprites
 entry_hash:
         stz r_hlo
         stz r_hhi
@@ -671,8 +614,8 @@ entry_hash:
         ldy #8                  ; the colours as the hi-res colours they
 eh_c:   lda eh_lo,y             ; become (an Atari colour cycle the 3RIC
         sta eh_ld+1             ; cannot show redraws nothing), players'
-        lda eh_hi,y             ; too (a player record holds pixels and
-        sta eh_ld+2             ; place, not colour)
+        lda eh_hi,y             ; too
+        sta eh_ld+2
 eh_ld:  lda $FFFF,x
         jsr col_class
         jsr hb
@@ -695,7 +638,7 @@ eh1:    lda (zsrc),y
         cpy r_nb
         bne eh1
 eh_done:
-        rts
+        jmp eh_spr
 eh_lo:  .byte <lt_c0,<lt_c1,<lt_c2,<lt_c3,<lt_cbk,<lt_pc0,<lt_pc1,<lt_pc2,<lt_pc3
 eh_hi:  .byte >lt_c0,>lt_c1,>lt_c2,>lt_c3,>lt_cbk,>lt_pc0,>lt_pc1,>lt_pc2,>lt_pc3
 hb:     eor r_hlo
@@ -795,6 +738,7 @@ cmask:  phx
 
 ; ---- draw entry r_i
 draw_entry:
+        jsr spr_new
         ldx r_i
         jsr set_colors
         lda lt_mslo,x
@@ -818,10 +762,10 @@ de_row: lda zt5
         bcs de_x
         cmp #192
         bcs de_x
-        jsr mark_row
+        jsr row_addr
         lda zt5                 ; the second scan line of a mode 5, 7 or D
-        lsr a                   ; line: a copy of the first
-        bcc de_go
+        lsr a                   ; line: a copy of the first (unless sprites
+        bcc de_go               ; were ORed into the first)
         lda lt_mode,x
         cmp #5
         beq de_cp
@@ -829,7 +773,14 @@ de_row: lda zt5
         beq de_cp
         cmp #$0D
         bne de_go
-de_cp:  ldy #39
+de_cp:  lda zt5
+        dec a
+        clc
+        adc lt_line,x
+        jsr ln_spr
+        ldx r_i
+        bcs de_go
+        ldy #39
 de_cp1: lda (zdl),y
         sta (zhr),y
         dey
@@ -886,6 +837,7 @@ de_t20: lda zt5
         bra de_next
 de_bm8: jsr row_bm8
 de_next:
+        jsr de_spr              ; the row's players and missiles
         lda zhr                 ; the row just drawn (zdl is free in phase 2)
         sta zdl
         lda zhr+1
@@ -1087,126 +1039,294 @@ rb2:    lda r_gl
 ; 8 pixels -> 14: widths 2,2,2,1 per half (bit 0 = leftmost on the hi-res)
 t6_l:   .byte $00,$40,$30,$70,$0C,$4C,$3C,$7C,$03,$43,$33,$73,$0F,$4F,$3F,$7F
 ; ---------------------------------------------------------------- players
-; Players 0-3 (single-line P/M at PMBASE+$400) are ORed onto the screen in
-; their colour, each band with the position and colour the line table
-; captured for it (the game repositions players in its DLIs). Each player
-; row drawn is a record (row, column and pixel shift, the player byte, the
-; bytes under it), so the next frame can tell exactly which rows changed; a
-; player colour change redraws the entry instead (entry_hash).
-spr_row = SPRITES               ; hi-res row (SPRMAX records)
-spr_ck  = spr_row+SPRMAX        ; player byte
-spr_y   = spr_ck+SPRMAX         ; column | shift index << 6
-spr_s0  = spr_y+SPRMAX
-spr_s1  = spr_s0+SPRMAX
-spr_s2  = spr_s1+SPRMAX
-r_spn   = $D4F2
-r_p     = $D4F3
-r_pg    = $D4F4
-r_cb    = $D4F5
-r_sh    = $D4F6
-r_L     = $D4F7
+; Players 0-3 (single-line P/M at PMBASE+$400) and the missiles
+; (PMBASE+$300) are ORed into each row as it is drawn, in the band's place,
+; width and colour (the game moves players and missiles in its display list
+; interrupts: lt_hp*, lt_pc* and the band's screen hole). A band's hash
+; covers the sprite bytes over it, so a moving sprite redraws the bands it
+; is on; nothing is kept between frames and nothing has to be lifted.
+; Within a band each sprite's colour masks, place and width are worked out
+; once, when a row first has its pixels (ob_get, the c_* cache).
+r_p     = $D4F3                 ; player or missile number (0-3)
+r_pg    = $D4F4                 ; the players' page (PMBASE + 4)
+r_cb    = $D4F5                 ; byte column of a run's first lit dot
+r_sh    = $D4F6                 ; dot offset there (0-6)
+r_L     = $D4F7                 ; Atari line
 r_le    = $D4F8
-r_d     = $D4F9
+r_d     = $D4F9                 ; 8 cells to draw
 r_b0    = $D4FA
 r_b1    = $D4FB
 r_b2    = $D4FC
+c_ok    = RROWS+3               ; per sprite object (0-3 players, 4-7
+c_cb    = RROWS+11              ; missiles): 0 not worked out yet, 1 on the
+c_sh    = RROWS+19              ; playfield, $80 off; where, its colour
+c_me    = RROWS+27              ; masks (even, odd bytes) and its width
+c_mo    = RROWS+35              ; (SIZEP/SIZEM bits)
+c_sz    = RROWS+43
+RIVER_GOLD = $16                ; PCOLR3 on the map ($4BB7)
+RIVER_BLUE = $86                ; an Atari blue (the 3RIC's blue)
 
-spr_erase:
-        ldx rd_osn
-        beq se_done
-se1:    dex
-        phx
-        lda spr_row,x
-        jsr row_bit
-        sta zt1
-        and rd_rows,y           ; drawn afresh: nothing to put back
-        bne se2
-        lda zt1
-        and rd_srow,y           ; unchanged: stays
-        beq se2
-        plx
-        phx
-        lda spr_row,x
-        jsr row_addr
-        lda spr_y,x
-        and #$3F
-        tay
-        lda spr_s0,x
-        sta (zhr),y
-        iny
-        cpy #40
-        bcs se2
-        lda spr_s1,x
-        sta (zhr),y
-        iny
-        cpy #40
-        bcs se2
-        lda spr_s2,x
-        sta (zhr),y
-se2:    plx
-        bne se1
-se_done:
-        rts
-
-; The (player, entry) pairs with pixels -> rd_pairs.
-spr_scan:
-        stz rd_np
-        lda $D400               ; player DMA and GRACTL players
-        and #$08
-        beq ss_r
-        lda $D01D
-        and #$02
-        bne ss_go
-ss_r:   rts
-ss_go:  lda $D407
+; this frame's P/M state: the players' page; players and missiles on
+; (DMACTL and GRACTL)
+pm_init:
+        lda $D407
         and #$F8
         clc
         adc #4
         sta r_pg
-        stz r_p
-ss_pl:  lda r_pg
-        clc
-        adc r_p
-        sta zg+1
+        lda $D400               ; DMACTL bit 3 players, bit 2 missiles
+        lsr a
+        lsr a
+        and $D01D               ; GRACTL bit 1 players, bit 0 missiles
+        and #$03
+        sta r_pmf
+        rts
+
+; graphics of sprite Y (0-3 a player, 4 the missiles) -> zg; carry set
+; when it is off (DMA or GRACTL). Y kept.
+sp_page:
         stz zg
-        stz r_i
-ss_ent: ldx r_i
-        cpx r_n
-        bcs ss_np
-        lda lt_rows,x
-        beq ss_ne
-        jsr sp_hpos
-        bcs ss_ne
+        tya
+        clc
+        adc r_pg
+        cpy #4
+        bcs spg_m
+        sta zg+1
+        lda r_pmf
+        and #$02
+        bra spg_x
+spg_m:  sbc #5                  ; (carry set) the missiles: PMBASE + 3
+        sta zg+1
+        lda r_pmf
+        and #$01
+spg_x:  cmp #1                  ; carry clear when off
+        bcc spg_off
+        clc
+        rts
+spg_off:
+        sec
+        rts
+
+; The sprites of entry X in its hash: each sprite's nonzero bytes over the
+; band's lines with their line, and, for one with any, its place and width.
+eh_spr: lda lt_rows,x
+        beq ehs_x
+        stz r_o
+ehs_o:  ldy r_o
+        jsr sp_page
+        bcs ehs_n
         jsr sd_lines
         stz zt1
-ss_ln:  ldy r_L
+ehs_l:  ldy r_L
         lda (zg),y
-        beq ss_nl
-        sta zt1
-ss_nl:  inc r_L
+        beq ehs_z
+        jsr hb
+        tya
+        jsr hb
+        inc zt1
+ehs_z:  inc r_L
         lda r_L
         cmp r_le
-        bne ss_ln
+        bne ehs_l
         lda zt1
-        beq ss_ne
-        ldx rd_np
-        cpx #NPAIR
-        bcs ss_ne
-        lda r_p
-        lsr a
-        ror a
-        ror a
-        ora r_i
-        sta rd_pairs,x
-        inc rd_np
-ss_ne:  inc r_i
-        jmp ss_ent
-ss_np:  inc r_p
-        lda r_p
+        beq ehs_n
+        lda r_o
         cmp #4
-        beq ss_x
-        jmp ss_pl
-ss_x:   rts
+        beq ehs_mi
+        jsr lt_get              ; HPOSn
+        jsr hb
+        jsr hole
+        lda r_o
+        ora #4
+        tay
+        jsr hole_ld             ; SIZEPn
+        jsr hb
+        bra ehs_n
+ehs_mi: jsr hole                ; HPOSM0-3, SIZEM, the fifth player
+        ldy #3
+ehs_m1: jsr hole_ld
+        jsr hb
+        dey
+        bpl ehs_m1
+        lda SNAP_G+12
+        jsr hb
+        lda SNAP_G+$1B
+        and #$10
+        jsr hb
+ehs_n:  inc r_o
+        lda r_o
+        cmp #5
+        bne ehs_o
+ehs_x:  rts
+
+; carry set when any sprite has pixels on Atari line A
+ln_spr: sta r_L
+        stz r_o
+lsp1:   ldy r_o
+        jsr sp_page
+        bcs lsp2
+        ldy r_L
+        lda (zg),y
+        bne lsp_y
+lsp2:   inc r_o
+        lda r_o
+        cmp #5
+        bne lsp1
+        clc
+        rts
+lsp_y:  sec
+        rts
+
+; draw_entry: a new band, nothing worked out about its sprites yet
+spr_new:
+        ldx #7
+sn1:    stz c_ok,x
+        dex
+        bpl sn1
+        rts
+
+; The sprites on row zt5 of entry r_i (at zhr): Atari line lt_line + zt5,
+; or both of lt_line + 2 * zt5 and the next where blank lines were halved.
+de_spr: ldx r_i
+        lda lt_rows,x
+        cmp lt_h,x
+        lda zt5
+        bcs ds1
+        asl a
+        clc
+        adc lt_line,x
+        sta r_L
+        jsr row_spr
+        inc r_L
+        bra row_spr
+ds1:    clc
+        adc lt_line,x
+        sta r_L
+; every sprite's pixels on line r_L, ORed into row zhr
+row_spr:
+        stz r_o
+rs_o:   ldy r_o
+        jsr sp_page
+        bcs rs_n
+        ldy r_L
+        lda (zg),y
+        beq rs_n
+        sta r_src
+        lda r_o
+        cmp #4
+        bcs rs_m
+        tax
+        jsr ob_get
+        bcs rs_n
+        jsr sp_wide             ; (RAM2) by SIZEP: 1, 2 or 4 runs
+rs_n:   inc r_o
+        lda r_o
+        cmp #5
+        bne rs_o
+        rts
+rs_m:   ldx #4                  ; the missiles, 2 bits each, missile 0 lowest
+rm1:    lda r_src
+        and #$03
+        beq rm_n
+        sta r_d
+        jsr ob_get
+        bcs rm_n
+        lda r_sz                ; 2, 4 or 8 cells by SIZEM
+        asl a
+        asl a
+        ora r_d
+        tay
+        lda m_tab,y
+        sta r_d
+        jsr ch_draw
+rm_n:   inx
+        lsr r_src
+        lsr r_src
+        bne rm1
+        rts
+
+; Sprite object X (0-3 players, 4-7 missiles 0-3) of entry r_i -> r_cb,
+; r_sh, its masks in r_pal/r_x and its width r_sz; carry set when off the
+; playfield. X kept. Worked out on first use in a band (c_*).
+ob_get: lda c_ok,x
+        beq og_new
+        bmi og_off
+        lda c_cb,x
+        sta r_cb
+        lda c_sh,x
+        sta r_sh
+        lda c_me,x
+        sta r_pal
+        lda c_mo,x
+        sta r_x
+        lda c_sz,x
+        sta r_sz
+        clc
+        rts
+og_off: sec
+        rts
+og_new: stx r_ob
+        txa
+        and #$03
+        sta r_p
+        ldx r_i
+        lda r_ob
+        cmp #4
+        bcs og_m
+        jsr sp_pcol             ; a player: COLPMn, HPOSn, SIZEPn
+        cmp #RIVER_GOLD         ; the river (player 3 in gold on the map)
+        bne og_p1               ; is water: blue
+        ldy r_p
+        cpy #3
+        bne og_p1
+        lda #RIVER_BLUE
+og_p1:  jsr pc_set
+        lda r_p
+        jsr lt_get
+        pha
+        jsr hole
+        lda r_p
+        ora #4
+        tay
+        jsr hole_ld
+        bra og_c
+og_m:   lda SNAP_G+$1B          ; a missile: COLPF3 for the fifth player,
+        and #$10                ; else its player's colour; HPOSMn (the
+        beq og_mp               ; band's); SIZEM's bits for it
+        lda lt_c3,x
+        bra og_mc
+og_mp:  jsr sp_pcol
+og_mc:  jsr pc_set
+        jsr hole
+        ldy r_p
+        jsr hole_ld
+        pha
+        lda SNAP_G+12
+        ldy r_p
+og_s:   dey
+        bmi og_c
+        lsr a
+        lsr a
+        bra og_s
+og_c:   and #$03
+        ldx r_ob
+        sta c_sz,x
+        lda r_pal
+        sta c_me,x
+        lda r_x
+        sta c_mo,x
+        pla
+        jsr shc
+        ldx r_ob
+        lda #$80
+        bcs og_st
+        lda r_cb
+        sta c_cb,x
+        lda r_sh
+        sta c_sh,x
+        lda #1
+og_st:  sta c_ok,x
+        jmp ob_get
 
 ; r_L/r_le = the entry's first and end Atari line (X = entry)
 sd_lines:
@@ -1217,74 +1337,14 @@ sd_lines:
         sta r_le
         rts
 
-spr_draw:
-        stz rd_k
-sd_pl:  ldx rd_k
-        cpx rd_np
-        bcs sd_out
-        lda rd_pairs,x
-        and #$3F
-        sta r_i
-        lda rd_pairs,x
-        rol a
-        rol a
-        rol a
-        and #$03
-        sta r_p
-        clc
-        adc r_pg
-        sta zg+1
-        stz zg
-        ldx r_i
-        jsr sp_pcol
-        jsr pc_par
-        jsr sp_hpos
-        bcs sd_np
-        jsr sd_lines
-sd_ln:  ldy r_L
-        lda (zg),y
-        beq sd_nl
-        sta r_d
-        jsr sd_row              ; A = hi-res row; carry set when off
-        bcs sd_nl
-        jsr sp_wide             ; one record, or 2/4 for a wide player
-        ldx r_i
-sd_nl:  inc r_L
-        lda r_L
-        cmp r_le
-        bne sd_ln
-sd_np:  inc rd_k
-        bra sd_pl
-sd_out: rts
-
-; Row of Atari line r_L in entry X: A = hrow + (L - line), halved when the
-; band's blank lines were compressed; carry set when off the screen.
-sd_row: lda r_L
-        sec
-        sbc lt_line,x
-        sta zt0
-        lda lt_rows,x
-        cmp lt_h,x
-        lda zt0
-        bcs rw_h1
-        lsr a
-rw_h1:  clc
-        adc lt_hrow,x
-        bcs rw_x
-        cmp #192
-rw_x:   rts
-
-; HPOS of player r_p in entry X -> byte column r_cb and dot offset r_sh
-; (0-6; r_shi = r_sh / 2) of its first lit dot; carry set when off the
-; playfield; X kept. Players are drawn in colour cells: colour clock
-; x = HPOS - 48 is cell c = x * 7/8 (the playfield's 160 clocks are 140
-; cells, so a player keeps its place on the map), and each player pixel is
-; one cell, dots 2c and 2c+1, lit on the colour's own dot (r_par: 0 for
-; violet, blue and white, 1 for green and orange; white lights both). The
-; first lit dot is s = 2c + r_par = 7 * r_cb + r_sh.
-sp_hpos:
-        lda r_p
-        jsr lt_get
+; HPOS A -> byte column r_cb and dot offset r_sh (0-6) of the first lit
+; dot; carry set when off the playfield; X kept. Sprites are drawn in
+; colour cells: colour clock x = HPOS - 48 is cell c = x * 7/8 (the
+; playfield's 160 clocks are 140 cells, so a sprite keeps its place on the
+; map), and each sprite pixel is one cell, dots 2c and 2c+1, lit on the
+; colour's own dot (r_par: 0 for violet, blue and white, 1 for green and
+; orange; white lights both). The first lit dot is s = 2c + r_par =
+; 7 * r_cb + r_sh.
 shc:    sec                     ; x = HPOS - 48 = 8q + r: c = 7q + r',
         sbc #48                 ; r' = r - 1 (0 for r = 0); s = 14q + t,
         bcc sh_off              ; t = 2r' + r_par (0-13)
@@ -1304,15 +1364,13 @@ sh_r0:  asl a
         sbc #7                  ; t >= 7: the next column
         inc r_cb
 sh_t:   sta r_sh
-        lsr a
-        sta r_shi
         lda r_cb
         cmp #40
         rts                     ; carry set when off the right edge
 sh_off: sec
         rts
 
-sp_pcol:                        ; COLPMn of entry X -> r_pcv (and A)
+sp_pcol:                        ; COLPMn (n = r_p) of entry X -> A
         lda r_p
         ora #4
         jsr lt_get
@@ -1328,120 +1386,41 @@ lg:     lda $FFFF,x
         rts
 lg_lo:  .byte <lt_hp0,<lt_hp1,<lt_hp2,<lt_hp3,<lt_pc0,<lt_pc1,<lt_pc2,<lt_pc3
 lg_hi:  .byte >lt_hp0,>lt_hp1,>lt_hp2,>lt_hp3,>lt_pc0,>lt_pc1,>lt_pc2,>lt_pc3
-; a missile's 2 pixels (bit 1 left) by SIZEM: 2, 4 or 8 cells (ms_draw)
+; a missile's 2 pixels (bit 1 left) by SIZEM: 2, 4 or 8 cells
 m_tab:  .byte $00,$40,$80,$C0, $00,$30,$C0,$F0, $00,$40,$80,$C0, $00,$0F,$F0,$FF
 
-; Player byte r_d on hi-res row A at column r_cb, shift r_shi: record it in
-; the pending list and compare it with the record on the screen at the same
-; index; a difference marks both rows. The record is exact (row, column |
-; shift << 6, player byte; a colour change redraws the entry, entry_hash).
-sp_rec: sta zt3
-        ldx r_spn
-        cpx #SPRMAX
-        bcs sp_rx
-        ldy r_shi
-        lda shi_hi,y
-        ora r_cb
-        sta zt4
-        sta pn_y,x
-        lda zt3
-        sta pn_row,x
-        lda r_d
-        sta pn_d,x
-        lda r_pcv
-        sta pn_c,x
-        cpx rd_osn
-        bcs sr_m1
-        lda spr_row,x
-        cmp zt3
-        bne sr_m0
-        lda spr_y,x
-        cmp zt4
-        bne sr_m0
-        lda spr_ck,x
-        cmp r_d
-        beq sr_n
-sr_m0:  lda spr_row,x
-        jsr srow_mark
-sr_m1:  lda zt3
-        jsr srow_mark
-sr_n:   inc r_spn
-sp_rx:  rts
-
-; Draw the pending records whose rows were lifted or drawn afresh (the
-; others are already on the screen, unchanged) and make them the records.
-spr_put:
-        stz rd_k
-pu_l:   ldx rd_k
-        cpx r_spn
-        bcc pu_c
-        rts
-pu_c:   lda pn_row,x
-        jsr row_bit
-        sta zt1
-        lda rd_rows,y
-        ora rd_srow,y
-        and zt1
-        bne pu_go
-        jmp pu_n
-pu_go:  ldx rd_k
-        lda pn_d,x
-        sta r_d
-        lda pn_c,x
+; Colour A for the sprite being worked out: r_par, and its masks in
+; r_cm+10/+11 (r_pal and r_x, free between rows; the band's own masks
+; stay for its next rows). X kept.
+pc_set: pha
         jsr pc_par
-        lda pn_y,x
-        sta zt4
-        and #$3F
-        sta r_cb
-        eor r_par               ; the offset's low bit: s = 7 * r_cb + r_sh
-        and #$01                ; has the colour's parity
-        sta r_sh
-        lda zt4
-        rol a
-        rol a
-        rol a
-        and #$03
-        asl a
-        ora r_sh
-        sta r_sh
-        lda pn_c,x
-        ldy #0
-        jsr cmask_fg
+        pla
+        ldy #10
+        jmp cmask_fg
+
+; 8 cells r_d at column r_cb, dot offset r_sh, in the masks in r_pal/r_x,
+; ORed into row zhr. X kept.
+ch_draw:
         jsr sp_bits
-        ldx rd_k
-        lda pn_row,x
-        sta spr_row,x
-        jsr row_addr
-        lda r_d
-        sta spr_ck,x
-        lda zt4
-        sta spr_y,x
         ldy r_cb
-        lda (zhr),y
-        sta spr_s0,x
         lda r_b0
         jsr sr_or
         iny
         cpy #40
-        bcs pu_n
-        lda (zhr),y
-        sta spr_s1,x
+        bcs cd_x
         lda r_b1
         jsr sr_or
         iny
         cpy #40
-        bcs pu_n
-        lda (zhr),y
-        sta spr_s2,x
+        bcs cd_x
         lda r_b2
         jsr sr_or
-pu_n:   inc rd_k
-        jmp pu_l
+cd_x:   rts
 
-; r_d at dot offset r_sh -> hi-res bytes r_b0-r_b2: player pixel k lights
-; dot 2k (and 2k+1 in white, r_cm = $7F), so a shape keeps every pixel and
-; its colour wherever it stands (one more dot of width per 7 than the
-; playfield's scale; at offset 6 a white pixel's last dot is cut)
+; r_d at dot offset r_sh -> hi-res bytes r_b0-r_b2: pixel k lights dot 2k
+; (and 2k+1 in white, mask $7F), so a shape keeps every pixel and its colour
+; wherever it stands (one more dot of width per 7 than the playfield's
+; scale; at offset 6 a white pixel's last dot is cut)
 sp_bits:
         lda r_d
         lsr a
@@ -1457,7 +1436,7 @@ sp_bits:
         lda sp_tab,y
         sta r_b1
         stz r_b2
-        lda r_cm
+        lda r_pal
         cmp #$7F
         bne sb1
         lda r_b0                ; white: both dots of each cell
@@ -1491,17 +1470,17 @@ sb3:    lda r_b0                ; 24 dots -> three bytes of 7
         sta r_b2
         rts
 
-sr_or:  beq sro1                ; OR pixels A at column Y in its colour
+sr_or:  beq sro1                ; OR pixels A at column Y in r_pal/r_x
         sta zt0
         tya
         and #$01
         phx
         tax
-        lda r_cm,x
+        lda r_pal,x
         plx
         and zt0
         sta zt0
-        lda r_cm
+        lda r_pal
         and #$80
         ora zt0
         ora (zhr),y
@@ -1522,59 +1501,54 @@ pc_par: jsr col_class
         plx
         rts
 par_tab: .byte 0,0,1,0,0,1
-shi_hi:  .byte $00,$40,$80,$C0
 ; 4 player pixels (bit 3 leftmost) -> dots 0, 2, 4, 6 (bit 0 leftmost)
 sp_tab:  .byte $00,$40,$10,$50,$04,$44,$14,$54,$01,$41,$11,$51,$05,$45,$15,$55
 b1gap_end:
 
         .org RAM2_R             ; RAM2, after the runtime: the same bytes in
                                 ; both renderer builds (the converter checks)
-; Entry X's screen hole -> zsrc: the 8 bytes after the 120 shown in hi-res
-; block X (blocks are 128 bytes, 3 rows), never on the screen; X kept.
-; Phase 1 keeps the band's HPOSM0-3 and SIZEP0-3 there (the game's display
-; list interrupts move the missiles per band: the plot frames' sides).
+; Entry X's screen hole: the 8 bytes after the 120 shown in hi-res block X
+; (blocks are 128 bytes, 3 rows), never on the screen; hole_ld/hole_st read
+; and write its byte Y. X kept. Phase 1 keeps the band's HPOSM0-3 and
+; SIZEP0-3 there (the game's display list interrupts move the missiles per
+; band: the plot frames' sides).
 hole:   txa
         lsr a
         ora r_hpg
-        sta zsrc+1
+        sta hole_ld+2
+        sta hole_st+2
         lda #$78
         bcc ho1
         lda #$F8
-ho1:    sta zsrc
+ho1:    sta hole_ld+1
+        sta hole_st+1
+        rts
+hole_ld: lda $FFFF,y
+        rts
+hole_st: sta $FFFF,y
         rts
 rec_hole:
         jsr hole
         ldy #7
 rh1:    lda $D004,y
-        sta (zsrc),y
+        jsr hole_st
         dey
         bpl rh1
         rts
 
-; Player byte r_d of player r_p on row A, in entry X, at the cell sp_hpos
-; found, in colour r_pcv: SIZEP 1 (double) and 3 (quad; the band's, from
-; its hole) draw each pixel 2 or 4 cells wide, as 2 or 4 records of 8 cells.
+; Player byte r_src at the place ob_get found, in its colour and width
+; r_sz (SIZEP: 1 double, 3 quad, else normal): each pixel 1, 2 or 4 cells,
+; drawn as 1, 2 or 4 runs of 8 cells.
 sp_wide:
-        sta r_row
-        jsr hole
-        lda r_p
-        ora #4
-        tay
-        lda (zsrc),y            ; SIZEP: 1 double, 3 quad, else normal
-        and #$03
+        lda r_sz
         lsr a
         bcs sw_w
-        lda r_row
-        jmp sp_rec
+        lda r_src
+        sta r_d
+        jmp ch_draw
 sw_w:   sta r_sz                ; 0 double, 1 quad
-        lda r_d
-        sta r_src
-        lda r_cb
-        pha
-        lda r_sh
-        pha
         ldy #8                  ; source bits left
-sw_1:   ldx #4                  ; 4 of them a record (double), 2 (quad)
+sw_1:   ldx #4                  ; 4 of them a run (double), 2 (quad)
         lda r_sz
         beq sw_2
         ldx #2
@@ -1595,22 +1569,16 @@ sw_4:   phy
         ply
         tya
         bne sw_1
-        pla
-        sta r_sh
-        lsr a
-        sta r_shi
-        pla
-        sta r_cb
         rts
-; 8 cells A at the current cell (a record unless empty or past the right
-; edge), then move 8 cells (16 dots) on
-sw_ch:  beq sw_n
+; 8 cells A at the current cell (unless empty or past the right edge), then
+; move 8 cells (16 dots) on
+sw_ch:  cmp #0                  ; (the caller's LDX r_sz set the flags)
+        beq sw_n
         sta r_d
         lda r_cb
         cmp #40
         bcs sw_n
-        lda r_row
-        jsr sp_rec
+        jsr ch_draw
 sw_n:   lda r_sh
         clc
         adc #2
@@ -1619,88 +1587,9 @@ sw_n:   lda r_sh
         sbc #7
         inc r_cb
 sw_n1:  sta r_sh
-        lsr a
-        sta r_shi
         inc r_cb
         inc r_cb
         rts
-
-; The missiles (GRAFM at PMBASE+$300, single line): each missile's row is a
-; record of 2, 4 or 8 cells (SIZEM) at its HPOSM, in COLPF3 when PRIOR has
-; the fifth player (M.U.L.E.'s mule bodies), else in its player's colour.
-; Positions and colours are the band's; SIZEM and PRIOR the VBI's (SNAP_G).
-ms_draw:
-        lda $D400               ; missile DMA and GRACTL missiles
-        and #$04
-        bne md_go
-md_x:   rts
-md_go:  lda $D01D
-        lsr a
-        bcc md_x
-        lda $D407               ; (carry set) PMBASE + 3
-        and #$F8
-        adc #2
-        sta zg+1
-        stz zg
-        stz r_i
-md_e:   ldx r_i
-        cpx r_n
-        bcs md_x
-        lda lt_rows,x
-        bne md_en
-md_ne:  inc r_i
-        bra md_e
-md_en:  jsr sd_lines
-        jsr hole                ; the band's HPOSM0-3
-md_l:   ldy r_L
-        lda (zg),y
-        beq md_nl
-        sta r_src
-        jsr sd_row
-        bcs md_nl
-        sta r_row
-        lda SNAP_G+12           ; SIZEM
-        sta r_sz
-        stz r_p
-md_m:   lda r_src               ; missile r_p: its 2 pixels, its size
-        and #$03
-        beq md_mn
-        sta r_d
-        lda r_sz
-        and #$03
-        asl a
-        asl a
-        ora r_d
-        tay
-        lda m_tab,y
-        sta r_d
-        ldx r_i
-        lda SNAP_G+$1B          ; PRIOR: the fifth player?
-        and #$10
-        beq md_pc
-        lda lt_c3,x
-        sta r_pcv
-        bra md_c
-md_pc:  jsr sp_pcol
-md_c:   jsr pc_par
-        ldy r_p
-        lda (zsrc),y            ; HPOSM
-        jsr shc
-        bcs md_mn
-        lda r_row
-        jsr sp_rec
-md_mn:  inc r_p
-        lsr r_sz
-        lsr r_sz
-        lsr r_src               ; the next missile, while any has pixels
-        lsr r_src
-        bne md_m
-        ldx r_i
-md_nl:  inc r_L
-        lda r_L
-        cmp r_le
-        bne md_l
-        jmp md_ne
 ; 4 pixels, each doubled
 dbl_t:  .byte $00,$03,$0C,$0F,$30,$33,$3C,$3F,$C0,$C3,$CC,$CF,$F0,$F3,$FC,$FF
 ram2_r_end:

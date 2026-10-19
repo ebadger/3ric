@@ -130,6 +130,10 @@ irq_tick:
         phy
         cld
         jsr vbi_rt
+        lda $D40E               ; NMIEN: the game's VBI only while it is on
+        and #$40                ; (its pause screen turns NMIs off and waits
+        beq vbi_after           ; for START inside its VBI: the ticks keep
+                                ; CONSOL fresh, the VBI must not re-enter)
         tsx                     ; the interrupted code's P: the game's VBI
         lda $0105,x            ; skips its work when I was set there
         tay
@@ -1059,6 +1063,8 @@ bf4:    sta $FF00,x
         sta $0230
         lda #>blank_dl
         sta $0231
+        lda #$40                ; NMIEN: the VBI on, as the OS leaves it
+        sta $D40E
         jsr hw_init
         jmp bf_b
 rt_b2f_end:
