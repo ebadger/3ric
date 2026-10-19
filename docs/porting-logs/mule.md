@@ -52,12 +52,13 @@ survive it). Both loaders work through one piece table (`SEQUENCE`) in two phase
   banner, so the M.U.L.E. walking below it showed only now and then; both reveal
   sweeps run straight away and `title_hold` keeps the title up until the Atari's
   would end. The banner's DLI no longer steps COLOR2 each frame (each step redrew
-  the whole banner). Any key typed reaches the intro's `CH` (the OS keyboard handler's
+  the whole banner), nor adds COLOR2 (which the music's notes set) to its shading,
+  so the letters stay one colour. Any key typed reaches the intro's `CH` (the OS keyboard handler's
   job), so a key skips the title as on the Atari. The number of planeteers starts
   at 1 and SELECT cycles 1, 0 (all computer), 2: the controller screen wants a
   different controller's button per planeteer, and the 3RIC has the keyboard and
   two pads. The intro's renderer build skips the player-collision scan (the intro
-  reads none) and waits a quarter of a redraw's length after one; its console-key
+  reads none); its console-key
   holds count only the ticks between redraws, since its main code (which reads
   CONSOL) does not run during one. Phase 1 of the loader loads the runtime, the intro's renderer and OS layer
   and the intro, saves what the ROM DOS (or the Disk II boot) needs (zero page, stack,
@@ -136,10 +137,23 @@ survive it). Both loaders work through one piece table (`SEQUENCE`) in two phase
   is filled black at once. The second scan line of a mode 5, 7 or D line is
   a copy of the first, unless sprites were ORed into the first. Blank lines above
   the first mode line that are on the screen become one entry, so sprites there (the
-  intro's species grid) are drawn. After a redraw the tick waits at least as long as
-  the redraw took (three ticks at least) before the next, so the main code keeps
-  half the CPU on busy screens. Renderer code that is the same in both builds also
-  uses RAM2's end; its variables sit after the runtime's in page 3.
+  intro's species grid) are drawn. A band whose playfield (layout, colours, screen
+  bytes; its own part of the hash) is unchanged but whose sprites changed is
+  redrawn only in the columns its sprites cover now or did last time (groups of
+  four), so a walking figure rewrites a few columns, not the band; the
+  hash's colour classes are cached per slot. The intro's mode-D logo is drawn in
+  colour cells: every 8 pixels are 7 cells of two dots, each from two neighbouring
+  pixels (the outline wins), so the letters' edges fall on whole cells, with one
+  palette bit for the band; both fills the intro uses are white, so it shows white
+  letters with black outlines on the gold, without fringes. After a redraw the tick
+  waits as long as the redraw took (three ticks at least) before the next, so the
+  main code keeps half the CPU on busy screens; while the interrupted code stays in
+  one page from tick to tick (a polling loop or a wait) the wait halves each tick.
+  Renderer code that is the same in both builds also
+  uses RAM2's end; its variables sit after the runtime's in page 3. Code and data
+  each build keeps for itself live in main RAM its program leaves free: the game's
+  at `$0600` (loaded with page 3) and `$0406`, the intro's at `$1800` (in
+  `IRT.BIN`) and `$1D00`.
 - **Sprites in colour cells.** The hi-res screen shows 140 colour cells across, the
   Atari playfield 160 colour clocks, so a sprite's place is cell x * 7/8 (it keeps
   its place on the map), but each of its pixels is a whole cell, two dots lit on its
@@ -149,7 +163,9 @@ survive it). Both loaders work through one piece table (`SEQUENCE`) in two phase
   pixels and shimmered as a sprite moved.) Double and quad players (SIZEP) are 2 or
   4 cells a pixel; missiles 2, 4 or 8 cells (SIZEM), in COLPF3 when PRIOR selects the
   fifth player (the title's and the town's mules have missile bodies), else their
-  player's colour. The map's river (player 3 in gold) is drawn blue: it is water.
+  player's colour. The map's river (player 3 in gold) is drawn blue: it is water,
+  and only on bytes nothing else is drawn on, so a plot's frame, icon and
+  production dots stay readable over it.
 - **Floating point** (`fp.s`): written for the port to the documented interface
   (base-100 BCD, ten digits), stubs at the Atari addresses, code in gaps between them.
 - **Font** (`font.mjs`): drawn for the port, in Atari character order.
@@ -226,6 +242,16 @@ survive it). Both loaders work through one piece table (`SEQUENCE`) in two phase
   blank characters, and a sixth of the CPU went to collisions the intro never reads.
   Title redraws went from 5 to 13 per 300 ticks, options 3 to 18, controllers 8
   to 21; the walk itself, done in the intro's VBI, always kept the Atari's pace.
+- **A logo that kept moving, and a store too slow to play.** The banner's shading
+  followed the music's notes, and a sweep turned the letters' fill from PF2 into
+  PF1 (the background's gold) pixel by pixel; each step redrew banner lines. In the
+  town the game's main loop only polled, yet the tick waited a redraw's length
+  between redraws, and each step of the player redrew whole mode-4 bands at about
+  340 cycles a byte: under two redraws a second. With the sprite-only column
+  redraws and the shorter wait when the main code polls, walking in the town went
+  from 4 to 9 redraws per 120 ticks. (A first rule that redrew at once whenever the
+  intro's main code was in one page starved the sweeps, which then filled the
+  letters over seconds.)
 
 ## Evidence
 
@@ -251,7 +277,10 @@ walking mule with its body, any key passing the title, the map with mountains, a
 blue river, the town and the plot cursor, complete plot frames and production dots,
 and play on through the random events into the second round; and a keyboard-only
 `MULE.WOZ` run (Q, Return, Space, Space, D, D, Space, Space) from the title to the
-status summary, the intro's plot drawn whole in blue, violet and orange.
+status summary, the intro's plot drawn whole in blue, violet and orange; the logo
+steady white with black outlines through the title; a walking mule redrawn by
+columns with nothing left behind (frames taken between redraws); and play through
+the town, development, production, the status and the first auctions.
 
 **Not yet shown:** the town and mules with real play, later rounds and the end of a
 game on the 3RIC; sound by ear; anything on the physical board.
@@ -272,7 +301,12 @@ game on the 3RIC; sound by ear; anything on the physical board.
   fire, Start = START, Select = SELECT, X/L/R = OPTION.
 - Keyboard directions latch, so steering is coarser than with a pad.
 - The intro's horizontal fine scrolling (HSCROL) is ignored, and its banner's colour
-  cycling is turned off. The intro redraws about three times a second.
+  cycling and shading are turned off. The title redraws about three times a second.
+- Entering the town redraws its whole mode-4 screen, about two seconds; walking
+  there redraws about four times a second. The player-collision scan still reads
+  every row of player 0 each tick (about a tenth of the CPU in the town).
+- The river's hiding over a developed river plot follows from the code and was not
+  seen in a run (no river plot was developed in the scripted games).
 - Space fires; the Atari game's Space pause is not reachable from the keyboard.
 - Relocation and hardware reads are complete for every path the static scans and
   three long sessions reached; an untested path could still use a pointer the

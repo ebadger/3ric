@@ -99,8 +99,9 @@ jp_s        = RTVARS+135
 kb_key      = RTVARS+136       ; the last key taken (bit 7 set), for the
                                 ; intro's OS layer (CH); 0 = none
 cc_t        = RTVARS+137       ; col_class scratch (the renderer's)
-gap_sh      = RTVARS+138       ; set by each renderer build: bits 0-6 the
-                                ; render gap shift, bit 7 no collisions
+r_flags     = RTVARS+138       ; set by each renderer build: bit 7 the
+                                ; intro (no collisions, keys held over
+                                ; redraws)
 ay_cache    = RTVARS+32         ; 32 bytes: AY 1 regs 0-15, AY 2 regs 0-15
 snap_g      = RTVARS+64         ; 32: GTIA registers for the renderer
 snap_a      = RTVARS+96         ; 16: ANTIC registers
@@ -154,26 +155,24 @@ vbi_after:
         cld                     ; the game's RTI restored the interrupted D
         lda rendering
         bne va_busy
-        dec render_cd
+        tsx                     ; the interrupted code in the same page as
+        lda $0107,x             ; at the last tick: its main loop polling
+        cmp cc_t                ; (or a wait), so the gap halves each such
+        sta cc_t                ; tick; code at work keeps its share
+        bne va_c
+        lsr render_cd
+        bne va_c
+        inc render_cd
+va_c:   dec render_cd
         bne irq_out
         inc rendering
         cli
         jsr render_tramp
         sei
-        lda rendering           ; 1 + the ticks the redraw took: wait
-        ldx gap_sh              ; that long (the game) or a quarter of it
-        txa                     ; (the intro, whose main code mostly waits)
-        and #$7F                ; before the next, so the main code keeps
-        tax                     ; its share on busy screens
-        lda rendering
-        cpx #0
-        beq va0
-va2:    lsr a
-        dex
-        bne va2
-va0:    cmp #RENDER_EVERY
-        bcs va1
-        lda #RENDER_EVERY
+        lda rendering           ; 1 + the ticks the redraw took: wait that
+        cmp #RENDER_EVERY       ; long before the next (less while the main
+        bcs va1                 ; code only polls), so the main code keeps
+        lda #RENDER_EVERY       ; its share on busy screens
 va1:    sta render_cd
         stz rendering
         bra irq_out
@@ -390,7 +389,7 @@ vbi_rt: jsr pad_scan
         jsr key_scan
         jsr map_input
         jsr sound
-        bit gap_sh              ; bit 7: no collisions (the intro reads
+        bit r_flags              ; bit 7: no collisions (the intro reads
         bmi vr1                 ; none; they cost a sixth of the CPU)
         jsr collide
 vr1:    inc frames
@@ -885,7 +884,7 @@ slot_hi:    .byte $00,$00,$00,$00,$00,$00,$00,$02
 key_scan:
         lda rendering           ; the intro's main code reads CONSOL and
         beq ks0                 ; doesn't run during a redraw: its button
-        bit gap_sh              ; holds count only the ticks between
+        bit r_flags              ; holds count only the ticks between
         bmi ks1x                ; (a START pressed during one was lost)
 ks0:    ldx #7                  ; button holds run down
 ks1:    lda kb_t,x
@@ -952,7 +951,7 @@ bf5:    stz kb_t,x
         dex
         bpl bf5
         stz kb_key
-        stz gap_sh              ; collisions on until a renderer says
+        stz r_flags              ; collisions on until a renderer says
         lda #$FF
         sta vc_fake
         lda #1

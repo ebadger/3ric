@@ -21,7 +21,8 @@
 ;
 ; Prepended by the converter: RENDER, FONT, T2TAB, HIRES, RROWS, VC_FAKE,
 ; RAM2_R, rt.s's snap_g/snap_a as SNAP_G/SNAP_A and its COL_CLASS,
-; COL_EVEN, COL_ODD.
+; COL_EVEN, COL_ODD, R_FLAGS, RENDERING; per build R_FLAG, R_OVF, R_DAT,
+; R_OVD and MD_MODE (see the per-build segment at the end).
 
 zdl     = $30                   ; display list pointer
 zsrc    = $32                   ; screen memory
@@ -99,7 +100,7 @@ r_pmf    = B1DATA+6             ; bit 1 players on, bit 0 missiles (pm_init)
 r_o      = B1DATA+7             ; sprite (0-3 players, 4 the missiles)
 r_ob     = B1DATA+8             ; sprite object being worked out (ob_get)
 r_pcv    = B1DATA+9             ; COLPM of the sprite being drawn
-                                ; (B1DATA+10 free)
+r_rvf    = B1DATA+10            ; ob_get's c_ok: 2 for the river
 r_sz     = B1DATA+11            ; SIZEP/SIZEM of the sprite being drawn
 ; in page 3, after the runtime's variables
 r_par    = RROWS                ; the lit dot of a colour cell (pc_par)
@@ -129,9 +130,9 @@ rd2:    lda SNAP_A,x
         jsr walk
         lda #$FF
         sta VC_FAKE
-        lda #GAP_SHIFT          ; rt.s: the gap after this redraw is its
-        sta GAP_SH              ; length >> GAP_SHIFT & $7F (at least 3
-                                ; ticks); bit 7: no player collisions
+        lda #R_FLAG             ; rt.s: bit 7 for the intro (no player
+        sta R_FLAGS             ; collisions, console keys held over
+                                ; redraws)
         plp
         jmp draw_lines
 
@@ -506,20 +507,9 @@ dl_loop:
         cmp r_n
         bcs dl_done
         jsr entry_hash
+        jsr ov_cmp              ; carry set: draw it (dm_*: which columns)
+        bcc dl_skip
         ldx r_i
-        cpx r_rr
-        beq dl_mark
-        lda r_hlo
-        cmp pv_lo,x
-        bne dl_mark
-        lda r_hhi
-        cmp pv_hi,x
-        beq dl_skip
-dl_mark:
-        lda r_hlo
-        sta pv_lo,x
-        lda r_hhi
-        sta pv_hi,x
         jsr dirty_bit
         ora rd_bits,y
         sta rd_bits,y
@@ -545,6 +535,7 @@ dl_iv:  cpx #NL                 ; when they come back
         lda #$A5
         sta pv_lo,x
         sta pv_hi,x
+        sta pf_lo,x
         inx
         bra dl_iv
 dl_iv2: lda r_end
@@ -620,8 +611,21 @@ eh_c:   lda eh_lo,y             ; become (an Atari colour cycle the 3RIC
         lda eh_hi,y             ; too
         sta eh_ld+2
 eh_ld:  lda $FFFF,x
+        cmp ec_v,y              ; as the last band's colour in this slot
+        bne eh_n                ; (with the same COLBK): its class again
+        lda lt_cbk,x
+        cmp ec_b,y
+        bne eh_n1
+        lda ec_r,y
+        bra eh_h
+eh_n1:  lda ec_v,y
+eh_n:   sta ec_v,y
         jsr eh_cls              ; (RAM2)
-        jsr hb
+        sta ec_r,y
+        lda lt_cbk,x
+        sta ec_b,y
+        lda ec_r,y
+eh_h:   jsr hb
         dey
         bpl eh_c
         lda lt_mode,x
@@ -645,7 +649,7 @@ eh1:    eor (zsrc),y            ; (hb, inline, the hash kept in A)
         bne eh1
         sta r_hlo
 eh_done:
-        jmp eh_spr
+        jmp ov_spr
 eh_lo:  .byte <lt_c0,<lt_c1,<lt_c2,<lt_c3,<lt_cbk,<lt_pc0,<lt_pc1,<lt_pc2,<lt_pc3
 eh_hi:  .byte >lt_c0,>lt_c1,>lt_c2,>lt_c3,>lt_cbk,>lt_pc0,>lt_pc1,>lt_pc2,>lt_pc3
 hb:     eor r_hlo
@@ -754,6 +758,7 @@ draw_entry:
         jsr spr_new
         ldx r_i
         jsr set_colors
+        jsr ov_ent              ; its column runs and pixel tables
         lda lt_mslo,x
         sta zsrc
         lda lt_mshi,x
@@ -799,56 +804,7 @@ de_cp1: lda (zdl),y
         dey
         bpl de_cp1
         jmp de_next
-de_go:  lda lt_mode,x
-        cmp #2
-        beq de_t40
-        cmp #3
-        beq de_t40
-        cmp #4
-        beq de_mc
-        cmp #5
-        beq de_mc2
-        cmp #6
-        beq de_t20
-        cmp #7
-        beq de_t20b
-        cmp #8
-        beq de_bm8
-        cmp #$0D
-        beq de_bmd
-        cmp #$0E
-        beq de_bmd
-        jsr clear_row
-        bra de_next
-de_bmd: lda #$80                ; ANTIC D/E: the mode-4 pixels, no glyphs
-        sta zrow
-        jsr row_mc
-        bra de_next
-de_t40: lda zt5
-        and #$07
-        sta zrow
-        jsr row_t40
-        bra de_next
-de_mc2: lda zt5
-        lsr a
-        sta zrow
-        jsr row_mc
-        bra de_next
-de_mc:  lda zt5
-        sta zrow
-        jsr row_mc
-        bra de_next
-de_t20b:
-        lda zt5
-        lsr a
-        sta zrow
-        jsr row_t20
-        bra de_next
-de_t20: lda zt5
-        sta zrow
-        jsr row_t20
-        bra de_next
-de_bm8: jsr row_bm8
+de_go:  jmp ov_go               ; the row by its mode, then de_next
 de_next:
         jsr de_spr              ; the row's players and missiles
         lda zhr                 ; the row just drawn (zdl is free in phase 2)
@@ -878,8 +834,9 @@ glyph:  pha
         rts
 
 ; ANTIC 2: 40 columns, one colour on the background, bit 7 = inverse
+; (columns r_c0 to r_c1)
 row_t40:
-        ldy #0
+        ldy r_c0
 rt40:   sty r_x
         lda (zsrc),y
         sta r_cls
@@ -895,7 +852,7 @@ rt40:   sty r_x
 rt40a:  ldy r_x
 rt40b:  sta (zhr),y
         iny
-        cpy #40
+        cpy r_c1
         bne rt40
         rts
 
@@ -907,7 +864,7 @@ row_t20:
         jsr t20_pre             ; (RAM2)
         bcc rt20s
         rts
-rt20s:  ldy #0
+rt20s:  ldy r_t0                ; characters r_t0 to r_t1
 rt20:   sty r_x
         lda (zsrc),y
         sta r_cls
@@ -964,13 +921,14 @@ rt20z:  pha
         sta (zhr),y
         ldy r_x
         iny
-        cpy #20
+        cpy r_t1
         bne rt20
         rts
 
 ; ANTIC 4/5: 40 columns of four 2-bit pixels (BK, PF0, PF1, PF2/PF3);
-; ANTIC D/E (zrow bit 7 set): the same pixels straight from screen memory
-row_mc: ldy #0
+; ANTIC D/E (zrow bit 7 set): the same pixels straight from screen memory;
+; columns r_c0 to r_c1
+row_mc: ldy r_c0
 rmc1:   sty r_x
         lda (zsrc),y
         bit zrow
@@ -1023,7 +981,7 @@ rmc3:   asl a                   ; mask index = class*2 + parity
         ldy r_x
         sta (zhr),y
         iny
-        cpy #40
+        cpy r_c1
         bne rmc1
         rts
 slot_mask: .byte $03,$0C,$30,$40
@@ -1062,6 +1020,8 @@ rb2:    lda r_gl
         cpy #10
         bne rb1
         rts
+
+; 8 pixels -> 14: widths 2,2,2,1 per half (bit 0 = leftmost on the hi-res)
 
 ; 8 pixels -> 14: widths 2,2,2,1 per half (bit 0 = leftmost on the hi-res)
 t6_l:   .byte $00,$40,$30,$70,$0C,$4C,$3C,$7C,$03,$43,$33,$73,$0F,$4F,$3F,$7F
@@ -1133,58 +1093,6 @@ spg_x:  cmp #1                  ; carry clear when off
 spg_off:
         sec
         rts
-
-; The sprites of entry X in its hash: each sprite's nonzero bytes over the
-; band's lines with their line, and, for one with any, its place and width.
-eh_spr: lda lt_rows,x
-        beq ehs_x
-        stz r_o
-ehs_o:  ldy r_o
-        jsr sp_page
-        bcs ehs_n
-        jsr sd_lines
-        stz zt1
-ehs_l:  ldy r_L
-        lda (zg),y
-        beq ehs_z
-        jsr hb
-        tya
-        jsr hb
-        inc zt1
-ehs_z:  inc r_L
-        lda r_L
-        cmp r_le
-        bne ehs_l
-        lda zt1
-        beq ehs_n
-        lda r_o
-        cmp #4
-        beq ehs_mi
-        jsr lt_get              ; HPOSn
-        jsr hb
-        jsr hole
-        lda r_o
-        ora #4
-        tay
-        jsr hole_ld             ; SIZEPn
-        jsr hb
-        bra ehs_n
-ehs_mi: jsr hole                ; HPOSM0-3, SIZEM, the fifth player
-        ldy #3
-ehs_m1: jsr hole_ld
-        jsr hb
-        dey
-        bpl ehs_m1
-        lda SNAP_G+12
-        jsr hb
-        lda SNAP_G+$1B
-        and #$10
-        jsr hb
-ehs_n:  inc r_o
-        lda r_o
-        cmp #5
-        bne ehs_o
-ehs_x:  rts
 
 ; carry set when any sprite has pixels on Atari line A
 ln_spr: sta r_L
@@ -1284,6 +1192,7 @@ rm_n:   inx
 ob_get: lda c_ok,x
         beq og_new
         bmi og_off
+        sta r_rvf               ; 2 for the river
         lda c_cb,x
         sta r_cb
         lda c_sh,x
@@ -1299,6 +1208,8 @@ ob_get: lda c_ok,x
 og_off: sec
         rts
 og_new: stx r_ob
+        lda #1
+        sta r_rvf
         txa
         and #$03
         sta r_p
@@ -1312,6 +1223,7 @@ og_new: stx r_ob
         ldy r_p
         cpy #3
         bne og_p1
+        inc r_rvf
         lda #RIVER_BLUE
 og_p1:  jsr pc_set
         lda r_p
@@ -1357,7 +1269,7 @@ og_c:   and #$03
         sta c_cb,x
         lda r_sh
         sta c_sh,x
-        lda #1
+        lda r_rvf               ; on the playfield: 1, the river 2
 og_st:  sta c_ok,x
         jmp ob_get
 
@@ -1450,6 +1362,88 @@ ch_draw:
         jsr sr_or
 cd_x:   rts
 
+; ---- entry_hash's end: keep the playfield hash (r_pfl/r_pfh); add every
+; sprite's bytes over the band's lines with their line and, for one with
+; any, its place and width; and note the column groups it covers
+; (r_nml/r_nmh, for ov_cmp)
+ov_spr: lda r_hlo
+        sta r_pfl
+        lda r_hhi
+        sta r_pfh
+        stz r_nml
+        stz r_nmh
+        lda lt_rows,x
+        bne os_s
+        rts
+os_s:   stz r_o
+os_o:   ldy r_o
+        jsr sp_page
+        bcc os_g
+        jmp os_n
+os_g:   jsr sd_lines
+        stz zt1
+        stz r_mor
+os_l:   ldy r_L
+        lda (zg),y
+        beq os_z
+        tsb r_mor
+        jsr hb
+        tya
+        jsr hb
+        inc zt1
+os_z:   inc r_L
+        lda r_L
+        cmp r_le
+        bne os_l
+        lda zt1
+        bne os_p
+        jmp os_n
+os_p:   lda r_o
+        cmp #4
+        beq os_mi
+        jsr lt_get              ; HPOSn
+        sta r_hpos
+        jsr hb
+        jsr hole
+        lda r_o
+        ora #4
+        tay
+        jsr hole_ld             ; SIZEPn
+        pha
+        jsr hb
+        pla
+        and #$03
+        tay
+        lda pw_tab,y
+        jsr os_mask
+        bra os_n
+os_mi:  jsr hole                ; HPOSM0-3, SIZEM, the fifth player
+        ldy #3
+os_m1:  jsr hole_ld
+        sta r_hpos
+        jsr hb
+        lda r_mor               ; a missile with pixels: its columns
+        and m_bit,y
+        beq os_m2
+        lda #4
+        phy
+        jsr os_mask
+        ply
+os_m2:  dey
+        bpl os_m1
+        lda SNAP_G+12
+        jsr hb
+        lda SNAP_G+$1B
+        and #$10
+        jsr hb
+os_n:   inc r_o
+        lda r_o
+        cmp #5
+        beq os_x
+        jmp os_o
+os_x:   rts
+
+
 ; r_d at dot offset r_sh -> hi-res bytes r_b0-r_b2: pixel k lights dot 2k
 ; (and 2k+1 in white, mask $7F), so a shape keeps every pixel and its colour
 ; wherever it stands (one more dot of width per 7 than the playfield's
@@ -1505,6 +1499,13 @@ sb3:    lda r_b0                ; 24 dots -> three bytes of 7
 
 sr_or:  beq sro1                ; OR pixels A at column Y in r_pal/r_x
         sta zt0
+        lda r_rvf               ; the river only where nothing is drawn:
+        lsr a                   ; a plot's frame, icon and production
+        lsr a                   ; dots stay readable over it
+        bcc sro0
+        lda (zhr),y
+        bne sro1
+sro0:
         tya
         and #$01
         phx
@@ -1736,3 +1737,400 @@ ram2_r_end:
 
         .org r_rrc              ; the first forced redraw after RR_EVERY
         .byte RR_EVERY,0        ; renders (r_rrc, r_rrn), not 256
+
+; =====================================================================
+; The per-build segment: main RAM the game and the intro leave free
+; (R_OVF: $0600 in the game, loaded with page 3; $1800 in the intro, part
+; of IRT.BIN), its data at R_DAT ($0406 / $1D00, not loaded: ov_cmp sets
+; it up on the first redraw); and the intro's logo (R_OVD, after its
+; segment; MD_MODE is $0D there and none in the game, whose R_OVD is not
+; loaded). Called with bank 1 mapped.
+;
+; Sprite-only redraws: a band whose playfield (layout, colours, screen
+; bytes) is unchanged but whose sprites changed is redrawn only in the
+; columns its sprites covered last time or cover now, in groups of four
+; columns (bits 0-9 of om/dm); the rest of each row stays as it is (its
+; sprites are ORed again, which changes nothing).
+; =====================================================================
+pf_lo   = R_DAT                 ; 48: the playfield part of each hash
+pf_hi   = R_DAT+48
+om_lo   = R_DAT+96              ; 48 x 2: the columns its sprites cover
+om_hi   = R_DAT+144
+dm_lo   = R_DAT+192             ; 48 x 2: the columns to redraw
+dm_hi   = R_DAT+240
+r_pfl   = R_DAT+288             ; this entry's playfield hash
+r_pfh   = R_DAT+289
+r_nml   = R_DAT+290             ; and its sprites' column groups
+r_nmh   = R_DAT+291
+r_c0    = R_DAT+292             ; the run being drawn: columns
+r_c1    = R_DAT+293
+r_t0    = R_DAT+294             ; and characters (20-column modes)
+r_t1    = R_DAT+295
+r_nr    = R_DAT+296             ; runs in r_ru
+r_rk    = R_DAT+297
+r_rs    = R_DAT+298
+r_hpos  = R_DAT+299
+r_mor   = R_DAT+300             ; the missiles' bytes ORed
+r_dv    = R_DAT+301             ; 2: the row drawer
+r_ru    = R_DAT+303             ; 10: up to 5 runs (first, end column)
+md_cp   = R_DAT+313             ; 16: mode D cell for a pixel pair
+md_pat  = R_DAT+329             ; 4: mode D cell for a pixel value
+md_pal  = R_DAT+333
+ec_v    = R_DAT+334             ; 9 x 3: entry_hash's colour-class cache
+ec_b    = R_DAT+343
+ec_r    = R_DAT+352
+R_DAT_END = R_DAT+361
+
+        .org R_OVF
+
+ov_ini: .byte 0                 ; set up (pf_* invalid)
+
+; the column groups of a sprite at r_hpos, A columns wide, into r_nm*: a
+; colour clock x = HPOS - 48 is column x / 4 (cell x * 7/8, 2 dots a cell)
+os_mask:
+        sta zt3
+        lda r_hpos
+        sec
+        sbc #48
+        bcc om_x                ; left of the playfield: not drawn (shc)
+        lsr a
+        lsr a
+        cmp #40
+        bcs om_x
+        sta zt4
+        clc
+        adc zt3
+        cmp #41
+        bcc om1
+        lda #40
+om1:    dec a                   ; the last column's group
+        lsr a
+        lsr a
+        sta zt3
+        lda zt4
+        lsr a
+        lsr a
+        tay
+om2:    cpy #8
+        bcs om3
+        lda bitv,y
+        tsb r_nml
+        bra om4
+om3:    lda bitv-8,y
+        tsb r_nmh
+om4:    iny
+        cpy zt3
+        bcc om2
+        beq om2
+om_x:   rts
+
+; ---- draw_lines: entry r_i's hash against the last frame's. Carry set
+; when it is to be drawn, dm_* then its columns: all of them, or (only
+; its sprites changed) the groups its sprites cover now or did before.
+ov_cmp: ldx ov_ini
+        bne oc0
+        inc ov_ini
+oci:    lda #$A5                ; nothing matches what is not drawn
+        sta pf_lo,x
+        inx
+        cpx #NL
+        bne oci
+oc0:    ldx r_i
+        lda r_hlo
+        cmp pv_lo,x
+        bne oc_ch
+        lda r_hhi
+        cmp pv_hi,x
+        bne oc_ch
+        cpx r_rr
+        beq oc_full
+        clc
+        rts
+oc_ch:  lda r_hlo
+        sta pv_lo,x
+        lda r_hhi
+        sta pv_hi,x
+        cpx r_rr
+        beq oc_pf
+        lda r_pfl
+        cmp pf_lo,x
+        bne oc_pf
+        lda r_pfh
+        cmp pf_hi,x
+        bne oc_pf
+        lda om_lo,x             ; only the sprites changed
+        ora r_nml
+        sta dm_lo,x
+        lda om_hi,x
+        ora r_nmh
+        sta dm_hi,x
+        bra oc_out
+oc_pf:  lda r_pfl
+        sta pf_lo,x
+        lda r_pfh
+        sta pf_hi,x
+oc_full:
+        lda #$FF
+        sta dm_lo,x
+        sta dm_hi,x
+oc_out: lda r_nml
+        sta om_lo,x
+        lda r_nmh
+        sta om_hi,x
+        sec
+        rts
+
+; ---- draw_entry, after set_colors (X = r_i): its runs of columns (and
+; the logo's cells). X kept.
+ov_ent: lda dm_lo,x
+        sta zt3
+        lda dm_hi,x
+        sta zt4
+        stz r_nr
+        lda #$FF
+        sta r_rs
+        ldy #0
+oe1:    lsr zt4
+        ror zt3
+        bcc oe2
+        lda r_rs
+        bpl oe3
+        tya
+        asl a
+        asl a
+        sta r_rs
+        bra oe3
+oe2:    lda r_rs
+        bmi oe3
+        jsr oe_end
+oe3:    iny
+        cpy #10
+        bne oe1
+        lda r_rs
+        bmi oe4
+        jsr oe_end
+oe4:    lda lt_mode,x
+        cmp #MD_MODE
+        bne oe6
+        jmp md_tab
+oe6:    rts
+oe_end: phx                     ; a run from r_rs to column 4 * Y
+        lda r_nr
+        asl a
+        tax
+        lda r_rs
+        sta r_ru,x
+        tya
+        asl a
+        asl a
+        cmp #41
+        bcc oe5
+        lda #40
+oe5:    sta r_ru+1,x
+        inc r_nr
+        lda #$FF
+        sta r_rs
+        plx
+        rts
+
+; ---- draw_entry's row zt5 of entry X at zhr, by its mode, each run of
+; columns in turn; then de_next
+ov_go:  lda lt_mode,x
+        cmp #MD_MODE
+        bne vg1
+        ldy #<ov_md
+        lda #>ov_md
+        bra vg_r2
+vg1:    cmp #8
+        bne vg2
+        jsr row_bm8
+        bra vg_x
+vg2:    cmp #$0D
+        bcc vg3
+        cmp #$0F
+        bcs vg_c
+        lda #$80                ; D/E: the mode-4 pixels, no glyphs
+        ldy #<row_mc
+        bra vg_r
+vg3:    cmp #2
+        bcc vg_c
+        cmp #8
+        bcs vg_c
+        tay
+        lda zt5
+        cpy #2
+        beq vg_40
+        cpy #3
+        beq vg_40
+        cpy #5
+        beq vg_h
+        cpy #7
+        bne vg_f
+vg_h:   lsr a                   ; 5, 7: two scan lines a row
+vg_f:   cpy #6
+        bcs vg_20
+        ldy #<row_mc            ; 4, 5
+        bra vg_r
+vg_20:  ldy #<t20_go            ; 6, 7
+        sta zrow
+        lda #>t20_go
+        bra vg_r2
+vg_40:  and #$07                ; 2, 3
+        sta zrow
+        ldy #<row_t40
+        lda #>row_t40
+        bra vg_r2
+vg_c:   ldy #<clr_rng           ; blank lines and modes not drawn: black
+        lda #>clr_rng
+        bra vg_r2
+vg_x:   ldx r_i
+        jmp de_next
+vg_r:   sta zrow
+        lda #>row_mc
+vg_r2:  sty r_dv
+        sta r_dv+1
+        stz r_rk
+vg_r4:  lda r_rk
+        cmp r_nr
+        bcs vg_x
+        asl a
+        tay
+        lda r_ru,y
+        sta r_c0
+        lsr a
+        sta r_t0
+        lda r_ru+1,y
+        sta r_c1
+        lsr a
+        sta r_t1
+        jsr vg_cl
+        ldx r_i
+        inc r_rk
+        bra vg_r4
+pw_tab: .byte 4,6,4,11          ; columns a player covers, by SIZEP
+m_bit:  .byte $03,$0C,$30,$C0
+vg_cl:  jmp (r_dv)
+; the run's columns black
+clr_rng:
+        ldy r_c0
+        lda #0
+cg1:    sta (zhr),y
+        iny
+        cpy r_c1
+        bne cg1
+        rts
+; ANTIC 6/7: a whole row through row_t20 (all-blank rows filled at once);
+; a run of it straight to its characters
+t20_go: lda r_t0
+        bne tg1
+        lda r_t1
+        cmp #20
+        bne tg1
+        jmp row_t20
+tg1:    lda #0                  ; zt2 = the space's glyph row (t20_pre)
+        jsr glyph
+        sta zt2
+        jmp rt20s
+r_ovf_end:
+
+; ---- the intro's logo (ANTIC D): every 8 pixels (two bytes) are 7 colour
+; cells of two dots, cell k from pixels k and k + 1, so the letters' fill
+; and outline keep their edges on whole cells: no colour fringes
+        .org R_OVD
+
+; md_pat = the cell of each pixel value (its colour's dots in an even
+; byte's first cell), md_cp = the cell for two neighbouring pixels (an
+; outline (the lower value) wins over a fill, both over the background),
+; md_pal = the palette bit of every colour in the band. X kept.
+md_tab: stz md_pal
+        ldy #3
+mdt1:   tya
+        asl a
+        tax
+        lda r_cm,x
+        and #$80
+        tsb md_pal
+        lda r_cm,x
+        and #$03
+        sta md_pat,y
+        dey
+        bpl mdt1
+        lda #3                  ; the letters white whichever fill the
+        sta md_pat+2            ; intro uses (its sweeps turn PF2's
+        sta md_pat+3            ; shades into PF1, the background's gold)
+        ldy #15
+mdt2:   tya
+        lsr a
+        lsr a
+        sta zt0                 ; v (left)
+        tya
+        and #$03                ; w (right)
+        beq mdt3                ; w the background: v
+        ldx zt0
+        beq mdt4                ; v the background: w
+        cmp zt0
+        bcc mdt4                ; w < v: w
+mdt3:   lda zt0
+mdt4:   tax
+        lda md_pat,x
+        lsr a                   ; the cell's two dots in bits 6-7
+        ror a
+        ror a
+        sta md_cp,y
+        dey
+        bpl mdt2
+        ldx r_i
+        rts
+
+; the row's columns r_c0 to r_c1 (even): pairs of bytes -> pairs
+ov_md:  ldy r_c0
+omd1:   lda (zsrc),y
+        sta zt0
+        iny
+        lda (zsrc),y
+        sta zt1
+        sty r_x
+        lda #7
+        sta r_k
+omd2:   lda zt0                 ; pixels k, k + 1 -> the cell; the cells
+        lsr a                   ; collect from the top of zt2/zt3 down
+        lsr a
+        lsr a
+        lsr a
+        tax
+        lsr zt3
+        ror zt2
+        lsr zt3
+        ror zt2
+        lda md_cp,x
+        ora zt3
+        sta zt3
+        asl zt1
+        rol zt0
+        asl zt1
+        rol zt0
+        dec r_k
+        bne omd2
+        lsr zt3                 ; dots 0-13 in zt2/zt3
+        ror zt2
+        lsr zt3
+        ror zt2
+        ldy r_x
+        lda zt2
+        asl a
+        lda zt3
+        rol a
+        and #$7F
+        ora md_pal
+        sta (zhr),y
+        dey
+        lda zt2
+        and #$7F
+        ora md_pal
+        sta (zhr),y
+        iny
+        iny
+        cpy r_c1
+        bne omd1
+        rts
+r_ovd_end:

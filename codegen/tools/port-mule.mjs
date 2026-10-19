@@ -61,12 +61,17 @@ export const LAYOUT = {
   RA: 0x0330,
   RTVARS: 0x0340,     // runtime variables (138 bytes), then the renderer's
   T2TAB: 0x0800,      // 8 -> 7 pixel table for 40-column text
+  R_OVF_G: 0x0600,    // render.s's per-build code (to $07FF, loaded with page 3)
+  R_DAT_G: 0x0406,    //   and data (to $057F, set up by the renderer)
   HIRES: 0x20,        // the game's hi-res page
   CFG_STASH: 0x3000,  // the intro's $0000-$0FFF, for boot_final (hi-res page)
   TEMP: 0x4000,       // language-card images are staged here
   // while the intro runs (intro.s): it uses none of $1000-$6FFF
   IRT: 0x1000,        // intro.s: 8 -> 7 table, then code
   IRT_CODE: 0x1100,
+  R_OVF_I: 0x1800,    // the intro renderer's per-build code (in IRT.BIN),
+  R_OVD_I: 0x1B00,    //   its logo section
+  R_DAT_I: 0x1D00,    //   and data
   INTRO_HIRES: 0x40,  // hi-res page 2: page 1 holds the loader and the stash
   STAGE_R2_I: 0x4000, // RAM2 and page-3 images for the intro's launch
   STAGE_LOW_I: 0x4800,
@@ -123,6 +128,12 @@ export const INTRO_PATCHES = [
   // intro's screens showed under one frame a second. The shading stays,
   // the cycling stops (BIT $02C6).
   [0x84c8, [0xee, 0xc6, 0x02], () => [0x2c, 0xc6, 0x02]],
+  // ... and adds COLOR2 to each line's shade, which the music's notes set
+  // ($865E/$8691): the letters pulsed with the tune and redrew the banner.
+  // A fixed orange base ($20-$34 down the banner) keeps them steady: the
+  // renderer draws them white with their black outlines on the gold.
+  [0x8482, [0x6d, 0xc6, 0x02], () => [0x69, 0x20, 0xea]],
+  [0x8496, [0x6d, 0xc6, 0x02], () => [0x69, 0x20, 0xea]],
   // The number of planeteers starts at 1 and SELECT cycles 1, 0, 2: the
   // controller screen waits for a different controller's button for each
   // planeteer, and the 3RIC has the keyboard (stick 1) and two pads, so the
@@ -281,20 +292,29 @@ export function buildRuntime() {
   // page 8) and for the intro (page 2, the table in intro.s's area)
   const renderer = (b1, v) => {
     const rd = assembleInto(b1, equ({ RENDER: L.RENDER, FONT: L.FONT, ...v, RROWS: S.RTVARS_END, SNAP_G: S.SNAP_G, SNAP_A: S.SNAP_A,
-      VC_FAKE: S.VC_FAKE, COL_CLASS: S.COL_CLASS, COL_EVEN: S.COL_EVEN, COL_ODD: S.COL_ODD, RAM2_R: S.RT_RAM2_END, GAP_SH: S.GAP_SH }) + src("render.s"), "render.s");
+      VC_FAKE: S.VC_FAKE, COL_CLASS: S.COL_CLASS, COL_EVEN: S.COL_EVEN, COL_ODD: S.COL_ODD, RAM2_R: S.RT_RAM2_END, R_FLAGS: S.R_FLAGS, RENDERING: S.RENDERING }) + src("render.s"), "render.s");
     if (rd.symbols.RAM2_R_END > 0xd000) throw new Error(`render.s's RAM2 part overflows (${h4(rd.symbols.RAM2_R_END)})`);
     if (rd.symbols.RENDER_END > 0xdfff) throw new Error(`render.s runs into the bank signature (${h4(rd.symbols.RENDER_END)})`);
     if (rd.symbols.B1GAP_END > 0xd1d0) throw new Error(`render.s overflows the line table's gap (${h4(rd.symbols.B1GAP_END)})`);
     if (rd.symbols.R_SZ !== 0xd3ff) throw new Error("render.s variables no longer sit in $D3F4-$D3FF");
     if (rd.symbols.RROWS_END > 0x0400) throw new Error(`render.s variables overflow page 3 (${h4(rd.symbols.RROWS_END)})`);
+    if (rd.symbols.R_OVF_END > v.R_OVF_LIM) throw new Error(`render.s's per-build segment overflows (${h4(rd.symbols.R_OVF_END)})`);
+    if (rd.symbols.R_OVD_END > v.R_OVD_LIM) throw new Error(`render.s's logo section overflows (${h4(rd.symbols.R_OVD_END)})`);
+    if (rd.symbols.R_DAT_END > v.R_DAT_LIM) throw new Error(`render.s's per-build data overflows (${h4(rd.symbols.R_DAT_END)})`);
     b1[0xdfff] = 0xa5;               // bank signature
     return rd;
   };
-  const game = { T2TAB: L.T2TAB, HIRES: L.HIRES, GAP_SHIFT: 0 };           // render gap = the redraw's length
-  const intro = { T2TAB: L.IRT, HIRES: L.INTRO_HIRES, GAP_SHIFT: 0x82 };  // a quarter: its main code mostly waits; no collisions
+  // each build's own segment and data in main RAM its program leaves free:
+  // the game's goes out with page 3 (LOW.BIN), the intro's with intro.s
+  const game = { T2TAB: L.T2TAB, HIRES: L.HIRES, R_FLAG: 0,
+    R_OVF: L.R_OVF_G, R_OVF_LIM: 0x0800, R_DAT: L.R_DAT_G, R_DAT_LIM: 0x0580,
+    R_OVD: 0x9000, R_OVD_LIM: 0xa000, MD_MODE: 0xff };    // (no logo: R_OVD is not loaded)
+  const intro = { T2TAB: L.IRT, HIRES: L.INTRO_HIRES, R_FLAG: 0x80,      // no collisions (it reads none)
+    R_OVF: L.R_OVF_I, R_OVF_LIM: L.R_OVD_I, R_DAT: L.R_DAT_I, R_DAT_LIM: 0x2000,
+    R_OVD: L.R_OVD_I, R_OVD_LIM: L.R_DAT_I, MD_MODE: 0x0d }; // the logo's cells
   const rd = renderer(b1, game);
   const b1i = new Uint8Array(0x10000);
-  renderer(b1i, intro);
+  const rdi = renderer(b1i, intro);
   // the renderers' RAM2 part (shared by both banks and both phases) must be
   // the same code in both builds
   const r2 = [S.RT_RAM2_END, rd.symbols.RAM2_R_END];
@@ -303,6 +323,7 @@ export function buildRuntime() {
   b2[0xdfff] = 0x5a;
   shared.set(buildFont(), L.FONT);
   shared.set(t2Table(), L.T2TAB);
+  shared.set(b1.subarray(L.R_OVF_G, rd.symbols.R_OVF_END), L.R_OVF_G);
   // static read-mirror values: POT0-7 = 228 (no paddles), SKSTAT idle,
   // PAL = NTSC, triggers up, sticks centred, console keys up
   for (let i = 0; i < 8; i++) shared[L.RP + i] = 228;
@@ -314,7 +335,7 @@ export function buildRuntime() {
   shared[L.RA + 1] = 0xff;
   shared[S.RND_LO] = 0x5a;           // RANDOM's LFSR must not start at zero
   shared[S.RND_HI] = 0x01;
-  return { b1, b1i, b2, shared, rt: S, fp: F, render: rd.symbols };
+  return { b1, b1i, b2, shared, rt: S, fp: F, render: rd.symbols, renderI: rdi.symbols };
 }
 
 /** The intro as the Atari boot leaves it, patched; plus its boot entry points. */
@@ -345,9 +366,11 @@ export function buildIrt(rt, intro) {
     SETVBV: S.SETVBV, NMI_ENTRY: S.NMI_ENTRY, IRQ_ENTRY: S.IRQ_ENTRY, RESET_ENTRY: S.RESET_ENTRY, JWAIT: S.JWAIT,
     HW_INIT: S.HW_INIT }) + src("intro.s"), "intro.s");
   const I = r.symbols;
-  if (I.IRT_END > 0x2000) throw new Error(`intro.s overflows ${h4(L.IRT)}-$1FFF (${h4(I.IRT_END)})`);
+  if (I.IRT_END > L.R_OVF_I) throw new Error(`intro.s runs into the intro renderer's segment (${h4(I.IRT_END)})`);
   mem.set(t2Table(), L.IRT);
-  return { bytes: mem.slice(L.IRT, I.IRT_END), symbols: I };
+  const ovfEnd = rt.renderI.R_OVD_END;      // the intro renderer's own code, after intro.s
+  mem.set(rt.b1i.subarray(L.R_OVF_I, ovfEnd), L.R_OVF_I);
+  return { bytes: mem.slice(L.IRT, ovfEnd), symbols: I };
 }
 
 /**
