@@ -620,7 +620,7 @@ eh_c:   lda eh_lo,y             ; become (an Atari colour cycle the 3RIC
         lda eh_hi,y             ; too
         sta eh_ld+2
 eh_ld:  lda $FFFF,x
-        jsr col_class
+        jsr eh_cls              ; (RAM2)
         jsr hb
         dey
         bpl eh_c
@@ -1666,6 +1666,15 @@ cp_c:   lda r_ctr
         sta r_cm+1,y
 cp_x:   pla
         rts
+; entry_hash: colour A of entry X as its hi-res colour, bit 7 set when it
+; is COLBK exactly (cmask_pf draws a colour that is differently)
+eh_cls: cmp lt_cbk,x
+        php
+        jsr col_class
+        plp
+        bne ec1
+        ora #$80
+ec1:    rts
 ;                 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
 bk_fill: .byte    0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0
 

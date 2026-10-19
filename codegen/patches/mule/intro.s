@@ -311,10 +311,13 @@ sy_x:   jmp XITVBV
 ; and the redraws show it at a lower frame rate. Only A (and Y in
 ; wait_e5, as before) is changed.
 IW_CAP  = 32
-; $90CF: wait A ticks; returns A = start + n
+; $90CF: wait A ticks; returns A = start + n with Z and C set, N clear
+; (as its CMP RTCLOK left them; for n = 0, A = RTCLOK at once)
 iwait:  cmp #0
-        beq iwz
-        sta iw_n
+        bne iw0
+        lda $14
+        bra iwz
+iw0:    sta iw_n
         lda $14
         sta iw_s
 iw1:    jsr iw_due
@@ -322,7 +325,9 @@ iw1:    jsr iw_due
 iw2:    lda iw_s
         clc
         adc iw_n
-iwz:    rts
+iwz:    sta iw_t
+        cmp iw_t
+        rts
 ; $9092: A ticks, or until $E5 is zero
 wait_e5:
         sta iw_n
