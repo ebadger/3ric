@@ -6,7 +6,7 @@
 ; Merlin loads, saves, creates, deletes, renames and catalogs real files on
 ; the card the 3RIC ROM DOS also uses.
 ;
-;   $8600-$9DB5  this code and its variables (STANDIN; ED, Merlin's editor
+;   $8500-$9DB5  this code and its variables (STANDIN; ED, Merlin's editor
 ;                module, starts at $9DB6; port-merlin8.mjs moves Merlin's
 ;                source, symbol and object areas below it)
 ;   $AE00-$AFFF  data sector cache (Merlin only ever gives ProDOS this page
@@ -195,12 +195,16 @@ setcbuf: lda #<CBUF
         sta SBUF+1
         rts
 
+; FAT sectors always reach the card before a dirty cached sector: an
+; interrupted call can leak a cluster, but never leaves a directory entry
+; pointing at a cluster the FAT still calls free.
 flush:  jsr cflush
         jmp fflush
 
 cflush: lda cdirty
         beq cf_x
         stz cdirty
+        jsr fflush
         jsr swaplba
         jsr setcbuf
         jsr SD_WRITE
@@ -432,8 +436,9 @@ al_inc: inc fcl,x
         bne al_lp
         inx
         bra al_inc
-al_full: lda #E_FULL
-        jmp fail
+al_full: lda #E_FULL            ; C set: the card is full
+        sec
+        rts
 al_got: lda #$FF
         sta fval
         sta fval+1
@@ -447,10 +452,20 @@ al_cp:  lda fcl,x
         sta hint,x
         dex
         bpl al_cp
-        inc hint
+        ldx #0
+al_hi:  inc hint,x
         bne al_x
-        inc hint+1
-al_x:   rts
+        inx
+        cpx #4
+        bne al_hi
+al_x:   clc
+        rts
+
+; alloc, or fail the call with E_FULL.
+allocf: jsr alloc
+        bcs af_full
+        rts
+af_full: jmp fail
 
 ; FAT[fcl] = newcl
 link:   ldx #3
@@ -654,7 +669,7 @@ ds_x:   rts
 need_slot:
         lda slotf
         bne ns_x
-        jsr alloc
+        jsr allocf
         ldx #3
 ns_cp:  lda itcl,x
         sta fcl,x
@@ -751,6 +766,9 @@ rs_r0:  stz dcl,x
         bpl rs_r0
         jsr comp
         bne rs_lp
+        lda plen                ; "/SD/" or "/SD", not "/SD//..."
+        cmp pos
+        bcs rs_bad
         inc isvol
         rts
 rs_rel: lda prefix
@@ -869,7 +887,11 @@ t8_e:   cpx clen
         sta fname,y
         iny
         bra t8_e
-t8_x:   rts
+t8_x:   lda fname               ; no name before the last dot
+        cmp #' '
+        beq t8_bad
+        rts
+t8_bad: jmp rs_bad
 
 ; Q = the path pointer at (P),Y.
 pathq:  lda (P),y
@@ -998,7 +1020,7 @@ ei_stor: lda i_eof              ; blocks = (eof + 511) / 512
         sta i_blk
         lda i_eof+2
         adc #0
-        lsr a
+        ror a                   ; the carry is bit 8 (EOF $FFFE01+)
         ror i_blk
         sta i_blk+1
         lda #1                  ; seedling, sapling (+ index), tree
@@ -1082,7 +1104,9 @@ rf_bad: lda #E_BADREF
         jmp fail
 
 ; Point LBA at the sector holding the mark of FCB fx. With grow set the
-; clusters it needs are allocated, otherwise a short chain is E_EOF.
+; clusters it needs are allocated (carry set, A = E_FULL, if the card is
+; full; the chain then still ends at the last cluster that was linked),
+; otherwise a short chain is E_EOF.
 seek:   ldx fx
         lda fcbs+F_MARK+2,x     ; sector number = mark >> 9
         lsr a
@@ -1117,6 +1141,7 @@ sk_reset: stz fcbs+F_IDX,x
         lda grow                ; empty file: its first cluster
         beq sk_eof
         jsr alloc
+        bcs sk_full
         ldx fx
         ldy #0
 sk_new: lda newcl,y
@@ -1143,6 +1168,7 @@ sk_walk: jsr curfcl             ; fcl = current cluster
         lda grow
         beq sk_eof
         jsr alloc
+        bcs sk_full
         jsr curfcl
         jsr link
         ldx #3
@@ -1165,6 +1191,7 @@ sk_n1:  lda fval,y
 sk_again: jmp sk_cmp
 sk_eof: lda #E_EOF
         jmp fail
+sk_full: rts                    ; C set, A = E_FULL
 sk_here: ldy #0
 sk_h1:  lda fcbs+F_CUR,x
         sta ccl,y
@@ -1179,7 +1206,8 @@ sk_h1:  lda fcbs+F_CUR,x
         sta LBA
         bcc sk_x
         jsr incl1
-sk_x:   rts
+sk_x:   clc
+        rts
 
 curfcl: ldx fx
         ldy #0
@@ -1413,18 +1441,23 @@ rd_cache: jsr getsec
 rd_adv: jsr advance
         bra rd_lp
 
-xfer_done: ldy #6
+xfer_done: lda #0
+xfer_end: pha                   ; trans_count = bytes moved, also on error
+        ldy #6
         lda trans
         sta (P),y
         iny
         lda trans+1
         sta (P),y
-        jmp ok
+        pla
+        jmp fail
 
 c_write: jsr ref_fcb
         jsr xfer_init
-        lda fcbs+F_FLAGS,x
-        bpl wr_lp
+        lda fcbs+F_FLAGS,x      ; a directory or a locked file
+        bmi wr_acc
+        lsr a
+        bcc wr_lp
 wr_acc: lda #E_ACCESS
         jmp fail
 wr_lp:  lda cnt
@@ -1433,6 +1466,7 @@ wr_lp:  lda cnt
         lda #1
         sta grow
         jsr seek
+        bcs xfer_end            ; card full: what was written stays
         jsr chunk
         jsr whole
         bne wr_cache
@@ -1514,12 +1548,21 @@ op_rt:  lda ROOTCL,y
         cpy #4
         bne op_rt
         bra op_dir
-op_ent: ldy #11
+op_ent: ldy #11                 ; bit 7 directory, bit 0 read-only (locked)
         lda (T),y
-        and #$10
+        and #$11
+        cmp #$10
+        bcc op_flg
+        ora #$80
+        and #$81
+op_flg: sta fcbs+F_FLAGS,x
+        cmp #$80               ; a directory?
+        bcs op_file
+        ldy #31                 ; ProDOS sizes stop below 16 MB
+        lda (T),y
         beq op_file
-        lda #$80
-        sta fcbs+F_FLAGS,x
+        lda #E_RANGE
+        jmp fail
 op_file: jsr ent_cl
         ldx fx
         ldy #0
@@ -1793,39 +1836,63 @@ setmark: ldx fx
         sta fcbs+F_MARK+2,x
         rts
 
-; SET_EOF: a longer file gets its clusters, a shorter one frees them.
-c_seteof: jsr new3
-        lda fcbs+F_FLAGS,x
-        bpl se_file
-        jmp wr_acc
-se_file: lda fcbs+F_MARK,x      ; keep the mark
+; SET_EOF: a longer file gets its clusters, a shorter one frees them. A
+; shorter EOF reaches the directory entry before any cluster is freed, so an
+; interrupted call leaks clusters rather than leaving the entry past the end
+; of its chain. If the card fills up while growing, the file is put back to
+; its old EOF and the call fails with E_FULL.
+c_seteof: jsr ref_fcb
+        lda fcbs+F_FLAGS,x      ; a directory or a locked file
+        bmi se_acc
+        lsr a
+        bcc se_ok
+se_acc: jmp wr_acc
+se_ok:  stz seerr
+        lda fcbs+F_MARK,x       ; keep the mark
         sta msave
         lda fcbs+F_MARK+1,x
         sta msave+1
         lda fcbs+F_MARK+2,x
         sta msave+2
+        jsr new3
         bcs se_short
         jsr lastmark            ; longer: reach its last byte
         lda #1
         sta grow
         jsr seek
-        bra se_set
-se_short: lda newv              ; shorter (or equal)
+        bcc se_set
+        sta seerr               ; full: back to the old EOF
+        ldx fx
+        lda fcbs+F_EOF,x
+        sta newv
+        lda fcbs+F_EOF+1,x
+        sta newv+1
+        lda fcbs+F_EOF+2,x
+        sta newv+2
+se_short: jsr se_eof            ; shorter (or equal): the entry first
+        lda newv
         ora newv+1
         ora newv+2
         bne se_part
-        ldy #0                  ; to zero: free the whole chain
+        ldy #0                  ; to zero: drop the whole chain
         ldx fx
 se_f0:  lda fcbs+F_FIRST,x
-        sta fcl,y
+        sta tcl,y
         stz fcbs+F_FIRST,x
         inx
         iny
         cpy #4
         bne se_f0
+        jsr se_entry
+        ldx #3
+se_fc:  lda tcl,x
+        sta fcl,x
+        dex
+        bpl se_fc
         jsr freechain
         bra se_set
-se_part: jsr lastmark           ; keep the cluster of the last byte
+se_part: jsr se_entry
+        jsr lastmark            ; keep the cluster of the last byte
         stz grow
         jsr seek
         jsr curfcl
@@ -1845,13 +1912,8 @@ se_pl:  pla
         cpx #4
         bne se_pl
         jsr freechain
-se_set: ldx fx
-        lda newv
-        sta fcbs+F_EOF,x
-        lda newv+1
-        sta fcbs+F_EOF+1,x
-        lda newv+2
-        sta fcbs+F_EOF+2,x
+se_set: jsr se_eof
+        ldx fx
         lda #$FF
         sta fcbs+F_IDX,x
         sta fcbs+F_IDX+1,x
@@ -1870,7 +1932,23 @@ se_set: ldx fx
         sta newv+2
 se_mk:  jsr setmark
         jsr setdirty
-        jmp ok
+        lda seerr
+        jmp fail
+
+; EOF of FCB fx = newv
+se_eof: ldx fx
+        lda newv
+        sta fcbs+F_EOF,x
+        lda newv+1
+        sta fcbs+F_EOF+1,x
+        lda newv+2
+        sta fcbs+F_EOF+2,x
+        rts
+
+; Write FCB fx's EOF and first cluster to its entry, on the card now.
+se_entry: jsr setdirty
+        jsr updent
+        jmp cflush
 
 ; mark = newv - 1 (newv is not zero)
 lastmark: ldx fx
@@ -2253,7 +2331,7 @@ cr_e0:  stz ecl,x
         cmp #$0D
         beq cr_mkd
         jmp cr_ent
-cr_mkd: jsr alloc               ; a directory: one zeroed cluster
+cr_mkd: jsr allocf              ; a directory: one zeroed cluster
         jsr zero_new            ; with "." and ".."
         ldx #3
 cr_cl:  lda LBA,x
@@ -2320,7 +2398,12 @@ cr_nm:  lda fname,y
         sta (T),y
         dey
         bpl cr_nm
-        ldy #11
+        ldy #3                  ; no write access: read-only (locked)
+        lda (P),y
+        and #$02
+        bne cr_rw
+        inc attr
+cr_rw:  ldy #11
         lda attr
         sta (T),y
         ldy #4                  ; type, aux
@@ -2383,11 +2466,16 @@ no_nx:  txa
         bcc no_lp
         rts
 
+; DESTROY: the entry is marked deleted on the card before its clusters are
+; freed (an interruption leaks them instead of leaving a live entry on free
+; clusters). Locked files, open files, non-empty directories and the prefix
+; directory are refused.
 c_destroy: ldy #1
         jsr pathq
         jsr lookup
         lda isvol
         bne de_acc
+        jsr locked
         jsr notopen
         jsr ent_cl
         ldx #3
@@ -2400,7 +2488,14 @@ de_cl:  lda ccl,x
         lda (T),y
         and #$10
         beq de_free
-        jsr dir_open            ; a directory must be empty
+        ldx #3                  ; not the prefix directory
+de_pf:  lda tcl,x
+        cmp prefcl,x
+        bne de_np
+        dex
+        bpl de_pf
+        bra de_acc
+de_np:  jsr dir_open            ; a directory must be empty
 de_chk: jsr dir_ent
         jsr ent_kind
         beq de_free
@@ -2408,20 +2503,28 @@ de_chk: jsr dir_ent
         beq de_acc
         jsr dir_next
         bcc de_chk
-de_free: ldx #3
+de_free: jsr locent
+        lda #$E5
+        sta (T)
+        lda #1
+        sta cdirty
+        jsr cflush
+        ldx #3
 de_fc:  lda tcl,x
         sta fcl,x
         dex
         bpl de_fc
         jsr freechain
-        jsr locent
-        lda #$E5
-        sta (T)
-        lda #1
-        sta cdirty
         jmp ok
 de_acc: lda #E_ACCESS
         jmp fail
+
+; Fail with E_ACCESS if the entry at T is read-only (locked).
+locked: ldy #11
+        lda (T),y
+        lsr a
+        bcs de_acc
+        rts
 
 ; T -> the entry at eloc/eidx.
 locent: ldx #3
@@ -2438,24 +2541,22 @@ c_rename: ldy #1
         jsr lookup
         lda isvol
         bne rn_bad
+        jsr locked
         jsr notopen
-        ldx #3
-rn_sv:  lda dcl,x
+        ldx #3                  ; keep the old entry's directory and place
+rn_sv:  lda dcl,x               ; (resolving the new path moves eloc/eidx)
         sta tcl,x
+        lda eloc,x
+        sta tloc,x
         dex
         bpl rn_sv
+        lda eidx
+        sta tidx
         ldy #3
         jsr pathq
         jsr resolve
         lda isvol
         bne rn_bad
-        ldx #3                  ; keep the old entry's place
-rn_lc:  lda eloc,x
-        sta tloc,x
-        dex
-        bpl rn_lc
-        lda eidx
-        sta tidx
         jsr dir_find
         bcs rn_new
         jmp cr_dup
@@ -2548,6 +2649,7 @@ sp_str: ldx #0                  ; absolute, or appended to the prefix
 sp_abs: txa
         clc
         adc (Q)
+        bcs sp_long
         cmp #63
         bcs sp_long
         ldy #0
@@ -2556,6 +2658,8 @@ sp_c:   iny
         and #$7F
         cmp #'a'
         bcc sp_up
+        cmp #'z'+1
+        bcs sp_up
         and #$DF
 sp_up:  inx
         sta prefix,x
@@ -2757,6 +2861,7 @@ av:     .res 2
 closing: .res 1
 newv:   .res 3
 msave:  .res 3
+seerr:  .res 1
 dcnt:   .res 2
 skip:   .res 2
 slots:  .res 1

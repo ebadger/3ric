@@ -380,7 +380,7 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   catalogs, renames, deletes and runs real files on the card, readable by the ROM DOS
   (`FLOAD`/`BRUN`/`DIR`). The program stays local; the repository holds the converter
   and glue (`codegen/patches/merlin8/`).
-  - **File layer:** ProDOS is replaced by a FAT32 stand-in (`prodos.s`, `$8600-$9DB5`,
+  - **File layer:** ProDOS is replaced by a FAT32 stand-in (`prodos.s`, `$8500-$9DB5`,
     global page `$BF00-$BFFF`, sector caches `$AE00-$B1FF` inside the 1 KB I/O buffer
     Merlin gives every OPEN) built on the ROM's `sd_readsector $E1B9`/`sd_writesector
     $E21C` and the mounted card's `$CC00-$CC34` geometry. It implements the MLI calls
@@ -396,11 +396,18 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     1980-01-01 creation date; untagged files are TXT for `.S`, else BIN aux `$0000`.
     Both FAT copies are updated; free clusters are found from the FSInfo hint (the
     FSInfo free count is not maintained). Any cluster size and fragmentation work.
+    FAT sectors reach the card before any directory sector that refers to them; DESTROY
+    and a shortening SET_EOF write the entry before freeing clusters, so an interruption
+    leaks clusters instead of leaving an entry on free ones. Locked (FAT read-only)
+    files refuse WRITE, SET_EOF, DESTROY and RENAME ($4E); CREATE without write access
+    makes them. A full card fails WRITE with $48 and the bytes actually written; a
+    growing SET_EOF that fills it puts the old EOF back. Files of 16 MB or more report the
+    largest ProDOS size and refuse OPEN ($4D); the prefix directory cannot be destroyed.
   - **Machine:** Merlin-8 wants a 128 KB IIe with 80 columns. 3RIC has 64 KB plus the
     language card, so byte-verified patches keep 40 columns (no `$C300` firmware), drop
     the RamWorks `$C073` store, accept a 64 KB `MACHID` and move the "auxiliary"
     workspace into main RAM: source `$0901-$57FF`, symbol table from `$5800`, object
-    buffer `$7000-$85FF`; `AUXMOVE $C311` becomes `MOVE`. The aux-bank soft switches
+    buffer `$7000-$84FF`; `AUXMOVE $C311` becomes `MOVE`. The aux-bank soft switches
     (`$C002-$C005`, `$C008/$C009`) are unmapped on 3RIC and stay harmless. Assembled
     objects are byte-identical to the disk's own (verified for `EDMAC`). ED's
     Open-Apple key is **Ctrl-A, then the key** (ED reads a flag, not `$C061`, the 3RIC

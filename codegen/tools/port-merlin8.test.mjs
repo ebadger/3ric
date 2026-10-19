@@ -60,10 +60,14 @@ const RES = 0x1c00;                     // A, P after call n at RES + 2n
 const pattern = (n, k) => Uint8Array.from({ length: n }, (_, i) => (i * k + (i >> 8) + 7) & 255);
 const BIG = pattern(5000, 13);
 const SRC = new TextEncoder().encode("* first line\r LDA #1\r RTS\r");
+const SA = buildLoader().standin.symbols;
 const sysSrc = `
         .org $2000
 RES = $${RES.toString(16)}
 MLI = $BF00
+HINT = $${SA.HINT.toString(16)}
+MAXCL = $${SA.MAXCL.toString(16)}
+CDIRTY = $${SA.CDIRTY.toString(16)}
         jmp start
 idx:    .byte 0
 tmpa:   .byte 0
@@ -134,7 +138,7 @@ nref:   .byte 0
         .byte $7F,$0D
 create: .byte 7
         .word 0
-        .byte $C3
+cacc:   .byte $C3
 ctype:  .byte $04
 caux:   .word 0
 cstor:  .byte 1
@@ -719,6 +723,322 @@ zok:    dex
         bpl zc
         sty RES+$128
 
+; Locked files, paths with directories, names ProDOS refuses, the prefix
+; directory, a full card and a file too large for ProDOS (calls 88-).
+        lda #$C3
+        sta cacc
+        lda #$06
+        sta ctype
+        lda #1
+        sta cstor
+        lda #$21                ; 88 CREATE LOCKD.S locked
+        sta cacc
+        lda #<p_lk
+        ldy #>p_lk
+        jsr setcr
+        jsr MLI
+        .byte $C0
+        .word create
+        jsr rec
+        lda #$C3
+        sta cacc
+        lda #<p_lk              ; 89 OPEN it
+        ldy #>p_lk
+        jsr setopen
+        jsr MLI
+        .byte $C8
+        .word open
+        jsr rec
+        lda #<$3000             ; 90 WRITE: refused
+        ldy #>$3000
+        jsr setrd
+        lda #10
+        sta rreq
+        stz rreq+1
+        jsr MLI
+        .byte $CB
+        .word rd
+        jsr rec
+        lda #5                  ; 91 SET_EOF: refused
+        sta mval
+        stz mval+1
+        stz mval+2
+        jsr MLI
+        .byte $D0
+        .word mark
+        jsr rec
+        jsr MLI                 ; 92 CLOSE
+        .byte $CC
+        .word cl
+        jsr rec
+        lda #<p_lk              ; 93 DESTROY: refused
+        ldy #>p_lk
+        jsr setp1
+        jsr MLI
+        .byte $C1
+        .word path1
+        jsr rec
+        jsr MLI                 ; 94 RENAME: refused
+        .byte $C2
+        .word ren3
+        jsr rec
+        lda #<p_dbl             ; 95 CREATE /SD//X
+        ldy #>p_dbl
+        jsr setcr
+        jsr MLI
+        .byte $C0
+        .word create
+        jsr rec
+        lda #<p_dot             ; 96 CREATE .S
+        ldy #>p_dot
+        jsr setcr
+        jsr MLI
+        .byte $C0
+        .word create
+        jsr rec
+        lda #$0D                ; 97 CREATE MANY/SUB (a directory)
+        sta cstor
+        lda #<p_msub
+        ldy #>p_msub
+        jsr setcr
+        jsr MLI
+        .byte $C0
+        .word create
+        jsr rec
+        lda #1
+        sta cstor
+        jsr MLI                 ; 98 RENAME MANY/FILE00 MANY/RENAMED
+        .byte $C2
+        .word ren4
+        jsr rec
+        lda #<p_mren            ; 99 the new name
+        ldy #>p_mren
+        jsr setinfo
+        jsr MLI
+        .byte $C4
+        .word info
+        jsr rec
+        lda #<p_mf0             ; 100 the old name is gone
+        ldy #>p_mf0
+        jsr setinfo
+        jsr MLI
+        .byte $C4
+        .word info
+        jsr rec
+        lda #<p_here            ; 101 MERLIN8 kept its name
+        ldy #>p_here
+        jsr setinfo
+        jsr MLI
+        .byte $C4
+        .word info
+        jsr rec
+        lda #<p_msub            ; 102 SET_PREFIX MANY/SUB
+        ldy #>p_msub
+        jsr setp1
+        jsr MLI
+        .byte $C6
+        .word path1
+        jsr rec
+        lda #<p_absb            ; 103 DESTROY the prefix directory: refused
+        ldy #>p_absb
+        jsr setp1
+        jsr MLI
+        .byte $C1
+        .word path1
+        jsr rec
+        lda #<p_here            ; 104 SET_PREFIX back
+        ldy #>p_here
+        jsr setp1
+        jsr MLI
+        .byte $C6
+        .word path1
+        jsr rec
+        lda #<p_msub            ; 105 DESTROY MANY/SUB
+        ldy #>p_msub
+        jsr setp1
+        jsr MLI
+        .byte $C1
+        .word path1
+        jsr rec
+        lda #<p_full            ; 106 CREATE FULL.BIN
+        ldy #>p_full
+        jsr setcr
+        jsr MLI
+        .byte $C0
+        .word create
+        jsr rec
+        lda #<p_full            ; 107 OPEN it
+        ldy #>p_full
+        jsr setopen
+        jsr MLI
+        .byte $C8
+        .word open
+        jsr rec
+        ldx #3                  ; the card ends at the hint (plus freed clusters)
+fc_sv:  lda MAXCL,x
+        sta maxsv,x
+        dex
+        bpl fc_sv
+        clc
+        ldx #0
+        lda #0
+fc_add: adc HINT,x
+        sta MAXCL,x
+        lda #0
+        inx
+        cpx #4
+        bne fc_add
+        lda #<$3000             ; 108 WRITE 20000: the card fills up
+        ldy #>$3000
+        jsr setrd
+        lda #<20000
+        sta rreq
+        lda #>20000
+        sta rreq+1
+        jsr MLI
+        .byte $CB
+        .word rd
+        jsr rec
+        lda rgot
+        sta RES+$160
+        lda rgot+1
+        sta RES+$161
+        jsr MLI                 ; 109 GET_EOF
+        .byte $D1
+        .word mark
+        jsr rec
+        lda mval
+        sta RES+$162
+        lda mval+1
+        sta RES+$163
+        lda #100                ; 110 SET_MARK 100
+        sta mval
+        stz mval+1
+        stz mval+2
+        jsr MLI
+        .byte $CE
+        .word mark
+        jsr rec
+        lda #<30000             ; 111 SET_EOF 30000: full
+        sta mval
+        lda #>30000
+        sta mval+1
+        jsr MLI
+        .byte $D0
+        .word mark
+        jsr rec
+        jsr MLI                 ; 112 GET_EOF: unchanged
+        .byte $D1
+        .word mark
+        jsr rec
+        lda mval
+        sta RES+$164
+        lda mval+1
+        sta RES+$165
+        lda mval+2
+        sta RES+$166
+        jsr MLI                 ; 113 GET_MARK: kept
+        .byte $CF
+        .word mark
+        jsr rec
+        lda mval
+        sta RES+$167
+        lda mval+1
+        sta RES+$168
+        ldx #3
+fc_rs:  lda maxsv,x
+        sta MAXCL,x
+        dex
+        bpl fc_rs
+        jsr MLI                 ; 114 CLOSE
+        .byte $CC
+        .word cl
+        jsr rec
+        lda #<p_huge            ; 115 CREATE HUGE.BIN
+        ldy #>p_huge
+        jsr setcr
+        jsr MLI
+        .byte $C0
+        .word create
+        jsr rec
+        lda #<p_huge            ; 116 its entry is now in the cache
+        ldy #>p_huge
+        jsr setinfo
+        jsr MLI
+        .byte $C4
+        .word info
+        jsr rec
+        lda #$01                ; size 16 MB (entry byte 31)
+        jsr hugeset
+        jsr MLI                 ; 117 GET_FILE_INFO: largest ProDOS EOF
+        .byte $C4
+        .word info
+        jsr rec
+        lda info+8
+        sta RES+$169
+        lda info+9
+        sta RES+$16A
+        lda #<p_huge            ; 118 OPEN: refused
+        ldy #>p_huge
+        jsr setopen
+        jsr MLI
+        .byte $C8
+        .word open
+        jsr rec
+        lda #<p_huge            ; 119 GET_FILE_INFO again (cache)
+        ldy #>p_huge
+        jsr setinfo
+        jsr MLI
+        .byte $C4
+        .word info
+        jsr rec
+        lda #0
+        jsr hugeset
+        lda #<p_huge            ; 120 DESTROY HUGE.BIN
+        ldy #>p_huge
+        jsr setp1
+        jsr MLI
+        .byte $C1
+        .word path1
+        jsr rec
+        bra lcsect
+
+; Byte 31 of HUGE.BIN's entry in the stand-in's sector cache = A.
+hugeset: sta tmpa
+        lda #$00
+        sta $FE
+        lda #$AE
+        sta $FF
+hs_lp:  ldy #0
+        lda ($FE),y
+        cmp #'H'
+        bne hs_nx
+        iny
+        lda ($FE),y
+        cmp #'U'
+        bne hs_nx
+        iny
+        lda ($FE),y
+        cmp #'G'
+        bne hs_nx
+        ldy #31
+        lda tmpa
+        sta ($FE),y
+        lda #1
+        sta CDIRTY
+        rts
+hs_nx:  clc
+        lda $FE
+        adc #32
+        sta $FE
+        bcc hs_lp
+        inc $FF
+        lda $FF
+        cmp #$B0
+        bne hs_lp
+        brk
+
+lcsect:
 ; Language card: MLI calls and NMIs keep the mode Merlin had selected.
         lda $C081               ; read ROM, write bank 2
         lda $C081
@@ -743,6 +1063,8 @@ zok:    dex
         .byte $C7
         .word prefix
         jsr rec
+        lda $DFFF
+        sta RES+$15A            ; bank 2 signature intact
         lda $D000
         sta RES+$129            ; $B2: bank 2 still read
         inc $D000
@@ -754,11 +1076,18 @@ zok:    dex
         .byte $C7
         .word prefix
         jsr rec
+        lda $DFFF
+        sta RES+$15B            ; bank 1 signature intact
         lda $D000
         sta RES+$12B            ; $B1
         inc $D000
         lda $D000
         sta RES+$12C            ; $B2: writes on
+        lda $C080               ; bank 2's signature after the bank-1 call
+        lda $DFFF
+        sta RES+$15C
+        lda $C08B
+        lda $C08B
         lda #$AA
         sta RES+$12F
 padwait: bit $C070              ; pad scans through the resident (ROM NMI)
@@ -777,6 +1106,33 @@ padwait: bit $C070              ; pad scans through the resident (ROM NMI)
         .word quit
 quit:   .byte 4,0,0,0,0,0,0
 cl0:    .byte 1,0
+p_lk:   .byte 7
+        .text "LOCKD.S"
+p_lk2:  .byte 3
+        .text "X.S"
+p_dbl:  .byte 6
+        .text "/SD//X"
+p_dot:  .byte 2
+        .text ".S"
+p_msub: .byte 8
+        .text "MANY/SUB"
+p_mf0:  .byte 11
+        .text "MANY/FILE00"
+p_mren: .byte 12
+        .text "MANY/RENAMED"
+p_absb: .byte 20
+        .text "/SD/MERLIN8/MANY/SUB"
+p_full: .byte 8
+        .text "FULL.BIN"
+p_huge: .byte 8
+        .text "HUGE.BIN"
+ren3:   .byte 2
+        .word p_lk
+        .word p_lk2
+ren4:   .byte 2
+        .word p_mf0
+        .word p_mren
+maxsv:  .res 4
 manyn:  .byte 0`;
 
 const sys = assemble(sysSrc);
@@ -881,7 +1237,26 @@ async function standinRun(cardOpts, label) {
     "BIG.BIN": BIG,
   };
   const { s, vm } = await bootMerlin(tree, cardOpts, (v) => v.loadData(0x3000, pattern(3100, 7)));
-  for (let i = 0; i < 6000 && vm.peek(RES + 0x12f) !== 0xaa; i++) vm.run(20000);
+  // NMIs right inside lc_mode's write probe (BANKSIG briefly changed): a
+  // $C070 pad trigger there is forwarded to the ROM and nests another probe.
+  const R = buildLoader().resident.symbols;
+  vm.addBreakpoint(R.LM_PUT);
+  if (process.env.M8_DEBUG) vm.addBreakpoint(SA.OP_FLG);
+  let injected = 0, taken = 0, injectedAt = -1;
+  let lastIdx = -1;
+  for (let i = 0; i < 6000 && vm.peek(RES + 0x12f) !== 0xaa; i++) {
+    if (process.env.M8_DEBUG && vm.peek(sym.IDX) !== lastIdx) { lastIdx = vm.peek(sym.IDX); console.log("call", lastIdx / 2, "pc", vm.pc().toString(16)); }
+    vm.run(20000);
+    if (process.env.M8_DEBUG && vm.breakpointHit() && vm.pc() === SA.OP_FLG) { const T = vm.peek(0xba) | (vm.peek(0xbb) << 8); console.log("OPEN at call", vm.peek(sym.IDX) / 2, "T", T.toString(16), Array.from({ length: 32 }, (_, i) => vm.peek(T + i).toString(16)).join(" ")); vm.step(); continue; }
+    while (vm.breakpointHit() && vm.peek(RES + 0x12f) !== 0xaa) {
+      if (vm.peek(sym.IDX) !== injectedAt) { vm.readBus(0xc070); injected++; injectedAt = vm.peek(sym.IDX); } // once per MLI call
+      vm.step();
+      if (vm.pc() === R.NMI_ENTRY) taken++;
+      vm.run(2000);
+    }
+  }
+  vm.removeBreakpoint(R.LM_PUT);
+  assert.ok(injected >= 2 && taken >= 2, `${label}: NMIs taken inside the bank probe (${injected}/${taken})`);
   assert.equal(vm.peek(RES + 0x12f), 0xaa, `${label}: test program reached the pad loop\n${screenText(s)}`);
   vm.setGamepadState(0, 1 << 8);         // SNES A: the ROM scan sets $CEE8
   for (let i = 0; i < 3000 && vm.peek(RES + 0x12f) !== 0xbb; i++) vm.run(20000);
@@ -975,7 +1350,28 @@ async function standinRun(cardOpts, label) {
   okCall(83, "GET_TIME"); err(84, 0x25, "ALLOC_INTERRUPT"); err(85, 0x28, "READ_BLOCK"); err(86, 0x01, "unknown call");
   assert.deepEqual([vm.peek(RES + 0x126), vm.peek(RES + 0x127)], [0x5a, 0xa5], "X/Y preserved");
   assert.equal(vm.peek(RES + 0x128), 0, "$B0-$BF restored");
-  okCall(88, "MLI from bank 2 read-only"); okCall(89, "MLI from bank 1 read/write");
+  okCall(88, "CREATE locked"); okCall(89, "OPEN locked");
+  err(90, 0x4e, "WRITE a locked file"); err(91, 0x4e, "SET_EOF a locked file"); okCall(92, "CLOSE");
+  err(93, 0x4e, "DESTROY a locked file"); err(94, 0x4e, "RENAME a locked file");
+  err(95, 0x40, "/SD//X"); err(96, 0x40, "a name with nothing before its dot");
+  okCall(97, "CREATE MANY/SUB"); okCall(98, "RENAME MANY/FILE00 MANY/RENAMED"); okCall(99, "the new name");
+  err(100, 0x46, "the old name is gone"); okCall(101, "the parent directory kept its name");
+  okCall(102, "SET_PREFIX MANY/SUB"); err(103, 0x4e, "DESTROY the prefix directory");
+  okCall(104, "SET_PREFIX back"); okCall(105, "DESTROY MANY/SUB");
+  okCall(106, "CREATE FULL.BIN"); okCall(107, "OPEN FULL.BIN");
+  err(108, 0x48, "WRITE on a full card");
+  const cs = 512 * (cardOpts.sectorsPerCluster || 1), wrote = word(RES + 0x160);
+  assert.ok(wrote > 0 && wrote < 20000 && wrote % cs === 0, `${label}: a full card reports the bytes written (${wrote})`);
+  okCall(109, "GET_EOF"); assert.equal(word(RES + 0x162), wrote, "EOF is what was written");
+  okCall(110, "SET_MARK"); err(111, 0x48, "SET_EOF past a full card");
+  okCall(112, "GET_EOF"); assert.deepEqual([word(RES + 0x164), vm.peek(RES + 0x166)], [wrote, 0], "a failed SET_EOF keeps the EOF");
+  okCall(113, "GET_MARK"); assert.equal(word(RES + 0x167), 100, "and the mark");
+  okCall(114, "CLOSE");
+  okCall(115, "CREATE HUGE.BIN"); okCall(116, "GET_FILE_INFO"); okCall(117, "GET_FILE_INFO 16 MB");
+  assert.equal(word(RES + 0x169), 0x8001, "a 16 MB file shows the largest ProDOS size: 32768 blocks + index");
+  err(118, 0x4d, "OPEN a 16 MB file"); okCall(119, "GET_FILE_INFO"); okCall(120, "DESTROY HUGE.BIN");
+  okCall(121, "MLI from bank 2 read-only"); okCall(122, "MLI from bank 1 read/write");
+  assert.deepEqual([vm.peek(RES + 0x15a), vm.peek(RES + 0x15b), vm.peek(RES + 0x15c)], [0x60, 0x05, 0x60], "bank signatures at $DFFF intact");
   assert.deepEqual([0x129, 0x12a, 0x12b, 0x12c, 0x12d, 0x12e].map((o) => vm.peek(RES + o)), [0xb2, 0xb2, 0xb1, 0xb2, 0xb2, 0xb3],
     "language-card bank and write state survive MLI calls and forwarded NMIs");
 
@@ -991,14 +1387,17 @@ async function standinRun(cardOpts, label) {
   // The card itself.
   const read = stub(vm);
   const fat = checkFat(read);
-  for (const name of ["MERLIN8/RENAMED.S", "MERLIN8/BIG.BIN", "MERLIN8/SRC.S", "MERLIN8/MANY/"]) assert.ok(fat.files.has(name), `${name} on the card`);
+  for (const name of ["MERLIN8/RENAMED.S", "MERLIN8/BIG.BIN", "MERLIN8/SRC.S", "MERLIN8/MANY/", "MERLIN8/LOCKD.S", "MERLIN8/FULL.BIN", "MERLIN8/MANY/RENAMED"]) assert.ok(fat.files.has(name), `${name} on the card`);
+  assert.ok(!fat.files.has("MERLIN8/HUGE.BIN") && !fat.files.has("MERLIN8/MANY/SUB/") && !fat.files.has("MERLIN8/MANY/FILE00"), "destroyed and renamed entries are gone");
+  assert.equal(fat.files.get("MERLIN8/LOCKD.S").entry[11] & 1, 1, "CREATE with no write access is read-only");
+  assert.equal(fat.files.get("MERLIN8/FULL.BIN").size, wrote, "FULL.BIN on the card holds what was written");
   assert.ok(!fat.files.has("MERLIN8/NEW.S") && !fat.files.has("MERLIN8/SUBDIR/"), "renamed and destroyed entries are gone");
   assert.deepEqual(Array.from(fat.content("MERLIN8/RENAMED.S")), Array.from(w.subarray(0, 2000)), "RENAMED.S content on the card");
   assert.deepEqual(Array.from(fat.content("MERLIN8/BIG.BIN")), Array.from(BIG));
   const ren = fat.files.get("MERLIN8/RENAMED.S").entry;
   assert.deepEqual([ren[11] & 1, ren[13], ren[16], ren[17]], [1, 0x04, 0x21, 0], "read-only, TXT tag");
-  for (let i = 0; i < 20; i++) assert.ok(fat.files.has(`MERLIN8/MANY/FILE${String(i).padStart(2, "0")}`));
-  console.log(`PASS ${label}: every MLI call Merlin makes (incl. errors), directory blocks, 20-file directory growth, LC modes + forwarded NMIs, QUIT, ROM DOS cross-check, FAT integrity`);
+  for (let i = 1; i < 20; i++) assert.ok(fat.files.has(`MERLIN8/MANY/FILE${String(i).padStart(2, "0")}`));
+  console.log(`PASS ${label}: every MLI call Merlin makes (incl. errors), locked files, nested-path rename, full card, 16 MB files, directory blocks, 20-file directory growth, LC modes + NMIs inside the bank probe, QUIT, ROM DOS cross-check, FAT integrity`);
 }
 
 await standinRun({}, "stand-in on 512-byte clusters");

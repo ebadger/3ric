@@ -35,7 +35,7 @@ export const ED_ORG = 0x9db6;
 // Main-RAM layout (pages). Merlin's source runs from $0901 to SRC_LIMIT;
 // its "auxiliary" workspace (symbol table from SYM, object buffer from OBJ,
 // both below TOP) and the stand-in follow; ED stays at $9DB6.
-export const LAYOUT = { SRC_LIMIT: 0x58, SYM: 0x58, OBJ: 0x70, TOP: 0x86, STANDIN: 0x8600 };
+export const LAYOUT = { SRC_LIMIT: 0x58, SYM: 0x58, OBJ: 0x70, TOP: 0x85, STANDIN: 0x8500 };
 
 const LOADER_ORG = 0x0800, IMG_SA = 0x0c00, RES_ORG = 0xcf00;
 

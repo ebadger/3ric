@@ -90,22 +90,8 @@ nmi_more:
 nmi_rom:
         phx
         phy                     ; the ROM handler can change Y
-        ldx BANKSIG             ; lc_mode, inline (see below)
-        txa
-        eor #$FF
-        sta BANKSIG
-        eor BANKSIG             ; 0 if the write went through, else $FF
-        stx BANKSIG
-        and #$03
-        eor #$83                ; $83 read/write, $80 read-only
-        tay
-        txa
-        and #$40
-        bne nr_mode             ; bank 2
-        tya
-        ora #$08                ; bank 1
-        tay
-nr_mode: phy                    ; mode to restore
+        jsr lc_mode
+        pha                     ; mode to restore
         lda #>lc_resume
         pha
         lda #<lc_resume
@@ -125,28 +111,29 @@ lc_resume:
 
 ; Language-card RAM is read-mapped: return in A the soft switch that
 ; re-selects it ($80/$88 read-only, $83/$8B read/write; bank 2 if BANKSIG
-; bit 6 is set). Writes are tested by flipping BANKSIG and restoring it.
+; bit 6 is set). Writes are tested by flipping bit 0 of BANKSIG and putting
+; it back. Bit 6 never changes, so an NMI anywhere in here (it runs lc_mode
+; too) sees the true bank, and its own probe leaves BANKSIG as it found it.
 ; Preserves X and Y.
 lc_mode:
         phx
         ldx BANKSIG
         txa
-        eor #$FF
+        eor #$01
         sta BANKSIG
-        cmp BANKSIG
-        stx BANKSIG
-        php                     ; Z set: the write went through
+        eor BANKSIG             ; 0 if the write went through, else 1
+lm_put: stx BANKSIG
+        lsr a                   ; C = writes off
         txa
-        asl a                   ; bit 6 -> N
-        bmi lm_bank2
-        lda #$88
+        and #$40
+        beq lm_bank1
+        lda #$80               ; bank 2
         bra lm_rw
-lm_bank2:
-        lda #$80
+lm_bank1:
+        lda #$88
 lm_rw:
-        plp
-        bne lm_done
-        ora #$03
+        bcs lm_done
+        ora #$03               ; read/write
 lm_done:
         plx
         rts

@@ -46,7 +46,7 @@ assembler to both language-card banks, and loads `ED` (the full-screen editor) a
    (`RAMRD`/`RAMWRT` `$C002-$C005` around every access; `AUXMOVE $C311`). A trace of
    every aux access while assembling showed the pages used are reached only through a
    handful of base/limit constants. 3RIC does not decode the aux switches, so moving
-   those constants into main RAM (symbols from `$5800`, object buffer `$7000-$85FF`)
+   those constants into main RAM (symbols from `$5800`, object buffer `$7000-$84FF`)
    makes all the aux accesses plain main-RAM accesses. Source space is `$0901-$57FF`
    (~19 KB).
 3. **80 columns and IIe firmware.** `PR#3` jumped into `$C300`, which on 3RIC is the
@@ -61,6 +61,18 @@ assembler to both language-card banks, and loads `ED` (the full-screen editor) a
    Open-Apple tests read instead.
 6. **The ED load check.** Merlin's `BLOAD` refuses loads above the source limit; ED
    itself loads above it by design, so that one address is allowed.
+
+## Review fixes
+
+The two-model review panel found, and this port fixed: a RENAME with directories in
+the path renamed the parent directory (the new path's lookup moved the saved entry
+location); the bank probe flipped all of ``, so an NMI inside it could see the
+other bank's signature and restore the wrong bank (it now flips bit 0 only, and a test
+injects NMIs exactly there - the old probe fails it); entries could reach the card
+before their FAT sectors; locked files were not enforced; disk-full writes reported no
+bytes; the free-cluster hint carried only 16 bits; empty or `/SD//` names were
+accepted; SET_PREFIX could overflow; 16 MB+ files wrapped on OPEN. Each has a test
+except the write ordering, which is by construction (no write-fault injection).
 
 ## Evidence
 
@@ -91,4 +103,6 @@ assembler to both language-card banks, and loads `ED` (the full-screen editor) a
 - RENAME works within a directory only; one volume (`/SD`); 3 open files; long FAT names
   are not shown; 8.3 mapping can collide (the converter refuses collisions in its own
   output). The FSInfo free-cluster count is left stale (the ROM ignores it).
+- Write ordering after an interruption (power loss, reset) is designed but not tested by
+  fault injection.
 - Depends on fingerprinted ROM SD/FAT32 internals, like the Wizardry I port.

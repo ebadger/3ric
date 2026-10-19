@@ -195,6 +195,8 @@ mc_one: inc S_MAXCL             ; clusters + 2 - 1
         inc S_MAXCL+1
         bne hint
         inc S_MAXCL+2
+        bne hint
+        inc S_MAXCL+3
 
 hint:   lda #2                  ; free-cluster hint: FSInfo, else 2
         sta S_HINT
