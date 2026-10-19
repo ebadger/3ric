@@ -83,7 +83,7 @@ export const KNOWN_INTRO_SHA256 = "646ee07569b890892b98b8809adf99128f1bbeae34b3b
 // The intro's patches: [address, expected bytes (null = any), new bytes
 // from the runtime/intro.s symbols S]. Its hardware reads and CONSOL clicks
 // go to the runtime as in the game; its RTCLOK-equality waits become
-// elapsed-time waits; its loader keeps everything but the disk: no disk
+// elapsed-time waits that catch up; its loader keeps everything but the disk: no disk
 // check, no reading the main game (the 3RIC loader does that after the warm
 // start).
 const w16 = (v) => [v & 0xff, v >> 8];
@@ -92,8 +92,9 @@ export const INTRO_PATCHES = [
   ...[0x8a44, 0x8a50, 0xa75f].map((a) => [a, [0xad, 0x1f, 0xd0], (S) => [0xad, ...w16(S.RG + 0x1f)]]),  // LDA CONSOL
   ...[0x888c, 0x8898, 0xa1f4, 0xa470, 0xbb66].map((a) => [a, [0xad, 0x0a, 0xd2], (S) => [0x20, ...w16(S.RND_A)]]),      // LDA RANDOM
   ...[0x88f7, 0x8ac2].map((a) => [a, [0xcd, 0x0b, 0xd4], (S) => [0x20, ...w16(S.VC_CMP)]]),             // CMP VCOUNT
-  // CLC / ADC RTCLOK / CMP RTCLOK / BNE / RTS: wait A ticks
-  [0x90cf, [0x18, 0x65, 0x14, 0xc5, 0x14, 0xd0, 0xfc, 0x60], (S) => [0x4c, ...w16(S.JWAIT)]],
+  // CLC / ADC RTCLOK / CMP RTCLOK / BNE / RTS: wait A ticks (these four
+  // waits catch up the ticks the redraws take: intro.s iw_d)
+  [0x90cf, [0x18, 0x65, 0x14, 0xc5, 0x14, 0xd0, 0xfc, 0x60], (S) => [0x4c, ...w16(S.IWAIT)]],
   // ... or until $E5 is zero
   [0x9092, [0x18, 0x65, 0x14, 0xa4, 0xe5, 0xf0, 0x04, 0xc5, 0x14, 0xd0, 0xf8, 0x60], (S) => [0x4c, ...w16(S.WAIT_E5)]],
   // LDA deadline / CMP RTCLOK / BNE loop (deadlines RTCLOK + 180 and + 100)
@@ -116,6 +117,19 @@ export const INTRO_PATCHES = [
   [0x8957, [0xa9, 0x01, 0x20, 0xcf, 0x90], () => [0xea, 0xea, 0xea, 0xea, 0xea]],   // its one-tick wait (as $91FD does)
   [0x895f, [0xad, 0xec, 0x83, 0xd0, 0x03, 0x4c, 0x0e, 0x8a, 0xa9, 0x78, 0x20, 0xcf, 0x90, 0x4c, 0x0e, 0x8a],
     (S) => [0x20, ...w16(S.TITLE_HOLD), 0x4c, 0x0e, 0x8a]],                           // JSR title_hold / JMP $8A0E
+  // The logo's display-list interrupt shades each of its lines from COLOR2
+  // and steps COLOR2 every frame (INC $02C6): each step that changed a
+  // line's hi-res colour redrew the whole banner (24 bitmap lines), so the
+  // intro's screens showed under one frame a second. The shading stays,
+  // the cycling stops (BIT $02C6).
+  [0x84c8, [0xee, 0xc6, 0x02], () => [0x2c, 0xc6, 0x02]],
+  // The number of planeteers starts at 1 and SELECT cycles 1, 0, 2: the
+  // controller screen waits for a different controller's button for each
+  // planeteer, and the 3RIC has the keyboard (stick 1) and two pads, so the
+  // Atari's default of 4 could never get past it with the keyboard alone,
+  // and 3 or 4 never at all. (0 is the Atari's all-computer game.)
+  [0x8a1e, [0xa9, 0x04, 0xac, 0xf1, 0xff, 0xc0, 0x01, 0xd0, 0x02, 0xa9, 0x03], () => [0xa9, 0x01, 0xd0, 0x07]],
+  [0x8a78, [0xa9, 0x04, 0xac, 0xf1, 0xff, 0xc0, 0x01, 0xd0, 0x02, 0xa9, 0x03], () => [0xa9, 0x02, 0xd0, 0x07]],
 ];
 
 const hexList = (s) => s.trim().split(/\s+/).map((h) => parseInt(h, 16));
@@ -267,7 +281,7 @@ export function buildRuntime() {
   // page 8) and for the intro (page 2, the table in intro.s's area)
   const renderer = (b1, v) => {
     const rd = assembleInto(b1, equ({ RENDER: L.RENDER, FONT: L.FONT, ...v, RROWS: S.RTVARS_END, SNAP_G: S.SNAP_G, SNAP_A: S.SNAP_A,
-      VC_FAKE: S.VC_FAKE, COL_CLASS: S.COL_CLASS, COL_EVEN: S.COL_EVEN, COL_ODD: S.COL_ODD, RAM2_R: S.RT_RAM2_END }) + src("render.s"), "render.s");
+      VC_FAKE: S.VC_FAKE, COL_CLASS: S.COL_CLASS, COL_EVEN: S.COL_EVEN, COL_ODD: S.COL_ODD, RAM2_R: S.RT_RAM2_END, GAP_SH: S.GAP_SH }) + src("render.s"), "render.s");
     if (rd.symbols.RAM2_R_END > 0xd000) throw new Error(`render.s's RAM2 part overflows (${h4(rd.symbols.RAM2_R_END)})`);
     if (rd.symbols.RENDER_END > 0xdfff) throw new Error(`render.s runs into the bank signature (${h4(rd.symbols.RENDER_END)})`);
     if (rd.symbols.B1GAP_END > 0xd1d0) throw new Error(`render.s overflows the line table's gap (${h4(rd.symbols.B1GAP_END)})`);
@@ -276,8 +290,8 @@ export function buildRuntime() {
     b1[0xdfff] = 0xa5;               // bank signature
     return rd;
   };
-  const game = { T2TAB: L.T2TAB, HIRES: L.HIRES };
-  const intro = { T2TAB: L.IRT, HIRES: L.INTRO_HIRES };
+  const game = { T2TAB: L.T2TAB, HIRES: L.HIRES, GAP_SHIFT: 0 };           // render gap = the redraw's length
+  const intro = { T2TAB: L.IRT, HIRES: L.INTRO_HIRES, GAP_SHIFT: 0x82 };  // a quarter: its main code mostly waits; no collisions
   const rd = renderer(b1, game);
   const b1i = new Uint8Array(0x10000);
   renderer(b1i, intro);

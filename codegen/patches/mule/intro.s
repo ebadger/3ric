@@ -302,41 +302,80 @@ sy5:    lda #228
         jmp ($0224)             ; VVBLKD
 sy_x:   jmp XITVBV
 
-; ---- the intro's RTCLOK-equality waits, as elapsed-time waits (the
-; redraw runs inside the tick, so the main code can miss one tick value)
+; ---- the intro's RTCLOK-equality waits, as elapsed-time waits that
+; catch up. The redraw runs inside the tick and takes many ticks; the
+; Atari's waits each start from "now", so the steps the main code missed
+; while it ran were lost and the characters walked a fraction of their
+; speed. iw_d keeps how late the last wait ended (at most IW_CAP ticks);
+; the next waits end that much early, so the walk keeps the Atari's pace
+; and the redraws show it at a lower frame rate. Only A (and Y in
+; wait_e5, as before) is changed.
+IW_CAP  = 32
+; $90CF: wait A ticks; returns A = start + n
+iwait:  cmp #0
+        beq iwz
+        sta iw_n
+        lda $14
+        sta iw_s
+iw1:    jsr iw_due
+        bcc iw1
+iw2:    lda iw_s
+        clc
+        adc iw_n
+iwz:    rts
 ; $9092: A ticks, or until $E5 is zero
 wait_e5:
         sta iw_n
         lda $14
         sta iw_s
 we1:    ldy $E5
-        beq we2
-        lda $14
+        beq iw2
+        jsr iw_due
+        bcc we1
+        bra iw2
+; C set once the ticks since iw_s plus the debt reach iw_n, the debt
+; then left with the rest
+iw_due: lda $14
         sec
         sbc iw_s
-        cmp iw_n
-        bcc we1
-we2:    lda iw_s
         clc
-        adc iw_n
-        rts
+        adc iw_d
+        bcs idu1
+        cmp iw_n
+        bcc idu_x
+idu1:   sbc iw_n                ; C set
+iw_set: cmp #IW_CAP+1
+        bcc idu2
+        lda #IW_CAP
+idu2:   sta iw_d
+        sec
+idu_x:  rts
 ; $8EDF/$9069: LDA dl / CMP RTCLOK / BNE loop, the deadline dl set to
-; RTCLOK + n just before: Z set (A = dl) once n ticks have passed
-ddl_84: lda $14
-        sec
-        sbc $84
-        cmp #256-180
-        bcs dd_no
+; RTCLOK + n just before: Z set (A = dl) once n ticks, less the debt,
+; have passed (dl at most 180 / 100 ticks ahead)
+ddl_84: lda #256-180
+        sta iw_w
         lda $84
-        cmp $84
-        rts
-ddl_97: lda $14
-        sec
-        sbc $97
-        cmp #256-100
-        bcs dd_no
+        bra ddl
+ddl_97: lda #256-100
+        sta iw_w
         lda $97
-        cmp $97
+ddl:    sta iw_t
+        lda $14
+        sec
+        sbc iw_t                ; ticks past the deadline (or, from iw_w,
+        cmp iw_w                ; before it)
+        bcc dl_late
+        clc
+        adc iw_d
+        bcc dd_no               ; still ahead with the debt paid
+        bra dl_set
+dl_late:
+        clc
+        adc iw_d
+dl_set: jsr iw_set
+        lda iw_t
+        cmp iw_t
         rts
 dd_no:  lda #1
         rts
@@ -404,4 +443,7 @@ sv_sp:  .byte 0
 sv_ier: .byte 0
 iw_n:   .byte 0
 iw_s:   .byte 0
+iw_d:   .byte 0
+iw_t:   .byte 0
+iw_w:   .byte 0
 irt_end:

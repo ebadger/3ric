@@ -202,7 +202,7 @@ async function testRealDisk(atrPath) {
     const main = P.mainImage(atr), entries = new Set();
     for (const a of P.RELOC_ABS) if (main[a] === 0x20 || main[a] === 0x4c) entries.add(main[a + 1] | (main[a + 2] << 8));
     const stale = [];
-    for (const [name, org] of [["G1.BIN", 0x1000], ["G2.BIN", 0x4000]]) {
+    for (const [name, org] of [["G1.BIN", 0x1000], ["G2.BIN", 0x4000], ["WIN.BIN", 0xe000]]) {
       const b = conv.files[name];
       for (let i = 0; i + 2 < b.length; i++)
         if ((b[i] === 0x20 || b[i] === 0x4c) && entries.has(b[i + 1] | (b[i + 2] << 8))) stale.push((org + i).toString(16));
@@ -395,7 +395,7 @@ function playIntro(vm, shot) {
       : /PRESS YOUR BUTTONS/.test(t) ? "controllers" : /PRESS START/.test(t) ? "options" : /OZARK/.test(t) ? "title" : "";
     if (stage && !seen.has(stage)) seen.add(stage);
     if (stage === "game") break;
-    if (stage === "title") press(0, B);
+    if (stage === "title") { vm.keyDown("Q".charCodeAt(0)); run(4); }   // any key (no pad): the intro's CH
     else if (stage === "options") { players = /\b2 PLANETEERS/.test(t); press(0, players ? START : SELECT, 3); }
     else if (stage === "controllers") { press(0, B); press(1, B); }
     else if (stage === "species") {

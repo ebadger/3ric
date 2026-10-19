@@ -106,7 +106,9 @@ r_par    = RROWS                ; the lit dot of a colour cell (pc_par)
 r_src    = RROWS+1              ; the player or missile byte being drawn
 r_hpg    = RROWS+2              ; HIRES, for the RAM2 code (the same in
                                 ; both builds); then the c_* sprite cache
-RROWS_END = RROWS+51
+r_ebk    = RROWS+51             ; set_colors: the background's hi-res colour
+r_ctr    = RROWS+52             ;   and the masks for a clash with it
+RROWS_END = RROWS+53
 
         .org RENDER
 
@@ -127,9 +129,11 @@ rd2:    lda SNAP_A,x
         jsr walk
         lda #$FF
         sta VC_FAKE
+        lda #GAP_SHIFT          ; rt.s: the gap after this redraw is its
+        sta GAP_SH              ; length >> GAP_SHIFT & $7F (at least 3
+                                ; ticks); bit 7: no player collisions
         plp
-        jsr draw_lines
-        rts
+        jmp draw_lines
 
 ; ---------------------------------------------------------------- phase 1
 xlat_hi:                        ; $20-$3F -> $E0-$FF (the moved window)
@@ -233,7 +237,7 @@ wk_blank:
         clc
         adc #1
         sta zt2
-        jsr blank_rows
+wk_br:  jsr blank_rows
         lda zt3                 ; a leading blank line: no entry (wk_nolms
         beq wk_adv              ; covers those on the screen)
         jsr record
@@ -250,11 +254,10 @@ wk_jump:
         and #$40
         beq wk_j1
         jmp wk_end              ; JVB: end of frame
-wk_j1:  stz zt1
+wk_j1:  stz zt1                 ; a jump: one blank line (as wk_blank)
         lda #1
         sta zt2
-        jsr blank_rows
-        jsr record
+        bra wk_br
 wk_adv: lda zt0                 ; display list interrupt at the line's end
         bpl wk_nodli
         lda $D40E
@@ -632,11 +635,15 @@ eh_ld:  lda $FFFF,x
         lda lt_mshi,x
         sta zsrc+1
         ldy #0
-eh1:    lda (zsrc),y
-        jsr hb
+        lda r_hlo
+eh1:    eor (zsrc),y            ; (hb, inline, the hash kept in A)
+        asl a
+        rol r_hhi
+        adc #0
         iny
         cpy r_nb
         bne eh1
+        sta r_hlo
 eh_done:
         jmp eh_spr
 eh_lo:  .byte <lt_c0,<lt_c1,<lt_c2,<lt_c3,<lt_cbk,<lt_pc0,<lt_pc1,<lt_pc2,<lt_pc3
@@ -697,23 +704,29 @@ cr1:    sta (zhr),y
 
 ; Colour masks for the five playfield colours of entry X:
 ; r_cm + 2k = even-byte mask, r_cm + 2k + 1 = odd-byte mask (k: BK, PF0-3).
-; The hi-res background is black, so a playfield colour that would come out
-; black is drawn white (dark-on-light Atari text stays readable).
+; Modes 4, 5, 8, D and E fill the background with COLBK; the others leave
+; it the black hi-res screen. A playfield colour that would come out as that
+; background colour is drawn white (black on a white background), unless it
+; is COLBK's own Atari colour: dark-on-light text stays readable, and the
+; title's gold logo keeps its red letters (white here) and black outlines.
 set_colors:
         lda lt_cbk,x
         ldy #0
         jsr cmask
+        jsr bk_set              ; (RAM2) r_ebk, r_ctr
         lda lt_c0,x
         ldy #2
-        jsr cmask_fg
+        jsr cmask_pf
         lda lt_c1,x
         ldy #4
-        jsr cmask_fg
+        jsr cmask_pf
         lda lt_c2,x
         ldy #6
-        jsr cmask_fg
+        jsr cmask_pf
         lda lt_c3,x
         ldy #8
+        jmp cmask_pf
+; a sprite's colour (pc_set): black is drawn white
 cmask_fg:
         jsr cmask
         lda r_cm,y
@@ -886,15 +899,28 @@ rt40b:  sta (zhr),y
         bne rt40
         rts
 
-; ANTIC 6/7: 20 columns of two bytes, bits 6-7 pick PF0-PF3
+; ANTIC 6/7: 20 columns of two bytes, bits 6-7 pick PF0-PF3. Code 0 (the
+; Atari space) uses glyph 0's row, looked up once; a row of nothing else,
+; with that row blank, is filled black at once (the title's text bands are
+; mostly that, under the walking characters)
 row_t20:
-        ldy #0
+        jsr t20_pre             ; (RAM2)
+        bcc rt20s
+        rts
+rt20s:  ldy #0
 rt20:   sty r_x
         lda (zsrc),y
         sta r_cls
         and #$3F
+        beq rt20o
         jsr glyph
-        sta r_gl
+        bne rt20g
+        bra rt20k               ; a blank glyph row
+rt20o:  lda zt2
+        bne rt20g
+rt20k:  jsr t20_bk              ; (RAM2) two black bytes
+        bra rt20z
+rt20g:  sta r_gl
         lda r_cls               ; colour masks for PF(code >> 6)
         rol a
         rol a
@@ -919,6 +945,7 @@ rt20:   sty r_x
         lda t6_l,y
         and r_cm+1,x
         sta zt1
+        jsr t20_fat             ; (RAM2) pixels 3 and 7 in one-dot colours
         lda r_cm,x              ; palette bit
         and #$80
         ora zt0
@@ -926,7 +953,7 @@ rt20:   sty r_x
         lda r_cm,x
         and #$80
         ora zt1
-        pha
+rt20z:  pha
         lda r_x
         asl a
         tay
@@ -1197,8 +1224,14 @@ de_spr: ldx r_i
         adc lt_line,x
         sta r_L
         jsr row_spr
+        ldx r_i                 ; and the next, if it is still this band's
         inc r_L
-        bra row_spr
+        lda lt_line,x
+        clc
+        adc lt_h,x
+        cmp r_L
+        bne row_spr
+        rts
 ds1:    clc
         adc lt_line,x
         sta r_L
@@ -1592,6 +1625,104 @@ sw_n1:  sta r_sh
         rts
 ; 4 pixels, each doubled
 dbl_t:  .byte $00,$03,$0C,$0F,$30,$33,$3C,$3F,$C0,$C3,$CC,$CF,$F0,$F3,$FC,$FF
+
+; set_colors' background (entry X): r_ebk = COLBK's hi-res colour in the
+; modes that fill the background (4, 5, 8, D, E), else 0 (the black
+; screen); r_ctr = the masks for a playfield colour that would vanish into
+; it: white, or black on white. X kept.
+bk_set: stz r_ebk
+        ldy lt_mode,x
+        lda bk_fill,y
+        beq bs1
+        lda lt_cbk,x
+        jsr col_class
+        sta r_ebk
+bs1:    lda #$7F
+        ldy r_ebk
+        cpy #3
+        bne bs2
+        lda #0
+bs2:    sta r_ctr
+        rts
+; playfield colour A into masks slot Y (entry X): as it is, unless it comes
+; out as the background's hi-res colour without being COLBK itself (on a
+; black background, always): then r_ctr. X, Y kept.
+cmask_pf:
+        pha
+        jsr cmask
+        pla
+        pha
+        jsr col_class
+        cmp r_ebk
+        bne cp_x                ; another hi-res colour: as it is
+        lda r_ebk
+        beq cp_c                ; no background drawn: always visible
+        pla
+        pha
+        cmp lt_cbk,x
+        beq cp_x                ; COLBK itself, as on the Atari
+cp_c:   lda r_ctr
+        sta r_cm,y
+        sta r_cm+1,y
+cp_x:   pla
+        rts
+;                 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
+bk_fill: .byte    0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0
+
+; row_t20's start: zt2 = glyph 0's row; C set (the row filled black) when
+; that is blank and all 20 characters are code 0
+t20_pre:
+        lda #0
+        jsr glyph
+        sta zt2
+        bne tp_n
+        ldy #19
+tp1:    lda (zsrc),y
+        and #$3F
+        bne tp_n
+        dey
+        bpl tp1
+        ldy #39                 ; A = 0
+tp2:    sta (zhr),y
+        dey
+        bpl tp2
+        sec
+        rts
+tp_n:   clc
+        rts
+; rt20g, the glyph's second byte in zt1 (X its colour's r_cm index):
+; pixels 3 and 7 of t6_l's 8 -> 14 dots are a single dot each, of
+; opposite parity, so they vanished in the one-dot colours (the plot
+; frame's right side and a column of its production dots) and showed as
+; colour in white. Pixel 3 also lights dot 7, pixel 7 dot 12 (sharing
+; them with pixels 4 and 6), so every pixel shows in every colour.
+t20_fat:
+        lda r_gl
+        and #$11
+        beq tf_x
+        lsr a                   ; pixel 7 -> C
+        and #$08
+        beq tf1
+        lda #$01                ; pixel 3: dot 7
+tf1:    bcc tf2
+        ora #$20                ; pixel 7: dot 12
+tf2:    and r_cm+1,x
+        ora zt1
+        sta zt1
+tf_x:   rts
+; rt20k: a blank character's two black bytes (A and zt0), with the palette
+; bit of the byte before: a dot at the end of an orange or blue byte is
+; shifted half a dot right, and a black palette-0 byte after it cut that
+; short (an orange plot's right side showed green)
+t20_bk: lda r_x
+        beq tb0
+        asl a
+        tay
+        dey
+        lda (zhr),y
+        and #$80
+tb0:    sta zt0
+        rts
 ram2_r_end:
 
         .org r_rrc              ; the first forced redraw after RR_EVERY

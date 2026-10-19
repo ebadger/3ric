@@ -99,13 +99,15 @@ jp_s        = RTVARS+135
 kb_key      = RTVARS+136       ; the last key taken (bit 7 set), for the
                                 ; intro's OS layer (CH); 0 = none
 cc_t        = RTVARS+137       ; col_class scratch (the renderer's)
+gap_sh      = RTVARS+138       ; set by each renderer build: bits 0-6 the
+                                ; render gap shift, bit 7 no collisions
 ay_cache    = RTVARS+32         ; 32 bytes: AY 1 regs 0-15, AY 2 regs 0-15
 snap_g      = RTVARS+64         ; 32: GTIA registers for the renderer
 snap_a      = RTVARS+96         ; 16: ANTIC registers
 snap_v      = RTVARS+112        ; 2: VDSLST
 vc_t        = RTVARS+114        ; VCOUNT compare scratch (main code only;
                                 ; not "vct": symbols ignore case, VCT is a table)
-RTVARS_END  = RTVARS+138
+RTVARS_END  = RTVARS+139
 
 ; =====================================================================
 ; Bank-neutral part (RAM2): entered with either language-card bank mapped
@@ -158,10 +160,20 @@ vbi_after:
         cli
         jsr render_tramp
         sei
-        lda rendering           ; 1 + the ticks the redraw took: wait at
-        cmp #RENDER_EVERY       ; least as long before the next, so the
-        bcs va1                 ; main code keeps half the time on busy
-        lda #RENDER_EVERY       ; screens
+        lda rendering           ; 1 + the ticks the redraw took: wait
+        ldx gap_sh              ; that long (the game) or a quarter of it
+        txa                     ; (the intro, whose main code mostly waits)
+        and #$7F                ; before the next, so the main code keeps
+        tax                     ; its share on busy screens
+        lda rendering
+        cpx #0
+        beq va0
+va2:    lsr a
+        dex
+        bne va2
+va0:    cmp #RENDER_EVERY
+        bcs va1
+        lda #RENDER_EVERY
 va1:    sta render_cd
         stz rendering
         bra irq_out
@@ -378,8 +390,10 @@ vbi_rt: jsr pad_scan
         jsr key_scan
         jsr map_input
         jsr sound
+        bit gap_sh              ; bit 7: no collisions (the intro reads
+        bmi vr1                 ; none; they cost a sixth of the CPU)
         jsr collide
-        inc frames
+vr1:    inc frames
         rts
 
 ; ---- SNES pads, clocked directly (as the ROM's scan does, without NMIs)
@@ -869,14 +883,18 @@ slot_lo:    .byte $10,$20,$40,$80,$01,$08,$04,$00
 slot_hi:    .byte $00,$00,$00,$00,$00,$00,$00,$02
 
 key_scan:
-        ldx #7                  ; button holds run down
+        lda rendering           ; the intro's main code reads CONSOL and
+        beq ks0                 ; doesn't run during a redraw: its button
+        bit gap_sh              ; holds count only the ticks between
+        bmi ks1x                ; (a START pressed during one was lost)
+ks0:    ldx #7                  ; button holds run down
 ks1:    lda kb_t,x
         beq ks2
         dec kb_t,x
 ks2:    dex
         cpx #4
         bcs ks1
-        lda $C000
+ks1x:   lda $C000
         bpl ks_map
         sta kb_key              ; any key (the intro's title takes any)
         and #$7F
@@ -934,6 +952,7 @@ bf5:    stz kb_t,x
         dex
         bpl bf5
         stz kb_key
+        stz gap_sh              ; collisions on until a renderer says
         lda #$FF
         sta vc_fake
         lda #1
@@ -1088,6 +1107,9 @@ bf6:    sta $2000,x
         bit $C057
         ldx #$FF
         txs
+        stx $02FC               ; CH: no key, as the OS leaves it (the
+                                ; intro's last key read as Space, which
+                                ; paused the game on its first frame)
         cli
         jsr bf_ini              ; Atari warm start: JSR (DOSINI), JMP (DOSVEC)
         jmp ($000A)

@@ -44,13 +44,22 @@ survive it). Both loaders work through one piece table (`SEQUENCE`) in two phase
   WARMSV ends the intro). Patched in the intro: its 10 hardware reads and CONSOL
   clicks, as in the game; its RTCLOK-equality waits (a delay subroutine, a delay that
   stops early, two timeout deadlines and the loader's one-tick wait) become
-  elapsed-time waits; its loader skips the disk check and the reading of the main
+  elapsed-time waits that catch up: each keeps how late it ended (up to 32 ticks)
+  and the next ends that much early, so steps lost while a redraw held the CPU are
+  made up; its loader skips the disk check and the reading of the main
   game. The title's logo appears at once: on the Atari it is revealed pixel by
   pixel for 47 seconds, and every revealed pixel made the renderer redraw the
   banner, so the M.U.L.E. walking below it showed only now and then; both reveal
   sweeps run straight away and `title_hold` keeps the title up until the Atari's
-  would end. Any key typed reaches the intro's `CH` (the OS keyboard handler's
-  job), so a key skips the title as on the Atari. Phase 1 of the loader loads the runtime, the intro's renderer and OS layer
+  would end. The banner's DLI no longer steps COLOR2 each frame (each step redrew
+  the whole banner). Any key typed reaches the intro's `CH` (the OS keyboard handler's
+  job), so a key skips the title as on the Atari. The number of planeteers starts
+  at 1 and SELECT cycles 1, 0 (all computer), 2: the controller screen wants a
+  different controller's button per planeteer, and the 3RIC has the keyboard and
+  two pads. The intro's renderer build skips the player-collision scan (the intro
+  reads none) and waits a quarter of a redraw's length after one; its console-key
+  holds count only the ticks between redraws, since its main code (which reads
+  CONSOL) does not run during one. Phase 1 of the loader loads the runtime, the intro's renderer and OS layer
   and the intro, saves what the ROM DOS (or the Disk II boot) needs (zero page, stack,
   pages 2-3 and 8-9, RAM2, the VIA's interrupt enables) and runs it. At the warm start
   `intro_done` stashes `$0000-$0FFF` (the configuration the intro wrote) at `$3000`,
@@ -115,8 +124,16 @@ survive it). Both loaders work through one piece table (`SEQUENCE`) in two phase
   town and plot cursor need about 220). There is no second page to flip to (both
   hi-res pages are inside the game), so this stands in for double buffering: static
   screens never blink. One Atari column per hi-res byte (four 2-bit pixels per byte
-  in modes 4/5 and the intro's mode D banner); colours to the nearest hi-res colour,
-  never black on the black screen. The second scan line of a mode 5, 7 or D line is
+  in modes 4/5 and the intro's mode D banner); colours to the nearest hi-res colour.
+  In modes 4, 5, 8, D and E COLBK fills the background; a playfield colour that
+  becomes the background's hi-res colour (but is not COLBK) is drawn white (black on
+  white), so the logo's black outlines on its gold show; on a black screen nothing
+  is drawn black. In modes 6 and 7 each Atari pixel is 1.75 dots: pixels 3 and 7
+  would be one dot each, of opposite parity, and vanish in the colours that light the
+  other dot, so pixel 3 also lights dot 7 and pixel 7 dot 12; a blank character
+  takes the palette bit of the byte before (a palette-0 byte cut short the half-dot
+  shift of an orange or blue dot before it), and a row of nothing but blank code 0
+  is filled black at once. The second scan line of a mode 5, 7 or D line is
   a copy of the first, unless sprites were ORed into the first. Blank lines above
   the first mode line that are on the screen become one entry, so sprites there (the
   intro's species grid) are drawn. After a redraw the tick waits at least as long as
@@ -194,6 +211,21 @@ survive it). Both loaders work through one piece table (`SEQUENCE`) in two phase
   off. A scan of every absolute hardware read and of every JSR/JMP to an entry point
   of the moved block found them; the test now asserts that none is left. (The
   river's blue had only changed the timing that led the test into those events.)
+- **No way past the intro on the keyboard.** The controller screen waited for a
+  third and fourth controller (the Atari's default is four planeteers); START
+  typed during a redraw expired before the intro's main code ran again; and once
+  through, the game paused on its first frame: Space (`CH` = `$21`) is the Atari
+  game's pause key, the intro's last key had left `CH` at `$21`, and nothing in the
+  game sets `CH`, so it waited forever on a black screen. `boot_final` now leaves
+  `CH` at `$FF`, as the OS does.
+- **A plot frame without its right side**, and a column of production dots missing
+  in the orange plots: the intro draws the plot in mode-6 characters, and their
+  one-dot pixels fell on the colour's unlit dot. The logo's outlines were white: a
+  black playfield colour was drawn white, also on the logo's gold background.
+- **Still slow.** Redraws of the title's walking band spent most of their time on
+  blank characters, and a sixth of the CPU went to collisions the intro never reads.
+  Title redraws went from 5 to 13 per 300 ticks, options 3 to 18, controllers 8
+  to 21; the walk itself, done in the intro's VBI, always kept the Atari's pace.
 
 ## Evidence
 
@@ -203,7 +235,7 @@ both renderers, `intro.s` and loader layout, and font. With `MULE_ATR=<atr>` (af
 `web/build.ps1`): converts the original disk and checks that no absolute read of an
 Atari hardware register and no JSR/JMP to an entry point of the moved block is left
 in the game or the intro; boots the folder from a generated FAT32
-card on the WASM 3RIC and plays the intro on the pads by what its screen says (title,
+card on the WASM 3RIC and plays the intro on the pads by what its screen says (title left with a typed key,
 two players on the options screen, the controller check, colour and species for each
 player; the species grid must be drawn on hi-res page 2 and the intro's summary must
 show the choices), then reaches the status summary and the land grant with the
@@ -217,14 +249,17 @@ transport ship, per-player status bands, mountains, plot markers, development, t
 pirate ship, the status after a round and the first auctions; then the title's
 walking mule with its body, any key passing the title, the map with mountains, a
 blue river, the town and the plot cursor, complete plot frames and production dots,
-and play on through the random events into the second round.
+and play on through the random events into the second round; and a keyboard-only
+`MULE.WOZ` run (Q, Return, Space, Space, D, D, Space, Space) from the title to the
+status summary, the intro's plot drawn whole in blue, violet and orange.
 
 **Not yet shown:** the town and mules with real play, later rounds and the end of a
 game on the 3RIC; sound by ear; anything on the physical board.
 
 ## Known limits
 
-- The planet surface is incomplete (background colours are not filled; mode-6 map
+- The planet surface is incomplete (background colours are filled only in modes
+  4, 5, 8, D and E; mode-6 map
   tiles in dark tones become white, dark sprites white), and the playfield is redrawn
   every third tick, so motion is choppier than the Atari; a sprite that moves
   redraws the bands it is on, which can tear for a moment mid-redraw.
@@ -236,8 +271,9 @@ game on the 3RIC; sound by ear; anything on the physical board.
   game runs (its NMIs are off and the ROM handler's RAM is the runtime's). Pads: B/A/Y
   fire, Start = START, Select = SELECT, X/L/R = OPTION.
 - Keyboard directions latch, so steering is coarser than with a pad.
-- The intro's horizontal fine scrolling (HSCROL) is ignored; its colour cycling
-  shows only where it changes a hi-res colour.
+- The intro's horizontal fine scrolling (HSCROL) is ignored, and its banner's colour
+  cycling is turned off. The intro redraws about three times a second.
+- Space fires; the Atari game's Space pause is not reachable from the keyboard.
 - Relocation and hardware reads are complete for every path the static scans and
   three long sessions reached; an untested path could still use a pointer the
   analysis missed.
