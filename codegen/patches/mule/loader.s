@@ -3,21 +3,24 @@
 ;
 ;     BRUN MULE.PRG 2000
 ;
-; Loads the pieces with ROM DOS FLOADs (one file each: FLOAD skips to a
-; start offset byte by byte), puts the language-card images in place, and
-; enters the last stage (rt.s boot_final, in RAM2) once no ROM call is left.
+; Works through the converter's piece table (port-mule.mjs SEQUENCE) with
+; ROM DOS FLOADs (one file each: FLOAD skips to a start offset byte by
+; byte). A piece's kind says where it goes:
+;   0  in place
+;   1  staged at TEMP, then into language-card bank 2 ($D000, 4 KB)
+;   2  staged at TEMP, then into bank 1 ($D000, 4 KB)
+;   3  staged at TEMP, then into $E000-$FFFF (8 KB, with the vectors)
+;   4  no file: run the intro (intro.s). snap_take saves what the ROM DOS
+;      and this loader need; the intro's warm start puts it back, stashes
+;      the players' choices ($0000-$0FFF) at $3000 and returns here again.
+; Phase 1 loads the runtime, the intro's renderer, its OS layer and the
+; intro and runs it; phase 2 loads the main game, its renderer and the
+; runtime's RAM2 and low pages (staged), then enters rt.s boot_final, in
+; RAM2, once no ROM call is left.
 ;
-;   WIN.BIN  game $2000-$3FFF, moved -> LC $E000-$FFFF (with the vectors)
-;   RTB2.BIN runtime, LC bank 2 $D000-$DFFF (register file, core, FP)
-;   RTB1.BIN renderer, LC bank 1 $D000-$DFFF
-;   RAM2.BIN font and bank-neutral runtime -> $C800-$CFFF (staged)
-;   LOW.BIN  runtime pages $0300 and $0600-$08FF (staged)
-;   CFG.BIN  $0000-$0FFF as the intro hands it to the main game (staged)
-;   G1.BIN   game $1000-$1FFF
-;   G2.BIN   game $4000-$B07F
-;
-; The converter prepends: BOOT_FINAL, the expected last byte of every file
-; (LAST_WIN ... LAST_G2) and the command strings below.
+; The converter prepends BOOT_FINAL, SNAP_TAKE, INTRO_LAUNCH and TEMP and
+; appends the tables: command offsets, each file's expected last byte, the
+; kinds and the command strings.
 
 COUT        = $FDED
 SETVID      = $FE93
@@ -25,7 +28,6 @@ DOS_HOOK    = $03EA             ; ROM DOS: JSR hook_buffer_no_output; RTS
 MUTE_OUTPUT = $CE09
 CTRL_D      = $84
 CR          = $8D
-TEMP        = $4000
 R2_STASH    = $2400
 LOW_STASH   = $2C00
 
@@ -54,35 +56,17 @@ rom_ok:
         lda #$80
         sta MUTE_OUTPUT
 
-        ldx #0                  ; WIN.BIN -> $E000 via TEMP
+        ldx #0
+nxt:    stx piece
+        lda p_kind,x
+        cmp #4
+        beq run_intro
         jsr load
-        lda $C081               ; read ROM, write bank 2 (and $E000-$FFFF)
-        lda $C081
-        lda #>TEMP
-        ldx #$E0
-        ldy #32
-        jsr copy
-        ldx #1                  ; RTB2.BIN -> bank 2
-        jsr load
-        lda $C081
-        lda $C081
-        lda #>TEMP
-        ldx #$D0
-        ldy #16
-        jsr copy
-        ldx #2                  ; RTB1.BIN -> bank 1
-        jsr load
-        lda $C089               ; read ROM, write bank 1
-        lda $C089
-        lda #>TEMP
-        ldx #$D0
-        ldy #16
-        jsr copy
-        lda $C082               ; ROM, write-protected
-        ldx #3                  ; RAM2, LOW, CFG staged; G1 and G2 in place
-nxt:    phx
-        jsr load
-        plx
+        ldx piece
+        lda p_kind,x
+        beq nx1
+        jsr lcput
+nx1:    ldx piece
         inx
         cpx #NPIECES
         bne nxt
@@ -108,6 +92,34 @@ nxt:    phx
         lda $C083               ; language card bank 2, read/write
         lda $C083
         jmp BOOT_FINAL
+
+run_intro:
+        jsr SNAP_TAKE           ; carry clear now; set when the intro is done
+        bcs nx1
+        jmp INTRO_LAUNCH
+
+; Piece of kind A (1-3) from TEMP into the language card.
+lcput:  cmp #2
+        bne lp1
+        lda $C089               ; read ROM, write bank 1
+        lda $C089
+        ldx #$D0
+        ldy #16
+        bra lp3
+lp1:    pha
+        lda $C081               ; read ROM, write bank 2 (and $E000-$FFFF)
+        lda $C081
+        ldx #$D0
+        ldy #16
+        pla
+        cmp #3
+        bne lp3
+        ldx #$E0
+        ldy #32
+lp3:    lda #>TEMP
+        jsr copy
+        lda $C082               ; ROM, write-protected
+        rts
 
 ; Copy Y pages from page A to page X.
 copy:   sta cp1+2
@@ -137,8 +149,12 @@ ld_set: sta $FFFF               ; a missing file must not look loaded
         lda #CTRL_D
         jsr COUT
         ldx piece
-        ldy cmd_off,x
-ld1:    lda cmds,y
+        lda cmd_lo,x
+        sta ld1+1
+        lda cmd_hi,x
+        sta ld1+2
+        ldy #0
+ld1:    lda $FFFF,y
         beq ld2
         jsr COUT
         iny

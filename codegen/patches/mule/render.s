@@ -7,17 +7,21 @@
 ; would, so the colours, character sets and player positions they change
 ; per band are captured (the handlers' register stores land in this bank's
 ; copy of the register file at $D000/$D400). Phase 2, interrupts on: redraw
-; the lines whose contents changed into hi-res page 1 at $2000, and update
-; only the player rows that changed (see draw_lines).
+; the lines whose contents changed into the hi-res page at HIRES*256 ($2000
+; for the game; $4000 for the intro, which runs while the loader and the
+; hand-off stash hold $2000-$3FFF), and update only the player rows that
+; changed (see draw_lines).
 ;
 ; Mapping: one Atari character column = one hi-res byte (7 pixels for 8,
-; or 14 for 16 in the 20-column modes); Atari colours become the nearest
+; or 14 for 16 in the 20-column modes; four 2-bit pixels per byte in modes
+; 4/5 and D/E); Atari colours become the nearest
 ; hi-res colour. Lines keep their height; if a display list is taller than
 ; 192 lines its blank lines are halved. Addresses in $2000-$3FFF (moved to
 ; $E000) are translated.
 ;
-; Prepended by the converter: RENDER, FONT, T2TAB, RTVARS (rt.s symbols
-; snap_g/snap_a are passed as SNAP_G/SNAP_A), VC_FAKE.
+; Prepended by the converter: RENDER, FONT, T2TAB, HIRES, SPRITES, SPRMAX,
+; PENDING, PAIRS, NPAIR, RROWS, VC_FAKE, rt.s's snap_g/snap_a as
+; SNAP_G/SNAP_A and its COL_CLASS, COL_EVEN, COL_ODD.
 
 zdl     = $30                   ; display list pointer
 zsrc    = $32                   ; screen memory
@@ -41,7 +45,8 @@ lt_rows = $D0E0
 lt_line = $D110
 lt_h    = $D140
 lt_chb  = $D170
-lt_cha  = $D1A0
+                                ; ($D1A0-$D1CF: pc_par and the player
+                                ; tables, after render_end)
 lt_c0   = $D1D0
 lt_c1   = $D210
 lt_c2   = $D240
@@ -88,26 +93,26 @@ r_rrc   = $D4FE                 ; renders until the next forced redraw
 r_rrn   = $D4FF                 ; next entry to force
 RR_EVERY = 16
 
-B1DATA   = $DFF0                ; renderer data at the top of bank 1
+B1DATA   = $D3F4                ; 12 bytes between lt_pc1 and the ANTIC copy
 rd_bits  = B1DATA               ; 6: entries to redraw this frame
 rd_np    = B1DATA+6             ; player/entry pairs with pixels
 rd_k     = B1DATA+7
 rd_osn   = B1DATA+8             ; player records on the screen
 r_pcv    = B1DATA+9             ; COLPM of the player being compared
-r_shi    = B1DATA+10            ; player pixel shift index (0-3)
+r_shi    = B1DATA+10            ; player dot offset / 2 (0-3)
+                                ; (B1DATA+11 free)
 ; in main RAM (bank 1 is full of code): RROWS in page 3 after the runtime's
-; variables, RDATA in $0406-$057F (the game uses $0400-$0405; $0580 is the
-; floating-point package's LBUFF)
+; variables; the pending records (PENDING, 4 x SPRMAX) and the player/entry
+; pairs (PAIRS, NPAIR) where the converter puts them for each build
 rd_rows  = RROWS                ; 24: hi-res rows drawn afresh
 rd_srow  = RROWS+24             ; 24: hi-res rows whose players changed
-RROWS_END = RROWS+48
-pn_row   = RDATA                ; pending player records (the compare
-pn_y     = RDATA+80             ; pass's findings, drawn by spr_put),
-pn_d     = RDATA+160            ; SPRMAX each
-pn_c     = RDATA+240
-rd_pairs = RDATA+320            ; NPAIR: player << 6 | entry
-NPAIR    = 58
-RDATA_END = RDATA+378
+r_par    = RROWS+48             ; the lit dot of a colour cell (pc_par)
+RROWS_END = RROWS+49
+pn_row   = PENDING              ; pending player records (the compare
+pn_y     = pn_row+SPRMAX        ; pass's findings, drawn by spr_put)
+pn_d     = pn_y+SPRMAX
+pn_c     = pn_d+SPRMAX
+rd_pairs = PAIRS                ; player << 6 | entry
 
         .org RENDER
 
@@ -191,7 +196,20 @@ wk_go:
         jsr xlat_hi
         sta r_mshi
 wk_nolms:
-        ldx zt1
+        lda r_seen              ; the first mode line: the leading blank
+        bne wk_m1               ; lines on the screen above it become one
+        lda r_ofs               ; entry, so they are cleared and players
+        beq wk_m1               ; over them are drawn
+        sta zt2
+        sta zt3
+        jsr record              ; (X = the new entry)
+        stz lt_mode,x
+        stz lt_hrow,x
+        lda r_line
+        sec
+        sbc r_ofs
+        sta lt_line,x
+wk_m1:  ldx zt1
         lda mode_h,x
         sta zt2
         sta zt3
@@ -220,6 +238,8 @@ wk_blank:
         adc #1
         sta zt2
         jsr blank_rows
+        lda zt3                 ; a leading blank line: no entry (wk_nolms
+        beq wk_adv              ; covers those on the screen)
         jsr record
         bra wk_adv
 wk_jump:
@@ -232,8 +252,9 @@ wk_jump:
         sta zdl
         lda zt0
         and #$40
-        bne wk_out              ; JVB: end of frame
-        stz zt1
+        beq wk_j1
+        jmp wk_end              ; JVB: end of frame
+wk_j1:  stz zt1
         lda #1
         sta zt2
         jsr blank_rows
@@ -265,15 +286,14 @@ wk_h:   sta r_hrow
 wk_end: rts
 
 blank_rows:                     ; zt3 = rows for zt2 blank lines
-        lda r_seen
+        lda r_seen              ; (0 for leading ones)
         bne br1
-        stz zt3                 ; leading blank lines are not drawn
+        stz zt3
         rts
 br1:    lda zt2
         ldx r_comp
         beq br2
-        clc
-        adc #1
+        inc a
         lsr a
 br2:    sta zt3
         rts
@@ -305,8 +325,6 @@ record: ldx r_n
         sta lt_h,x
         lda $D409
         sta lt_chb,x
-        lda $D401
-        sta lt_cha,x
         lda $D016
         sta lt_c0,x
         lda $D017
@@ -643,26 +661,16 @@ entry_hash:
         jsr hb
         lda lt_chb,x
         jsr hb
-        lda lt_cha,x
+        ldy #8                  ; the colours as the hi-res colours they
+eh_c:   lda eh_lo,y             ; become (an Atari colour cycle the 3RIC
+        sta eh_ld+1             ; cannot show redraws nothing), players'
+        lda eh_hi,y             ; too (a player record holds pixels and
+        sta eh_ld+2             ; place, not colour)
+eh_ld:  lda $FFFF,x
+        jsr col_class
         jsr hb
-        lda lt_c0,x
-        jsr hb
-        lda lt_c1,x
-        jsr hb
-        lda lt_c2,x
-        jsr hb
-        lda lt_c3,x
-        jsr hb
-        lda lt_cbk,x
-        jsr hb
-        lda lt_pc0,x            ; player colours: a player record holds
-        jsr hb                  ; pixels and place, not colour
-        lda lt_pc1,x
-        jsr hb
-        lda lt_pc2,x
-        jsr hb
-        lda lt_pc3,x
-        jsr hb
+        dey
+        bpl eh_c
         lda lt_mode,x
         cmp #2
         bcc eh_done
@@ -681,6 +689,8 @@ eh1:    lda (zsrc),y
         bne eh1
 eh_done:
         rts
+eh_lo:  .byte <lt_c0,<lt_c1,<lt_c2,<lt_c3,<lt_cbk,<lt_pc0,<lt_pc1,<lt_pc2,<lt_pc3
+eh_hi:  .byte >lt_c0,>lt_c1,>lt_c2,>lt_c3,>lt_cbk,>lt_pc0,>lt_pc1,>lt_pc2,>lt_pc3
 hb:     eor r_hlo
         asl a
         rol r_hhi
@@ -695,7 +705,7 @@ row_addr:
         and #$07
         asl a
         asl a
-        ora #$20
+        ora #HIRES
         sta zhr+1
         pla
         pha
@@ -764,45 +774,17 @@ cmask_fg:
         sta r_cm+1,y
 cmf1:   rts
 cmask:  phx
-        pha
-        and #$0E                ; luminance
-        cmp #$02
-        bcc cm_black
-        cmp #$0E
-        bcs cm_white
-        pla
-        pha
-        lsr a
-        lsr a
-        lsr a
-        lsr a
+        jsr col_class
         tax
-        lda hue_col,x
-        bne cm_hue
-        pla                     ; grey: light = white, dark = black
-        pha
-        and #$0E
-        cmp #$08
-        bcs cm_white
-cm_black:
-        lda #0
-        bra cm_set
-cm_white:
-        lda #3
-cm_hue:
-cm_set: tax
         lda col_even,x
         sta r_cm,y
         lda col_odd,x
         sta r_cm+1,y
-        pla
         plx
         rts
-;               grey gold orng rdor pink purp ppbl blue blue ltbl turq grbl gren yegr orgr ltor
-hue_col: .byte    0,   5,   5,   5,   1,   1,   1,   4,   4,   4,   4,   2,   2,   2,   5,   5
-;               black violet green white blue orange
-col_even: .byte $00,  $55,  $2A,  $7F, $D5, $AA
-col_odd:  .byte $00,  $2A,  $55,  $7F, $AA, $D5
+; col_class (Atari colour A -> the hi-res colour it becomes, 0-5: black,
+; violet, green, white, blue, orange; X, Y kept) and its col_even/col_odd
+; masks are in rt.s's RAM2 part (bank 1 is full).
 
 ; ---- draw entry r_i
 draw_entry:
@@ -819,16 +801,34 @@ draw_entry:
         lda #>FONT
 de1:    sta zcb
         stz zt5                 ; row within the entry
+        bra de_row
+de_x:   rts
 de_row: lda zt5
         cmp lt_rows,x
-        bcs de_done
+        bcs de_x
         clc
         adc lt_hrow,x
-        bcs de_done
+        bcs de_x
         cmp #192
-        bcs de_done
+        bcs de_x
         jsr mark_row
+        lda zt5                 ; the second scan line of a mode 5, 7 or D
+        lsr a                   ; line: a copy of the first
+        bcc de_go
         lda lt_mode,x
+        cmp #5
+        beq de_cp
+        cmp #7
+        beq de_cp
+        cmp #$0D
+        bne de_go
+de_cp:  ldy #39
+de_cp1: lda (zdl),y
+        sta (zhr),y
+        dey
+        bpl de_cp1
+        jmp de_next
+de_go:  lda lt_mode,x
         cmp #2
         beq de_t40
         cmp #3
@@ -843,7 +843,15 @@ de_row: lda zt5
         beq de_t20b
         cmp #8
         beq de_bm8
+        cmp #$0D
+        beq de_bmd
+        cmp #$0E
+        beq de_bmd
         jsr clear_row
+        bra de_next
+de_bmd: lda #$80                ; ANTIC D/E: the mode-4 pixels, no glyphs
+        sta zrow
+        jsr row_mc
         bra de_next
 de_t40: lda zt5
         and #$07
@@ -871,11 +879,13 @@ de_t20: lda zt5
         bra de_next
 de_bm8: jsr row_bm8
 de_next:
+        lda zhr                 ; the row just drawn (zdl is free in phase 2)
+        sta zdl
+        lda zhr+1
+        sta zdl+1
         ldx r_i
         inc zt5
-        bra de_row
-de_done:
-        rts
+        jmp de_row
 
 ; glyph byte for character A (code & mask already applied) at row zrow
 glyph:  pha
@@ -947,7 +957,7 @@ rt20:   sty r_x
         lda r_gl
         and #$0F
         tay
-        lda t6_r,y
+        lda t6_l,y
         and r_cm+1,x
         sta zt1
         lda r_cm,x              ; palette bit
@@ -972,14 +982,19 @@ rt20:   sty r_x
         bne rt20
         rts
 
-; ANTIC 4/5: 40 columns of four 2-bit pixels (BK, PF0, PF1, PF2/PF3)
+; ANTIC 4/5: 40 columns of four 2-bit pixels (BK, PF0, PF1, PF2/PF3);
+; ANTIC D/E (zrow bit 7 set): the same pixels straight from screen memory
 row_mc: ldy #0
 rmc1:   sty r_x
         lda (zsrc),y
+        bit zrow
+        bmi rmc_b
         sta r_cls
         and #$7F
         jsr glyph
-        sta r_gl
+        bra rmc_g
+rmc_b:  stz r_cls
+rmc_g:  sta r_gl
         stz zt0                 ; output byte
         stz r_pal
         lda r_x                 ; parity of the byte column
@@ -1064,7 +1079,6 @@ rb2:    lda r_gl
 
 ; 8 pixels -> 14: widths 2,2,2,1 per half (bit 0 = leftmost on the hi-res)
 t6_l:   .byte $00,$40,$30,$70,$0C,$4C,$3C,$7C,$03,$43,$33,$73,$0F,$4F,$3F,$7F
-t6_r:   .byte $00,$40,$30,$70,$0C,$4C,$3C,$7C,$03,$43,$33,$73,$0F,$4F,$3F,$7F
 ; ---------------------------------------------------------------- players
 ; Players 0-3 (single-line P/M at PMBASE+$400) are ORed onto the screen in
 ; their colour, each band with the position and colour the line table
@@ -1072,13 +1086,12 @@ t6_r:   .byte $00,$40,$30,$70,$0C,$4C,$3C,$7C,$03,$43,$33,$73,$0F,$4F,$3F,$7F
 ; row drawn is a record (row, column and pixel shift, the player byte, the
 ; bytes under it), so the next frame can tell exactly which rows changed; a
 ; player colour change redraws the entry instead (entry_hash).
-SPRMAX  = 80
-spr_row = SPRITES               ; hi-res row
-spr_ck  = SPRITES+80            ; player byte
-spr_y   = SPRITES+160           ; column | shift index << 6
-spr_s0  = SPRITES+240
-spr_s1  = SPRITES+320
-spr_s2  = SPRITES+400
+spr_row = SPRITES               ; hi-res row (SPRMAX records)
+spr_ck  = spr_row+SPRMAX        ; player byte
+spr_y   = spr_ck+SPRMAX         ; column | shift index << 6
+spr_s0  = spr_y+SPRMAX
+spr_s1  = spr_s0+SPRMAX
+spr_s2  = spr_s1+SPRMAX
 r_spn   = $D4F2
 r_p     = $D4F3
 r_pg    = $D4F4
@@ -1216,10 +1229,10 @@ sd_pl:  ldx rd_k
         sta zg+1
         stz zg
         ldx r_i
+        jsr sp_pcol
+        jsr pc_par
         jsr sp_hpos
         bcs sd_np
-        jsr sp_pcol
-        ldx r_i
         jsr sd_lines
 sd_ln:  ldy r_L
         lda (zg),y
@@ -1249,8 +1262,14 @@ sd_np:  inc rd_k
         bra sd_pl
 sd_out: rts
 
-; HPOS of player r_p in entry X -> byte column r_cb, pixel shift r_sh;
-; carry set when off the playfield. Hi-res x = (HPOS - 48) * 7/4.
+; HPOS of player r_p in entry X -> byte column r_cb and dot offset r_sh
+; (0-6; r_shi = r_sh / 2) of its first lit dot; carry set when off the
+; playfield; X kept. Players are drawn in colour cells: colour clock
+; x = HPOS - 48 is cell c = x * 7/8 (the playfield's 160 clocks are 140
+; cells, so a player keeps its place on the map), and each player pixel is
+; one cell, dots 2c and 2c+1, lit on the colour's own dot (r_par: 0 for
+; violet, blue and white, 1 for green and orange; white lights both). The
+; first lit dot is s = 2c + r_par = 7 * r_cb + r_sh.
 sp_hpos:
         lda r_p
         beq sh0
@@ -1265,27 +1284,32 @@ sh0:    lda lt_hp0,x
 sh1:    lda lt_hp1,x
         bra shc
 sh2:    lda lt_hp2,x
-shc:    sec
-        sbc #48
-        bcc sh_off
-        pha
-        and #$03
-        sta r_shi
+shc:    sec                     ; x = HPOS - 48 = 8q + r: c = 7q + r',
+        sbc #48                 ; r' = r - 1 (0 for r = 0); s = 14q + t,
+        bcc sh_off              ; t = 2r' + r_par (0-13)
         tay
-        lda sh_tab,y
-        sta r_sh
-        pla
         lsr a
         lsr a
-        sta r_cb
+        and #$FE
+        sta r_cb                ; 2q
+        tya
+        and #$07
+        beq sh_r0
+        dec a
+sh_r0:  asl a
+        ora r_par
+        cmp #7
+        bcc sh_t
+        sbc #7                  ; t >= 7: the next column
+        inc r_cb
+sh_t:   sta r_sh
+        lsr a
+        sta r_shi
+        lda r_cb
         cmp #40
-        bcs sh_off
-        clc
-        rts
+        rts                     ; carry set when off the right edge
 sh_off: sec
         rts
-sh_tab: .byte 0,1,3,5
-shi_hi: .byte $00,$40,$80,$C0
 
 sp_pcol:                        ; COLPMn of entry X -> r_pcv
         lda r_p
@@ -1360,17 +1384,22 @@ pu_c:   lda pn_row,x
 pu_go:  ldx rd_k
         lda pn_d,x
         sta r_d
+        lda pn_c,x
+        jsr pc_par
         lda pn_y,x
         sta zt4
         and #$3F
         sta r_cb
+        eor r_par               ; the offset's low bit: s = 7 * r_cb + r_sh
+        and #$01                ; has the colour's parity
+        sta r_sh
         lda zt4
         rol a
         rol a
         rol a
         and #$03
-        tay
-        lda sh_tab,y
+        asl a
+        ora r_sh
         sta r_sh
         lda pn_c,x
         ldy #0
@@ -1406,8 +1435,10 @@ pu_go:  ldx rd_k
 pu_n:   inc rd_k
         jmp pu_l
 
-; r_d, shift r_sh -> hi-res bytes r_b0-r_b2 (8 pixels -> 14, as in the
-; 20-column text, then r_sh pixels right across 7-bit bytes)
+; r_d at dot offset r_sh -> hi-res bytes r_b0-r_b2: player pixel k lights
+; dot 2k (and 2k+1 in white, r_cm = $7F), so a shape keeps every pixel and
+; its colour wherever it stands (one more dot of width per 7 than the
+; playfield's scale; at offset 6 a white pixel's last dot is cut)
 sp_bits:
         lda r_d
         lsr a
@@ -1415,32 +1446,47 @@ sp_bits:
         lsr a
         lsr a
         tay
-        lda t6_l,y
+        lda sp_tab,y
         sta r_b0
         lda r_d
         and #$0F
         tay
-        lda t6_r,y
+        lda sp_tab,y
         sta r_b1
         stz r_b2
-        ldy r_sh
-        beq sb_x
-sr1:    asl r_b2
-        asl r_b1
-        lda r_b1
-        bpl sr1a
-        and #$7F
-        sta r_b1
-        inc r_b2
-sr1a:   asl r_b0
-        lda r_b0
-        bpl sr1b
-        and #$7F
+        lda r_cm
+        cmp #$7F
+        bne sb1
+        lda r_b0                ; white: both dots of each cell
+        asl a
+        ora r_b0
         sta r_b0
-        inc r_b1
-sr1b:   dey
-        bne sr1
-sb_x:   rts
+        lda r_b1
+        asl a
+        ora r_b1
+        sta r_b1
+sb1:    ldy r_sh
+        beq sb3
+sb2:    asl r_b0
+        rol r_b1
+        rol r_b2
+        dey
+        bne sb2
+sb3:    lda r_b0                ; 24 dots -> three bytes of 7
+        asl a
+        rol r_b1
+        rol r_b2
+        lsr a
+        sta r_b0
+        lda r_b1
+        asl a
+        rol r_b2
+        lsr a
+        sta r_b1
+        lda r_b2
+        and #$7F
+        sta r_b2
+        rts
 
 sr_or:  beq sro1                ; OR pixels A at column Y in its colour
         sta zt0
@@ -1460,6 +1506,23 @@ sr_or:  beq sro1                ; OR pixels A at column Y in its colour
 sro1:   rts
 
 render_end:
+
+        .org $D1A0              ; the line table's unused gap
+; Atari colour A -> r_par, the dot of a colour cell it lights: 0 for
+; violet, blue and white (and black, drawn white), 1 for green and orange.
+; X, Y kept.
+pc_par: jsr col_class
+        phx
+        tax
+        lda par_tab,x
+        sta r_par
+        plx
+        rts
+par_tab: .byte 0,0,1,0,0,1
+shi_hi:  .byte $00,$40,$80,$C0
+; 4 player pixels (bit 3 leftmost) -> dots 0, 2, 4, 6 (bit 0 leftmost)
+sp_tab:  .byte $00,$40,$10,$50,$04,$44,$14,$54,$01,$41,$11,$51,$05,$45,$15,$55
+b1gap_end:
 
         .org r_rrc              ; the first forced redraw after RR_EVERY
         .byte RR_EVERY,0        ; renders (r_rrc, r_rrn), not 256

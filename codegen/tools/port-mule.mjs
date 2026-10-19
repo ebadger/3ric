@@ -1,28 +1,27 @@
 // Build the 3RIC SD-card edition of M.U.L.E. (Ozark Softscape / Electronic
 // Arts, 1983) from the Atari 8-bit disk image.
 //
-//   node codegen/tools/port-mule.mjs <mule.atr> <output-dir> [--players 1|2]
-//        [--level beginner|standard|tournament]
+//   node codegen/tools/port-mule.mjs <mule.atr> <output-dir> [--woz MULE.WOZ]
 //
 // Writes <output-dir>/MULE/: the loader MULE.PRG and the pieces it loads.
 // Copy the folder to the card, then at the ROM DOS prompt: CD MULE,
 // BRUN MULE.PRG 2000.
 //
-// What the port is (docs/porting-logs/mule.md has the full story): the main
-// game (disk sectors 400-720, $1000-$B07F) runs on the 3RIC's 65C02 at its
-// Atari addresses. Its $2000-$3FFF block moves to language-card RAM at
-// $E000 so that $2000 can be the hi-res page; every absolute reference and
-// every pointer source into that block (found by static disassembly and by
-// tracing where pointer high bytes come from) is relocated. Hardware stores
-// land in a register file of language-card RAM; the few hardware reads are
-// patched to a runtime (rt.s) that supplies joysticks, console keys,
-// RANDOM, VCOUNT and collisions; POKEY becomes the two AY chips; a renderer
-// (render.s) redraws the Atari display list on the hi-res page; fp.s stands
-// in for the Atari floating-point ROM and font.mjs for the ROM font.
-//
-// <handoff.bin> is $0000-$0FFF as the game's intro program leaves it for the
-// main game (configuration and data at $0900-$0FFF). The intro is not yet
-// ported; see the porting log.
+// What the port is (docs/porting-logs/mule.md has the full story): both of
+// the disk's programs run on the 3RIC's 65C02 at their Atari addresses.
+// The intro (sectors 1-129: title, options, controllers, colours, species)
+// runs first with a little of the Atari OS (intro.s); its warm start hands
+// the configuration it wrote to the loader, which then loads the main game
+// (sectors 400-720, $1000-$B07F). The game's $2000-$3FFF block moves to
+// language-card RAM at $E000 so that $2000 can be the hi-res page; every
+// absolute reference and every pointer source into that block (found by
+// static disassembly and by tracing where pointer high bytes come from) is
+// relocated. Hardware stores land in a register file of language-card RAM;
+// the few hardware reads are patched to a runtime (rt.s) that supplies
+// joysticks, console keys, RANDOM, VCOUNT and collisions; POKEY becomes the
+// two AY chips; a renderer (render.s) redraws the Atari display list on the
+// hi-res page; fp.s stands in for the Atari floating-point ROM and font.mjs
+// for the ROM font.
 //
 // The disk image and the generated folder contain the copyrighted game;
 // keep them local - this repository holds only the tool and the glue code.
@@ -56,14 +55,72 @@ export const LAYOUT = {
   RP: 0x0320,
   RA: 0x0330,
   RTVARS: 0x0340,     // runtime variables (136 bytes)
-  SPRITES: 0x0600,    // reserved for player save-unders
-  RDATA: 0x0406,      // renderer scratch to $057F (the game uses $0400-$0405,
-                      // the FP package $0580-$05FF); row bitmaps after RTVARS
+  SPRITES: 0x0600,    // player records with save-unders (6 x SPRMAX)
+  SPRMAX: 80,
+  PENDING: 0x0406,    // the compare pass's player records (4 x SPRMAX) and
+  PAIRS: 0x0546,      // the player/entry pairs, to $057F: the game uses only
+  NPAIR: 58,          // $0400-$0405 there, the FP package $0580-$05FF
   T2TAB: 0x0800,      // 8 -> 7 pixel table for 40-column text
-  CFG_STASH: 0x3000,  // loader staging (inside the hi-res page)
+  HIRES: 0x20,        // the game's hi-res page
+  CFG_STASH: 0x3000,  // the intro's $0000-$0FFF, for boot_final (hi-res page)
+  TEMP: 0x4000,       // language-card images are staged here
+  // while the intro runs (intro.s): it uses none of $1000-$6FFF
+  IRT: 0x1000,        // intro.s: 8 -> 7 table, code, then the renderer's
+  IRT_CODE: 0x1100,   // player tables (twice the game's: the species
+  IRT_SPRITES: 0x1800, // screen's players are tall)
+  IRT_SPRMAX: 160,
+  IRT_PENDING: 0x1bc0,
+  IRT_PAIRS: 0x1e40,
+  INTRO_HIRES: 0x40,  // hi-res page 2: page 1 holds the loader and the stash
+  STAGE_R2_I: 0x4000, // RAM2 and page-3 images for the intro's launch
+  STAGE_LOW_I: 0x4800,
+  SNAP: 0x6000,       // the loader's state while the intro runs (14 pages)
   RENDER_EVERY: 3,    // redraw every third 60 Hz tick
   TIMER_LATCH: 26222, // 1,573,437.5 Hz / 60 - 2
 };
+
+// The intro: boot sectors 1-129, loaded at $7BEF; the image the loaders
+// place is page-aligned.
+export const INTRO_SECTORS = 129, INTRO_LOAD = 0x7bef, INTRO_ORG = 0x7b00, INTRO_END = 0xbd00;
+export const KNOWN_INTRO_SHA256 = "646ee07569b890892b98b8809adf99128f1bbeae34b3b8beb7cd1321be9a5919";
+
+// The intro's patches: [address, expected bytes (null = any), new bytes
+// from the runtime/intro.s symbols S]. Its hardware reads and CONSOL clicks
+// go to the runtime as in the game; its RTCLOK-equality waits become
+// elapsed-time waits; its loader keeps everything but the disk: no disk
+// check, no reading the main game (the 3RIC loader does that after the warm
+// start).
+const w16 = (v) => [v & 0xff, v >> 8];
+export const INTRO_PATCHES = [
+  ...[0x8a41, 0x8a4d, 0xa75c].map((a) => [a, [0x8d, 0x1f, 0xd0], (S) => [0x20, ...w16(S.SPK_A)]]),       // STA CONSOL
+  ...[0x8a44, 0x8a50, 0xa75f].map((a) => [a, [0xad, 0x1f, 0xd0], (S) => [0xad, ...w16(S.RG + 0x1f)]]),  // LDA CONSOL
+  ...[0x888c, 0x8898, 0xbb66].map((a) => [a, [0xad, 0x0a, 0xd2], (S) => [0x20, ...w16(S.RND_A)]]),      // LDA RANDOM
+  ...[0x88f7, 0x8ac2].map((a) => [a, [0xcd, 0x0b, 0xd4], (S) => [0x20, ...w16(S.VC_CMP)]]),             // CMP VCOUNT
+  // CLC / ADC RTCLOK / CMP RTCLOK / BNE / RTS: wait A ticks
+  [0x90cf, [0x18, 0x65, 0x14, 0xc5, 0x14, 0xd0, 0xfc, 0x60], (S) => [0x4c, ...w16(S.JWAIT)]],
+  // ... or until $E5 is zero
+  [0x9092, [0x18, 0x65, 0x14, 0xa4, 0xe5, 0xf0, 0x04, 0xc5, 0x14, 0xd0, 0xf8, 0x60], (S) => [0x4c, ...w16(S.WAIT_E5)]],
+  // LDA deadline / CMP RTCLOK / BNE loop (deadlines RTCLOK + 180 and + 100)
+  [0x8edf, [0xa5, 0x84, 0xc5, 0x14, 0xd0, null], (S) => [0x20, ...w16(S.DDL_84), 0xea]],
+  [0x9069, [0xa5, 0x97, 0xc5, 0x14, 0xd0, null], (S) => [0x20, ...w16(S.DDL_97), 0xea]],
+  // the loader's one-tick wait before the warm start
+  [0xbb58, [0xa5, 0x14, 0x18, 0x69, 0x01, 0xc5, 0x14, 0xd0, 0xfc], (S) => [0xa9, 0x01, 0x20, ...w16(S.JWAIT), 0xea, 0xea, 0xea, 0xea]],
+  [0xba97, [0x20, 0x65, 0xe4], () => [0x4c, 0xcd, 0xba]],              // skip the disk check: JMP $BACD
+  [0xbaf6, [0xa9, 0x01, 0x8d, 0x01, 0x03], () => [0x4c, 0x43, 0xbb]],  // skip loading the game: JMP $BB43
+  // The title's logo appears at once. On the Atari it is revealed pixel by
+  // pixel for 47 seconds (random pixels until the title's tick count
+  // $83E0/1 reaches $0500, a centre-out sweep, random recolouring until
+  // $0B00, a second sweep); here every revealed pixel made the renderer
+  // redraw the banner, and the characters walking below it (the title's
+  // VBI) showed only now and then. Both sweeps run straight away, without
+  // their waits, and title_hold keeps the title up until the Atari's would
+  // end, or a trigger or key.
+  [0x88ad, [0xad, 0xe1, 0x83, 0xc9, 0x05, 0xb0, 0x13], () => [0x4c, 0xc7, 0x88]],   // JMP to the first sweep
+  [0x890b, [0xad, 0xe1, 0x83, 0xc9, 0x0b, 0xb0, 0x1c], () => [0x4c, 0x2e, 0x89]],   // JMP to the second sweep
+  [0x8957, [0xa9, 0x01, 0x20, 0xcf, 0x90], () => [0xea, 0xea, 0xea, 0xea, 0xea]],   // its one-tick wait (as $91FD does)
+  [0x895f, [0xad, 0xec, 0x83, 0xd0, 0x03, 0x4c, 0x0e, 0x8a, 0xa9, 0x78, 0x20, 0xcf, 0x90, 0x4c, 0x0e, 0x8a],
+    (S) => [0x20, ...w16(S.TITLE_HOLD), 0x4c, 0x0e, 0x8a]],                           // JSR title_hold / JMP $8A0E
+];
 
 const hexList = (s) => s.trim().split(/\s+/).map((h) => parseInt(h, 16));
 
@@ -111,8 +168,10 @@ export const HW_SITES = hexList(`
 export const FONT_READS = [[0x59b3, 0xbd, 0xe000], [0x5a95, 0xb9, 0xe028]]; // LDA $E000,X / LDA $E028,Y
 export const SETVBV_CALL = 0x42f5;                                             // JSR $E45C
 // Strings (high-bit characters, the last one with bit 7 clear) that start in
-// the moved block but end past $3FFF: copied whole and repointed. Each entry
-// is the LDY #high operand of an "LDA #low / LDY #high" pair.
+// the moved block but end past $3FFF: copied whole (into the free end of
+// bank 2's keyboard part: the game always runs with bank 2 mapped) and
+// repointed. Each entry is the LDY #high operand of an "LDA #low / LDY
+// #high" pair.
 export const MOVED_STRINGS = [0x8c8e];
 // The game's waits for RTCLOK to equal start + n (see rt.s jwait): the
 // subroutine at $1310 and the inline loop at $3926 (CLC/ADC $14/TAY/CPY $14/
@@ -192,12 +251,32 @@ export function buildRuntime() {
     [F.FP_D, F.FP_D_END, 0xda60, "D"], [F.FP_E, F.FP_E_END, 0xd9aa, "E"]]) {
     if (e > lim) throw new Error(`fp.s chunk ${name} ${h4(a)}-${h4(e)} passes ${h4(lim)}`);
   }
-  const rd = assembleInto(b1, equ({ RENDER: L.RENDER, FONT: L.FONT, T2TAB: L.T2TAB, SPRITES: L.SPRITES, RDATA: L.RDATA, RROWS: S.RTVARS_END, SNAP_G: S.SNAP_G, SNAP_A: S.SNAP_A,
-    VC_FAKE: S.VC_FAKE }) + src("render.s"), "render.s");
-  if (rd.symbols.RENDER_END > rd.symbols.B1DATA) throw new Error(`render.s runs into its data (${h4(rd.symbols.RENDER_END)})`);
-  if (rd.symbols.RDATA_END > 0x0580) throw new Error(`render.s scratch runs into LBUFF (${h4(rd.symbols.RDATA_END)})`);
-  if (rd.symbols.RROWS_END > 0x0400) throw new Error(`render.s row bitmaps overflow page 3 (${h4(rd.symbols.RROWS_END)})`);
-  b1[0xdfff] = 0xa5;                 // bank signatures
+  // the renderer twice: for the game (hi-res page 1, tables in pages 6-8)
+  // and for the intro (page 2, tables in intro.s's area)
+  const renderer = (b1, v) => {
+    const rd = assembleInto(b1, equ({ RENDER: L.RENDER, FONT: L.FONT, ...v, RROWS: S.RTVARS_END, SNAP_G: S.SNAP_G, SNAP_A: S.SNAP_A,
+      VC_FAKE: S.VC_FAKE, COL_CLASS: S.COL_CLASS, COL_EVEN: S.COL_EVEN, COL_ODD: S.COL_ODD }) + src("render.s"), "render.s");
+    if (rd.symbols.RENDER_END > 0xdfff) throw new Error(`render.s runs into the bank signature (${h4(rd.symbols.RENDER_END)})`);
+    if (rd.symbols.B1GAP_END > 0xd1d0) throw new Error(`render.s overflows the line table's gap (${h4(rd.symbols.B1GAP_END)})`);
+    if (rd.symbols.R_SHI !== 0xd3fe) throw new Error("render.s variables no longer sit in $D3F4-$D3FF");
+    if (rd.symbols.RROWS_END > 0x0400) throw new Error(`render.s row bitmaps overflow page 3 (${h4(rd.symbols.RROWS_END)})`);
+    b1[0xdfff] = 0xa5;               // bank signature
+    return rd;
+  };
+  const game = { T2TAB: L.T2TAB, HIRES: L.HIRES, SPRITES: L.SPRITES, SPRMAX: L.SPRMAX, PENDING: L.PENDING, PAIRS: L.PAIRS, NPAIR: L.NPAIR };
+  const intro = { T2TAB: L.IRT, HIRES: L.INTRO_HIRES, SPRITES: L.IRT_SPRITES, SPRMAX: L.IRT_SPRMAX, PENDING: L.IRT_PENDING,
+    PAIRS: L.IRT_PAIRS, NPAIR: L.NPAIR };
+  // [table start, size, limit]: the game's tables end below T2TAB and LBUFF
+  // ($0580), the intro's below $2000
+  for (const [name, v, checks] of [
+    ["game", game, [[v => v.SPRITES, 6, L.T2TAB], [v => v.PENDING, 4, L.PAIRS], [v => v.PAIRS, 0, 0x0580]]],
+    ["intro", intro, [[v => v.SPRITES, 6, L.IRT_PENDING], [v => v.PENDING, 4, L.IRT_PAIRS], [v => v.PAIRS, 0, 0x2000]]]]) {
+    for (const [start, n, limit] of checks)
+      if (start(v) + (n ? n * v.SPRMAX : v.NPAIR) > limit || v.SPRMAX > 255) throw new Error(`the ${name} renderer's tables overlap`);
+  }
+  const rd = renderer(b1, game);
+  const b1i = new Uint8Array(0x10000);
+  renderer(b1i, intro);
   b2[0xdfff] = 0x5a;
   shared.set(buildFont(), L.FONT);
   shared.set(t2Table(), L.T2TAB);
@@ -212,7 +291,41 @@ export function buildRuntime() {
   shared[L.RA + 1] = 0xff;
   shared[S.RND_LO] = 0x5a;           // RANDOM's LFSR must not start at zero
   shared[S.RND_HI] = 0x01;
-  return { b1, b2, shared, rt: S, fp: F, render: rd.symbols };
+  return { b1, b1i, b2, shared, rt: S, fp: F, render: rd.symbols };
+}
+
+/** The intro as the Atari boot leaves it, patched; plus its boot entry points. */
+export function buildIntro(atrBytes, S, { allowUnknown = false } = {}) {
+  const sector = readAtr(atrBytes);
+  const s1 = sector(1);
+  if (s1[1] !== INTRO_SECTORS || (s1[2] | (s1[3] << 8)) !== INTRO_LOAD) throw new Error("unexpected boot sector header");
+  const mem = new Uint8Array(0x10000);
+  for (let i = 0; i < INTRO_SECTORS; i++) mem.set(sector(i + 1), INTRO_LOAD + i * 128);
+  const hash = sha256(mem.subarray(INTRO_LOAD, INTRO_LOAD + INTRO_SECTORS * 128));
+  if (hash !== KNOWN_INTRO_SHA256 && !allowUnknown) throw new Error(`unrecognised M.U.L.E. intro (SHA-256 ${hash})`);
+  for (const [a, expect, put] of INTRO_PATCHES) {
+    for (let i = 0; i < expect.length; i++)
+      if (expect[i] !== null && mem[a + i] !== expect[i]) throw new Error(`intro patch at ${h4(a)}: unexpected bytes`);
+    const bytes = put(S);
+    if (bytes.length > expect.length || bytes.some((v) => !(v >= 0 && v <= 0xff))) throw new Error(`intro patch at ${h4(a)}: bad replacement`);
+    mem.set(bytes, a);
+  }
+  return { mem, bootInit: INTRO_LOAD + 6, dosini: s1[4] | (s1[5] << 8), hash };
+}
+
+/** Assemble intro.s (the intro's OS layer) with the 8 -> 7 table in front. */
+export function buildIrt(rt, intro) {
+  const L = LAYOUT, S = rt.rt;
+  const mem = new Uint8Array(0x10000);
+  const r = assembleInto(mem, equ({ IRT_CODE: L.IRT_CODE, SNAP: L.SNAP, CFG_STASH: L.CFG_STASH, STAGE_R2: L.STAGE_R2_I,
+    STAGE_LOW: L.STAGE_LOW_I, BOOT_INIT: intro.bootInit, DOSINI_INIT: intro.dosini, RG: L.RG, RA: L.RA, KB_KEY: S.KB_KEY, XITVBV: S.XITVBV,
+    SETVBV: S.SETVBV, NMI_ENTRY: S.NMI_ENTRY, IRQ_ENTRY: S.IRQ_ENTRY, RESET_ENTRY: S.RESET_ENTRY, JWAIT: S.JWAIT,
+    HW_INIT: S.HW_INIT }) + src("intro.s"), "intro.s");
+  const I = r.symbols;
+  if (I.IRT_END > 0x2000) throw new Error(`intro.s overflows ${h4(L.IRT)}-$1FFF (${h4(I.IRT_END)})`);
+  if (I.IRT_END > L.IRT_SPRITES) throw new Error(`intro.s runs into the intro renderer's tables (${h4(I.IRT_END)})`);
+  mem.set(t2Table(), L.IRT);
+  return { bytes: mem.slice(L.IRT, I.IRT_END), symbols: I };
 }
 
 /**
@@ -309,34 +422,67 @@ export function buildGame(mem0, rt, { allowUnknown = false, strArea = 0, strLimi
   return { mem, known, hash, moved };
 }
 
-const PIECES = [
-  // name, file contents, staging/load address
-  ["WIN.BIN", (g) => g.mem.subarray(0xe000, 0x10000), 0x4000],
-  ["RTB2.BIN", (g, r) => r.b2.subarray(0xd000, 0xe000), 0x4000],
-  ["RTB1.BIN", (g, r) => r.b1.subarray(0xd000, 0xe000), 0x4000],
-  ["RAM2.BIN", (g, r) => r.shared.subarray(0xc800, 0xd000), 0x2400],
-  ["LOW.BIN", (g, r) => Uint8Array.from([...r.shared.subarray(0x0300, 0x0400), ...r.shared.subarray(0x0600, 0x0900)]), 0x2c00],
-  ["CFG.BIN", (g, r, cfg) => cfg, LAYOUT.CFG_STASH],
-  ["G1.BIN", (g) => g.mem.subarray(0x1000, 0x2000), 0x1000],
-  ["G2.BIN", (g) => g.mem.subarray(0x4000, MAIN_END), 0x4000],
+// The files, from the built parts.
+const FILES = {
+  "RTB2.BIN": (p) => p.rt.b2.subarray(0xd000, 0xe000),
+  "RTB1I.BIN": (p) => p.rt.b1i.subarray(0xd000, 0xe000),
+  "IRT.BIN": (p) => p.irt.bytes,
+  "INTRO.BIN": (p) => p.intro.mem.subarray(INTRO_ORG, INTRO_END),
+  "RAM2.BIN": (p) => p.rt.shared.subarray(0xc800, 0xd000),
+  "LOW.BIN": (p) => Uint8Array.from([...p.rt.shared.subarray(0x0300, 0x0400), ...p.rt.shared.subarray(0x0600, 0x0900)]),
+  "WIN.BIN": (p) => p.game.mem.subarray(0xe000, 0x10000),
+  "RTB1.BIN": (p) => p.rt.b1.subarray(0xd000, 0xe000),
+  "G1.BIN": (p) => p.game.mem.subarray(0x1000, 0x2000),
+  "G2.BIN": (p) => p.game.mem.subarray(0x4000, MAIN_END),
+};
+
+// What the loaders do, in order: [file, load address, kind]. Kind 0: in
+// place; 1/2: staged at TEMP, then into language-card bank 2/1 at $D000;
+// 3: staged, then into $E000-$FFFF; 4: no file - run the intro (intro.s),
+// whose warm start comes back to the loader with the players' choices.
+export const KIND = { PLACE: 0, BANK2: 1, BANK1: 2, HIGH: 3, INTRO: 4 };
+export const SEQUENCE = [
+  ["RTB2.BIN", LAYOUT.TEMP, KIND.BANK2],          // phase 1: the intro
+  ["RTB1I.BIN", LAYOUT.TEMP, KIND.BANK1],
+  ["IRT.BIN", LAYOUT.IRT, KIND.PLACE],
+  ["INTRO.BIN", INTRO_ORG, KIND.PLACE],
+  ["RAM2.BIN", LAYOUT.STAGE_R2_I, KIND.PLACE],
+  ["LOW.BIN", LAYOUT.STAGE_LOW_I, KIND.PLACE],
+  [null, 0, KIND.INTRO],
+  ["WIN.BIN", LAYOUT.TEMP, KIND.HIGH],            // phase 2: the main game
+  ["RTB2.BIN", LAYOUT.TEMP, KIND.BANK2],
+  ["RTB1.BIN", LAYOUT.TEMP, KIND.BANK1],
+  ["RAM2.BIN", 0x2400, KIND.PLACE],               // staged for the last stage
+  ["LOW.BIN", 0x2c00, KIND.PLACE],
+  ["G1.BIN", 0x1000, KIND.PLACE],
+  ["G2.BIN", 0x4000, KIND.PLACE],
 ];
 
-/** Assemble the loader with its FLOAD table. */
-export function buildLoader(files, rt) {
-  let cmds = "", offs = [], los = [], his = [], vals = [];
-  for (const { name, data, addr } of files) {
-    offs.push(cmds.length);
+const bytes = (a) => a.map((v) => "$" + v.toString(16).padStart(2, "0")).join(",");
+const hex4 = (v) => v.toString(16).toUpperCase().padStart(4, "0");
+
+/** Assemble the loader (MULE.PRG) with its FLOAD table. */
+export function buildLoader(files, rt, irt) {
+  const lo = [], hi = [], los = [], his = [], vals = [], kinds = [];
+  let strings = "";
+  SEQUENCE.forEach(([name, addr, kind], i) => {
+    kinds.push(kind);
+    if (!name) { lo.push("0"); hi.push("0"); los.push(0); his.push(0); vals.push(0); return; }
+    const data = files[name];
     const end = data.length - 1;
-    cmds += `FLOAD ${name} ${addr.toString(16).toUpperCase().padStart(4, "0")} 0000 ${end.toString(16).toUpperCase().padStart(4, "0")}\0`;
+    const cmd = "FLOAD " + name + " " + hex4(addr) + " 0000 " + hex4(end);
+    lo.push("<cmd" + i); hi.push(">cmd" + i);
+    strings += "cmd" + i + ": .byte " + bytes([...cmd].map((c) => c.charCodeAt(0))) + ",0\n";
     const last = addr + end;
     los.push(last & 0xff); his.push(last >> 8); vals.push(data[end]);
-  }
-  const bytes = (a) => a.map((v) => "$" + v.toString(16).padStart(2, "0")).join(",");
-  const tables = `NPIECES = ${files.length}\n` +
-    `cmd_off: .byte ${bytes(offs)}\nlast_lo: .byte ${bytes(los)}\nlast_hi: .byte ${bytes(his)}\nlast_val: .byte ${bytes(vals)}\n` +
-    `cmds: .byte ${bytes([...cmds].map((c) => c.charCodeAt(0)))}\n`;
+  });
+  const tables = "NPIECES = " + SEQUENCE.length + "\n" +
+    "cmd_lo: .byte " + lo.join(",") + "\ncmd_hi: .byte " + hi.join(",") + "\n" +
+    "last_lo: .byte " + bytes(los) + "\nlast_hi: .byte " + bytes(his) + "\n" +
+    "last_val: .byte " + bytes(vals) + "\np_kind: .byte " + bytes(kinds) + "\n" + strings;
   const mem = new Uint8Array(0x10000);
-  const r = assembleInto(mem, `BOOT_FINAL = ${rt.BOOT_FINAL}\n` + src("loader.s") + tables, "loader.s");
+  const r = assembleInto(mem, equ({ BOOT_FINAL: rt.BOOT_FINAL, SNAP_TAKE: irt.SNAP_TAKE, INTRO_LAUNCH: irt.INTRO_LAUNCH, TEMP: LAYOUT.TEMP })
+    + src("loader.s") + tables, "loader.s");
   const end = Math.max(...r.used.map(([, e]) => e));
   if (end > 0x2400) throw new Error(`loader runs into its staging area (${h4(end)})`);
   return mem.slice(0x2000, end);
@@ -344,23 +490,26 @@ export function buildLoader(files, rt) {
 
 /**
  * The same game as a bootable Disk II image (MULE.WOZ, boot with C600G):
- * diskboot.s in track 0 sectors 0-1, then every piece in order.
+ * diskboot.s in track 0 sectors 0-1, then the pieces in SEQUENCE order
+ * (with diskboot's one-page stage 2 before the staged RAM2/LOW images).
  */
-export function buildWoz(files, rt, buildWozFromDsk) {
-  const order = [
-    ["WIN.BIN", 0x40], ["RTB2.BIN", 0x60], ["RTB1.BIN", 0x70], ["STAGE2", 0x20],
-    ["RAM2.BIN", 0x24], ["LOW.BIN", 0x2c], ["CFG.BIN", 0x30], ["G1.BIN", 0x10], ["G2.BIN", 0x40],
-  ];
-  const pages = (name) => Math.ceil((name === "STAGE2" ? 256 : files[name].length) / 256);
-  const bytes = (a) => a.map((v) => "$" + v.toString(16).padStart(2, "0")).join(",");
-  const eq = `NPIECES = ${order.length}\nBOOT_FINAL = ${rt.BOOT_FINAL}\n`;
-  const src = eq + src_("diskboot.s") + `        .byte ${bytes(order.map(([n]) => pages(n)))}\n` +
-    `p_hi:   .byte ${bytes(order.map(([, hi]) => hi))}\n`;
+export function buildWoz(files, rt, irt, buildWozFromDsk) {
+  const order = [];
+  for (const [name, addr, kind] of SEQUENCE) {
+    if (name === "RAM2.BIN" && addr === 0x2400) order.push(["STAGE2", 0x2000, KIND.PLACE]);
+    order.push([name, addr, kind]);
+  }
+  const pages = (name) => (!name ? 0 : name === "STAGE2" ? 1 : Math.ceil(files[name].length / 256));
+  for (const [name, addr] of order) if (name && addr & 0xff) throw new Error(`${name}: Disk II pieces load to page boundaries`);
+  const eq = equ({ NPIECES: order.length, BOOT_FINAL: rt.BOOT_FINAL, SNAP_TAKE: irt.SNAP_TAKE, INTRO_LAUNCH: irt.INTRO_LAUNCH });
+  const source = eq + src("diskboot.s") + "        .byte " + bytes(order.map(([n]) => pages(n))) + "\n" +
+    "p_hi:   .byte " + bytes(order.map(([, a]) => a >> 8)) + "\np_kind: .byte " + bytes(order.map(([, , k]) => k)) + "\n";
   const mem = new Uint8Array(0x10000);
-  const r = assembleInto(mem, src, "diskboot.s");
+  const r = assembleInto(mem, source, "diskboot.s");
   if (r.symbols.STAGE2_END > 0x2100) throw new Error("disk stage 2 exceeds one page");
   const bootEnd = Math.max(...r.used.filter(([a]) => a < 0x0a00).map(([, e]) => e));
   if (bootEnd > 0x0a00) throw new Error("disk boot loader exceeds two sectors");
+  if (r.symbols.BOOT_CODE_END > r.symbols.P_N) throw new Error("disk boot code runs into its piece table");
   const dsk = new Uint8Array(35 * 16 * 256);
   const place = (k, data) => {                      // payload page k (boot = -2, -1)
     const s = k + 2, track = s >> 4, phys = s & 15;
@@ -372,6 +521,7 @@ export function buildWoz(files, rt, buildWozFromDsk) {
   place(-1, mem.subarray(0x0900, 0x0a00));
   let k = 0;
   for (const [name] of order) {
+    if (!name) continue;
     const data = name === "STAGE2" ? mem.subarray(0x2000, 0x2100) : files[name];
     for (let p = 0; p < pages(name); p++) {
       const page = new Uint8Array(256);
@@ -381,46 +531,36 @@ export function buildWoz(files, rt, buildWozFromDsk) {
   }
   return buildWozFromDsk(dsk);
 }
-const src_ = (name) => fs.readFileSync(path.join(patchDir, name), "utf8");
 
-/** Convert: returns { files: {name: Uint8Array}, known, hash }. */
-export function convert(atrBytes, handoff, opts = {}) {
-  if (!handoff || handoff.length !== 0x1000) throw new Error("handoff image must be 4096 bytes ($0000-$0FFF)");
+/** Convert: returns { files: {name: Uint8Array}, known, hash, rt, irt }. */
+export function convert(atrBytes, opts = {}) {
   const rt = buildRuntime();
-  const game = buildGame(mainImage(atrBytes), rt.rt, { ...opts, strArea: rt.rt.RT_RAM2_END, strLimit: 0xd000 });
-  for (const m of game.moved) rt.shared.set(m.bytes, m.addr);
-  const files = PIECES.map(([name, f, addr]) => ({ name, data: new Uint8Array(f(game, rt, handoff)), addr }));
-  const loader = buildLoader(files, rt.rt);
-  const out = { "MULE.PRG": loader };
-  for (const f of files) out[f.name] = f.data;
-  return { files: out, known: game.known, hash: game.hash, rt };
+  const game = buildGame(mainImage(atrBytes), rt.rt, { ...opts, strArea: rt.rt.RT_B2X_END, strLimit: 0xd200 });
+  for (const m of game.moved) rt.b2.set(m.bytes, m.addr);
+  const s1 = readAtr(atrBytes)(1);
+  const irt = buildIrt(rt, { bootInit: INTRO_LOAD + 6, dosini: s1[4] | (s1[5] << 8) });
+  const intro = buildIntro(atrBytes, { ...rt.rt, ...irt.symbols, RG: LAYOUT.RG }, opts);
+  const parts = { rt, game, irt, intro };
+  const files = {};
+  for (const [name, f] of Object.entries(FILES)) files[name] = new Uint8Array(f(parts));
+  const out = { "MULE.PRG": buildLoader(files, rt.rt, irt.symbols), ...files };
+  return { files: out, known: game.known && intro.hash === KNOWN_INTRO_SHA256, hash: game.hash, rt, irt };
 }
 
 async function main(argv) {
-  const opts = { players: 2, level: "BEGINNER", handoff: null, woz: null };
+  const opts = { woz: null };
   const pos = [];
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--players") opts.players = +argv[++i];
-    else if (argv[i] === "--level") opts.level = String(argv[++i]).toUpperCase();
-    else if (argv[i] === "--handoff") opts.handoff = argv[++i];
-    else if (argv[i] === "--woz") opts.woz = argv[++i];
+    if (argv[i] === "--woz") opts.woz = argv[++i];
     else pos.push(argv[i]);
   }
   if (pos.length !== 2) {
-    console.error("usage: node codegen/tools/port-mule.mjs <mule.atr> <output-dir> [--players 1|2] [--level beginner|standard|tournament] [--woz MULE.WOZ]");
+    console.error("usage: node codegen/tools/port-mule.mjs <mule.atr> <output-dir> [--woz MULE.WOZ]");
     process.exit(2);
   }
   const [atrPath, outDir] = pos;
   const atr = fs.readFileSync(atrPath);
-  let handoff;
-  if (opts.handoff) handoff = fs.readFileSync(opts.handoff);
-  else {
-    const { runIntro } = await import("./mule-intro.mjs");
-    console.log(`running the intro: ${opts.players} player(s), ${opts.level}`);
-    handoff = runIntro(atr, { players: opts.players, level: opts.level });
-  }
-  const r = convert(atr, handoff);
-  if (!r.known) console.warn(`warning: unrecognised release (SHA-256 ${r.hash})`);
+  const r = convert(atr);
   const dir = path.join(outDir, FOLDER);
   if (fs.existsSync(dir)) { console.error(`${dir} exists; remove it first`); process.exit(1); }
   fs.mkdirSync(dir, { recursive: true });
@@ -429,7 +569,7 @@ async function main(argv) {
   console.log(`then on the 3RIC: CD ${FOLDER}, BRUN MULE.PRG 2000`);
   if (opts.woz) {
     const { buildWozFromDsk } = await import("./wozgen.mjs");
-    fs.writeFileSync(opts.woz, buildWoz(r.files, r.rt.rt, buildWozFromDsk));
+    fs.writeFileSync(opts.woz, buildWoz(r.files, r.rt.rt, r.irt.symbols, buildWozFromDsk));
     console.log(`wrote ${opts.woz}: boot it with C600G from the monitor`);
   }
 }

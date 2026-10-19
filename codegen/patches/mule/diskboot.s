@@ -5,15 +5,24 @@
 ; enters $0801. Like codegen/tools/wozgen.mjs, the loader then re-enters the
 ; PROM's sector reader ($C65C) once per run of sectors, with its own resume
 ; address patched into $0801-$0803, stepping the head itself between tracks.
-; The language-card images are read to $4000-$7FFF and copied into the card
-; before the game is read over them; the game goes in place, and the RAM2,
-; low-page and hand-off images to the same staging pages the SD loader uses.
-; Stage 2 (one page at $2000) then copies those, maps bank 2 and enters
-; rt.s boot_final.
+; It works through the same piece table as MULE.PRG (port-mule.mjs
+; SEQUENCE); a piece's kind says where it goes:
+;   0  in place
+;   1  read to $4000, then into language-card bank 2 ($D000, 16 pages)
+;   2  read to $4000, then into bank 1
+;   3  read to $4000, then into $E000-$FFFF (32 pages)
+;   4  no pages: run the intro (intro.s) with the motor off; snap_take
+;      saves this loader's pages and zero page, the PROM's tables in page 3
+;      and so on, and the intro's warm start puts them back and returns
+;      here, the head where it was
+; Language-card copies happen between reads: the card's write enable does
+; not survive the Disk II accesses of a read. Stage 2 (one page at $2000)
+; finally copies the staged RAM2 and low-page images, maps bank 2 and
+; enters rt.s boot_final.
 ;
-; The converter prepends NPIECES and BOOT_FINAL and appends the piece table
-; (p_n pages, p_hi destination page). Payload page k lives at track
-; (k+2)/16, sector (k+2)%16.
+; The converter prepends NPIECES, BOOT_FINAL, SNAP_TAKE and INTRO_LAUNCH
+; and appends the piece table (p_n pages, p_hi destination page, p_kind).
+; Payload page k lives at track (k+2)/16, sector (k+2)%16.
 
 READSEC = $C65C
 WAIT    = $FCA8
@@ -34,7 +43,7 @@ init:   lda #<resume
         sta $05                 ; piece
         lda #2
         sta $09                 ; next sector
-        jsr piece
+        jmp nextp
 
 batch:  sec                     ; read min(16 - sector, pages left in piece)
         lda #16
@@ -69,55 +78,72 @@ resume: clc
         lda $06
         sbc $0a
         sta $06
-        bne rs1
-        lda $05                 ; piece done; after the three language-card
-        cmp #2                  ; images, move them into the card before the
-        bne rs0                 ; game is read over their staging pages
-        jsr lccopy
+        bne chk
+        ldx $05                 ; piece done
+        lda p_kind,x
+        beq rs0
+        jsr lcput
 rs0:    inc $05
-        lda $05
-        cmp #NPIECES
+nextp:  ldx $05
+        cpx #NPIECES
         beq done
-        jsr piece
-rs1:    lda $09
+        lda p_kind,x
+        cmp #4
+        bne np1
+        jsr intro
+        inc $05
+        bra nextp
+np1:    lda p_n,x               ; $06 pages, $07 destination
+        sta $06
+        lda p_hi,x
+        sta $07
+chk:    lda $09
         cmp #16
-        bcc batch
+        bcc bt2
         lda #0                  ; next track
         sta $09
         inc $08
         jsr stepin
-        jmp batch
+bt2:    jmp batch
 
 done:   ldx $2b                 ; motor off, ROM read-only, stage 2
         lda $C088,x
         lda $C082
         jmp $2000
 
-piece:  ldx $05                 ; $06 pages, $07 destination
-        lda p_n,x
-        sta $06
-        lda p_hi,x
-        sta $07
+; Run the intro: motor and stepper phase off while it runs.
+intro:  ldx $2b
+        lda $C088,x
+        lda $0b
+        and #3
+        asl a
+        ora $2b
+        tay
+        lda $C080,y
+        jsr SNAP_TAKE           ; carry clear now; set when the intro is done
+        bcs in1
+        jmp INTRO_LAUNCH
+in1:    ldx $2b
+        lda $C089,x             ; motor on again
         rts
 
-; WIN.BIN ($4000) -> $E000, RTB2.BIN ($6000) -> bank 2, RTB1.BIN ($7000) ->
-; bank 1. Copied here, between sector reads: the card's write enable does
-; not survive the Disk II accesses of a read.
-lccopy: lda $C081               ; read ROM, write bank 2 and $E000-$FFFF
+; Piece of kind A (1-3) from $4000 into the language card.
+lcput:  ldx #$D0
+        ldy #16
+        cmp #2
+        beq lp2
+        pha
+        lda $C081               ; read ROM, write bank 2 and $E000-$FFFF
         lda $C081
-        lda #$40
+        pla
+        cmp #3
+        bne lp3
         ldx #$E0
         ldy #32
-        jsr bcopy
-        lda #$60
-        ldx #$D0
-        ldy #16
-        jsr bcopy
-        lda $C089               ; read ROM, write bank 1
+        bra lp3
+lp2:    lda $C089               ; read ROM, write bank 1
         lda $C089
-        lda #$70
-        ldx #$D0
-        ldy #16
+lp3:    lda #$40
         jsr bcopy
         lda $C082
         rts
@@ -154,6 +180,7 @@ si1:    lda $0b
         dex
         bne si1
         rts
+boot_code_end:
 
 ; ---- stage 2: the last piece read, at $2000
         .org $2000

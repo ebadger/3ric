@@ -53,7 +53,7 @@ DMACTL      = $D400
 PMBASE      = $D407
 
 ; variables (RTVARS, bank-neutral RAM)
-rendering   = RTVARS            ; non-zero while a redraw runs
+rendering   = RTVARS            ; while a redraw runs: 1 + ticks during it
 render_cd   = RTVARS+1
 frames      = RTVARS+2
 rnd_lo      = RTVARS+3
@@ -96,13 +96,16 @@ jw_n        = RTVARS+132       ; jiffy waits (main code only)
 jw_s        = RTVARS+133
 jp_n        = RTVARS+134       ; jwait_poll's own (its poll could jwait)
 jp_s        = RTVARS+135
+kb_key      = RTVARS+136       ; the last key taken (bit 7 set), for the
+                                ; intro's OS layer (CH); 0 = none
+cc_t        = RTVARS+137       ; col_class scratch (the renderer's)
 ay_cache    = RTVARS+32         ; 32 bytes: AY 1 regs 0-15, AY 2 regs 0-15
 snap_g      = RTVARS+64         ; 32: GTIA registers for the renderer
 snap_a      = RTVARS+96         ; 16: ANTIC registers
 snap_v      = RTVARS+112        ; 2: VDSLST
 vc_t        = RTVARS+114        ; VCOUNT compare scratch (main code only;
                                 ; not "vct": symbols ignore case, VCT is a table)
-RTVARS_END  = RTVARS+136
+RTVARS_END  = RTVARS+138
 
 ; =====================================================================
 ; Bank-neutral part (RAM2): entered with either language-card bank mapped
@@ -144,16 +147,24 @@ vbi_after:
         sei
         cld                     ; the game's RTI restored the interrupted D
         lda rendering
-        bne irq_out
+        bne va_busy
         dec render_cd
         bne irq_out
-        lda #RENDER_EVERY
-        sta render_cd
         inc rendering
         cli
         jsr render_tramp
         sei
+        lda rendering           ; 1 + the ticks the redraw took: wait at
+        cmp #RENDER_EVERY       ; least as long before the next, so the
+        bcs va1                 ; main code keeps half the time on busy
+        lda #RENDER_EVERY       ; screens
+va1:    sta render_cd
         stz rendering
+        bra irq_out
+va_busy:
+        inc rendering           ; a tick during the redraw
+        bne irq_out
+        dec rendering           ; (stays non-zero)
 irq_out:
         ply
         plx
@@ -374,15 +385,7 @@ bf4:    sta $FF00,x
         sta $0230
         lda #>blank_dl
         sta $0231
-        ldx #7                  ; no keys held
-bf5:    stz kb_t,x
-        dex
-        bpl bf5
-        lda #$FF
-        sta vc_fake
-        lda #1
-        sta render_cd
-        stz rendering
+        jsr hw_init
         lda #$20                ; clear hi-res page 1
         sta bf6+2
         lda #0
@@ -398,6 +401,27 @@ bf6:    sta $2000,x
         bit $C052
         bit $C054
         bit $C057
+        ldx #$FF
+        txs
+        cli
+        jsr bf_ini              ; Atari warm start: JSR (DOSINI), JMP (DOSVEC)
+        jmp ($000A)
+bf_ini: jmp ($000C)
+blank_dl: .byte $70,$70,$70,$41,<blank_dl,>blank_dl
+; ---- runtime state and hardware for a run (boot_final, and the intro's
+; launch): no keys held, pads, AYs quiet, both timers started and the tick
+; armed. Interrupts stay off.
+hw_init:
+        ldx #7                  ; no keys held
+bf5:    stz kb_t,x
+        dex
+        bpl bf5
+        stz kb_key
+        lda #$FF
+        sta vc_fake
+        lda #1
+        sta render_cd
+        stz rendering
         lda #$7F                ; no onboard VIA interrupts (PS/2 NMIs)
         sta PADIER
         ldx #$80                ; both Mockingboard VIAs
@@ -430,13 +454,7 @@ bf9:    lda #$FF
         sta MB2+V_T1CH
         lda #$C0                ; tick interrupt on
         sta MB2+V_IER
-        ldx #$FF
-        txs
-        cli
-        jsr bf_ini              ; Atari warm start: JSR (DOSINI), JMP (DOSVEC)
-        jmp ($000A)
-bf_ini: jmp ($000C)
-blank_dl: .byte $70,$70,$70,$41,<blank_dl,>blank_dl
+        rts
 ; ---- the game's jiffy waits ($1310, and the one at $3926 that also polls
 ; the players) loop until RTCLOK equals start + n. The redraw runs inside
 ; the tick and can take a few ticks, so the main code may never see that
@@ -493,6 +511,40 @@ VCR:    .byte 0,56,112,168,24,80,136,192,48,104,160,16,72,128,184,40,96,152,8,64
         .byte 0,56,112,168,24,80,136,192,48,104,160,16,72,128,184,40,96,152,8,64,120,176,32,88
         .byte 144,0,56,112,168,24,80,136,192,48,104,160,16,72,128,184,40,96,152,8,64,120,176,32
         .byte 88,144,0,56,112,168,24,80
+
+; ---- for the renderer (render.s, bank 1, which is full): Atari colour A
+; -> the hi-res colour it becomes (0-5: black, violet, green, white, blue,
+; orange); X, Y kept. And each colour's dot masks, even and odd bytes.
+col_class:
+        phx
+        sta cc_t
+        and #$0E                ; luminance
+        cmp #$02
+        bcc cc_blk
+        cmp #$0E
+        bcs cc_wht
+        lda cc_t
+        lsr a
+        lsr a
+        lsr a
+        lsr a
+        tax
+        lda hue_col,x
+        bne cc_x
+        lda cc_t                ; grey: light = white, dark = black
+        and #$0E
+        cmp #$08
+        bcs cc_wht
+cc_blk: lda #0
+        bra cc_x
+cc_wht: lda #3
+cc_x:   plx
+        rts
+;               grey gold orng rdor pink purp ppbl blue blue ltbl turq grbl gren yegr orgr ltor
+hue_col: .byte    0,   5,   5,   5,   1,   1,   1,   4,   4,   4,   4,   2,   2,   2,   5,   5
+;               black violet green white blue orange
+col_even: .byte $00,  $55,  $2A,  $7F, $D5, $AA
+col_odd:  .byte $00,  $2A,  $55,  $7F, $AA, $D5
 rt_ram2_end:
 
 ; =====================================================================
@@ -913,12 +965,31 @@ ay_set: sta ay_val
 ays_x:  ldx ay_chip
         ldy ay_reg
         rts
-; ---- player collisions: P0 against P1-P3 (P0PL) from the VBI positions
+; ---- player collisions: P0 against P1-P3 (P0PL) from the VBI positions.
+; Only players within 8 colour clocks of P0 (normal width) can collide, so
+; those are found first and the rows scanned only for them (the scan for
+; every player cost more than a tick on screens with tall players).
 collide:
         stz RG+$0C
         stz RG+$04
         lda DMACTL
         and #$0C
+        beq cl_done
+        stz col_m               ; players near P0
+        ldx #3
+cl_h:   lda HPOSP0,x            ; |HPOSPx - HPOSP0| < 8
+        sec
+        sbc HPOSP0
+        bcs cl_h1
+        eor #$FF
+        adc #1
+cl_h1:  cmp #8
+        bcs cl_h2
+        lda col_bits,x
+        tsb col_m
+cl_h2:  dex
+        bne cl_h
+        lda col_m
         beq cl_done
         lda PMBASE
         and #$F8
@@ -932,47 +1003,32 @@ collide:
         adc #$01
         sta cl_p3+2
         ldy #$20
-cl_row: 
+cl_row:
 cl_p0:  lda $FF00,y
         beq cl_next
-        sta col_m
-        ldx #1
-cl_pl:
-        jsr cl_test
-        inx
-        cpx #4
-        bne cl_pl
+cl_p1:  lda $FF00,y
+        beq cl_q2
+        lda #$02
+        and col_m
+        tsb RG+$0C
+cl_q2:
+cl_p2:  lda $FF00,y
+        beq cl_q3
+        lda #$04
+        and col_m
+        tsb RG+$0C
+cl_q3:
+cl_p3:  lda $FF00,y
+        beq cl_next
+        lda #$08
+        and col_m
+        tsb RG+$0C
 cl_next:
         iny
         cpy #$F8
         bne cl_row
 cl_done:
         rts
-cl_test:                        ; P0 row Y against player X
-        txa
-        cmp #1
-        bne ct2
-cl_p1:  lda $FF00,y
-        bra ct4
-ct2:    cmp #2
-        bne ct3
-cl_p2:  lda $FF00,y
-        bra ct4
-ct3:
-cl_p3:  lda $FF00,y
-ct4:    beq ct_no
-        lda HPOSP0,x            ; |HPOSPx - HPOSP0| < 8 (normal width)
-        sec
-        sbc HPOSP0
-        bcs ct5
-        eor #$FF
-        adc #1
-ct5:    cmp #8
-        bcs ct_no
-        lda col_bits,x
-        ora RG+$0C
-        sta RG+$0C
-ct_no:  rts
 col_bits:   .byte $00,$02,$04,$08
 rt_b2_end:
 
@@ -1000,6 +1056,7 @@ ks2:    dex
         bcs ks1
         lda $C000
         bpl ks_map
+        sta kb_key              ; any key (the intro's title takes any)
         and #$7F
         ldy $C010               ; take the key
         cmp #'a'                ; fold lower case
