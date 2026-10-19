@@ -73,7 +73,7 @@ pad2h       = RTVARS+16
 snd_ch      = RTVARS+17
 snd_c       = RTVARS+18
 snd_f       = RTVARS+19
-snd_n0      = RTVARS+20        ; (unused)
+idle_pg     = RTVARS+20        ; vbi_after: the page the last tick interrupted
 snd_p       = RTVARS+21         ; 2 bytes
 snd_mix     = RTVARS+23         ; 2 bytes (one per AY)
 col_m       = RTVARS+25
@@ -157,8 +157,8 @@ vbi_after:
         bne va_busy
         tsx                     ; the interrupted code in the same page as
         lda $0107,x             ; at the last tick: its main loop polling
-        cmp cc_t                ; (or a wait), so the gap halves each such
-        sta cc_t                ; tick; code at work keeps its share
+        cmp idle_pg             ; (or a wait), so the gap halves each such
+        sta idle_pg             ; tick; code at work keeps its share
         bne va_c
         lsr render_cd
         bne va_c
