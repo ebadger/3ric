@@ -374,6 +374,54 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     bank 2 around each BIOS call. `$CF00-$CFFF` is reserved for this profile, not a
     general free-RAM declaration. No ROM, VM, web bridge or hardware change.
   - **Acceptance and limits:** see [`docs/porting-logs/wizardry-i.md`](../docs/porting-logs/wizardry-i.md).
+- **Merlin-8 2.58 (ProDOS) SD-card port:** `codegen/tools/port-merlin8.mjs` converts the
+  owner-supplied Merlin-8 disks (volume `/MERLIN.8`, and optionally `/APPLESOFT`) into a
+  `MERLIN8/` folder (`CD MERLIN8`, `BRUN MERLIN.PRG 0800`). Merlin then loads, saves,
+  catalogs, renames, deletes and runs real files on the card, readable by the ROM DOS
+  (`FLOAD`/`BRUN`/`DIR`). The program stays local; the repository holds the converter
+  and glue (`codegen/patches/merlin8/`).
+  - **File layer:** ProDOS is replaced by a FAT32 stand-in (`prodos.s`, `$8500-$9DB5`,
+    global page `$BF00-$BFFF`, sector caches `$AE00-$B1FF` inside the 1 KB I/O buffer
+    Merlin gives every OPEN) built on the ROM's `sd_readsector $E1B9`/`sd_writesector
+    $E21C` and the mounted card's `$CC00-$CC34` geometry. It implements the MLI calls
+    Merlin makes: CREATE (files and directories), DESTROY, RENAME (same directory),
+    SET/GET_FILE_INFO, ON_LINE, SET/GET_PREFIX, OPEN (3 files), NEWLINE, READ, WRITE
+    (files grow by cluster), CLOSE, FLUSH, SET/GET_MARK, SET/GET_EOF and QUIT (back to
+    the ROM DOS prompt in the same folder); interrupt, block and unknown calls return
+    `$25`/`$28`/`$01`. Errors are ProDOS codes with carry set; X/Y and `$B0-$BF` are
+    preserved. The volume is the whole card, `/SD`; the prefix starts at the folder
+    `MERLIN.PRG` ran from. Directories READ as synthesized ProDOS blocks. ProDOS names
+    map to 8.3 by their last dot (`PI.START.S` → `PISTART.S`); type and aux type of
+    files the stand-in creates or retypes live in FAT entry bytes 13-15, tagged by a
+    1980-01-01 creation date; untagged files are TXT for `.S`, else BIN aux `$0000`.
+    Both FAT copies are updated; free clusters are found from the FSInfo hint (the
+    FSInfo free count is not maintained). Any cluster size and fragmentation work.
+    FAT sectors reach the card before any directory sector that refers to them; DESTROY
+    and a shortening SET_EOF write the entry before freeing clusters, so an interruption
+    leaks clusters instead of leaving an entry on free ones. Locked (FAT read-only)
+    files refuse WRITE, SET_EOF, DESTROY and RENAME ($4E); CREATE without write access
+    makes them. A full card fails WRITE with $48 and the bytes actually written; a
+    growing SET_EOF that fills it puts the old EOF back. Files of 16 MB or more report the
+    largest ProDOS size and refuse OPEN ($4D); the prefix directory cannot be destroyed.
+  - **Machine:** Merlin-8 wants a 128 KB IIe with 80 columns. 3RIC has 64 KB plus the
+    language card, so byte-verified patches keep 40 columns (no `$C300` firmware), drop
+    the RamWorks `$C073` store, accept a 64 KB `MACHID` and move the "auxiliary"
+    workspace into main RAM: source `$0901-$57FF`, symbol table from `$5800`, object
+    buffer `$7000-$84FF`; `AUXMOVE $C311` becomes `MOVE`. The aux-bank soft switches
+    (`$C002-$C005`, `$C008/$C009`) are unmapped on 3RIC and stay harmless. Assembled
+    objects are byte-identical to the disk's own (verified for `EDMAC`). ED's
+    Open-Apple key is **Ctrl-A, then the key** (ED reads a flag, not `$C061`, the 3RIC
+    pad-button byte).
+  - **Banking and interrupts:** Merlin runs from language-card RAM (bank 1 read/write
+    or bank 2 read-only). The `MERLIN.SYSTEM` monitor copy is followed by pointing the
+    card's `$FFFA` at a resident (`resident.s`, `$CF00-$CFFF`, the Ultima V/Wizardry PS/2
+    receiver) that forwards other NMIs to the ROM and restores the exact bank and write
+    state (write state probed at `$DFFF`). Every MLI call selects the ROM and restores
+    that mode on return. `$CF00-$CFFF` is reserved for this profile, not general free RAM.
+  - **Trust:** the loader refuses a ROM whose fingerprinted SD/FAT32/monitor ranges
+    differ and a different `MERLIN.SYSTEM`/`ED` (SHA-256). No ROM, VM, web bridge or
+    hardware change is part of the port.
+  - **Acceptance and limits:** see [`docs/porting-logs/merlin-8.md`](../docs/porting-logs/merlin-8.md).
 - **ROM DOS load/write semantics (observed, unchanged):** `FLOAD name addr start end`
   takes an inclusive end offset and skips to `start` byte by byte; `BLOAD` stores one
   byte past EOF; `OWRITE` writes whole sectors in place and, for a missing file, falls
@@ -759,6 +807,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Ultima I SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima1.test.mjs` drives the real loader and ProDOS stand-in through the ROM DOS with synthetic files (file info, open/read with marks and EOF, write/read-back, every error path, registers, zero page, NMI) and the SNES pad glue (all 12 buttons, both controllers, one key per press with overlapping buttons, D-pad repeat gated on the game's buffer, keyboard priority including a key decoded mid-scan); `codegen/tools/port-ultima1.native.ps1` clocks real PS/2 frames (94/120/160-cycle bits, Caps Lock LED exchange) while the glue scans, with hundreds of keyboard NMIs landing inside scans, and fails the earlier `PTRIG` version; with `U1_DISK` it plays the original disk through intro, character creation and save, continue, quick-save and Lord British's castle (entered with the pad's B) and checks the stand-in and pad glue stayed intact. Manual WASM play also covered a town, overworld combat and the Dungeon of Doubt (entered and walked with the pad). Space flight, the time machine and the endgame are unverified; the owner's first SD-card run loaded the game and went through character creation (saving, play and the pads not yet confirmed outside the emulator); ROM DOS command failures are not detected (card contents trusted); loads cost ~0.45 s/KB. |
 | Ultima II SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima2.test.mjs` drives the real loader and DOS 3.3 translator on the ROM DOS with synthetic disks (BLOAD/BRUN/BSAVE, folder switches, exact lengths, register preservation, fail-loud errors); with `U2_DISKS` it plays the original disks through title, character creation and save, the overworld and both patched space disk swaps, plus a D-pad move; SNES pads are covered on the emulated pads with the resident clocking VIA1 port B directly (12-button map on both pads, D-pad repeat after 10 ticks then every 4, pending keys kept, A/X/Y/flags preserved, 30 Hz at 2.1% CPU with no scan or paddle-timer NMIs, IRQs masked during ROM DOS commands, timer off at every error stop). Manual WASM play also covered movement, Z-stats, quit-save, dungeon entry, reloading a saved character and the demo slideshow. No physical-board trial yet; towns/dialogue, combat depth, space flight and the endgame were not played through; the game runs ~1.54x faster than on a 1.02 MHz Apple II. Known issue (shipped by owner decision): `OWRITE` gets the file length, so 4 KB map saves write one extra SD sector; saves need 512-byte clusters. |
 | Ultima III SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima3.test.mjs` reconstructs a synthetic boot image and drives the real loader/RWTS shim on the ROM DOS (whole-file loads, zero-page load, write and read-back, IOB/flag state); with `U3_DISKS` it plays the original disks through Mockingboard set-up, title, character creation, party, world, Lord British's castle, a dungeon and an autosave resume after reset, and checks the 61.5 Hz music IRQ; the gamepad tick is checked synthetically (buttons type keys, held directions repeat) and SNES Up walks the real party north. Talking, shops, Moongates, the endgame and the physical board (including pad scans alongside PS/2 typing) are open; ROM DOS command failures are not detected (card contents trusted); loads run ~2 KB/s in the emulator (boot ~30 s). |
+| Merlin-8 SD-card port | Experimental / emulator-verified | `codegen/tools/port-merlin8.test.mjs` drives the real loader, FAT32 ProDOS stand-in and resident on the ROM DOS with a synthetic `MERLIN.SYSTEM` making every MLI call Merlin uses (incl. errors, directory growth, both LC modes, forwarded NMIs, QUIT) on 1- and 8-sector-cluster (fragmented) cards, then checks the card's FATs and files; with `MERLIN_DISKS` it runs the real Merlin: catalog, load + assemble `EDMAC.S` byte-identical to the disk's object, ED editing (Ctrl-A), save, BRUN, quit to DOS. `port-merlin8.native.ps1` passes the native PS/2 harness. No board trial; Sourceror, linker, `/RAM` and the utilities are unverified. |
 | Wizardry I SD-card port | Experimental / emulator-verified | `codegen/tools/port-wizardry1.test.mjs` drives the real loader/resident/shim on the ROM DOS with a synthetic volume on 1-, 8-(fragmented) and 64-sector-cluster cards (reads, writes, errors 8/9/16, NMIs and bank restore, loader refusals), and with `WIZ1_DISKS` plays the original disks from `BRUN` to the training grounds; `port-wizardry1.native.ps1` passes the native PS/2 harness. Manual WASM play reached the tavern (roster write) and the maze. No board trial; combat, deeper levels and a reload after reboot are unverified. Depends on fingerprinted ROM SD/FAT32 internals. |
 | ROM `BLOAD` stores one byte past EOF | Known gap (ROM) | Observed in `fat32_file_read`; programs loading below live data must use `FLOAD 0000 eof-1`. ROM source is not in this repository. |
 | Adventure disk-only compatibility adapter | Experimental / emulator-verified | Exact-image `.dsk`/`.woz` patcher (`patch-adventure.mjs`); relocates MSBASIC to LC `$D000-$F0FF`, patches DOS 3.3 + `CHAIN` + Applesoft dialect + KIM-1 `FMULT` `ROR RESULT+2` bug (`$E5C7`), retokenizes `ADVENTURE` and `ADVENTURE^Q PART TWO`, and boots through `CHAIN` into full above-ground and underground gameplay. Physical board confirmation and Disk II write support for `SAVE` remain open; see [`docs/porting-logs/adventure.md`](../docs/porting-logs/adventure.md). |
