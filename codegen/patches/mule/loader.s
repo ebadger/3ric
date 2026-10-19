@@ -16,7 +16,7 @@
 ; Phase 1 loads the runtime, the intro's renderer, its OS layer and the
 ; intro and runs it; phase 2 loads the main game, its renderer and the
 ; runtime's RAM2 and low pages (staged), then enters rt.s boot_final, in
-; RAM2, once no ROM call is left.
+; language-card bank 2, once no ROM call is left.
 ;
 ; The converter prepends BOOT_FINAL, SNAP_TAKE, INTRO_LAUNCH and TEMP and
 ; appends the tables: command offsets, each file's expected last byte, the

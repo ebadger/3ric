@@ -100,14 +100,17 @@ rd_k     = B1DATA+7
 rd_osn   = B1DATA+8             ; player records on the screen
 r_pcv    = B1DATA+9             ; COLPM of the player being compared
 r_shi    = B1DATA+10            ; player dot offset / 2 (0-3)
-                                ; (B1DATA+11 free)
+r_sz     = B1DATA+11            ; ms_draw: SIZEM, shifted per missile
 ; in main RAM (bank 1 is full of code): RROWS in page 3 after the runtime's
 ; variables; the pending records (PENDING, 4 x SPRMAX) and the player/entry
 ; pairs (PAIRS, NPAIR) where the converter puts them for each build
 rd_rows  = RROWS                ; 24: hi-res rows drawn afresh
 rd_srow  = RROWS+24             ; 24: hi-res rows whose players changed
 r_par    = RROWS+48             ; the lit dot of a colour cell (pc_par)
-RROWS_END = RROWS+49
+r_row    = RROWS+49             ; sp_wide/ms_draw: the record's row
+r_src    = RROWS+50             ;   and the player or missile byte
+r_hpg    = RROWS+51             ; HIRES, for the RAM2 code (the same in
+RROWS_END = RROWS+52            ; both builds)
 pn_row   = PENDING              ; pending player records (the compare
 pn_y     = pn_row+SPRMAX        ; pass's findings, drawn by spr_put)
 pn_d     = pn_y+SPRMAX
@@ -118,6 +121,8 @@ rd_pairs = PAIRS                ; player << 6 | entry
 
 render: php
         sei
+        lda #HIRES
+        sta r_hpg
         ldx #$1F                ; this bank's register file = the game's
 rd1:    lda SNAP_G,x
         sta $D000,x
@@ -351,6 +356,7 @@ record: ldx r_n
         sta lt_pc2,x
         lda $D015
         sta lt_pc3,x
+        jsr rec_hole            ; (RAM2) HPOSM0-3, SIZEP0-3
         inc r_n
         rts
 
@@ -560,6 +566,7 @@ dl_s1:  stz rd_srow,x
         sta rd_osn
         stz r_spn
         jsr spr_draw
+        jsr ms_draw             ; (RAM2) the missiles
         jsr spr_gone
         lda r_dc
         ldx #23
@@ -1238,21 +1245,9 @@ sd_ln:  ldy r_L
         lda (zg),y
         beq sd_nl
         sta r_d
-        lda r_L                 ; row = hrow + (L - line), halved when the
-        sec                     ; band's blank lines were compressed
-        sbc lt_line,x
-        sta zt0
-        lda lt_rows,x
-        cmp lt_h,x
-        lda zt0
-        bcs sd_h1
-        lsr a
-sd_h1:  clc
-        adc lt_hrow,x
+        jsr sd_row              ; A = hi-res row; carry set when off
         bcs sd_nl
-        cmp #192
-        bcs sd_nl
-        jsr sp_rec
+        jsr sp_wide             ; one record, or 2/4 for a wide player
         ldx r_i
 sd_nl:  inc r_L
         lda r_L
@@ -1261,6 +1256,23 @@ sd_nl:  inc r_L
 sd_np:  inc rd_k
         bra sd_pl
 sd_out: rts
+
+; Row of Atari line r_L in entry X: A = hrow + (L - line), halved when the
+; band's blank lines were compressed; carry set when off the screen.
+sd_row: lda r_L
+        sec
+        sbc lt_line,x
+        sta zt0
+        lda lt_rows,x
+        cmp lt_h,x
+        lda zt0
+        bcs rw_h1
+        lsr a
+rw_h1:  clc
+        adc lt_hrow,x
+        bcs rw_x
+        cmp #192
+rw_x:   rts
 
 ; HPOS of player r_p in entry X -> byte column r_cb and dot offset r_sh
 ; (0-6; r_shi = r_sh / 2) of its first lit dot; carry set when off the
@@ -1272,18 +1284,7 @@ sd_out: rts
 ; first lit dot is s = 2c + r_par = 7 * r_cb + r_sh.
 sp_hpos:
         lda r_p
-        beq sh0
-        cmp #1
-        beq sh1
-        cmp #2
-        beq sh2
-        lda lt_hp3,x
-        bra shc
-sh0:    lda lt_hp0,x
-        bra shc
-sh1:    lda lt_hp1,x
-        bra shc
-sh2:    lda lt_hp2,x
+        jsr lt_get
 shc:    sec                     ; x = HPOS - 48 = 8q + r: c = 7q + r',
         sbc #48                 ; r' = r - 1 (0 for r = 0); s = 14q + t,
         bcc sh_off              ; t = 2r' + r_par (0-13)
@@ -1311,22 +1312,24 @@ sh_t:   sta r_sh
 sh_off: sec
         rts
 
-sp_pcol:                        ; COLPMn of entry X -> r_pcv
+sp_pcol:                        ; COLPMn of entry X -> r_pcv (and A)
         lda r_p
-        beq sc0
-        cmp #1
-        beq sc1
-        cmp #2
-        beq sc2
-        lda lt_pc3,x
-        bra scc
-sc0:    lda lt_pc0,x
-        bra scc
-sc1:    lda lt_pc1,x
-        bra scc
-sc2:    lda lt_pc2,x
-scc:    sta r_pcv
+        ora #4
+        jsr lt_get
+        sta r_pcv
         rts
+; line table A (0-3: lt_hp0-3, 4-7: lt_pc0-3), entry X -> A; X kept, Y lost
+lt_get: tay
+        lda lg_lo,y
+        sta lg+1
+        lda lg_hi,y
+        sta lg+2
+lg:     lda $FFFF,x
+        rts
+lg_lo:  .byte <lt_hp0,<lt_hp1,<lt_hp2,<lt_hp3,<lt_pc0,<lt_pc1,<lt_pc2,<lt_pc3
+lg_hi:  .byte >lt_hp0,>lt_hp1,>lt_hp2,>lt_hp3,>lt_pc0,>lt_pc1,>lt_pc2,>lt_pc3
+; a missile's 2 pixels (bit 1 left) by SIZEM: 2, 4 or 8 cells (ms_draw)
+m_tab:  .byte $00,$40,$80,$C0, $00,$30,$C0,$F0, $00,$40,$80,$C0, $00,$0F,$F0,$FF
 
 ; Player byte r_d on hi-res row A at column r_cb, shift r_shi: record it in
 ; the pending list and compare it with the record on the screen at the same
@@ -1523,6 +1526,184 @@ shi_hi:  .byte $00,$40,$80,$C0
 ; 4 player pixels (bit 3 leftmost) -> dots 0, 2, 4, 6 (bit 0 leftmost)
 sp_tab:  .byte $00,$40,$10,$50,$04,$44,$14,$54,$01,$41,$11,$51,$05,$45,$15,$55
 b1gap_end:
+
+        .org RAM2_R             ; RAM2, after the runtime: the same bytes in
+                                ; both renderer builds (the converter checks)
+; Entry X's screen hole -> zsrc: the 8 bytes after the 120 shown in hi-res
+; block X (blocks are 128 bytes, 3 rows), never on the screen; X kept.
+; Phase 1 keeps the band's HPOSM0-3 and SIZEP0-3 there (the game's display
+; list interrupts move the missiles per band: the plot frames' sides).
+hole:   txa
+        lsr a
+        ora r_hpg
+        sta zsrc+1
+        lda #$78
+        bcc ho1
+        lda #$F8
+ho1:    sta zsrc
+        rts
+rec_hole:
+        jsr hole
+        ldy #7
+rh1:    lda $D004,y
+        sta (zsrc),y
+        dey
+        bpl rh1
+        rts
+
+; Player byte r_d of player r_p on row A, in entry X, at the cell sp_hpos
+; found, in colour r_pcv: SIZEP 1 (double) and 3 (quad; the band's, from
+; its hole) draw each pixel 2 or 4 cells wide, as 2 or 4 records of 8 cells.
+sp_wide:
+        sta r_row
+        jsr hole
+        lda r_p
+        ora #4
+        tay
+        lda (zsrc),y            ; SIZEP: 1 double, 3 quad, else normal
+        and #$03
+        lsr a
+        bcs sw_w
+        lda r_row
+        jmp sp_rec
+sw_w:   sta r_sz                ; 0 double, 1 quad
+        lda r_d
+        sta r_src
+        lda r_cb
+        pha
+        lda r_sh
+        pha
+        ldy #8                  ; source bits left
+sw_1:   ldx #4                  ; 4 of them a record (double), 2 (quad)
+        lda r_sz
+        beq sw_2
+        ldx #2
+sw_2:   lda #0
+sw_3:   asl r_src
+        rol a
+        dey
+        dex
+        bne sw_3
+        tax
+        lda dbl_t,x             ; each pixel doubled
+        ldx r_sz
+        beq sw_4
+        tax
+        lda dbl_t,x             ; and again (quad)
+sw_4:   phy
+        jsr sw_ch
+        ply
+        tya
+        bne sw_1
+        pla
+        sta r_sh
+        lsr a
+        sta r_shi
+        pla
+        sta r_cb
+        rts
+; 8 cells A at the current cell (a record unless empty or past the right
+; edge), then move 8 cells (16 dots) on
+sw_ch:  beq sw_n
+        sta r_d
+        lda r_cb
+        cmp #40
+        bcs sw_n
+        lda r_row
+        jsr sp_rec
+sw_n:   lda r_sh
+        clc
+        adc #2
+        cmp #7
+        bcc sw_n1
+        sbc #7
+        inc r_cb
+sw_n1:  sta r_sh
+        lsr a
+        sta r_shi
+        inc r_cb
+        inc r_cb
+        rts
+
+; The missiles (GRAFM at PMBASE+$300, single line): each missile's row is a
+; record of 2, 4 or 8 cells (SIZEM) at its HPOSM, in COLPF3 when PRIOR has
+; the fifth player (M.U.L.E.'s mule bodies), else in its player's colour.
+; Positions and colours are the band's; SIZEM and PRIOR the VBI's (SNAP_G).
+ms_draw:
+        lda $D400               ; missile DMA and GRACTL missiles
+        and #$04
+        bne md_go
+md_x:   rts
+md_go:  lda $D01D
+        lsr a
+        bcc md_x
+        lda $D407               ; (carry set) PMBASE + 3
+        and #$F8
+        adc #2
+        sta zg+1
+        stz zg
+        stz r_i
+md_e:   ldx r_i
+        cpx r_n
+        bcs md_x
+        lda lt_rows,x
+        bne md_en
+md_ne:  inc r_i
+        bra md_e
+md_en:  jsr sd_lines
+        jsr hole                ; the band's HPOSM0-3
+md_l:   ldy r_L
+        lda (zg),y
+        beq md_nl
+        sta r_src
+        jsr sd_row
+        bcs md_nl
+        sta r_row
+        lda SNAP_G+12           ; SIZEM
+        sta r_sz
+        stz r_p
+md_m:   lda r_src               ; missile r_p: its 2 pixels, its size
+        and #$03
+        beq md_mn
+        sta r_d
+        lda r_sz
+        and #$03
+        asl a
+        asl a
+        ora r_d
+        tay
+        lda m_tab,y
+        sta r_d
+        ldx r_i
+        lda SNAP_G+$1B          ; PRIOR: the fifth player?
+        and #$10
+        beq md_pc
+        lda lt_c3,x
+        sta r_pcv
+        bra md_c
+md_pc:  jsr sp_pcol
+md_c:   jsr pc_par
+        ldy r_p
+        lda (zsrc),y            ; HPOSM
+        jsr shc
+        bcs md_mn
+        lda r_row
+        jsr sp_rec
+md_mn:  inc r_p
+        lsr r_sz
+        lsr r_sz
+        lsr r_src               ; the next missile, while any has pixels
+        lsr r_src
+        bne md_m
+        ldx r_i
+md_nl:  inc r_L
+        lda r_L
+        cmp r_le
+        bne md_l
+        jmp md_ne
+; 4 pixels, each doubled
+dbl_t:  .byte $00,$03,$0C,$0F,$30,$33,$3C,$3F,$C0,$C3,$CC,$CF,$F0,$F3,$FC,$FF
+ram2_r_end:
 
         .org r_rrc              ; the first forced redraw after RR_EVERY
         .byte RR_EVERY,0        ; renders (r_rrc, r_rrn), not 256

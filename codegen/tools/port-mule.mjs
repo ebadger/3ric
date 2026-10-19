@@ -49,6 +49,11 @@ export const LAYOUT = {
   RT_RAM2: 0xcc00,    // RAM2: interrupt entry, read helpers, boot stage
   RT_B2: 0xd500,      // bank 2: pads, sound, collisions
   RT_B2X: 0xd0f0,     // bank 2, after FP_C: keyboard
+  RT_B2H: 0xda69,     // bank 2, free gaps between FP entry points: hw_init
+  RT_B2J: 0xdd39,     //   and the jiffy waits and SETVBV (bank-2-only code),
+  RT_B2F: 0xdf7f,     //   boot_final in two pieces,
+  RT_B2G: 0xdade,
+  RT_B2K: 0xd9ad,     //   the CONSOL clicks and XITVBV
   RENDER: 0xd500,     // bank 1: renderer
   FPW: 0xd4c0,        // bank 2: floating-point scratch (40 bytes)
   RG: 0x0300,         // GTIA read mirror (32), POKEY (16), PIA (4)
@@ -233,7 +238,7 @@ export function buildRuntime() {
   const L = LAYOUT;
   const b2 = new Uint8Array(0x10000), b1 = new Uint8Array(0x10000), shared = new Uint8Array(0x10000);
   // rt.s spans RAM2 (shared) and bank 2: assemble once, split by address.
-  const rtEq = equ({ RT_RAM2: L.RT_RAM2, RT_B2: L.RT_B2, RT_B2X: L.RT_B2X, FONT: L.FONT, RENDER: L.RENDER, RENDER_EVERY: L.RENDER_EVERY,
+  const rtEq = equ({ RT_RAM2: L.RT_RAM2, RT_B2: L.RT_B2, RT_B2X: L.RT_B2X, RT_B2H: L.RT_B2H, RT_B2J: L.RT_B2J, RT_B2F: L.RT_B2F, RT_B2G: L.RT_B2G, RT_B2K: L.RT_B2K, FONT: L.FONT, RENDER: L.RENDER, RENDER_EVERY: L.RENDER_EVERY,
     TIMER_LATCH: L.TIMER_LATCH, RG: L.RG, RP: L.RP, RA: L.RA, RTVARS: L.RTVARS, CFG_STASH: L.CFG_STASH });
   const tmp = new Uint8Array(0x10000);
   const rt = assembleInto(tmp, rtEq + src("rt.s"), "rt.s");
@@ -244,9 +249,16 @@ export function buildRuntime() {
   if (S.RT_RAM2_END > 0xd000) throw new Error(`rt.s RAM2 part overflows (${h4(S.RT_RAM2_END)})`);
   if (S.RT_B2_END > 0xd8e6) throw new Error(`rt.s bank-2 part runs into the FP stubs (${h4(S.RT_B2_END)})`);
   if (S.RT_B2X_END > 0xd200) throw new Error(`rt.s keyboard part overflows (${h4(S.RT_B2X_END)})`);
+  if (S.RT_B2H_END > 0xdadb) throw new Error(`rt.s hw_init overflows its gap (${h4(S.RT_B2H_END)})`);
+  if (S.RT_B2J_END > 0xdd89) throw new Error(`rt.s jiffy waits overflow their gap (${h4(S.RT_B2J_END)})`);
+  if (S.RT_B2F_END > 0xdfff) throw new Error(`rt.s boot_final overflows into the bank signature (${h4(S.RT_B2F_END)})`);
+  if (S.RT_B2G_END > 0xdb28) throw new Error(`rt.s boot_final's second part overflows its gap (${h4(S.RT_B2G_END)})`);
+  if (S.RT_B2K_END > 0xd9d2) throw new Error(`rt.s CONSOL helpers overflow their gap (${h4(S.RT_B2K_END)})`);
   if (S.RTVARS_END > 0x0400) throw new Error("runtime variables overflow page 3");
   const fp = assembleInto(b2, equ({ FPW: L.FPW }) + src("fp.s"), "fp.s");
   const F = fp.symbols;
+  for (const [a, e] of fp.used) for (const [ra, re] of rt.used)
+    if (ra >= 0xd000 && ra < 0xe000 && a < re && ra < e) throw new Error(`rt.s ${h4(ra)}-${h4(re)} overlaps fp.s ${h4(a)}-${h4(e)}`);
   for (const [a, e, lim, name] of [[F.FP_A, F.FP_A_END, 0xdd89, "A"], [F.FP_B, F.FP_END, 0xdfff, "B"], [F.FP_C, F.FP_C_END, L.RT_B2X, "C"],
     [F.FP_D, F.FP_D_END, 0xda60, "D"], [F.FP_E, F.FP_E_END, 0xd9aa, "E"]]) {
     if (e > lim) throw new Error(`fp.s chunk ${name} ${h4(a)}-${h4(e)} passes ${h4(lim)}`);
@@ -255,7 +267,8 @@ export function buildRuntime() {
   // and for the intro (page 2, tables in intro.s's area)
   const renderer = (b1, v) => {
     const rd = assembleInto(b1, equ({ RENDER: L.RENDER, FONT: L.FONT, ...v, RROWS: S.RTVARS_END, SNAP_G: S.SNAP_G, SNAP_A: S.SNAP_A,
-      VC_FAKE: S.VC_FAKE, COL_CLASS: S.COL_CLASS, COL_EVEN: S.COL_EVEN, COL_ODD: S.COL_ODD }) + src("render.s"), "render.s");
+      VC_FAKE: S.VC_FAKE, COL_CLASS: S.COL_CLASS, COL_EVEN: S.COL_EVEN, COL_ODD: S.COL_ODD, RAM2_R: S.RT_RAM2_END }) + src("render.s"), "render.s");
+    if (rd.symbols.RAM2_R_END > 0xd000) throw new Error(`render.s's RAM2 part overflows (${h4(rd.symbols.RAM2_R_END)})`);
     if (rd.symbols.RENDER_END > 0xdfff) throw new Error(`render.s runs into the bank signature (${h4(rd.symbols.RENDER_END)})`);
     if (rd.symbols.B1GAP_END > 0xd1d0) throw new Error(`render.s overflows the line table's gap (${h4(rd.symbols.B1GAP_END)})`);
     if (rd.symbols.R_SHI !== 0xd3fe) throw new Error("render.s variables no longer sit in $D3F4-$D3FF");
@@ -277,6 +290,11 @@ export function buildRuntime() {
   const rd = renderer(b1, game);
   const b1i = new Uint8Array(0x10000);
   renderer(b1i, intro);
+  // the renderers' RAM2 part (shared by both banks and both phases) must be
+  // the same code in both builds
+  const r2 = [S.RT_RAM2_END, rd.symbols.RAM2_R_END];
+  if (b1.subarray(...r2).some((v, i) => v !== b1i[r2[0] + i])) throw new Error("render.s's RAM2 part differs between the game and intro builds");
+  shared.set(b1.subarray(...r2), r2[0]);
   b2[0xdfff] = 0x5a;
   shared.set(buildFont(), L.FONT);
   shared.set(t2Table(), L.T2TAB);

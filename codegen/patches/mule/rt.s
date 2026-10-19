@@ -310,196 +310,14 @@ vc_cpy: php                     ; CPY VCOUNT
         cpy vc_t
         rts
 
-; ---- CONSOL ($D01F) stores: bit 3 drives the console speaker
-spk_a:  php
-        pha
-        eor spk_last
-        and #$08
-        beq sp1
-        bit SPEAKER
-sp1:    pla
-        sta spk_last
-        sta $D01F
-        plp
-        rts
-
-spk_x:  php                     ; STX CONSOL
-        pha
-        txa
-        jsr spk_a
-        pla
-        plp
-        rts
-
-; ---- default VBI until the game installs its own (Atari XITVBV)
-xitvbv: pla
-        tay
-        pla
-        tax
-        pla
-        rti
-
 ; ---- RESET with the language card mapped: back to the ROM's reset
 reset_entry:
         lda $C082
         jmp ($FFFC)
 
-; ---- last loader stage, entered with interrupts off and bank 2 mapped.
-; CFG_STASH holds $0000-$0FFF as the intro leaves it for the main game.
-boot_final:
-        ldx #0
-bf1:    lda CFG_STASH,x         ; zero page, page 2, pages 4-5 and 9-15;
-        sta $00,x               ; page 1 is the stack, 3 and 6-8 are ours
-        lda CFG_STASH+$200,x
-        sta $0200,x
-        lda CFG_STASH+$400,x
-        sta $0400,x
-        lda CFG_STASH+$500,x
-        sta $0500,x
-        inx
-        bne bf1
-        lda #>(CFG_STASH+$900)
-        sta bf3+2
-        lda #$09
-        sta bf4+2
-bf2:    ldx #0
-bf3:    lda $FF00,x
-bf4:    sta $FF00,x
-        inx
-        bne bf3
-        inc bf3+2
-        inc bf4+2
-        lda bf4+2
-        cmp #$10
-        bne bf2
-        lda #<xitvbv            ; until the game's SETVBV
-        sta VVBLKI
-        lda #>xitvbv
-        sta VVBLKI+1
-        lda #<nmi_entry         ; what an Atari warm start leaves: no DLI
-        sta VDSLST              ; handler, no screen, and a display list
-        lda #>nmi_entry         ; without interrupts (the intro's are gone)
-        sta VDSLST+1
-        stz $022F
-        lda #<blank_dl
-        sta $0230
-        lda #>blank_dl
-        sta $0231
-        jsr hw_init
-        lda #$20                ; clear hi-res page 1
-        sta bf6+2
-        lda #0
-        ldx #0
-bf6:    sta $2000,x
-        inx
-        bne bf6
-        inc bf6+2
-        ldy bf6+2
-        cpy #$40
-        bne bf6
-        bit $C050               ; hi-res page 1, full screen
-        bit $C052
-        bit $C054
-        bit $C057
-        ldx #$FF
-        txs
-        cli
-        jsr bf_ini              ; Atari warm start: JSR (DOSINI), JMP (DOSVEC)
-        jmp ($000A)
-bf_ini: jmp ($000C)
+; the display list an Atari warm start leaves (boot_final): the renderer
+; reads it with bank 1 mapped, so it stays in RAM2
 blank_dl: .byte $70,$70,$70,$41,<blank_dl,>blank_dl
-; ---- runtime state and hardware for a run (boot_final, and the intro's
-; launch): no keys held, pads, AYs quiet, both timers started and the tick
-; armed. Interrupts stay off.
-hw_init:
-        ldx #7                  ; no keys held
-bf5:    stz kb_t,x
-        dex
-        bpl bf5
-        stz kb_key
-        lda #$FF
-        sta vc_fake
-        lda #1
-        sta render_cd
-        stz rendering
-        lda #$7F                ; no onboard VIA interrupts (PS/2 NMIs)
-        sta PADIER
-        ldx #$80                ; both Mockingboard VIAs
-bf7:    lda #$FF
-        sta MB1+V_DDRA,x
-        lda #$07
-        sta MB1+V_DDRB,x
-        lda #$00                ; AY reset pulse
-        sta MB1+V_ORB,x
-        lda #$04
-        sta MB1+V_ORB,x
-        lda #$7F
-        sta MB1+V_IER,x
-        lda #$40                ; Timer 1 free-running
-        sta MB1+V_ACR,x
-        cpx #0
-        beq bf8
-        ldx #0
-        bra bf7
-bf8:    ldx #31                 ; nothing cached: first write goes out
-bf9:    lda #$FF
-        sta ay_cache,x
-        dex
-        bpl bf9
-        lda #<TIMER_LATCH       ; start both timers back to back
-        sta MB1+V_T1CL
-        sta MB2+V_T1CL
-        lda #>TIMER_LATCH
-        sta MB1+V_T1CH
-        sta MB2+V_T1CH
-        lda #$C0                ; tick interrupt on
-        sta MB2+V_IER
-        rts
-; ---- the game's jiffy waits ($1310, and the one at $3926 that also polls
-; the players) loop until RTCLOK equals start + n. The redraw runs inside
-; the tick and can take a few ticks, so the main code may never see that
-; exact value; these wait until n ticks have elapsed instead.
-jwait:  cmp #0                  ; A = ticks; returns A = start + n
-        beq jw_x
-        sta jw_n
-        lda $14
-        sta jw_s
-jw1:    lda $14
-        sec
-        sbc jw_s
-        cmp jw_n
-        bcc jw1
-        lda jw_s
-        clc
-        adc jw_n
-        sec
-jw_x:   rts
-jwait_poll:                     ; ... stopping early when the game's
-        sta jp_n                ; player poll ($373C, moved) returns Z set
-        lda $14
-        sta jp_s
-jp1:    lda $14
-        sec
-        sbc jp_s
-        cmp jp_n
-        bcs jp_x
-        jsr $373C+$C000
-        bne jp1
-jp_x:   rts
-; ---- SETVBV ($E45C): A = 6 immediate / 7 deferred VBI, X = high, Y = low
-setvbv: php
-        sei
-        cmp #7
-        beq sv7
-        sty VVBLKI
-        stx VVBLKI+1
-        plp
-        rts
-sv7:    sty VVBLKI+2
-        stx VVBLKI+3
-        plp
-        rts
-
 ; elapsed/256*256/200 and its remainder, for elapsed/256 = 0..103
 VCT:    .byte 0,1,2,3,5,6,7,8,10,11,12,14,15,16,17,19,20,21,23,24,25,26,28,29,30,32
         .byte 33,34,35,37,38,39,40,42,43,44,46,47,48,49,51,52,53,55,56,57,58,60,61,62
@@ -1098,3 +916,207 @@ ks8:    dex
 volmap:     .byte 0,7,9,10,11,12,12,13,13,13,14,14,14,15,15,15
 m15:        .byte 1,15,15,5,15,3,5,15,15,5,3,15,5,15,15   ; n mod 15 -> m
 rt_b2x_end:
+
+; Bank 2 again, in free gaps between the FP package's entry points: code
+; that only ever runs with bank 2 mapped (the game, the intro, the boot),
+; out of RAM2, which the renderer needs.
+        .org RT_B2H
+; ---- runtime state and hardware for a run (boot_final, and the intro's
+; launch): no keys held, pads, AYs quiet, both timers started and the tick
+; armed. Interrupts stay off.
+hw_init:
+        ldx #7                  ; no keys held
+bf5:    stz kb_t,x
+        dex
+        bpl bf5
+        stz kb_key
+        lda #$FF
+        sta vc_fake
+        lda #1
+        sta render_cd
+        stz rendering
+        lda #$7F                ; no onboard VIA interrupts (PS/2 NMIs)
+        sta PADIER
+        ldx #$80                ; both Mockingboard VIAs
+bf7:    lda #$FF
+        sta MB1+V_DDRA,x
+        lda #$07
+        sta MB1+V_DDRB,x
+        lda #$00                ; AY reset pulse
+        sta MB1+V_ORB,x
+        lda #$04
+        sta MB1+V_ORB,x
+        lda #$7F
+        sta MB1+V_IER,x
+        lda #$40                ; Timer 1 free-running
+        sta MB1+V_ACR,x
+        cpx #0
+        beq bf8
+        ldx #0
+        bra bf7
+bf8:    ldx #31                 ; nothing cached: first write goes out
+bf9:    lda #$FF
+        sta ay_cache,x
+        dex
+        bpl bf9
+        lda #<TIMER_LATCH       ; start both timers back to back
+        sta MB1+V_T1CL
+        sta MB2+V_T1CL
+        lda #>TIMER_LATCH
+        sta MB1+V_T1CH
+        sta MB2+V_T1CH
+        lda #$C0                ; tick interrupt on
+        sta MB2+V_IER
+        rts
+rt_b2h_end:
+
+        .org RT_B2J
+; ---- the game's jiffy waits ($1310, and the one at $3926 that also polls
+; the players) loop until RTCLOK equals start + n. The redraw runs inside
+; the tick and can take a few ticks, so the main code may never see that
+; exact value; these wait until n ticks have elapsed instead.
+jwait:  cmp #0                  ; A = ticks; returns A = start + n
+        beq jw_x
+        sta jw_n
+        lda $14
+        sta jw_s
+jw1:    lda $14
+        sec
+        sbc jw_s
+        cmp jw_n
+        bcc jw1
+        lda jw_s
+        clc
+        adc jw_n
+        sec
+jw_x:   rts
+jwait_poll:                     ; ... stopping early when the game's
+        sta jp_n                ; player poll ($373C, moved) returns Z set
+        lda $14
+        sta jp_s
+jp1:    lda $14
+        sec
+        sbc jp_s
+        cmp jp_n
+        bcs jp_x
+        jsr $373C+$C000
+        bne jp1
+jp_x:   rts
+; ---- SETVBV ($E45C): A = 6 immediate / 7 deferred VBI, X = high, Y = low
+setvbv: php
+        sei
+        cmp #7
+        beq sv7
+        sty VVBLKI
+        stx VVBLKI+1
+        plp
+        rts
+sv7:    sty VVBLKI+2
+        stx VVBLKI+3
+        plp
+        rts
+rt_b2j_end:
+
+        .org RT_B2F
+; ---- last loader stage, entered with interrupts off and bank 2 mapped.
+; CFG_STASH holds $0000-$0FFF as the intro leaves it for the main game.
+boot_final:
+        ldx #0
+bf1:    lda CFG_STASH,x         ; zero page, page 2, pages 4-5 and 9-15;
+        sta $00,x               ; page 1 is the stack, 3 and 6-8 are ours
+        lda CFG_STASH+$200,x
+        sta $0200,x
+        lda CFG_STASH+$400,x
+        sta $0400,x
+        lda CFG_STASH+$500,x
+        sta $0500,x
+        inx
+        bne bf1
+        lda #>(CFG_STASH+$900)
+        sta bf3+2
+        lda #$09
+        sta bf4+2
+bf2:    ldx #0
+bf3:    lda $FF00,x
+bf4:    sta $FF00,x
+        inx
+        bne bf3
+        inc bf3+2
+        inc bf4+2
+        lda bf4+2
+        cmp #$10
+        bne bf2
+        lda #<xitvbv            ; until the game's SETVBV
+        sta VVBLKI
+        lda #>xitvbv
+        sta VVBLKI+1
+        lda #<nmi_entry         ; what an Atari warm start leaves: no DLI
+        sta VDSLST              ; handler, no screen, and a display list
+        lda #>nmi_entry         ; without interrupts (the intro's are gone)
+        sta VDSLST+1
+        stz $022F
+        lda #<blank_dl
+        sta $0230
+        lda #>blank_dl
+        sta $0231
+        jsr hw_init
+        jmp bf_b
+rt_b2f_end:
+
+        .org RT_B2G
+bf_b:
+        lda #$20                ; clear hi-res page 1
+        sta bf6+2
+        lda #0
+        ldx #0
+bf6:    sta $2000,x
+        inx
+        bne bf6
+        inc bf6+2
+        ldy bf6+2
+        cpy #$40
+        bne bf6
+        bit $C050               ; hi-res page 1, full screen
+        bit $C052
+        bit $C054
+        bit $C057
+        ldx #$FF
+        txs
+        cli
+        jsr bf_ini              ; Atari warm start: JSR (DOSINI), JMP (DOSVEC)
+        jmp ($000A)
+bf_ini: jmp ($000C)
+rt_b2g_end:
+
+; CONSOL clicks (main code and the VBI only, never a DLI) and the default
+; VBI exit: bank 2 only
+        .org RT_B2K
+; ---- CONSOL ($D01F) stores: bit 3 drives the console speaker
+spk_a:  php
+        pha
+        eor spk_last
+        and #$08
+        beq sp1
+        bit SPEAKER
+sp1:    pla
+        sta spk_last
+        sta $D01F
+        plp
+        rts
+
+spk_x:  php                     ; STX CONSOL
+        pha
+        txa
+        jsr spk_a
+        pla
+        plp
+        rts
+
+; ---- default VBI until the game installs its own (Atari XITVBV)
+xitvbv: pla
+        tay
+        pla
+        tax
+        pla
+        rti
+rt_b2k_end:
