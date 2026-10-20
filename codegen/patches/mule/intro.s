@@ -118,6 +118,9 @@ il3:    sta R_SWP,x             ; db_flip)
         sta R_SWP+288
         lda #$40                ; page 2 shown
         sta R_SWP+289
+        lda #16                 ; its forced redraws (render.s RR_EVERY)
+        sta R_SWP+290
+        stz R_SWP+291
         lda #>(SNAP+$E00)
         ldy #$7B-(>(SNAP+$E00))
         jsr pclear
@@ -179,6 +182,7 @@ intro_done:
         cld
         lda #$7F
         sta MB2+V_IER           ; no more ticks
+        bit $C055               ; page 2 shown: page 1 is rewritten below
         lda #LDR_PARK           ; the loader back in page 1 (the card is
         ldx #$20                ; still read: this code is reached through
                                 ; its $E474)
