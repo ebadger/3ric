@@ -122,9 +122,14 @@ survive it). Both loaders work through one piece table (`SEQUENCE`) in two phase
   playfield is drawn, so a sprite is off the screen only while its own row is
   rewritten; nothing is kept between frames (no save-unders or row records, so
   there is no limit on how many sprite rows a screen has: the map's mountains, river,
-  town and plot cursor need about 220). There is no second page to flip to (both
-  hi-res pages are inside the game), so this stands in for double buffering: static
-  screens never blink. One Atari column per hi-res byte (four 2-bit pixels per byte
+  town and plot cursor need about 220). The game has no second page to flip to
+  (`$4000-$5FFF` is 8 KB of its code, and the 3RIC's 64 KB has no room to move
+  it), so this stands in for double buffering there: static screens never blink.
+  The intro is double-buffered: each redraw draws on the page not shown, against
+  that page's own hashes, sprite columns and height (swapped in and out of
+  `$1E60`), then shows it. The loader, which sits in page 1, is parked in the
+  language card's `$F600-$F9FF` meanwhile (Atari ROM space: the intro writes none
+  of it) and put back when the intro ends. One Atari column per hi-res byte (four 2-bit pixels per byte
   in modes 4/5 and the intro's mode D banner); colours to the nearest hi-res colour.
   In modes 4, 5, 8, D and E COLBK fills the background; a playfield colour that
   becomes the background's hi-res colour (but is not COLBK) is drawn white (black on
@@ -266,9 +271,11 @@ survive it). Both loaders work through one piece table (`SEQUENCE`) in two phase
   five seconds before it settled. With the zoom skipped and the table-driven mode-4
   rows the town is complete about one second after leaving the map (60 frames
   against 297), and the outfitting step returns to the town loop in 23 frames
-  against 62. Tearing remains on screens whose picture changes during a redraw (the
-  title's plot flashing white): with one hi-res page the top bands show the new
-  picture while the bottom ones are still the old.
+  against 62. Tearing remained on the title, whose plot flashes white: with one
+  hi-res page the top bands showed the new picture while the bottom ones were
+  still the old. The intro is now double-buffered (a first attempt parked the
+  loader at `$0400`, which the intro's two-player path overwrites with its texts);
+  the game cannot be, for want of memory.
 
 ## Evidence
 
@@ -323,8 +330,9 @@ game on the 3RIC; sound by ear; anything on the physical board.
   appears about a second after leaving the map; walking there redraws about four
   times a second. The player-collision scan still reads every row of player 0 each
   tick (about a tenth of the CPU in the town).
-- There is one hi-res page to draw on (the intro's loader holds the other), so a
-  picture that changes during a redraw tears until the redraw ends.
+- The game draws on its one hi-res page (the other is its code), so a picture that
+  changes during a redraw tears there until the redraw ends; the intro is
+  double-buffered. The page flip is not timed to the display's vertical blank.
 - The river's hiding over a developed river plot follows from the code and was not
   seen in a run (no river plot was developed in the scripted games).
 - Space fires; the Atari game's Space pause is not reachable from the keyboard.

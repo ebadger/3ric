@@ -60,6 +60,13 @@ st1:    lda $00,x
         ldx #>(SNAP+$600)
         ldy #8
         jsr pcopy
+        lda $C081               ; the loader (MULE.PRG) out of hi-res page
+        lda $C081               ; 1, which the intro double-buffers into:
+        lda #$20                ; to the language card's $F600-$F9FF (ROM
+        ldx #LDR_PARK           ; on the Atari: the intro writes none of
+        ldy #4                  ; it), the ROM still read
+        jsr pcopy
+        lda $C082
         clc
         rts
 
@@ -98,9 +105,19 @@ il2:    lda vectors,x
         lda #$04
         ldy #12
         jsr pclear
-        lda #$40                ; hi-res page 2 and up to the intro, but
-        ldy #32                 ; not the snapshot at SNAP
-        jsr pclear
+        lda #$20                ; both hi-res pages (page 1: the loader
+        ldy #64                 ; is parked), and up to the intro,
+        jsr pclear              ; but not the snapshot at SNAP
+        ldx #0                  ; the renderer's hashes of the page it
+        lda #$FF                ; draws second: nothing matches (render.s
+il3:    sta R_SWP,x             ; db_flip)
+        sta R_SWP+34,x
+        inx
+        bne il3
+        lda #192                ; (its height: all of it to clear)
+        sta R_SWP+288
+        lda #$40                ; page 2 shown
+        sta R_SWP+289
         lda #>(SNAP+$E00)
         ldy #$7B-(>(SNAP+$E00))
         jsr pclear
@@ -162,6 +179,11 @@ intro_done:
         cld
         lda #$7F
         sta MB2+V_IER           ; no more ticks
+        lda #LDR_PARK           ; the loader back in page 1 (the card is
+        ldx #$20                ; still read: this code is reached through
+                                ; its $E474)
+        ldy #4
+        jsr pcopy
         lda #0                  ; both AYs reset: silence
         sta MB1+V_ORB
         sta MB2+V_ORB

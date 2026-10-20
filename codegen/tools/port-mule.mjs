@@ -73,7 +73,9 @@ export const LAYOUT = {
   R_OVF_I: 0x1800,    // the intro renderer's per-build code (in IRT.BIN),
   R_OVM_I: 0x1A00,    //   its mode-4 rows,
   R_OVD_I: 0x1C00,    //   its logo section
-  R_DAT_I: 0x1D00,    //   and data
+  R_DAT_I: 0x1D00,    //   and data,
+  R_SWP_I: 0x1E60,    //   and its second page's hashes (double buffering);
+  LDR_PARK: 0xF6,     // MULE.PRG while the intro draws on hi-res page 1: LC $F600-$F9FF
   INTRO_HIRES: 0x40,  // hi-res page 2: page 1 holds the loader and the stash
   STAGE_R2_I: 0x4000, // RAM2 and page-3 images for the intro's launch
   STAGE_LOW_I: 0x4800,
@@ -336,10 +338,12 @@ export function buildRuntime() {
   // the game's goes out with page 3 (LOW.BIN), the intro's with intro.s
   const game = { T2TAB: L.T2TAB, HIRES: L.HIRES, R_FLAG: 0,
     R_OVF: L.R_OVF_G, R_OVF_LIM: 0x0800, R_DAT: L.R_DAT_G, R_DAT_LIM: 0x0580,
-    R_OVM: L.R_OVM_G, R_OVM_LIM: 0x1c00, R_OVD: 0x9000, R_OVD_LIM: 0xa000, MD_MODE: 0xff };    // (no logo: R_OVD is not loaded)
+    R_OVM: L.R_OVM_G, R_OVM_LIM: 0x1c00, R_OVD: 0x9000, R_OVD_LIM: 0xa000, MD_MODE: 0xff,
+    DBL: 0, R_SWP: 0x9100 };   // no logo, one hi-res page: R_OVD and R_SWP are never loaded or used
   const intro = { T2TAB: L.IRT, HIRES: L.INTRO_HIRES, R_FLAG: 0x80,      // no collisions (it reads none)
-    R_OVF: L.R_OVF_I, R_OVF_LIM: L.R_OVM_I, R_OVM: L.R_OVM_I, R_OVM_LIM: L.R_OVD_I, R_DAT: L.R_DAT_I, R_DAT_LIM: 0x2000,
-    R_OVD: L.R_OVD_I, R_OVD_LIM: L.R_DAT_I, MD_MODE: 0x0d }; // the logo's cells
+    R_OVF: L.R_OVF_I, R_OVF_LIM: L.R_OVM_I, R_OVM: L.R_OVM_I, R_OVM_LIM: L.R_OVD_I, R_DAT: L.R_DAT_I, R_DAT_LIM: L.R_SWP_I,
+    R_OVD: L.R_OVD_I, R_OVD_LIM: L.R_DAT_I, MD_MODE: 0x0d,  // the logo's cells;
+    DBL: 1, R_SWP: L.R_SWP_I };                       // both hi-res pages
   const rd = renderer(b1, game);
   const b1i = new Uint8Array(0x10000);
   const rdi = renderer(b1i, intro);
@@ -389,7 +393,7 @@ export function buildIntro(atrBytes, S, { allowUnknown = false } = {}) {
 export function buildIrt(rt, intro) {
   const L = LAYOUT, S = rt.rt;
   const mem = new Uint8Array(0x10000);
-  const r = assembleInto(mem, equ({ IRT_CODE: L.IRT_CODE, SNAP: L.SNAP, CFG_STASH: L.CFG_STASH, STAGE_R2: L.STAGE_R2_I,
+  const r = assembleInto(mem, equ({ IRT_CODE: L.IRT_CODE, R_SWP: L.R_SWP_I, LDR_PARK: L.LDR_PARK, SNAP: L.SNAP, CFG_STASH: L.CFG_STASH, STAGE_R2: L.STAGE_R2_I,
     STAGE_LOW: L.STAGE_LOW_I, BOOT_INIT: intro.bootInit, DOSINI_INIT: intro.dosini, RG: L.RG, RA: L.RA, KB_KEY: S.KB_KEY, XITVBV: S.XITVBV,
     SETVBV: S.SETVBV, NMI_ENTRY: S.NMI_ENTRY, IRQ_ENTRY: S.IRQ_ENTRY, RESET_ENTRY: S.RESET_ENTRY, JWAIT: S.JWAIT,
     HW_INIT: S.HW_INIT }) + src("intro.s"), "intro.s");

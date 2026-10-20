@@ -117,7 +117,10 @@ render: php
         sei
         lda #HIRES
         sta r_hpg
-        ldx #$1F                ; this bank's register file = the game's
+        lda #DBL                ; the intro: draw on the page not shown
+        beq rd0                 ; (R_OVD's db_page)
+        jsr db_page
+rd0:    ldx #$1F                ; this bank's register file = the game's
 rd1:    lda SNAP_G,x
         sta $D000,x
         dex
@@ -134,7 +137,11 @@ rd2:    lda SNAP_A,x
         sta R_FLAGS             ; collisions, console keys held over
                                 ; redraws)
         plp
-        jmp draw_lines
+        jsr draw_lines
+        lda #DBL                ; the intro: show the page just drawn
+        beq rn_x
+        jmp db_flip
+rn_x:   rts
 
 ; ---------------------------------------------------------------- phase 1
 xlat_hi:                        ; $20-$3F -> $E0-$FF (the moved window)
@@ -665,7 +672,7 @@ row_addr:
         and #$07
         asl a
         asl a
-        ora #HIRES
+        ora r_hpg               ; (the page being drawn)
         sta zhr+1
         pla
         pha
@@ -2052,6 +2059,49 @@ omd2:   lda zt0                 ; pixels k, k + 1 -> the cell; the cells
         iny
         cpy r_c1
         bne omd1
+        rts
+; ---- double buffering (the intro, DBL = 1: hi-res pages 1 and 2; the
+; game has no second page, its $4000-$5FFF is code). Each render draws on
+; the page not shown, against that page's own hashes, sprite columns and
+; height (swapped in and out of R_SWP), then shows it: the screen only
+; ever shows a whole picture.
+sw_pf   = R_SWP                 ; 192: pf_lo..om_hi of the other page
+sw_pv   = R_SWP+192             ; 96: its pv_lo, pv_hi
+sw_pe   = R_SWP+288             ; its r_pend
+r_shw   = R_SWP+289             ; the page shown ($20 or $40; intro.s)
+db_page:
+        lda r_shw
+        eor #$60                ; $20 <-> $40
+        sta r_hpg
+        rts
+db_flip:
+        ldx #192
+dbf1:   lda pf_lo-1,x
+        ldy sw_pf-1,x
+        sta sw_pf-1,x
+        tya
+        sta pf_lo-1,x
+        dex
+        bne dbf1
+        ldx #96
+dbf2:   lda pv_lo-1,x
+        ldy sw_pv-1,x
+        sta sw_pv-1,x
+        tya
+        sta pv_lo-1,x
+        dex
+        bne dbf2
+        lda r_pend
+        ldy sw_pe
+        sta sw_pe
+        sty r_pend
+        lda r_hpg
+        sta r_shw
+        cmp #$40
+        beq dbf3
+        bit $C054
+        rts
+dbf3:   bit $C055
         rts
 r_ovd_end:
 
