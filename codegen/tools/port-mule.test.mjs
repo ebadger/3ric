@@ -7,12 +7,15 @@
 // limits, the font and the 40-column pixel table.
 //
 // With MULE_ATR=<path to the owner's M.U.L.E. .atr> (and web/build.ps1 run):
-// converts the disk (running the intro headlessly), boots the folder on the
-// WASM 3RIC from a generated SD card, presses the SNES pads and checks that
-// the main game reaches its status summary and the land grant, with the
-// hi-res page drawn, that the status-summary music's POKEY registers come
-// out on the AY chips as documented, and that the keyboard drives the pad-1
-// stick and fire. Set MULE_SHOTS=<dir> to keep PNG screenshots.
+// converts the disk, boots the folder on the WASM 3RIC from a generated SD
+// card and plays the intro there on the SNES pads (two players, colours and
+// species picked on the 3RIC, the species grid drawn on hi-res page 2), then
+// checks that the main game reaches its status summary and the land grant,
+// with the hi-res page drawn, that the status-summary music's POKEY
+// registers come out on the AY chips as documented, that the keyboard
+// drives the pad-1 stick and fire, and that the game plays on through the
+// development and production rounds; then the same intro and game from
+// MULE.WOZ on the Disk II. Set MULE_SHOTS=<dir> to keep PNG screenshots.
 
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -21,7 +24,7 @@ import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { assemble } from "./asm6502.mjs";
 import * as P from "./port-mule.mjs";
-import { Cpu } from "./mule-intro.mjs";
+import { Cpu } from "./mule-cpu.mjs";
 import { buildFont } from "../patches/mule/font.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -153,13 +156,20 @@ function testBuild() {
   assert.equal(t2[0x80], 0x01, "leftmost Atari pixel = leftmost hi-res pixel");
   assert.equal(t2[0x01], 0x40, "the last two Atari pixels share the last hi-res pixel");
   assert.equal(t2[0xff], 0x7f);
-  const files = ["WIN.BIN", "RTB2.BIN", "RTB1.BIN", "RAM2.BIN", "LOW.BIN", "CFG.BIN", "G1.BIN", "G2.BIN"]
-    .map((name, i) => ({ name, data: new Uint8Array(100 + i).fill(i + 1), addr: 0x4000 }));
-  const loader = P.buildLoader(files, rt.rt);
+  assert.equal(rt.b1i[0xdfff], 0xa5, "intro renderer: bank 1 signature");
+  const irt = P.buildIrt(rt, { bootInit: P.INTRO_LOAD + 6, dosini: 0x7c08 });
+  assert.equal(irt.bytes[0x80], 0x01, "intro.s area starts with the 8 -> 7 table");
+  assert.ok(P.LAYOUT.IRT + irt.bytes.length <= 0x2000, "intro.s ends below $2000");
+  for (const sym of ["SNAP_TAKE", "INTRO_LAUNCH", "INTRO_DONE", "SYSVBV", "WAIT_E5", "DDL_84", "DDL_97"]) assert.ok(irt.symbols[sym], sym);
+  const names = [...new Set(P.SEQUENCE.map(([n]) => n).filter(Boolean))];
+  const files = Object.fromEntries(names.map((name, i) => [name, new Uint8Array(100 + i).fill(i + 1)]));
+  const loader = P.buildLoader(files, rt.rt, irt.symbols);
   assert.ok(loader.length > 300 && loader.length <= 0x400, "loader fits below its staging area");
   const text = Buffer.from(loader).toString("latin1");
-  assert.ok(text.includes("FLOAD G2.BIN 4000 0000 006A"), "FLOAD commands with inclusive end offsets");
-  ok("runtime, renderer, loader and font build within their layout");
+  assert.ok(text.includes(`FLOAD G2.BIN 4000 0000 ${(99 + names.indexOf("G2.BIN")).toString(16).toUpperCase().padStart(4, "0")}`),
+    "FLOAD commands with inclusive end offsets");
+  assert.equal(P.SEQUENCE.filter(([, , k]) => k === P.KIND.INTRO).length, 1, "the intro runs once, between the phases");
+  ok("runtime, renderers, intro layer, loader and font build within their layout");
 }
 
 // ---------------------------------------------------------------- real disk
@@ -168,11 +178,41 @@ async function testRealDisk(atrPath) {
   const require = createRequire(import.meta.url);
   const harness = require("./harness.cjs");
   const { buildSparseFat32 } = await import("./ultima5/fat32.mjs");
-  const { runIntro } = await import("./mule-intro.mjs");
   const atr = fs.readFileSync(atrPath);
-  const handoff = runIntro(atr, { players: 2, level: "BEGINNER" });
-  const conv = P.convert(atr, handoff);
+  const conv = P.convert(atr);
   assert.ok(conv.known, `known release (main image SHA-256 ${conv.hash})`);
+  // no absolute read of an Atari hardware register is left in the game or
+  // the intro: each one reads a constant on the 3RIC (a random event that
+  // waited for RANDOM to fall in a range hung the development round)
+  {
+    const readOps = new Set([0xad, 0xae, 0xac, 0xcd, 0xec, 0xcc, 0x2c, 0x2d, 0x0d, 0x4d, 0x6d, 0xed,
+      0xbd, 0xb9, 0xbe, 0xbc, 0xdd, 0xd9, 0x3d, 0x39, 0x1d, 0x19, 0x5d, 0x59, 0x7d, 0x79, 0xfd, 0xf9]);
+    const hw = (t) => (t >= 0xd000 && t < 0xd020) || (t >= 0xd200 && t < 0xd210) || (t >= 0xd300 && t < 0xd304) || (t >= 0xd400 && t < 0xd410);
+    const scan = (bytes, org, allow, skip = [0, 0]) => {
+      const left = [];
+      for (let i = 0; i + 2 < bytes.length; i++)
+        if (readOps.has(bytes[i]) && hw(bytes[i + 1] | (bytes[i + 2] << 8)) && !allow.includes(org + i) &&
+          !(org + i >= skip[0] && org + i < skip[1])) left.push((org + i).toString(16));
+      return left;
+    };
+    // (G1.BIN's $1A00 holds render.s's mode-4 rows, which read its line
+    // table at $D0xx in bank 1, not the game's)
+    const left = [...scan(conv.files["G1.BIN"], 0x1000, [], [P.LAYOUT.R_OVM_G, conv.rt.render.R_OVM_END]),
+      ...scan(conv.files["G2.BIN"], 0x4000, [0x8f48]),   // $8F48: inside CMP $00CC,Y
+      ...scan(conv.files["WIN.BIN"], 0xe000, []), ...scan(conv.files["INTRO.BIN"], P.INTRO_ORG, [])];
+    assert.deepEqual(left, [], `hardware reads left unpatched: ${left.join(" ")}`);
+    // and no JSR/JMP still goes to an entry point in the moved $2000-$3FFF
+    // block that relocated JSR/JMPs reach
+    const main = P.mainImage(atr), entries = new Set();
+    for (const a of P.RELOC_ABS) if (main[a] === 0x20 || main[a] === 0x4c) entries.add(main[a + 1] | (main[a + 2] << 8));
+    const stale = [];
+    for (const [name, org] of [["G1.BIN", 0x1000], ["G2.BIN", 0x4000], ["WIN.BIN", 0xe000]]) {
+      const b = conv.files[name];
+      for (let i = 0; i + 2 < b.length; i++)
+        if ((b[i] === 0x20 || b[i] === 0x4c) && entries.has(b[i + 1] | (b[i + 2] << 8))) stale.push((org + i).toString(16));
+    }
+    assert.deepEqual(stale, [], `JSR/JMP into the moved block left unrelocated: ${stale.join(" ")}`);
+  }
   const s = await harness.boot({ sd: buildSparseFat32({ [P.FOLDER]: conv.files }) });
   const vm = s.vm;
   for (const line of [`CD ${P.FOLDER}\r`, "BRUN MULE.PRG 2000\r"]) {
@@ -253,20 +293,23 @@ async function testRealDisk(atrPath) {
     assert.ok(tones.has(0xc0) && tones.has(0xa0), "the summary music's buzz (distortion C) and pure tones were both checked");
     ok(`sound: ${checked} ticks of POKEY -> AY (distortions ${[...tones].map((d) => "$" + d.toString(16)).join(" ")})`);
   };
+  const intro = playIntro(vm, shot);
+  checkIntro(intro);
+  ok(`intro on the 3RIC: ${[...intro.seen].join(" -> ")}; species grid drawn (${intro.grid} bytes)`);
   const seen = new Set();
   for (let t = 0; t < 120 && !seen.has("land"); t++) {
-    vm.setGamepadState(0, t % 3 === 0 ? 1 : 0);                  // B on pad 1
-    vm.setGamepadState(1, t % 3 === 1 ? 1 : 0);                  // and pad 2
-    for (let i = 0; i < 12; i++) vm.run(50000);
-    const txt = atText();
+    const txt = atText();                                          // look before pressing: the summary may
     if (/STATUS SUMMARY/.test(txt) && !seen.has("status")) { seen.add("status"); shot("mule-status.png"); vm.setGamepadState(0, 0); vm.setGamepadState(1, 0); checkSound(); }
-    if (/LAND GRANT/.test(txt)) { seen.add("land"); for (let i = 0; i < 120; i++) vm.run(50000); shot("mule-land-grant.png"); }
+    if (/LAND GRANT/.test(txt)) { seen.add("land"); for (let i = 0; i < 120; i++) vm.run(50000); shot("mule-land-grant.png"); break; }
+    vm.setGamepadState(0, t % 3 === 0 ? 1 : 0);                  // B on pad 1 (end on the next press if a
+    vm.setGamepadState(1, t % 3 === 1 ? 1 : 0);                  // and pad 2      press is already latched)
+    for (let i = 0; i < 12; i++) vm.run(50000);
   }
   assert.ok(seen.has("status"), "status summary reached");
   assert.ok(seen.has("land"), "land grant reached");
   let lit = 0; for (let a = 0x2000; a < 0x4000; a++) if (vm.peek(a) & 0x7f) lit++;
   assert.ok(lit > 200, `hi-res page drawn (${lit} non-blank bytes)`);
-  ok("original disk: intro hand-off, SD boot, status summary and land grant on the hi-res page");
+  ok("original disk: SD boot, the intro's hand-off, status summary and land grant on the hi-res page");
 
   // keyboard: Space is a short fire press; W latches the stick up until pressed again
   const L = P.LAYOUT, tick = () => { for (let i = 0; i < 3; i++) vm.runCycles(26224); };
@@ -301,7 +344,7 @@ async function testRealDisk(atrPath) {
 
 
   const { buildWozFromDsk } = await import("./wozgen.mjs");
-  const woz = P.buildWoz(conv.files, conv.rt.rt, buildWozFromDsk);
+  const woz = P.buildWoz(conv.files, conv.rt.rt, conv.irt.symbols, buildWozFromDsk);
   const s2 = await harness.boot({});
   const vm2 = s2.vm;
   assert.ok(vm2.insertDisk(0, new Uint8Array(woz)), "WOZ accepted");
@@ -310,15 +353,77 @@ async function testRealDisk(atrPath) {
     vm2.keyDown(ch === "\r" ? 13 : ch.charCodeAt(0));
     for (let t = 0; t < 20; t++) vm2.run(4000);
   }
+  checkIntro(playIntro(vm2, () => {}));
   let status = false;
   for (let t = 0; t < 80 && !status; t++) {
+    let txt = ""; for (let i = 0; i < 120; i++) { const c = vm2.peek(0xb500 + i) & 0x7f; txt += c < 64 ? String.fromCharCode(c + 32) : " "; }
+    status = /STATUS SUMMARY/.test(txt);                         // look before pressing (as above)
+    if (status) break;
     vm2.setGamepadState(0, t % 3 === 0 ? 1 : 0);
     for (let i = 0; i < 12; i++) vm2.run(50000);
-    let txt = ""; for (let i = 0; i < 120; i++) { const c = vm2.peek(0xb500 + i) & 0x7f; txt += c < 64 ? String.fromCharCode(c + 32) : " "; }
-    status = /STATUS SUMMARY/.test(txt);
   }
   assert.ok(status, "MULE.WOZ boots (C600G) to the status summary");
-  ok("MULE.WOZ: Disk II boot to the status summary");
+  ok("MULE.WOZ: Disk II boot, the intro, then the game to the status summary");
+}
+
+// The intro, played on the pads by what its screen says: B past the title,
+// SELECT to two players and START, fire on both pads at the controller
+// check, then (for whichever player's turn it is) a move right and fire for
+// a colour and a species. Returns the stages seen and the species grid's lit bytes.
+function playIntro(vm, shot) {
+  const pk = (a) => vm.peek(a);
+  const run = (n) => { for (let i = 0; i < n; i++) vm.run(50000); };
+  const press = (pad, m, n = 2) => { vm.setGamepadState(pad, m); run(n); vm.setGamepadState(pad, 0); run(2); };
+  const text = () => {                        // the text lines of the intro's display list
+    let dl = pk(0x230) | (pk(0x231) << 8), scan = 0, s = "";
+    for (let g = 0; g < 80; g++) {
+      const ins = pk(dl), m = ins & 15; dl = (dl + 1) & 0xffff;
+      if (m === 1) { if (ins & 0x40) break; dl = pk(dl) | (pk(dl + 1) << 8); continue; }
+      if (!m) continue;
+      if (ins & 0x40) { scan = pk(dl) | (pk(dl + 1) << 8); dl += 2; }
+      const nb = { 2: 40, 6: 20, 7: 20 }[m];
+      for (let i = 0; i < (nb || 0); i++) { const c = pk(scan + i) & (m === 2 ? 0x7f : 0x3f); s += String.fromCharCode(c + 32); }
+      scan += [0, 0, 40, 40, 40, 40, 20, 20, 10, 10, 20, 20, 20, 40, 40, 40][m];
+      s += " ";
+    }
+    return s.replace(/\s+/g, " ");
+  };
+  const gameText = () => { let t = ""; for (let i = 0; i < 120; i++) { const c = pk(0xb500 + i) & 0x7f; t += String.fromCharCode(c + 32); } return t; };
+  const B = 1, SELECT = 4, START = 8, RIGHT = 128;
+  const seen = new Set();
+  let grid = 0, players = false, summary = false;
+  for (let k = 0; k < 600; k++) {
+    const t = text();
+    if (/2 PLANETEERS/.test(t) && /SELECTED/.test(t)) summary = true;
+    const stage = /STATUS SUMMARY/.test(gameText()) ? "game" : /PICK YOUR SPECIES/.test(t) ? "species" : /COLOR CHOICE/.test(t) ? "colour"
+      : /PRESS YOUR BUTTONS/.test(t) ? "controllers" : /PRESS START/.test(t) ? "options" : /OZARK/.test(t) ? "title" : "";
+    if (stage && !seen.has(stage)) seen.add(stage);
+    if (stage === "game") break;
+    if (stage === "title") { vm.keyDown("Q".charCodeAt(0)); run(4); }   // any key (no pad): the intro's CH
+    else if (stage === "options") { players = /\b2 PLANETEERS/.test(t); press(0, players ? START : SELECT, 3); }
+    else if (stage === "controllers") { press(0, B); press(1, B); }
+    else if (stage === "species") {
+      if (!grid) {                               // the grid: players over the top of the screen
+        run(30); shot("mule-intro-species.png");
+        for (let y = 0; y < 80; y++) {
+          const a = 0x4000 + (y & 7) * 0x400 + ((y >> 3) & 7) * 0x80 + (y >> 6) * 40;
+          for (let x = 0; x < 40; x++) if (pk(a + x) & 0x7f) grid++;
+        }
+      }
+      for (const p of [0, 1]) { press(p, RIGHT, 8); press(p, B); }   // whoever's turn it is (the box moves
+                                                                     // only after the stick is held over two
+                                                                     // of the intro's 13-tick checks)
+    }
+    else if (stage === "colour") for (const p of [0, 1]) press(p, B);
+    else { run(6); if (k % 4 === 0) press((k >> 2) & 1, B); }
+  }
+  return { seen, grid, players, summary };
+}
+function checkIntro(r) {
+  for (const s of ["title", "options", "controllers", "colour", "species", "game"]) assert.ok(r.seen.has(s), `intro stage ${s} (seen: ${[...r.seen].join(", ")})`);
+  assert.ok(r.players, "two players chosen on the options screen");
+  assert.ok(r.summary, "the intro's summary shows the 3RIC players' choices");
+  assert.ok(r.grid > 60, `species grid drawn on hi-res page 2 (${r.grid} bytes)`);
 }
 
 testFp();
