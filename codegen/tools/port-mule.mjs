@@ -231,7 +231,7 @@ export const GAME_PATCHES = [
   // two loops of 2-tick steps with a sound sweep. Put it where the second
   // loop ends ($A4 = $50), in the player's colour as $6A05 does, and go on
   // ($6A23).
-  [0x69e4, [0xa9, 0xff, 0x85, 0x8b, 0xa9, 0xc8, 0x8d, 0x07, 0xd2],
+  [0x69e4, [0xa9, 0xff, 0x85, 0x8b, 0xa9, 0xc8, 0x8d, 0x07, 0xd2, 0xa5, 0x8b, 0x8d, 0x06],
     [0xa9, 0x50, 0x85, 0xa4, 0xad, 0xc0, 0x02, 0x8d, 0xc1, 0x02, 0x4c, 0x23, 0x6a]],
 ];
 
@@ -489,6 +489,7 @@ export function buildGame(mem0, rt, { allowUnknown = false, strArea = 0, strLimi
   // renderer, not here: the game's own code is only patched where the port
   // needs it)
   for (const [a, want, put] of GAME_PATCHES) {
+    if (put.length > want.length) throw new Error(`game patch at ${h4(a)} writes more bytes than it checks`);
     expect(a, want, "game patch");
     mem.set(put, a);
   }
