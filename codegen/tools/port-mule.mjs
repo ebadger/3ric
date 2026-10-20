@@ -62,7 +62,8 @@ export const LAYOUT = {
   RTVARS: 0x0340,     // runtime variables (138 bytes), then the renderer's
   T2TAB: 0x0800,      // 8 -> 7 pixel table for 40-column text
   R_OVF_G: 0x0600,    // render.s's per-build code (to $07FF, loaded with page 3)
-  R_DAT_G: 0x0406,    //   and data (to $057F, set up by the renderer)
+  R_DAT_G: 0x0406,    //   and data (to $057F, set up by the renderer);
+  R_OVM_G: 0x1A00,    //   its mode-4 rows: the town zoom's bitmap (GAME_PATCHES skip the zoom)
   HIRES: 0x20,        // the game's hi-res page
   CFG_STASH: 0x3000,  // the intro's $0000-$0FFF, for boot_final (hi-res page)
   TEMP: 0x4000,       // language-card images are staged here
@@ -70,7 +71,8 @@ export const LAYOUT = {
   IRT: 0x1000,        // intro.s: 8 -> 7 table, then code
   IRT_CODE: 0x1100,
   R_OVF_I: 0x1800,    // the intro renderer's per-build code (in IRT.BIN),
-  R_OVD_I: 0x1B00,    //   its logo section
+  R_OVM_I: 0x1A00,    //   its mode-4 rows,
+  R_OVD_I: 0x1C00,    //   its logo section
   R_DAT_I: 0x1D00,    //   and data
   INTRO_HIRES: 0x40,  // hi-res page 2: page 1 holds the loader and the stash
   STAGE_R2_I: 0x4000, // RAM2 and page-3 images for the intro's launch
@@ -208,6 +210,31 @@ export const MOVED_STRINGS = [0x8c8e];
 // BEQ/JSR $373C/BNE), both made to wait for n elapsed ticks.
 export const JIFFY_WAIT = 0x1310, JIFFY_POLL = 0x3926;
 
+// The game's own animations the 3RIC cannot afford: [address, expected
+// bytes, new bytes]. Each redraw of a whole mode-4/8 screen takes the 3RIC
+// a good part of a second, so these, a few frames apart on the Atari, took
+// seconds here.
+export const GAME_PATCHES = [
+  // Entering the town ($50B3): three frames of a mode-8 zoom, 6 ticks apart.
+  // Set its colours ($5033) and go straight to the town ($50EF). (A NOP
+  // first: $4C, the JSR before's last byte, then $20 $33 would read as a
+  // JMP into the moved block to the stale-JMP check.)
+  [0x50c9, [0xa9, 0x40, 0xa0, 0x1b, 0x8d, 0xf2, 0x1e], [0xea, 0x20, 0x33, 0x50, 0x4c, 0xef, 0x50]],
+  // $5033 keeps its colours but no longer shows the zoom (its display list,
+  // DLI and 6-tick wait): RTS
+  [0x504d, [0xa9, 0xeb, 0x8d, 0x30, 0x02], [0x60]],
+  // Leaving the town ($50F5): skip the zoom frames, on to the map ($5123).
+  // The zoom's bitmap ($1A00-$1BDF) is then never shown: render.s's
+  // mode-4 rows live there.
+  [0x510a, [0xa2, 0x02, 0xad, 0xf2, 0x1e], [0x4c, 0x23, 0x51]],
+  // The mule entering an outfitter's shop and coming out outfitted ($69E4):
+  // two loops of 2-tick steps with a sound sweep. Put it where the second
+  // loop ends ($A4 = $50), in the player's colour as $6A05 does, and go on
+  // ($6A23).
+  [0x69e4, [0xa9, 0xff, 0x85, 0x8b, 0xa9, 0xc8, 0x8d, 0x07, 0xd2],
+    [0xa9, 0x50, 0x85, 0xa4, 0xad, 0xc0, 0x02, 0x8d, 0xc1, 0x02, 0x4c, 0x23, 0x6a]],
+];
+
 /** Sector n (1-based) of an ATR image. */
 export function readAtr(bytes) {
   const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
@@ -299,6 +326,7 @@ export function buildRuntime() {
     if (rd.symbols.R_SZ !== 0xd3ff) throw new Error("render.s variables no longer sit in $D3F4-$D3FF");
     if (rd.symbols.RROWS_END > 0x0400) throw new Error(`render.s variables overflow page 3 (${h4(rd.symbols.RROWS_END)})`);
     if (rd.symbols.R_OVF_END > v.R_OVF_LIM) throw new Error(`render.s's per-build segment overflows (${h4(rd.symbols.R_OVF_END)})`);
+    if (rd.symbols.R_OVM_END > v.R_OVM_LIM) throw new Error(`render.s's mode-4 section overflows (${h4(rd.symbols.R_OVM_END)})`);
     if (rd.symbols.R_OVD_END > v.R_OVD_LIM) throw new Error(`render.s's logo section overflows (${h4(rd.symbols.R_OVD_END)})`);
     if (rd.symbols.R_DAT_END > v.R_DAT_LIM) throw new Error(`render.s's per-build data overflows (${h4(rd.symbols.R_DAT_END)})`);
     b1[0xdfff] = 0xa5;               // bank signature
@@ -308,9 +336,9 @@ export function buildRuntime() {
   // the game's goes out with page 3 (LOW.BIN), the intro's with intro.s
   const game = { T2TAB: L.T2TAB, HIRES: L.HIRES, R_FLAG: 0,
     R_OVF: L.R_OVF_G, R_OVF_LIM: 0x0800, R_DAT: L.R_DAT_G, R_DAT_LIM: 0x0580,
-    R_OVD: 0x9000, R_OVD_LIM: 0xa000, MD_MODE: 0xff };    // (no logo: R_OVD is not loaded)
+    R_OVM: L.R_OVM_G, R_OVM_LIM: 0x1c00, R_OVD: 0x9000, R_OVD_LIM: 0xa000, MD_MODE: 0xff };    // (no logo: R_OVD is not loaded)
   const intro = { T2TAB: L.IRT, HIRES: L.INTRO_HIRES, R_FLAG: 0x80,      // no collisions (it reads none)
-    R_OVF: L.R_OVF_I, R_OVF_LIM: L.R_OVD_I, R_DAT: L.R_DAT_I, R_DAT_LIM: 0x2000,
+    R_OVF: L.R_OVF_I, R_OVF_LIM: L.R_OVM_I, R_OVM: L.R_OVM_I, R_OVM_LIM: L.R_OVD_I, R_DAT: L.R_DAT_I, R_DAT_LIM: 0x2000,
     R_OVD: L.R_OVD_I, R_OVD_LIM: L.R_DAT_I, MD_MODE: 0x0d }; // the logo's cells
   const rd = renderer(b1, game);
   const b1i = new Uint8Array(0x10000);
@@ -460,6 +488,10 @@ export function buildGame(mem0, rt, { allowUnknown = false, strArea = 0, strLimi
   // (the river's colour, PCOLR3 = $16 set at $4BB7, is changed to blue by the
   // renderer, not here: the game's own code is only patched where the port
   // needs it)
+  for (const [a, want, put] of GAME_PATCHES) {
+    expect(a, want, "game patch");
+    mem.set(put, a);
+  }
   // the window moves; $2000-$3FFF becomes the hi-res page
   mem.copyWithin(WIN_TO, WIN_LO, WIN_HI);
   mem.fill(0, WIN_LO, WIN_HI);
@@ -585,6 +617,8 @@ export function convert(atrBytes, opts = {}) {
   const rt = buildRuntime();
   const game = buildGame(mainImage(atrBytes), rt.rt, { ...opts, strArea: rt.rt.RT_B2X_END, strLimit: 0xd200 });
   for (const m of game.moved) rt.b2.set(m.bytes, m.addr);
+  // render.s's mode-4 rows over the town zoom's bitmap (never shown now)
+  game.mem.set(rt.b1.subarray(LAYOUT.R_OVM_G, rt.render.R_OVM_END), LAYOUT.R_OVM_G);
   const s1 = readAtr(atrBytes)(1);
   const irt = buildIrt(rt, { bootInit: INTRO_LOAD + 6, dosini: s1[4] | (s1[5] << 8) });
   const intro = buildIntro(atrBytes, { ...rt.rt, ...irt.symbols, RG: LAYOUT.RG }, opts);

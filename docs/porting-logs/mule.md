@@ -152,8 +152,17 @@ survive it). Both loaders work through one piece table (`SEQUENCE`) in two phase
   Renderer code that is the same in both builds also
   uses RAM2's end; its variables sit after the runtime's in page 3. Code and data
   each build keeps for itself live in main RAM its program leaves free: the game's
-  at `$0600` (loaded with page 3) and `$0406`, the intro's at `$1800` (in
-  `IRT.BIN`) and `$1D00`.
+  at `$0600` (loaded with page 3), `$0406` and `$1A00` (the town zoom's bitmap,
+  never shown once the zoom is skipped; `G1.BIN` carries it), the intro's at
+  `$1800`-`$1CFF` (in `IRT.BIN`) and `$1D00`. Mode 4/5/D/E rows go through four
+  tables built from the band's colours (a byte's two left and two right pixels as
+  their dots in an even or odd column, with the palette bit; inverse variants for
+  PF3), rebuilt only when the colours change, and a byte the same as the last of
+  its column parity is not worked out again: about 140 cycles a byte against 340.
+- **The game's own slow animations are skipped** (`GAME_PATCHES`): the mode-8 zoom
+  into and out of the town (three frames 6 ticks apart on the Atari, a whole-screen
+  redraw each here) and the mule walking into an outfitter's shop and back out,
+  which now appears outside the shop in the player's colour at once.
 - **Sprites in colour cells.** The hi-res screen shows 140 colour cells across, the
   Atari playfield 160 colour clocks, so a sprite's place is cell x * 7/8 (it keeps
   its place on the map), but each of its pixels is a whole cell, two dots lit on its
@@ -252,6 +261,14 @@ survive it). Both loaders work through one piece table (`SEQUENCE`) in two phase
   from 4 to 9 redraws per 120 ticks. (A first rule that redrew at once whenever the
   intro's main code was in one page starved the sweeps, which then filled the
   letters over seconds.)
+- **Still too slow in the town.** Entering it showed the zoom (three whole-screen
+  mode-8 redraws) and then repainted the mode-4 town as the game built it: about
+  five seconds before it settled. With the zoom skipped and the table-driven mode-4
+  rows the town is complete about one second after leaving the map (60 frames
+  against 297), and the outfitting step returns to the town loop in 23 frames
+  against 62. Tearing remains on screens whose picture changes during a redraw (the
+  title's plot flashing white): with one hi-res page the top bands show the new
+  picture while the bottom ones are still the old.
 
 ## Evidence
 
@@ -302,9 +319,12 @@ game on the 3RIC; sound by ear; anything on the physical board.
 - Keyboard directions latch, so steering is coarser than with a pad.
 - The intro's horizontal fine scrolling (HSCROL) is ignored, and its banner's colour
   cycling and shading are turned off. The title redraws about three times a second.
-- Entering the town redraws its whole mode-4 screen, about two seconds; walking
-  there redraws about four times a second. The player-collision scan still reads
-  every row of player 0 each tick (about a tenth of the CPU in the town).
+- The town zoom and the outfitting animation are skipped, not shown. The town
+  appears about a second after leaving the map; walking there redraws about four
+  times a second. The player-collision scan still reads every row of player 0 each
+  tick (about a tenth of the CPU in the town).
+- There is one hi-res page to draw on (the intro's loader holds the other), so a
+  picture that changes during a redraw tears until the redraw ends.
 - The river's hiding over a developed river plot follows from the code and was not
   seen in a run (no river plot was developed in the scripted games).
 - Space fires; the Atari game's Space pause is not reachable from the keyboard.

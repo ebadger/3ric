@@ -188,13 +188,17 @@ async function testRealDisk(atrPath) {
     const readOps = new Set([0xad, 0xae, 0xac, 0xcd, 0xec, 0xcc, 0x2c, 0x2d, 0x0d, 0x4d, 0x6d, 0xed,
       0xbd, 0xb9, 0xbe, 0xbc, 0xdd, 0xd9, 0x3d, 0x39, 0x1d, 0x19, 0x5d, 0x59, 0x7d, 0x79, 0xfd, 0xf9]);
     const hw = (t) => (t >= 0xd000 && t < 0xd020) || (t >= 0xd200 && t < 0xd210) || (t >= 0xd300 && t < 0xd304) || (t >= 0xd400 && t < 0xd410);
-    const scan = (bytes, org, allow) => {
+    const scan = (bytes, org, allow, skip = [0, 0]) => {
       const left = [];
       for (let i = 0; i + 2 < bytes.length; i++)
-        if (readOps.has(bytes[i]) && hw(bytes[i + 1] | (bytes[i + 2] << 8)) && !allow.includes(org + i)) left.push((org + i).toString(16));
+        if (readOps.has(bytes[i]) && hw(bytes[i + 1] | (bytes[i + 2] << 8)) && !allow.includes(org + i) &&
+          !(org + i >= skip[0] && org + i < skip[1])) left.push((org + i).toString(16));
       return left;
     };
-    const left = [...scan(conv.files["G1.BIN"], 0x1000, []), ...scan(conv.files["G2.BIN"], 0x4000, [0x8f48]),   // $8F48: inside CMP $00CC,Y
+    // (G1.BIN's $1A00 holds render.s's mode-4 rows, which read its line
+    // table at $D0xx in bank 1, not the game's)
+    const left = [...scan(conv.files["G1.BIN"], 0x1000, [], [P.LAYOUT.R_OVM_G, conv.rt.render.R_OVM_END]),
+      ...scan(conv.files["G2.BIN"], 0x4000, [0x8f48]),   // $8F48: inside CMP $00CC,Y
       ...scan(conv.files["WIN.BIN"], 0xe000, []), ...scan(conv.files["INTRO.BIN"], P.INTRO_ORG, [])];
     assert.deepEqual(left, [], `hardware reads left unpatched: ${left.join(" ")}`);
     // and no JSR/JMP still goes to an entry point in the moved $2000-$3FFF

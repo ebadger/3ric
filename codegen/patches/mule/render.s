@@ -924,66 +924,7 @@ rt20z:  pha
         bne rt20
         rts
 
-; ANTIC 4/5: 40 columns of four 2-bit pixels (BK, PF0, PF1, PF2/PF3);
-; ANTIC D/E (zrow bit 7 set): the same pixels straight from screen memory;
-; columns r_c0 to r_c1
-row_mc: ldy r_c0
-rmc1:   sty r_x
-        lda (zsrc),y
-        bit zrow
-        bmi rmc_b
-        sta r_cls
-        and #$7F
-        jsr glyph
-        bra rmc_g
-rmc_b:  stz r_cls
-rmc_g:  sta r_gl
-        stz zt0                 ; output byte
-        stz r_pal
-        lda r_x                 ; parity of the byte column
-        and #$01
-        sta zt2
-        stz r_k                 ; pixel slot 0-3
-rmc2:   lda r_gl
-        asl a
-        rol zt1
-        asl a
-        rol zt1
-        sta r_gl
-        lda zt1
-        and #$03
-        cmp #$03                ; PF2, or PF3 for inverse characters
-        bne rmc3
-        bit r_cls
-        bpl rmc3
-        lda #$04
-rmc3:   asl a                   ; mask index = class*2 + parity
-        ora zt2
-        tax
-        lda r_cm,x
-        tay
-        and #$80
-        ora r_pal
-        sta r_pal
-        tya
-        ldx r_k
-        and slot_mask,x
-        ora zt0
-        sta zt0
-        inc r_k
-        lda r_k
-        cmp #4
-        bne rmc2
-        lda zt0
-        and #$7F
-        ora r_pal
-        ldy r_x
-        sta (zhr),y
-        iny
-        cpy r_c1
-        bne rmc1
-        rts
-slot_mask: .byte $03,$0C,$30,$40
+; ANTIC 4/5 and D/E: ov_mc (R_OVM)
 
 ; ANTIC 8: 40 four-colour pixels, one hi-res byte each
 row_bm8:
@@ -1917,7 +1858,7 @@ oe4:    lda lt_mode,x
         cmp #MD_MODE
         bne oe6
         jmp md_tab
-oe6:    rts
+oe6:    jmp mc_chk           ; (R_OVM) a mode-4 band's tables
 oe_end: phx                     ; a run from r_rs to column 4 * Y
         lda r_nr
         asl a
@@ -1951,8 +1892,8 @@ vg2:    cmp #$0D
         cmp #$0F
         bcs vg_c
         lda #$80                ; D/E: the mode-4 pixels, no glyphs
-        ldy #<row_mc
-        ldx #>row_mc
+        ldy #<ov_mc
+        ldx #>ov_mc
         bra vg_r
 vg3:    cmp #2
         bcc vg_c
@@ -1971,8 +1912,8 @@ vg3:    cmp #2
 vg_h:   lsr a                   ; 5, 7: two scan lines a row
 vg_f:   cpy #6
         bcs vg_20
-        ldy #<row_mc            ; 4, 5
-        ldx #>row_mc
+        ldy #<ov_mc            ; 4, 5
+        ldx #>ov_mc
         bra vg_r
 vg_20:  ldy #<t20_go            ; 6, 7
         ldx #>t20_go
@@ -2010,27 +1951,6 @@ vg_r4:  lda r_rk
 pw_tab: .byte 4,6,4,11          ; columns a player covers, by SIZEP
 m_bit:  .byte $03,$0C,$30,$C0
 vg_cl:  jmp (r_dv)
-; the run's columns black
-clr_rng:
-        ldy r_c0
-        lda #0
-cg1:    sta (zhr),y
-        iny
-        cpy r_c1
-        bne cg1
-        rts
-; ANTIC 6/7: a whole row through row_t20 (all-blank rows filled at once);
-; a run of it straight to its characters
-t20_go: lda r_t0
-        bne tg1
-        lda r_t1
-        cmp #20
-        bne tg1
-        jmp row_t20
-tg1:    lda #0                  ; zt2 = the space's glyph row (t20_pre)
-        jsr glyph
-        sta zt2
-        jmp rt20s
 r_ovf_end:
 
 ; ---- the intro's logo (ANTIC D): every 8 pixels (two bytes) are 7 colour
@@ -2134,3 +2054,196 @@ omd2:   lda zt0                 ; pixels k, k + 1 -> the cell; the cells
         bne omd1
         rts
 r_ovd_end:
+
+; ---- mode 4/5/D/E rows (R_OVM: game $1A00, the town zoom's bitmap, free
+; since the zoom is skipped; intro $1A00). Each band's colours make four
+; tables: a byte's two high pixels (left) and two low pixels (right) as
+; their dots in an even or an odd column, with the palette bit of any of
+; them; +16 for an inverse character (pixel value 3 is PF3). A row is then
+; a glyph lookup and two table reads a byte, and a byte the same as the
+; last one of its column parity is not worked out again.
+        .org R_OVM
+
+mc_chk: lda lt_mode,x           ; X = r_i
+        cmp #4
+        beq mc_t0
+        cmp #5
+        beq mc_t0
+        cmp #$0D
+        beq mc_t0
+        cmp #$0E
+        beq mc_t0
+        rts
+mc_t0:  ldy #9                  ; the tables of the last such band are
+mct1:   lda r_cm,y              ; still right when its colours were the
+        cmp mc_cm,y             ; same (most of a screen's bands)
+        bne mct2
+        dey
+        bpl mct1
+        rts
+mct2:   ldy #9
+mct3:   lda r_cm,y
+        sta mc_cm,y
+        dey
+        bpl mct3
+mc_tab: ldy #31
+mt1:    tya
+        lsr a
+        lsr a
+        and #$03
+        jsr mt_ci
+        sta zt0                 ; the left pixel's masks in r_cm
+        tya
+        and #$03
+        jsr mt_ci
+        sta zt1                 ; the right pixel's
+        ldx zt0
+        lda r_cm,x
+        and #$83
+        sta zt2
+        lda r_cm+1,x
+        and #$83
+        sta zt3
+        ldx zt1
+        lda r_cm,x
+        and #$8C
+        ora zt2
+        sta mt_he,y             ; pixels 0, 1: dots 0-1, 2-3
+        lda r_cm+1,x
+        and #$8C
+        ora zt3
+        sta mt_ho,y
+        ldx zt0
+        lda r_cm,x
+        and #$B0
+        sta zt2
+        lda r_cm+1,x
+        and #$B0
+        sta zt3
+        ldx zt1
+        lda r_cm,x
+        and #$C0
+        ora zt2
+        sta mt_le,y             ; pixels 2, 3: dots 4-5, 6
+        lda r_cm+1,x
+        and #$C0
+        ora zt3
+        sta mt_lo,y
+        dey
+        bpl mt1
+        ldx r_i
+        rts
+; pixel value A (0-3; Y >= 16 an inverse character) -> its masks' index
+; in r_cm (class * 2: BK, PF0, PF1, PF2, or PF3 for an inverse 3)
+mt_ci:  cmp #3
+        bne mci1
+        cpy #16
+        bcc mci1
+        lda #4
+mci1:   asl a
+        rts
+
+; the row's columns r_c0 to r_c1 (zrow: glyph row; bit 7 D/E, the bytes
+; are the pixels)
+ov_mc:  stz mc_ok
+        stz mc_ok+1
+        ldy r_c0
+omc1:   tya
+        and #$01
+        tax
+        lda (zsrc),y
+        cmp mc_k,x              ; as the last byte of this parity: its
+        bne omc_n               ; hi-res byte again
+        lda mc_ok,x
+        beq omc_n1
+        lda mc_v,x
+        bra omc_w
+omc_n1: lda mc_k,x
+omc_n:  sta mc_k,x
+        sty r_x
+        bit zrow
+        bmi omc_b
+        tax                     ; a character: its glyph row (glyph,
+        and #$80                ; inline)
+        lsr a
+        lsr a
+        lsr a
+        sta zt3                 ; $10: inverse
+        txa
+        asl a
+        asl a
+        asl a
+        ora zrow
+        sta zg
+        txa
+        and #$7F
+        lsr a
+        lsr a
+        lsr a
+        lsr a
+        lsr a
+        ora zcb
+        sta zg+1
+        lda (zg)
+        bra omc_g
+omc_b:  stz zt3
+omc_g:  tax
+        and #$0F
+        ora zt3
+        sta zt4
+        txa
+        lsr a
+        lsr a
+        lsr a
+        lsr a
+        ora zt3
+        tay
+        ldx zt4
+        lda r_x
+        lsr a
+        bcs omc_o
+        lda mt_he,y
+        ora mt_le,x
+        ldx #0
+        bra omc_s
+omc_o:  lda mt_ho,y
+        ora mt_lo,x
+        ldx #1
+omc_s:  sta mc_v,x
+        inc mc_ok,x
+        ldy r_x
+omc_w:  sta (zhr),y
+        iny
+        cpy r_c1
+        bne omc1
+        rts
+; the run's columns black
+clr_rng:
+        ldy r_c0
+        lda #0
+cg1:    sta (zhr),y
+        iny
+        cpy r_c1
+        bne cg1
+        rts
+; ANTIC 6/7: a whole row through row_t20 (all-blank rows filled at once);
+; a run of it straight to its characters
+t20_go: lda r_t0
+        bne tg1
+        lda r_t1
+        cmp #20
+        bne tg1
+        jmp row_t20
+tg1:    lda #0                  ; zt2 = the space's glyph row (t20_pre)
+        jsr glyph
+        sta zt2
+        jmp rt20s
+mc_k:   .byte 0,0               ; ov_mc's last byte per column parity,
+mc_v:   .byte 0,0               ; its hi-res byte, and whether it is set
+mc_ok:  .byte 0,0
+mc_cm:  .byte $A5,$A5,$A5,$A5,$A5,$A5,$A5,$A5,$A5,$A5   ; the tables' r_cm
+mt_he:  .res 32                 ; mc_tab's tables
+mt_ho:  .res 32
+mt_le:  .res 32
+mt_lo:  .res 32
+r_ovm_end:
