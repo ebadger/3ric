@@ -36,6 +36,12 @@ on:
       - 'codegen/tools/tts-entry*'
       - 'codegen/tools/check-tts.mjs'
       - 'codegen/tools/fixtures/tts-check-*'
+      # The shipped SD card (emulator/Data/sd.zip) is checked against the sources
+      # it is built from (make-sd-card.test.mjs) before each publish.
+      - 'codegen/tools/make-sd-card*.mjs'
+      - 'codegen/tools/port-dirtbike.mjs'
+      - 'codegen/tools/ultima5/fat32.mjs'
+      - 'codegen/patches/dirtbike/**'
       - '.github/workflows/deploy-pages.yml'
   # Allow manual runs from the Actions tab.
   workflow_dispatch:
@@ -68,7 +74,7 @@ jobs:
         with:
           node-version: '22'
 
-      # make_sd_sparse.py + build.ps1's sd.sparse generation need `python`.
+      # make_sd_sparse.py + build.ps1's sd.v2.sparse generation need `python`.
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -100,6 +106,8 @@ jobs:
           node web/test_keyboard.cjs
           node web/test_boot.cjs
           node web/test_embed.cjs
+          node web/test_sd.cjs
+          node codegen/tools/make-sd-card.test.mjs
           node web/test_woz_validation.cjs
           node web/test_sound_default.cjs
           node web/test_woz_download.cjs

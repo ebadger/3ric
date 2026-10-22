@@ -5,3 +5,8 @@
 scripts/dev/*.sh              text eol=lf
 scripts/dev/*.example         text eol=lf
 .github/extensions/**/*.mjs   text eol=lf
+
+# The micro-SD card's notice files are copied byte for byte onto the card image
+# (codegen/tools/make-sd-card.mjs, checked by make-sd-card.test.mjs): never convert
+# their line endings. README.TXT uses CR, as the 3RIC ROM DOS prints text.
+emulator/Data/sd-card/DIRTBIKE/* -text

@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Extract a compact "sparse" SD image for the web build.
 
-The shipped SD card image (emulator/Data/sd.zip) decompresses to a 2 GB raw
-image (sd.001) that is almost entirely zeros. We cannot fetch 2 GB in a browser
-or allocate it in WASM, so this tool streams the image straight out of the zip
+The shipped SD card image (emulator/Data/sd.zip) decompresses to a raw FAT32
+card image (sd.001; 64 MB since the Dirt Bike card, codegen/tools/
+make-sd-card.mjs) that is almost entirely zeros. Rather than fetch and allocate
+all of it in a browser, this tool streams the image straight out of the zip
 and emits only the non-zero 512-byte sectors in a compact container the web
 bridge can load into a lazily-allocated sector map.
 
-Output format (little-endian), web/data/sd.sparse:
+Output format (little-endian), web/data/sd.v2.sparse:
     magic    : 4 bytes  "SDSP"
     secSize  : uint32   bytes per sector (512)
     secCount : uint32   total logical sectors (image size / secSize)
@@ -32,7 +33,7 @@ CHUNK = 8 * 1024 * 1024  # 8 MB read window (multiple of SEC)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_ZIP = os.path.normpath(os.path.join(HERE, "..", "emulator", "Data", "sd.zip"))
-DEFAULT_OUT = os.path.join(HERE, "data", "sd.sparse")
+DEFAULT_OUT = os.path.join(HERE, "data", "sd.v2.sparse")
 
 
 def main():

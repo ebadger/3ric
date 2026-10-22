@@ -3,13 +3,15 @@
 **2026-10-22. Emulator-verified; no physical-board trial yet.**
 The owner supplied `DIRTBIKE.dsk`, Verhille Arnaud's Apple II port of a motocross time
 trial ("DIRTBIKE - APPLE II+ 48K", V1.0: 30 tracks, three laps each, a hall of fame),
-and asked for it to load from the 3RIC ROM DOS rather than as a WOZ. The image and
-the generated SD folder contain the game and stay local. This repository holds the
-converter, the glue code and its tests only.
+and asked for it to load from the 3RIC ROM DOS rather than as a WOZ. The game is free
+software under the GNU GPL v3 (<https://github.com/habib256/pom2games>), and the disk is
+that repository's `dist/DIRTBIKE.dsk`. At first the generated folder stayed local; the
+same day it became the emulators' micro-SD card and playable on the web page
+([below](#on-the-web-page-the-shipped-card)).
 
 | Artifact | SHA-256 |
 |----------|---------|
-| `DIRTBIKE.dsk` as supplied (140 KB, DOS order) | `ea40bda3dd58a31674af742736fd900dcbfd264ad4ef04eab09b6d59e247096e` |
+| `DIRTBIKE.dsk` as supplied (140 KB, DOS order; upstream commit `8140d9ffca77`, git blob `d8e050b3`) | `ea40bda3dd58a31674af742736fd900dcbfd264ad4ef04eab09b6d59e247096e` |
 | `DIRTBIKE` file body (`$6000-$957E`), checked by the tool | `296fa338efabd5fa72402fcd3d9d500bfc26c5080880fbefdc654b057df3424f` |
 | `TITLE` file body, checked by the tool | `3167fb0e9275e405494db47d1f7d58d22daf03d876ce2b2ddbab8bde460ad7bf` |
 
@@ -218,6 +220,67 @@ Manual emulator play also showed the title, the track menu, crashes and the
 
 **Physical board:** not yet tried.
 
+## On the web page: the shipped card
+
+The owner then asked for the game to be playable from the 3RIC page, and chose to
+replace the emulators' micro-SD card with the Dirt Bike files alone, plus an external
+link and no dedicated button. The ~100 game `.PRG`s on the old 2 GB card were removed.
+
+- **The card.** `node codegen/tools/make-sd-card.mjs <DIRTBIKE.dsk>` builds
+  `emulator/Data/sd.zip` from the upstream disk (whole-disk SHA-256 checked): this
+  converter's 33 files plus `README.TXT` (an upper-case, 40-column notice that
+  `CAT README.TXT` prints) and `LICENSE.TXT` (the GPL v3, verbatim), in one `DIRTBIKE`
+  folder on a deterministic 64 MB FAT32 image. The web build serves it as a 130 KB
+  `data/sd.v2.sparse`, and the WinUI host unpacks it.
+- **The link.** <https://ebadger.github.io/3ric/?brun=DIRTBIKE/DIRTBIKE.PRG> loads the
+  card, powers on with it and types `CD DIRTBIKE`, then `BRUN DIRTBIKE.PRG 0800`. `?brun=`
+  takes any 8.3 path on the card, and also works in `?embed=1`. The workbench now powers
+  on with the card mounted, so the same commands typed at the first prompt work too.
+- **Licence.** The game is GPL v3 and a separate work; 3RIC is MIT. The card, the page
+  footer and `emulator/Data/sd-card/README.md` state the author, the licence, that this
+  copy was modified for 3RIC on 2026-10-22, and where the corresponding source is: the
+  upstream commit `8140d9ffca77` (`dirtbike/` and its shared `dev/` build tree), plus
+  this converter, `loader.s` and `resident.s`. The release disk's DOS 3.3 and `HELLO` are
+  not on the card.
+- **Found on the way: a reset mid-load broke the card.** The ROM mounts the card only at
+  reset. The page used to load the card after the first reset, so **Mount SD**'s `DIR`
+  showed nothing until a manual Reset. It also typed `EC5CG`, the old `dos` entry, which
+  the current ROM's DOS prompt rejects with `?`. Mount SD now powers on again with the
+  card and types `DIR`. A worse problem was that a reset during one of the game's file
+  loads left the emulated card mid-transfer: `SDCard` frames commands by counting bits
+  and does not resynchronize on chip select. The next mount failed with
+  `SD READ FAILED`, or hung, until the page was reloaded. Resets 0.06, 0.49, 0.95 and
+  1.59 s into the 2.2 s `TITLE` load all failed; one at 2.54 s, after the load, worked.
+  The page's power-on re-seeds
+  all memory anyway, so it now also resets the card's SPI interface
+  (`SDCard::ResetInterface()`, bridge `resetSD()`), as a power cycle would; the card's
+  contents are kept. After that change all five resets mounted the card. A CPU-only
+  (warm) reset, as in the native hosts, is unchanged and recorded as a known gap in
+  `EMULATOR.md`.
+
+Evidence (WASM, real ROM DOS, the shipped card):
+
+- `web/test_sd.cjs`: the mount at reset; a root of only `DIRTBIKE`; a `BSAVE`, `BLOAD`
+  and `DEL` round trip; the folder's 35 files; `CAT README.TXT`; and `BRUN` to the
+  hi-res title in 9.2 s (emulated).
+- `web/test_embed.cjs` runs the real page script:
+  - the workbench's first `DIR` lists the card;
+  - the link reaches the title, and Mount SD then lists the card;
+  - a card rejected at power-on (not an SD image) is fetched again by Mount SD;
+  - the embedded launch, and its Restart 0.5 s into the `TITLE` load (this check fails
+    without `resetSD()`);
+  - seven refused paths (empty, `..`, a space, a long name, a long extension, `//`, an
+    encoded CR) type nothing;
+  - a failed card load is visible and retried by Restart.
+- `codegen/tools/make-sd-card.test.mjs` (no disk needed) checks the card against its
+  sources:
+  - `DIRTBIKE.PRG` is rebuilt byte for byte from the committed loader and resident;
+  - un-patching the game and `TITLE` gives the release's SHA-256s;
+  - the notices are the repository's files, and `LICENSE.TXT` is the GPL v3;
+  - with `DIRTBIKE_DSK`, the whole image is rebuilt byte for byte.
+
+  A one-byte change to `resident.s` or to `README.TXT` makes it fail.
+
 ## Known limits
 
 - Only emulator-tested. The pad path clocks VIA1 port B directly, like Ultima II and
@@ -252,6 +315,11 @@ Manual emulator play also showed the title, the track menu, crashes and the
 - `DIRTHOF` writes are one 512-byte card sector, so any cluster size works.
 - Reserved while the game runs: `$B704-$BF4B` (resident), the slot-4 Mockingboard's
   first VIA Timer 1 (pacing), VIA1 port B (pads). `$C800-$CFFF` remains ROM state.
+- On the web page, records last until the page is reloaded (the card lives in the
+  browser's memory). The `?embed=1` player hides the page footer with the game's
+  credit and licence, as it does for every embed; the title screen still names the
+  author. The GPL's source offer points at the upstream repository: if it ever goes
+  away, keeping that source available falls to us (a fork or a copy would cover it).
 
 ## Next steps worth discussing
 

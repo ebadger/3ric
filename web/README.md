@@ -24,9 +24,11 @@ identically. Browser-only presentation code stays in the bridge and JavaScript.
 - **Two gamepads** through the standard browser Gamepad API. USB and Bluetooth
   devices use the same path after OS pairing; the shared VM serializes them as real
   SNES pads through VIA1 and the unmodified ROM fills `GAMEPAD1/2`.
-- **Micro-SD card** (bit-banged SPI through VIA1) backing a FAT32 disk image. A
-  **Mount SD** button drops into the ROM's DOS shell (`>` prompt) and lists the
-  card; from there `DIR`, `CAT`, `CD <dir>`, `BLOAD`/`BRUN <file>` all work.
+- **Micro-SD card** (bit-banged SPI through VIA1) backing a FAT32 disk image. The page
+  powers on with the card inserted, so the ROM mounts it at reset and starts its DOS shell
+  (`>` prompt); **Mount SD** restarts the machine that way and lists the card. `DIR`,
+  `CAT`, `CD <dir>`, `BLOAD`/`BRUN <file>` all work. The card holds **Dirt Bike**:
+  `?brun=DIRTBIKE/DIRTBIKE.PRG` starts it (see below).
 - **Disk II 5.25″ floppy** emulation (WozLib) through the standard boot ROM at
   `$C600`. A **Boot Disk** button boots the bundled `.woz`, and **Insert .woz…**
   boots any WOZ image you pick. Self-booting machine-code game disks run into
@@ -65,8 +67,8 @@ identically. Browser-only presentation code stays in the bridge and JavaScript.
 | `emulation-clock.js` | Elapsed-time cycle pacer that keeps finite CPU speeds independent of display refresh rate and carries instruction overshoot between frames. |
 | `audio-worklet.js` | Stereo PCM queue on the browser audio-rendering thread; no `SharedArrayBuffer` or cross-origin isolation required. |
 | `web_compat.h` | Tiny shims so `WozLib` + `MockMicroSD`'s MSVC-isms (`OutputDebugString`, `sprintf_s`, `swprintf_s`, `fopen_s`, `_ASSERT`, …) compile under Emscripten. |
-| `make_sd_sparse.py` | Streams `emulator/Data/sd.zip` (a 2GB, mostly-zero FAT32 image) into a compact `data/sd.sparse` keeping only the ~11.5MB of non-zero sectors. |
-| `build.ps1` | Compiles the core + WozLib + MockMicroSD + bridge to `badger6502.js` / `.wasm`, stages the data files, generates `sd.sparse`, and stages the demo `disk.woz`. |
+| `make_sd_sparse.py` | Streams `emulator/Data/sd.zip` (a 64 MB, mostly-zero FAT32 card image) into a compact `data/sd.v2.sparse` keeping only its ~130KB of non-zero sectors. |
+| `build.ps1` | Compiles the core + WozLib + MockMicroSD + bridge to `badger6502.js` / `.wasm`, stages the data files, generates `sd.v2.sparse` (whenever `sd.zip` is newer), and stages the demo `disk.woz`. |
 | `index.html` | Canvas UI + `requestAnimationFrame` driver + keyboard + clock-speed/disk/sound controls + the in-browser assembler/editor/debugger. Honors an optional `ASSET_BASE` (R2/CDN offload). |
 | `challenges.html`, `challenges.css` | Static introduction to the public model challenges and first TTS round. |
 | `challenges/tts/index.template.html` | Template for the complete TTS brief, kickoff task, submission guide and entries; generated from `codegen/challenges/tts/v1/`. |
@@ -134,8 +136,8 @@ bridge:          web_bridge.cpp
 `-std=c++17 -O2 -lembind -sMODULARIZE=1 -sEXPORT_NAME=createBadgerVM
 -sALLOW_MEMORY_GROWTH=1 -sENVIRONMENT=web,node`. The data files
 (`badger6502.bin`, `fontrom.dat`, `badger6502.dbg`) are copied from
-`emulator/Data` into `web/data`, `sd.sparse` is generated from
-`emulator/Data/sd.zip` (first run only; ~20s), and the demo `disk.woz` is staged
+`emulator/Data` into `web/data`, `sd.v2.sparse` is generated from
+`emulator/Data/sd.zip` (whenever `sd.zip` is newer; under a second), and the demo `disk.woz` is staged
 from the in-repo WOZ test images.
 
 ## Run in the browser
@@ -148,11 +150,11 @@ cd web
 Open <http://localhost:8011/index.html>, click the canvas and type, or expand
 **Virtual Keyboard** below the screen to use its full symbol and arrow layout on a phone.
 Press **Boot Disk** to boot the bundled 5.25″ floppy, or **Insert .woz…** to boot one
-of your own WOZ images. Press **Mount SD** to mount the micro-SD card and enter
-the DOS shell — it runs the monitor command `EC5CG` (Go to `$EC5C`, the `dos`
-routine) which mounts the FAT32 image and prints a `>` prompt, then auto-runs
-`DIR`. Type `CAT`, `CD <dir>`, `BRUN <file>`, etc. to load games and programs
-from the card. The **Speed** selector sets the CPU clock (0.5×–8× or Max).
+of your own WOZ images. The machine powers on with its micro-SD card inserted: the ROM
+mounts it at reset and prints the DOS shell's `>` prompt, so `DIR`, `CD <dir>`,
+`BRUN <file> <addr>`, `CAT <file>` etc. work straight away. Press **Mount SD** to restart
+the machine with the card (loading it again if it failed) and list it with `DIR`.
+The **Speed** selector sets the CPU clock (0.5×–8× or Max).
 The system-speaker and stereo Mockingboard mix is enabled by default. Browser
 autoplay rules delay it until the first pointer or keyboard interaction; press
 **Disable Sound** to opt out. Sound is intentionally generated only at native 1×.
@@ -242,6 +244,42 @@ limits/timeouts, errors, and existing program links against the real WASM core.
 `node web\test_woz_validation.cjs` covers malformed containers, checksums, formats,
 and the exact size boundary directly through the shared parser. Native equivalents
 are in `Badger6502VMTest`'s `WozFileTests` class.
+
+## Play Dirt Bike, or any program on the SD card (`?brun=`)
+
+The micro-SD card holds one game, **Dirt Bike** (Arnaud Verhille's Apple II motocross,
+GNU GPL v3, modified for 3RIC: see
+[`emulator/Data/sd-card/README.md`](../emulator/Data/sd-card/README.md)). This link starts
+it:
+
+**<https://ebadger.github.io/3ric/?brun=DIRTBIKE/DIRTBIKE.PRG>**
+
+`?brun=FOLDER/FILE.PRG` runs a program from the card through the ROM's own DOS, typed as
+you would: the page loads the card, powers the machine on with it, then types `CD FOLDER`
+for each folder and `BRUN FILE.PRG 0800`. You see the commands on the screen, then the
+DOS loads the program (Dirt Bike: about 8 s, then its title). `&org=` changes the `BRUN`
+address (hex, default `0800`, as for `?prg=`). Each name must be a FAT 8.3 name (letters,
+digits, `_`, `~`, `-`; case does not matter); anything else is refused with a message and
+types nothing. Click the screen once for sound. Play with the keyboard or a gamepad:
+either SNES-mapped pad leans (D-pad), accelerates (B/X) and brakes (A/Y); Start is Esc.
+Keyboard: A/Up gas, Z/Down half gas, J/L or Left/Right lean, Space brake, Esc menu.
+
+It works in the embedded player too, where **Restart** runs the launch again:
+
+```html
+<iframe
+  title="Dirt Bike on 3RIC"
+  src="https://ebadger.github.io/3ric/index.html?embed=1&amp;brun=DIRTBIKE/DIRTBIKE.PRG"
+  width="800" height="660"
+  style="width: 100%; border: 0;"
+  allow="fullscreen; autoplay; gamepad"
+  allowfullscreen>
+</iframe>
+```
+
+The card's contents, including the game's hall of fame, last until the page is reloaded.
+The embedded player hides the page footer, which carries the game's credit, licence and
+source links; the game's title screen still names its author.
 
 ## Browser gamepads
 
@@ -457,7 +495,8 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node web\test_system_speaker.cjs # $C030 read/write toggles + mixed PCM
 & $node web\test_gamepad.cjs    # mapping, VIA serialization, ROM GAMEPAD1/2 scan
 & $node web\test_debugger.cjs   # source map, ROM lookup, breakpoints, step-over
-& $node web\test_sd.cjs          # mount the SD card + DIR lists the FAT32 root
+& $node web\test_sd.cjs          # shipped SD card: mount, DIR, BSAVE/BLOAD/DEL, BRUN Dirt Bike
+& $node codegen\tools\make-sd-card.test.mjs # the card against its sources (no build needed)
 & $node web\test_disk.cjs        # boot a WOZ floppy via C600G into a hi-res title
 ```
 
@@ -483,19 +522,27 @@ the SD state machine (`emulator/MockMicroSD/SDCard.cpp`): `CS`=bit4, `SCK`=bit3,
 `MOSI`=bit2, and the resulting `MISO` drives the VIA's external port-A bit1
 input. The bridge installs this pump via `VM::CallbackWriteMemory`.
 
-The disk image (`emulator/Data/sd.zip`) decompresses to a **2GB** FAT32 image
-that is almost entirely zeros — far too large to fetch or allocate in a browser.
-`make_sd_sparse.py` streams it straight out of the zip and emits only the
-~23k non-zero 512-byte sectors as `data/sd.sparse` (~11.5MB, an `SDSP`
-container). The Emscripten branch of `MMappedFile` (`MockMicroSD/MappedFile.cpp`)
-backs the 2GB logical image with a lazily-allocated `unordered_map<sector,
-512 bytes>`; never-written sectors read back as zero.
+The disk image (`emulator/Data/sd.zip`, built by `codegen/tools/make-sd-card.mjs`;
+see `emulator/Data/sd-card/README.md`) decompresses to a **64 MB** FAT32 card image
+that is almost entirely zeros. `make_sd_sparse.py` streams it straight out of the zip
+and emits only its ~260 non-zero 512-byte sectors as `data/sd.v2.sparse` (~130KB, an
+`SDSP` container). The Emscripten branch of `MMappedFile` (`MockMicroSD/MappedFile.cpp`)
+backs the logical image with a lazily-allocated `unordered_map<sector, 512 bytes>`;
+never-written sectors read back as zero. The card holds only `DIRTBIKE/` (the game,
+its `README.TXT` notice and `LICENSE.TXT`). The served name changes with the card's
+contents (`sd.v2.sparse`, then `sd.v3.sparse`...), because the `Caddyfile` caches
+`data/` for a year.
 
-At runtime the page lazily fetches `sd.sparse`, hands it to `loadSD()`
-(`SDCard::LoadSparseImage`), and the ROM's own FAT32 driver (`fat32_start` →
-`fat32_dir`) reads the card over SPI. `test_sd.cjs` proves the round trip: it
-enters the shell, runs `DIR`, and asserts real `<DIR>` folders and `PRG` files
-come back along with a non-zero sector-read count.
+The ROM mounts a card only at reset (`fat32_start`), so the workbench fetches the card
+alongside the ROM and hands it to `loadSD()` (`SDCard::LoadSparseImage`) before the
+first power-on; the ROM's own FAT32 driver then reads and writes it over SPI. The card
+lives in the bridge, so its contents (writes included) survive resets until the page is
+reloaded. Every power-on from the page (`loadRom`: re-seed memory, `resetSD()`,
+`reset()`) also resets the card's SPI interface: a CPU reset alone would leave a sector
+transfer the guest was in the middle of, and the ROM's mount would then fail
+(`SD READ FAILED`). `test_sd.cjs` proves the round trip on the shipped card: the
+mount at reset, `DIR` (only `DIRTBIKE`), a `BSAVE`/`BLOAD`/`DEL` round trip, the
+folder's files, `CAT README.TXT`, and `BRUN DIRTBIKE.PRG 0800` to the hi-res title.
 
 ## How the Disk II floppy boots
 
@@ -568,9 +615,9 @@ of concurrent users; the only real constraint is bandwidth for *first-time*
 downloads, which Cloudflare's edge cache absorbs.
 
 Per fresh visit the mandatory payload is ~1.26 MB (`index.html` + `badger6502.js`
-+ `.wasm` + `badger6502.bin` + `fontrom.dat`). `disk.woz` (~230 KB) and
-`sd.sparse` (~11.5 MB) are fetched lazily, only when the user clicks **Boot Disk**
-or **Mount SD**.
++ `.wasm` + `badger6502.bin` + `fontrom.dat`), plus the ~130 KB SD card
+(`sd.v2.sparse`) in the workbench, which powers on with it. `disk.woz` (~230 KB) is
+fetched only when the user clicks **Boot Disk**.
 
 ### Caddy (static origin)
 
@@ -588,7 +635,7 @@ Point your Cloudflare Tunnel's public hostname at `http://localhost:8080`.
 ### Caching the SD image to minimize ISP upload
 
 The `Caddyfile` already sends `Cache-Control: public, max-age=31536000, immutable`
-on everything under `/data/` (including the ~11.5 MB `sd.sparse`), so a returning
+on everything under `/data/` (including the ~130 KB `sd.v2.sparse`), so a returning
 visitor's **browser** never re-downloads it. To also stop your **Pi** from
 re-uploading it to each *new* visitor, let Cloudflare's edge cache it:
 
@@ -600,30 +647,30 @@ re-uploading it to each *new* visitor, let Cloudflare's edge cache it:
    - This rule is *required*: a `.sparse` file is **not** one of the extensions
      Cloudflare caches by default, so without it the edge passes every request
      straight through to your Pi.
-2. Verify with `curl -I https://your-host/data/sd.sparse`. After the first
+2. Verify with `curl -I https://your-host/data/sd.v2.sparse`. After the first
    request you should see `cf-cache-status: HIT` — meaning that download came
-   from Cloudflare, not your uplink. (Free/Pro cache objects up to 512 MB, so
-   11.5 MB is fine.)
+   from Cloudflare, not your uplink. (Free/Pro cache objects up to 512 MB.)
 
-With the rule in place your Pi serves `sd.sparse` roughly **once per Cloudflare
+With the rule in place your Pi serves the SD card roughly **once per Cloudflare
 location per TTL** instead of once per visitor. If you change the SD contents,
-give the new image a different filename (e.g. `sd.v2.sparse`) and update the
-fetch path in `index.html`, otherwise cached copies persist for up to a year.
+give the new image a different filename (`sd.v2.sparse` → `sd.v3.sparse` in
+`build.ps1`, `make_sd_sparse.py` and `index.html`), otherwise cached copies persist
+for up to a year.
 
-For the strongest result — `sd.sparse` never touching your home connection at
-all — offload it to R2 (next section): zero egress fees, served straight from
+For the strongest result — the data files never touching your home connection at
+all — offload them to R2 (next section): zero egress fees, served straight from
 Cloudflare's network.
 
 ### Offloading the heavy files to R2 (`ASSET_BASE`)
 
-If the optional 11.5 MB `sd.sparse` gets popular, serving it from your home
+If the site gets popular, serving the `.wasm` and the data files from your home
 connection can saturate your uplink (or hit an ISP data cap). `index.html`
 supports an **`ASSET_BASE`** that relocates the `.wasm` binary and everything
 under `data/` to any CDN — ideally a **Cloudflare R2** bucket (free tier: 10 GB
 storage + **zero egress fees**, and policy-clean for large-file distribution):
 
 1. Upload `badger6502.wasm` and the whole `data/` folder to a public R2 bucket,
-   preserving paths (so `…/badger6502.wasm` and `…/data/sd.sparse` resolve).
+   preserving paths (so `…/badger6502.wasm` and `…/data/sd.v2.sparse` resolve).
 2. Configure the bucket's **CORS policy** to allow your site's origin (or `*`),
    and make sure objects are served with sensible content types — in particular
    `badger6502.wasm` as `application/wasm` for streaming compile.

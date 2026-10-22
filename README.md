@@ -28,10 +28,15 @@ at **1x**, then click the emulator for sound. Use **1-4** for scenes, **Space** 
 exports are available in the editor; the program targets 3RIC, not an unmodified Apple II.
 
 **<https://ebadger.github.io/3ric/>** runs the *entire machine* client-side via
-WebAssembly. Click the canvas and start typing at the monitor `*` prompt. Then:
+WebAssembly. Click the canvas and start typing at the DOS `>` prompt (`MON` enters the
+monitor's `*` prompt). Then:
 
 - **Boot Disk** — boot the demo 5.25″ floppy (a self-booting machine-code disk).
 - **Mount SD** — mount the micro-SD card and use the ROM's DOS shell (`DIR`, etc.).
+- **Play Dirt Bike** — [ebadger.github.io/3ric/?brun=DIRTBIKE/DIRTBIKE.PRG](https://ebadger.github.io/3ric/?brun=DIRTBIKE/DIRTBIKE.PRG)
+  boots Arnaud Verhille's Apple II motocross from the SD card through the ROM DOS
+  (`CD DIRTBIKE`, `BRUN DIRTBIKE.PRG 0800`). It takes about 10 seconds to load; play
+  with the keyboard or a gamepad.
 - **Assemble & Run** — open the built-in 65C02 editor, write assembly, and run it like
   `BRUN` — all in the browser. Programs are shareable via a `?src=` deep link.
 
@@ -186,8 +191,10 @@ boards, and more build videos, and **every sponsor is credited in
 
 Bundled third-party components keep their own licenses, and some bundled data (the ROM's
 Microsoft BASIC, Apple II disk images used as test fixtures) is third-party copyrighted
-material **not** licensed by this project. See [`NOTICE`](NOTICE) for the full breakdown
-before redistributing.
+material **not** licensed by this project. The emulators' micro-SD card holds **Dirt Bike**,
+a separate game under the GNU GPL v3, modified for 3RIC (see
+[`emulator/Data/sd-card/`](emulator/Data/sd-card/README.md)). See [`NOTICE`](NOTICE) for the
+full breakdown before redistributing.
 
 [demo]: https://ebadger.github.io/3ric/
 [youtube]: https://www.youtube.com/playlist?list=PLbYLt1iawSBLK4w46Kn7cxxuoeVt7Zepq

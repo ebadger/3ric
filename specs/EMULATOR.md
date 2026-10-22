@@ -133,6 +133,14 @@ These are existing mappings, not a new memory expansion.
   asserted and receiver interrupts are enabled in the 6551 command register. A write to the
   status address performs a programmed reset independent of the written value, preserving
   the control register and command parity bits.
+- **Micro-SD card (`MockMicroSD`).** `SDCard` frames SPI commands by counting bits from its
+  power-on state; it does not resynchronize on chip select or on a command's start bits.
+  A CPU reset leaves the card as it was, so a reset during a sector transfer leaves it
+  mid-transfer, and the ROM's mount at reset then fails (`SD READ FAILED`) or hangs.
+  `SDCard::ResetInterface()` returns the SPI side to its power-on state and keeps the image
+  and everything written to it. The web page calls it (bridge `resetSD()`) at each power-on
+  (`loadRom`, which also re-seeds memory). The native hosts' Reset is a warm reset and does
+  not call it.
 
 **System speaker and mixed-audio contract:**
 
@@ -226,7 +234,7 @@ left/right AY) + framebuffer + serial + register state → host (native window o
 | Memory map + soft switches | Shipped | `vm.h` `MM_*`; the shared contract, including stable read-mapping identity, side-effect-free mapped inspection, and ROM-visibility queries. |
 | Text / lo-res / hi-res video | Shipped | `badgervmpal`; color/fringe logic shared with hosts. |
 | Keyboard + ACIA serial | Shipped | `$C000`/`$C010`; `PS2Keyboard`, `acia`. |
-| VIA1 + bit-banged SPI micro-SD | Shipped | `via` + `MockMicroSD`. |
+| VIA1 + bit-banged SPI micro-SD | Shipped | `via` + `MockMicroSD`; `SDCard::ResetInterface()` gives a power-on SPI state with the card's contents kept (`web/test_embed.cjs` restarts the page's machine during a file load and the ROM mounts the card again). |
 | 65C22 timer reset/release | Shipped | Retained timer storage, independent counting/event arming, quiet unarmed wraps, and synthetic cold 6502 detection probes covered by native VIA tests and `web/test_mockingboard.cjs`; timing limits are stated above. |
 | Two serial SNES gamepads on VIA1 | Shipped | Shared native/WASM peripheral; latch/clock, active-low data, reset, and two-pad scans covered by MSTest. |
 | `$C030` system speaker + VM audio mixer | Shipped | Any read/write toggles the mono latch; centered PCM mixes with both AY channels; covered by native and WASM tests. |
@@ -235,3 +243,4 @@ left/right AY) + framebuffer + serial + register state → host (native window o
 | Bounded, validated WOZ2 input | Implemented | Shared snapshot-based parser validation and cleanup, 8 MiB limit, and explicit unsupported-format rejection. `WozFileTests` covers the native reader; `web/test_woz_validation.cjs` exercises malformed containers and recovery through the actual WASM bridge. |
 | Disk II motor spin-up | Known gap | `DriveEmulator` returns no data for `ONE_SECOND` after motor-on once the motor has stopped (a real drive's latch changes as soon as it turns). Apple Pascal's BIOS spin check then fails with error 9 when more than a second passes between accesses; found while porting Wizardry I (`docs/porting-logs/wizardry-i.md`), not changed. |
 | Branch cycle counts | Known gap | `ReadByAddressMode` adds a cycle for every `PC_Relative` operand, so a branch not taken counts 3 cycles (65C02: 2). `BranchOnFlag`'s page test adds the *unsigned* offset, so most taken backward branches count 4 (65C02: 3, or 4 across a page). A `DEX`/`BNE` delay loop runs ~20% long in the emulator (256 iterations: 1,537 cycles, not 1,281), and emulator-measured cycle budgets carry this. Found while porting Dirt Bike (`docs/porting-logs/dirt-bike.md`), not changed. |
+| SD card after a warm reset | Known gap | `SDCard` does not resynchronize its command framing on chip select, so a warm reset (CPU reset only, as in the native hosts) during a sector transfer leaves the ROM unable to mount the card until the host resets the card's interface. The web page avoids it by calling `ResetInterface()` at each power-on. Found while putting Dirt Bike on the web card; the framing itself is not changed. |

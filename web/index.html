@@ -376,8 +376,11 @@
     maps up to two USB/Bluetooth gamepads through the real SNES/VIA interface, and emulates both
     the $C030 system speaker and 3RIC slot-4 dual-AY Mockingboard.
     Click the screen and type, open the <strong>Virtual Keyboard</strong> on a phone, or pair a controller and press a button. &ldquo;Boot Disk&rdquo; boots the bundled 5.25&Prime; floppy (or pick a .woz with
-    &ldquo;Insert&rdquo;) through the Disk&nbsp;II ROM at $C600. &ldquo;Mount SD&rdquo; enters the DOS shell
-    (prompt &ldquo;&gt;&rdquo;) and lists the micro-SD card &mdash; load games and programs from there.
+    &ldquo;Insert&rdquo;) through the Disk&nbsp;II ROM at $C600. The machine starts with its micro-SD card
+    inserted, at the ROM&rsquo;s DOS prompt (&ldquo;&gt;&rdquo;); &ldquo;Mount SD&rdquo; restarts it that way and
+    lists the card. The card holds <strong>Dirt Bike</strong>: type <code>CD&nbsp;DIRTBIKE</code>, then
+    <code>BRUN&nbsp;DIRTBIKE.PRG&nbsp;0800</code>, or open the page with
+    <a href="?brun=DIRTBIKE/DIRTBIKE.PRG"><code>?brun=DIRTBIKE/DIRTBIKE.PRG</code></a> to start it directly.
     &ldquo;Load .PRG&rdquo; loads a raw program image at the given hex address and runs it, exactly like
     <code>BRUN FILE.PRG&nbsp;&lt;addr&gt;</code> on the hardware (or deep-link one with
     <code>?prg=programs/hello.prg&amp;org=0800</code>).
@@ -404,6 +407,14 @@
     &mdash; the same TTS brief, independent model implementations, software worth keeping.
     <br />Enjoying 3RIC Studio? <a href="https://github.com/sponsors/ebadger" target="_blank" rel="noopener noreferrer">&#9749; Support the project</a>
     &mdash; sponsorship funds parts, boards, and more build videos.
+    <br />Dirt Bike is by Arnaud Verhille
+    (<a href="https://github.com/habib256/pom2games" target="_blank" rel="noopener noreferrer">habib256</a>)
+    and is free software under the
+    <a href="https://github.com/ebadger/3ric/blob/main/emulator/Data/sd-card/DIRTBIKE/LICENSE.TXT" target="_blank" rel="noopener noreferrer">GNU GPL v3</a>,
+    with no warranty. The copy on the SD card was modified for 3RIC on 2026-10-22: it loads through the ROM
+    DOS, plays on SNES pads and runs at Apple&nbsp;II speed. Source:
+    <a href="https://github.com/habib256/pom2games/tree/8140d9ffca77b366ce8e952171c3e8294e574514" target="_blank" rel="noopener noreferrer">the game (commit 8140d9f)</a>
+    and <a href="https://github.com/ebadger/3ric/blob/main/emulator/Data/sd-card/README.md" target="_blank" rel="noopener noreferrer">the 3RIC changes</a>.
   </footer>
 
   <script src="emulation-clock.js"></script>
@@ -444,6 +455,7 @@
     let sdLoading = null;
     let demoDisk = null;
     let activeDisk = null;
+    let sdLaunch = null;
     let maxWozFileSize = 0;
     let initialLoading = true;
     let audioContext = null;
@@ -497,7 +509,7 @@
     updateFullscreenButton();
 
     // Optional CDN/R2 offload for the large static assets (the .wasm binary and
-    // everything under data/, especially the ~11.5MB SD image). Leave ASSET_BASE
+    // everything under data/). Leave ASSET_BASE
     // empty to serve them from this same origin (e.g. the Raspberry Pi). To take
     // the heavy files off your home uplink, upload badger6502.wasm and the data/
     // folder to a Cloudflare R2 bucket (free tier, zero egress) preserving paths,
@@ -511,7 +523,7 @@
       window.ASSET_BASE || ""
     ).replace(/\/+$/, "");
 
-    // Resolve an asset path (e.g. "data/sd.sparse" or "badger6502.wasm") against
+    // Resolve an asset path (e.g. "data/sd.v2.sparse" or "badger6502.wasm") against
     // ASSET_BASE, falling back to this origin when ASSET_BASE is empty.
     function assetUrl(path) {
       return ASSET_BASE ? `${ASSET_BASE}/${path}` : path;
@@ -582,13 +594,22 @@
 
     // Fetch + load the sparse micro-SD image once. The card persists across CPU
     // resets (it lives in the bridge, not the VM), so this only runs a single
-    // time. ~11.5MB, so it is loaded lazily on first "Mount SD" rather than at
-    // boot. Returns true when the image is available.
+    // time. The ROM mounts a card only at reset, so the workbench loads it
+    // (~130KB) before the first power-on; embeds load it only for ?brun=.
+    // Returns true when the image is available. The name changes with the
+    // card's contents: web/Caddyfile caches data/ files for a year.
     function ensureSD() {
       if (sdLoaded) return Promise.resolve(true);
       if (!sdLoading) {
-        sdLoading = fetchBytes("data/sd.sparse")
-          .then((bytes) => { sdLoaded = vm.loadSD(bytes); return sdLoaded; })
+        sdLoading = fetchBytes("data/sd.v2.sparse")
+          .then((bytes) => {
+            sdLoaded = vm.loadSD(bytes);
+            if (!sdLoaded) {            // a rejected image is retried, like a failed fetch
+              console.error(new Error("the SD card image was rejected"));
+              sdLoading = null;
+            }
+            return sdLoaded;
+          })
           .catch((err) => { console.error(err); sdLoading = null; return false; });
       }
       return sdLoading;
@@ -924,20 +945,29 @@
       requestAnimationFrame(frame);
     }
 
-    async function loadRom() {
+    async function fetchRom() {
       // Fetch the ROM + font once, then reuse the cached bytes so Reset and Boot
       // Disk re-seed the machine instantly (no re-download).
-      if (!loadRom.cache) {
+      if (!fetchRom.cache) {
         const [rom, font] = await Promise.all([
           fetchBytes("data/badger6502.bin"),
           fetchBytes("data/fontrom.dat"),
         ]);
-        loadRom.cache = { rom, font };
+        fetchRom.cache = { rom, font };
       }
-      const { rom, font } = loadRom.cache;
+      return fetchRom.cache;
+    }
+
+    async function loadRom() {
+      const { rom, font } = await fetchRom();
       vm.loadData(0x0000, rom.subarray(0, 0x10000)); // first 64KB -> address space
       vm.seedBasicRom();
       vm.loadFont(font);
+      // Re-seeding memory makes this a power-on, so the SD card's interface
+      // starts afresh too (its contents stay): a reset alone would leave a
+      // sector transfer the guest was in the middle of, and the ROM's mount at
+      // reset would fail. Older WASM builds lack the call.
+      if (vm.resetSD) vm.resetSD();
       vm.reset();
       emulationClock.reset();
       clearAudioQueue();
@@ -988,6 +1018,33 @@
       statusEl.textContent = "loading disk\u2026";
       const bytes = await fetchBytesUrl(url.href, { maxBytes: maxWozFileSize });
       await bootDisk(bytes, url.pathname.split("/").pop() || "disk");
+    }
+
+    // ?brun=FOLDER/FILE.PRG[&org=0800]: run a program from the micro-SD card
+    // through the ROM's own DOS, typed as a user would: restart with the card
+    // inserted (the ROM mounts it at reset and starts its DOS), CD into each
+    // folder, then BRUN at the address (default $0800).
+    const SD_NAME = /^[A-Z0-9_~-]{1,8}(\.[A-Z0-9_~-]{1,3})?$/;
+    function sdBrunCommands(value, org) {
+      const parts = value.trim().toUpperCase().split("/");
+      if (!parts.every((part) => SD_NAME.test(part))) {
+        throw new Error("?brun= needs an 8.3 path on the SD card, e.g. DIRTBIKE/DIRTBIKE.PRG");
+      }
+      const file = parts.pop();
+      return parts.map((dir) => `CD ${dir}\r`).join("") + `BRUN ${file} ${hex(org, 4)}\r`;
+    }
+
+    async function brunFromSD(value, org) {
+      const commands = sdBrunCommands(value, org);
+      sdLaunch = { value, org };
+      statusEl.textContent = "loading SD card\u2026";
+      if (!await ensureSD()) throw new Error("the SD card image did not load");
+      inputQueue.length = 0;
+      await loadRom();
+      initializeRom();
+      typeString(commands);
+      statusEl.textContent = `BRUN ${value.trim().toUpperCase()} from the SD card\u2026`;
+      focusScreen();
     }
 
     // Load a raw .PRG image at `org` and jump to it — the in-browser equivalent
@@ -1554,12 +1611,12 @@
         } catch (e) { setOut("could not load sample: " + e, "err"); }
       });
 
-      // Disk/raw-image launch targets take precedence over editor auto-run.
+      // Disk/raw-image/SD-card launch targets take precedence over editor auto-run.
       // Editor content precedence: ?code= (inline source) > ?src=<url> (file) >
       // your saved source > STAR SWARM. A ?code=/?src= link auto-runs and shows the
       // remix banner so a visitor knows they can edit it and re-share their version.
       const params0 = new URLSearchParams(location.search);
-      const imageLaunch = params0.has("woz") || params0.has("prg");
+      const imageLaunch = params0.has("woz") || params0.has("prg") || params0.has("brun");
       const showRemix = () => {
         remixEl.textContent = "\uD83D\uDD00 You opened a shared program \u2014 edit it, then hit Share to pass your version on.";
         remixEl.classList.add("show");
@@ -1628,6 +1685,9 @@
       imageData = ctx.createImageData(vm.frameWidth(), vm.frameHeight());
 
       statusEl.textContent = "loading ROM\u2026";
+      // Power on with the micro-SD card inserted, as on the board: the ROM
+      // mounts a card only at reset. A card that fails to load is not fatal.
+      if (!embedded || launchParams.has("brun")) await Promise.all([ensureSD(), fetchRom()]);
       await loadRom();
       statusEl.textContent = "running";
       focusScreen();
@@ -1664,6 +1724,8 @@
             await bootDisk(activeDisk.bytes, activeDisk.label);
           } else if (embedded && launchParams.has("woz")) {
             await loadWozUrl(launchParams.get("woz"));
+          } else if (embedded && sdLaunch) {
+            await brunFromSD(sdLaunch.value, sdLaunch.org);
           } else {
             inputQueue.length = 0;
             await loadRom();
@@ -1678,23 +1740,21 @@
         }
       });
 
-      // Mount the micro-SD card and drop into the ROM's DOS shell. "EC5CG" is
-      // the monitor's Go command pointed at $EC5C (the `dos` routine), which
-      // mounts the FAT32 card (fat32_start) and shows the ">" prompt; the
-      // trailing DIR lists the root directory. From there: CAT, CD <dir>,
-      // BLOAD/BRUN <file>, etc.
+      // Mount the micro-SD card the way the board does: the ROM mounts a card
+      // only at reset, then starts its DOS shell (">" prompt). So restart with
+      // the card inserted and list the root directory. From there: CD <dir>,
+      // BRUN <file> <addr>, CAT <file>, etc.
       document.getElementById("mountsd").addEventListener("click", async () => {
         statusEl.textContent = "loading SD image\u2026";
         const ok = await ensureSD();
         if (!ok) { statusEl.textContent = "SD image unavailable (run build.ps1)"; return; }
         inputQueue.length = 0;
-        typeString("EC5CG\rDIR\r");
+        await loadRom();
+        initializeRom();
+        typeString("DIR\r");
         statusEl.textContent = "SD mounted \u2014 DOS shell";
         canvas.focus();
       });
-
-      // Warm the SD image in the background so the first "Mount SD" is instant.
-      if (!embedded) ensureSD();
 
       // Boot the bundled demo floppy (data/disk.woz, staged by build.ps1).
       document.getElementById("bootdisk").addEventListener("click", async () => {
@@ -1774,11 +1834,18 @@
             statusEl.textContent = ".PRG load failed: " + error.message;
             console.error(error);
           }
+        } else if (launchParams.has("brun")) {
+          try {
+            await brunFromSD(launchParams.get("brun"), parseAddr(launchParams.get("org"), 0x0800));
+          } catch (error) {
+            statusEl.textContent = "SD launch failed: " + error.message;
+            console.error(error);
+          }
         }
 
         // Embeds only initialize the hidden editor for an explicit source launch.
         if (!embedded || (!launchParams.has("woz") && !launchParams.has("prg") &&
-            (launchParams.get("code") || launchParams.get("src")))) {
+            !launchParams.has("brun") && (launchParams.get("code") || launchParams.get("src")))) {
           await wireEditor();
         }
         if (!embedded && location.hash === "#ide") {

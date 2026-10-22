@@ -14,15 +14,16 @@
 #
 #   caddy run --config Caddyfile
 #
-# Caching strategy (this is what keeps the ~11.5MB SD image off your uplink):
+# Caching strategy (this keeps the data blobs, the ROM and the SD card, off your uplink):
 #   - index.html  -> no-cache, so a rebuild is picked up immediately.
 #   - *.wasm/*.js -> 1 day; these are small and change on every rebuild.
-#   - /data/*     -> 1 year, immutable. The ROM, font, disk.woz and sd.sparse are
+#   - /data/*     -> 1 year, immutable. The ROM, font, disk.woz and sd.v2.sparse are
 #     static content blobs, so caching them hard lets the browser AND Cloudflare's
 #     edge serve repeat downloads — your Pi then uploads each file about once per
 #     edge location per TTL, not once per visitor. If you ever change a data blob
-#     (e.g. regenerate sd.sparse with new SD contents) give it a NEW filename
-#     (sd.v2.sparse) and update the fetch path, or cached copies linger for a year.
+#     (e.g. regenerate the SD card with new contents) give it a NEW filename
+#     (sd.v2.sparse -> sd.v3.sparse) and update the fetch path, or cached copies
+#     linger for a year.
 #
 # The browser cache below only helps *repeat* visitors. The real ISP-upload saver
 # is Cloudflare's edge cache, and a ".sparse" file is NOT edge-cached by default:
@@ -42,7 +43,7 @@
 	@build path *.wasm *.js
 	header @build Cache-Control "public, max-age=86400"
 
-	# Static data blobs (ROM, font, disk.woz, the ~11.5MB sd.sparse): immutable
+	# Static data blobs (ROM, font, disk.woz, the ~130KB sd.v2.sparse): immutable
 	# content cached for a year so the browser/edge serve repeats and spare the
 	# Pi's uplink. Rename the file to bust this if its contents ever change.
 	@data path /data/*
