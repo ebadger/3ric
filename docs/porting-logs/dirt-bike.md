@@ -232,9 +232,23 @@ Manual emulator play also showed the title, the track menu, crashes and the
   average ~735 cycles: the paddle read every other frame, reused by that frame's
   button read, 12 bits clocked. That stands in for the Apple's paddle loop (~740 for
   a centred stick, longer off-centre) and is scaled with the frame.
-- The ROM DOS's `OWRITE` falls back to `BSAVE` in the BASIC bank for a missing file.
-  The game's read-first save avoids this, but a card that loses `DIRTHOF` mid-game
-  only stops saving. Card contents are otherwise trusted: copy the whole folder.
+- Card contents are trusted (review-panel findings; the owner's decision, as for the
+  earlier ports):
+  - A load is checked only by the file's 4-byte DOS header, so a truncated or
+    corrupted file with an intact header is accepted (a truncated `TITLE` would run
+    stale memory).
+  - Hall-of-fame writes are not read back: a failed `OWRITE` reaches the game as
+    success. The game's save reads `DIRTHOF` first, but if the file vanished between
+    that read and the write, the ROM's `OWRITE` would fall into `BSAVE` code in the
+    BASIC bank, which is RAM while the game runs.
+  - The converter keeps any existing `DIRTHOF` without checking it.
+
+  Copy the whole folder and don't edit its files.
+- Pad keys and the keyboard: a PS/2 key decoded between the resident's latch check
+  and its store (two instructions) is overwritten by a Start/Select key, as in
+  Ultima II. A second Start/Select press while the first is still waiting replaces it.
+- The ROM's own F-key hotkeys (`@handlef7`-`@handlef12` video page/mode, `@handlef1`
+  font; gated by the key-state entry `$CB77`) act during the game, as in any program.
 - `DIRTHOF` writes are one 512-byte card sector, so any cluster size works.
 - Reserved while the game runs: `$B704-$BF4B` (resident), the slot-4 Mockingboard's
   first VIA Timer 1 (pacing), VIA1 port B (pads). `$C800-$CFFF` remains ROM state.
