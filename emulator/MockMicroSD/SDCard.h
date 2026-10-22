@@ -15,6 +15,11 @@ public:
 	void SetMOSI(bool high);
 	void SetSCK(bool high);
 	bool GetMISO();
+	// Power-on state of the card's SPI interface: a command or transfer in
+	// progress is dropped; the image, and everything written to it, is kept.
+	// A CPU reset leaves the card as it was, as on the board; the web page
+	// calls this when it powers the machine on again (web_bridge resetSD).
+	void ResetInterface();
 #if defined(__EMSCRIPTEN__)
 	// Number of sector reads/writes issued by the guest (CMD17/CMD24). Lets the
 	// web test prove the ROM's FAT32 driver actually touched the SD image.

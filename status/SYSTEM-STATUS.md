@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-22 — ebadger (via Copilot)_
+_Last updated: 2026-10-22 — ebadger (via Copilot): Dirt Bike is the SD card; `?brun=` link_
 
 ---
 
@@ -16,7 +16,7 @@ _Last updated: 2026-10-22 — ebadger (via Copilot)_
 | Dev (native emulator) | Windows + Visual Studio 2022 | — | Open `emulator/Badger6502VM.sln`; run the `Console` or WinUI host. |
 | Dev (WASM, local) | emsdk 6.0.1 + Node + Python 3 | `http://localhost:8011/index.html` | `web/build.ps1` then `web/serve.ps1`. |
 | Production | GitHub Pages (static) | <https://ebadger.github.io/3ric/> | 100% client-side; deployed by `.github/workflows/deploy-pages.yml` on push to `main`. |
-| Production (optional self-host) | Raspberry Pi + Cloudflare Tunnel / R2 | — | `web/Caddyfile`; `ASSET_BASE` offloads the heavy `sd.sparse`/`.wasm`. See `web/README.md`. |
+| Production (optional self-host) | Raspberry Pi + Cloudflare Tunnel / R2 | — | `web/Caddyfile`; `ASSET_BASE` offloads the `.wasm` and `data/` (ROM, font, `sd.v2.sparse`). See `web/README.md`. |
 
 ## How to run it (dev)
 
@@ -48,7 +48,7 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node codegen/tools/hackaday.test.mjs # Built from Bits scenes, music, timing, controls, WOZ boot
 & $node web/test_hackaday_page.cjs      # showcase page, source links, and committed preview
 & $node web/test_boot.cjs                # ROM boots, sane PC, video RAM written
-& $node web\test_embed.cjs              # iframe player, real URL disk boot/restart, fullscreen state, errors
+& $node web\test_embed.cjs              # iframe player, real URL disk boot/restart, fullscreen state, errors; SD power-on, ?brun=, Mount SD
 & $node web\test_woz_validation.cjs     # native-parser bounds/CRC/formats, 8 MiB boundary, safe recovery
 & $node web/test_render.cjs              # framebuffer has lit pixels
 & $node web/test_keyboard.cjs            # monitor echoes typed commands
@@ -66,7 +66,8 @@ $node = "C:\Users\ebadger\emsdk\node\22.16.0_64bit\bin\node.exe"
 & $node codegen\tools\sunsling.test.mjs   # SUNSLING duel, dual input, timing, monitor exit, WOZ boot
 & $node codegen\tools\pulsar.test.mjs    # PULSAR DUEL orbits, curved torpedoes, XOR draw/erase, pads
 & $node web/test_debugger.cjs            # breakpoints, stepping, source map, ROM debug lookup
-& $node web/test_sd.cjs                  # mount SD + DIR lists the FAT32 root
+& $node web/test_sd.cjs                  # shipped SD card: mount at reset, DIR, BSAVE/BLOAD/DEL, BRUN Dirt Bike to its title
+& $node codegen/tools/make-sd-card.test.mjs # the card = Dirt Bike release + converter patches + committed glue (DIRTBIKE_DSK = byte-for-byte rebuild)
 & $node web/test_disk.cjs                # boot a WOZ floppy via C600G into a hi-res title
 & $node web/test_woz_download.cjs        # Disk II boots, overlap-safe images through 34,560 bytes, size guards
 & $node codegen\tools\port-ultima5.test.mjs # Ultima V shim, pads and music (set U5_DISKS to also boot the real disks)
@@ -161,9 +162,11 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   Q/Esc preserves the ROM text window and returns to a usable visible monitor.
   Source/export links ending in `#ide` focus and reveal the editor after loading,
   including on phones; ordinary Run links retain emulator focus.
-- **Emulator:** boots the unmodified 512 KB ROM to the monitor; text/lo-res/hi-res color
+- **Emulator:** boots the unmodified 512 KB ROM to the DOS shell (`MON` reaches the
+  monitor); text/lo-res/hi-res color
   video; keyboard; two serial SNES pads; ACIA serial; Disk II WOZ boot; micro-SD FAT32 DOS
-  shell; `$C030` system speaker centered into the slot-4 dual-AY Mockingboard stereo stream
+  shell (the page powers on with the card; each page power-on also resets the card's SPI
+  interface, so a restart mid-load still mounts it); `$C030` system speaker centered into the slot-4 dual-AY Mockingboard stereo stream
   at the hardware's 1.5734375 MHz clock; adjustable CPU clock. The browser maps standard
   USB/Bluetooth controllers through the SNES/VIA path. Shared VM core runs identically on
   Windows and in the browser. VIA timers count after reset release without being programmed;
@@ -180,6 +183,8 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   Fullscreen and sound still need a visitor gesture; the iframe must delegate
   fullscreen/autoplay/gamepad permissions. Copyable embed/full-viewport examples
   are in `web/README.md`. Without `embed=1`, the normal workbench remains available.
+  `?brun=FOLDER/FILE.PRG` (workbench or embed) runs a program from the SD card through
+  the ROM DOS (`CD`, then `BRUN`); an embedded **Restart** runs it again.
 - **In-browser assembler:** assembles 65C02 source client-side with the project's own
   `asm6502.mjs` and runs it like `BRUN`; ships ~11 sample programs; deep-linkable via `?src=`.
   Exports the assembled program as a raw **.PRG** or a bootable **.woz** disk image
@@ -293,10 +298,22 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   checks. WASM play reached the castle, a tavern roster write and the maze; no board
   trial yet. Game data stays local. See
   [`docs/porting-logs/wizardry-i.md`](../docs/porting-logs/wizardry-i.md).
-- **Dirt Bike (SD-card port, experimental):** `node codegen\tools\port-dirtbike.mjs <DIRTBIKE.dsk> <out>`
-  turns the owner's DOS 3.3 disk (Verhille Arnaud's Apple II motocross time trial) into
-  a `DIRTBIKE\` folder. Copy it to the card, then `CD DIRTBIKE` and
-  `BRUN DIRTBIKE.PRG 0800`. Game data stays local. The game read its own raw sectors
+- **Dirt Bike (SD-card port, experimental; on the web page):** play it at
+  <https://ebadger.github.io/3ric/?brun=DIRTBIKE/DIRTBIKE.PRG>. Since 2026-10-22 the
+  emulators' micro-SD card (`emulator/Data/sd.zip`, web `data/sd.v2.sparse`) holds only
+  the `DIRTBIKE\` folder, built from the upstream release disk
+  (`node codegen\tools\make-sd-card.mjs <DIRTBIKE.dsk>`); the ~100 game PRGs on the old
+  card are gone (owner's decision). Dirt Bike is Arnaud Verhille's free software (GNU
+  GPL v3); the card carries `README.TXT` and `LICENSE.TXT`, the page footer credits it,
+  and `emulator/Data/sd-card/README.md` gives the licence, the modification notice and
+  the corresponding source (upstream commit `8140d9ffca77` + this repo's converter). The
+  workbench powers on with the card mounted, so `CD DIRTBIKE`, then
+  `BRUN DIRTBIKE.PRG 0800` also works at the first `>` prompt; `?brun=` types exactly
+  that. The WinUI host keeps its earlier copy of `sd.001` in its local data folder until
+  that copy is deleted.
+  `node codegen\tools\port-dirtbike.mjs <DIRTBIKE.dsk> <out>` still writes the folder for
+  a physical card: copy it to the card, then `CD DIRTBIKE` and
+  `BRUN DIRTBIKE.PRG 0800`. The game read its own raw sectors
   through RWTS; each card file holds those sectors, and the resident turns its loads and
   hall-of-fame saves into `FLOAD`/`OWRITE` (records and the input setting persist in
   `DIRTHOF`; the converter keeps an existing one). It runs at Apple II speed: race frames
@@ -314,6 +331,10 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   most taken backward branches as 4 (the chip: 2 and 3). Delay loops therefore run ~20%
   long in the emulator, and emulator-measured cycle budgets include this (recorded in
   `EMULATOR.md`; found while porting Dirt Bike; not changed).
+- **SD warm-reset gap:** the emulated SD card does not resynchronize on chip select, so a
+  CPU-only reset during a sector transfer leaves the ROM unable to mount it. The web page
+  resets the card's interface at every power-on; the native hosts' Reset does not
+  (recorded in `EMULATOR.md`; not changed for warm resets).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**

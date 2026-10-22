@@ -25,7 +25,7 @@ below as working on the physical machine.
 | [Ultima III](ultima-iii.md) (2026-10-15) | When a game checksums its loader, keep the loader and replace the layer under it; move whole files on the first sector call | Converter, glue and synthetic RWTS test; WASM play of the original disks through set-up, creation, world, castle, combat, dungeon and save/resume with retimed music, plus SNES pad input; board: music confirmed working on a later run, gamepad untried |
 | [Adventure](adventure.md) (2026-10-08) | Relocate 3ric's MSBASIC (`+$4000`) into Language Card RAM above DOS 3.3, bridge Applesoft tokens/boolean/formatting semantics, and fix the 1977 KIM-1 `FMULT` bug (`ROR RESULT+2`) | Reproducible DSK/WOZ patcher verified in WASM across cold boot, `CHAIN`, hi-res title, underground traversal, bird capture, `POP`, `SCORE`, `SAVE`, and NMI bank preservation; physical-board confirmation remains open |
 | [Wizardry I](wizardry-i.md) (2026-10-16) | An Apple Pascal game ports at the BIOS block interface: one combined volume, direct ROM sector I/O through a cluster table, and the empty language card it maps on purpose needs the resident's vectors | Converter, glue, synthetic-volume tests on three cluster layouts, native PS/2 test; WASM play from title through castle, tavern write and maze entry; no board trial yet |
-| [Dirt Bike](dirt-bike.md) (2026-10-22) | A game that reads raw sectors through its own T/S tables ports as raw-sector card files behind `FLOAD`/`OWRITE`, checked by their DOS header; Apple II speed comes back by pacing each frame's measured work on the Mockingboard's Timer 1 and retiming the speaker loops and `WAIT`s | Converter, loader and resident tests on synthetic files (loads, a missing file, hall-of-fame round trip, pads, timing); real-disk WASM play of the title, a pad race at Apple II speed (300 frames within 0.5%), the menu setting saved across a re-run and a staged record with initials; no board trial yet |
+| [Dirt Bike](dirt-bike.md) (2026-10-22) | A game that reads raw sectors through its own T/S tables ports as raw-sector card files behind `FLOAD`/`OWRITE`, checked by their DOS header; Apple II speed comes back by pacing each frame's measured work on the Mockingboard's Timer 1 and retiming the speaker loops and `WAIT`s | Converter, loader and resident tests on synthetic files (loads, a missing file, hall-of-fame round trip, pads, timing); real-disk WASM play of the title, a pad race at Apple II speed (300 frames within 0.5%), the menu setting saved across a re-run and a staged record with initials; no board trial yet. Since 2026-10-22 it is the emulators' SD card, playable on the web page (`?brun=DIRTBIKE/DIRTBIKE.PRG`) |
 
 ## Scope and evidence
 
@@ -38,11 +38,14 @@ tests, and successful browser input is not proof of a physical PS/2 exchange.
 The games and patched images were owner-supplied/local artifacts. No game bytes,
 disk images, commercial assets, replacement firmware, or private diagnostic media
 are included or offered for download here. Short instruction changes describe the
-engineering intervention, not a redistribution of the games.
+engineering intervention, not a redistribution of the games. One exception, outside
+this directory: Dirt Bike is free software (GNU GPL v3), and since 2026-10-22 its
+3RIC build is the emulators' micro-SD card (`emulator/Data/sd.zip`), with its licence,
+notice and source pointers in `emulator/Data/sd-card/`.
 
 Historical patchers and runbooks named in the four September logs are **not present
 in this checkout**. The newer Archon, Ultima V, Ultima I, Ultima II, Ultima III, Wizardry I and Dirt Bike experiments include their own
-converters and tests, but none of the original or converted game data. Local commit IDs identify retained development history;
+converters and tests, but none of the original or converted game data (apart from Dirt Bike's card, above). Local commit IDs identify retained development history;
 they may not be reachable from `origin` or available in a fresh clone. They are
 intentionally not GitHub commit links. The offsets, transformations, hashes, and
 evidence in each log remain useful without those tools.

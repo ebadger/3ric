@@ -1,8 +1,11 @@
-// Build a small FAT32 micro-SD image in the web emulator's sparse format.
+// Build a small FAT32 micro-SD image from a folder tree, and read one back.
 //
-// Test-only helper: lets the headless harness boot a generated folder tree
-// through the real ROM DOS and SPI SD emulation. Layout mirrors the shipped
-// card: MBR, one type-0x0C partition at LBA 2048, 512-byte clusters, 2 FATs.
+// buildSparseFat32 returns the web emulator's sparse "SDSP" format, so the
+// headless harness can boot a generated folder tree through the real ROM DOS
+// and SPI SD emulation. buildFat32Image returns the same card as a raw image:
+// make-sd-card.mjs builds the card the emulators ship with from it. Layout:
+// MBR, one type-0x0C partition at LBA 2048, 512-byte clusters, 2 FATs, the
+// root directory at cluster 2. The output is deterministic (no timestamps).
 // Names must already be FAT 8.3 (upper case, NAME or NAME.EXT).
 // Test options for other card layouts: sectorsPerCluster (a power of two;
 // larger clusters need a larger totalSectors to stay FAT32) and fragment, a
@@ -22,7 +25,70 @@ function shortName(name) {
 }
 
 /** tree: { NAME: Uint8Array | tree }. Returns the "SDSP" sparse image bytes. */
-export function buildSparseFat32(tree, { totalSectors = 131072, label = "3RIC U5", sectorsPerCluster = 1, fragment = [], reservedBits = [] } = {}) {
+export function buildSparseFat32(tree, opts) {
+  const { sectors, totalSectors } = layoutFat32(tree, opts);
+  const lbas = [...sectors.keys()].sort((a, b) => a - b);
+  const out = new Uint8Array(16 + lbas.length * (4 + SEC));
+  const dv = new DataView(out.buffer);
+  out.set(Buffer.from("SDSP"), 0);
+  dv.setUint32(4, SEC, true); dv.setUint32(8, totalSectors, true); dv.setUint32(12, lbas.length, true);
+  lbas.forEach((lba, i) => { dv.setUint32(16 + i * (4 + SEC), lba, true); out.set(sectors.get(lba), 20 + i * (4 + SEC)); });
+  return out;
+}
+
+/** The same card as a raw image: totalSectors * 512 bytes. */
+export function buildFat32Image(tree, opts) {
+  const { sectors, totalSectors } = layoutFat32(tree, opts);
+  const image = new Uint8Array(totalSectors * SEC);
+  for (const [lba, s] of sectors) image.set(s, lba * SEC);
+  return image;
+}
+
+/** Read a raw FAT32 card image (MBR, first partition): the volume label, the
+ *  geometry and the tree ({ NAME: Uint8Array | tree } in directory order;
+ *  the volume label, ".", "..", long names and deleted entries are skipped). */
+export function readFat32(image) {
+  const dv = new DataView(image.buffer, image.byteOffset, image.byteLength);
+  if (dv.getUint16(510, true) !== 0xaa55) throw new Error("no MBR signature");
+  const part = dv.getUint32(0x1be + 8, true), bs = part * SEC;
+  if (dv.getUint16(bs + 510, true) !== 0xaa55 || dv.getUint16(bs + 11, true) !== SEC) throw new Error("no FAT boot sector");
+  const spc = image[bs + 13], fats = image[bs + 16], fatSectors = dv.getUint32(bs + 36, true);
+  const rootCluster = dv.getUint32(bs + 44, true);
+  const fatLba = part + dv.getUint16(bs + 14, true), dataLba = fatLba + fats * fatSectors;
+  const next = (c) => dv.getUint32(fatLba * SEC + c * 4, true) & 0x0fffffff;
+  const chain = (c) => {
+    const out = [];
+    for (; c >= 2 && c < 0x0ffffff8; c = next(c)) {
+      if (out.length > image.length / SEC) throw new Error("FAT chain loops");
+      out.push(c);
+    }
+    return out;
+  };
+  const read = (c, size) => {
+    const clusters = chain(c), out = new Uint8Array(clusters.length * spc * SEC);
+    clusters.forEach((cl, i) => out.set(image.subarray((dataLba + (cl - 2) * spc) * SEC, (dataLba + (cl - 1) * spc) * SEC), i * spc * SEC));
+    return size === undefined ? out : out.subarray(0, size);
+  };
+  let label = "";
+  const dir = (c) => {
+    const node = {}, bytes = read(c);
+    for (let i = 0; i < bytes.length && bytes[i] !== 0; i += 32) {
+      const e = bytes.subarray(i, i + 32), attr = e[11];
+      if (e[0] === 0xe5 || attr === 0x0f) continue;
+      const base = String.fromCharCode(...e.subarray(0, 8)).trimEnd(), ext = String.fromCharCode(...e.subarray(8, 11)).trimEnd();
+      if (attr & 0x08) { label = (base + ext).trimEnd(); continue; }
+      if (base === "." || base === "..") continue;
+      const ed = new DataView(e.buffer, e.byteOffset, 32);
+      const first = (ed.getUint16(20, true) << 16) | ed.getUint16(26, true);
+      node[ext ? `${base}.${ext}` : base] = attr & 0x10 ? dir(first) : read(first, ed.getUint32(28, true));
+    }
+    return node;
+  };
+  const tree = dir(rootCluster);
+  return { label, partLba: part, sectorsPerCluster: spc, fats, rootCluster, totalSectors: image.length / SEC, tree };
+}
+
+function layoutFat32(tree, { totalSectors = 131072, label = "3RIC U5", sectorsPerCluster = 1, fragment = [], reservedBits = [] } = {}) {
   const SPC = sectorsPerCluster, CL = SEC * SPC;
   const fragmented = new Set(fragment), reserved = new Set(reservedBits);
   const sectors = new Map();
@@ -137,12 +203,5 @@ export function buildSparseFat32(tree, { totalSectors = 131072, label = "3RIC U5
       new DataView(s.buffer).setUint32((c % 128) * 4, v, true);
     }
   }
-
-  const lbas = [...sectors.keys()].sort((a, b) => a - b);
-  const out = new Uint8Array(16 + lbas.length * (4 + SEC));
-  const dv = new DataView(out.buffer);
-  out.set(Buffer.from("SDSP"), 0);
-  dv.setUint32(4, SEC, true); dv.setUint32(8, totalSectors, true); dv.setUint32(12, lbas.length, true);
-  lbas.forEach((lba, i) => { dv.setUint32(16 + i * (4 + SEC), lba, true); out.set(sectors.get(lba), 20 + i * (4 + SEC)); });
-  return out;
+  return { sectors, totalSectors };
 }

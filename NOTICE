@@ -56,6 +56,15 @@ under the license shipped with them:
       Creative Commons Attribution-ShareAlike 4.0. See the LICENSE in that
       directory.
 
+  - emulator/Data/sd.zip (the emulators' micro-SD card image)
+      Holds Dirt Bike by Arnaud Verhille (github.com/habib256/pom2games), free
+      software under the GNU General Public License, version 3, modified for
+      3RIC on 2026-10-22. The 3RIC loader and resident (MIT,
+      codegen/patches/dirtbike/) are linked into its DIRTBIKE.PRG; the modified
+      game as a whole is distributed under the GPL v3. The licence text, the
+      notice and the corresponding source (the upstream commit and this
+      repository's converter) are in emulator/Data/sd-card/.
+
 Other vendored libraries or footprints, if added later, likewise retain their
 own licenses; add them to this section.
 

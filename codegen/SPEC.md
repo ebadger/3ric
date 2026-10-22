@@ -102,7 +102,8 @@ the ROM actually in the repo.
 
 ### 2.4 The `.PRG` on-disk format (reverse-engineered from the shipped SD image)
 
-The SD image (`emulator/Data/sd.zip` → 2 GB FAT32) contains many real programs.
+The SD image formerly shipped as `emulator/Data/sd.zip` (a 2 GB FAT32 card, replaced
+on 2026-10-22 by a card holding only Dirt Bike) contained many real programs.
 Findings from dumping actual files:
 
 - **No DOS-3.3-style 4-byte header.** A `.PRG` is a **raw memory image**: byte 0

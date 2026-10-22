@@ -83,6 +83,26 @@ void SDCard::SetCS(bool level)
 	}
 }
 
+void SDCard::ResetInterface()
+{
+	_mode = MODE_COMMAND;
+	_status = 0;
+	_bits = 0;
+	_byteIn = 0;
+	_response = 0;
+	_byteCount = 0;
+	for (uint8_t& b : _command)
+	{
+		b = 0;
+	}
+	_commandByte = 0;
+	_miso = false;
+	_mosi = false;
+	_cs = false;
+	_sector = 0;
+	_pos = 0;
+}
+
 void SDCard::SetMOSI(bool level)
 {
 	_mosi = level;

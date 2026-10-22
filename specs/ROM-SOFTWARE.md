@@ -375,10 +375,14 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     general free-RAM declaration. No ROM, VM, web bridge or hardware change.
   - **Acceptance and limits:** see [`docs/porting-logs/wizardry-i.md`](../docs/porting-logs/wizardry-i.md).
 - **Dirt Bike SD-card port:** `codegen/tools/port-dirtbike.mjs` converts the
-  owner-supplied DOS 3.3 `DIRTBIKE.dsk` (Verhille Arnaud's Apple II port; the
-  `DIRTBIKE` and `TITLE` bodies are SHA-256-checked) into a `DIRTBIKE/` folder
-  (`CD DIRTBIKE`, `BRUN DIRTBIKE.PRG 0800`). The game data stays local; the
-  repository holds the converter and glue (`codegen/patches/dirtbike/`).
+  DOS 3.3 `DIRTBIKE.dsk` (Arnaud Verhille's Apple II motocross, free software under the
+  GNU GPL v3; the `DIRTBIKE` and `TITLE` bodies are SHA-256-checked) into a `DIRTBIKE/`
+  folder (`CD DIRTBIKE`, `BRUN DIRTBIKE.PRG 0800`). Since 2026-10-22 that folder, built
+  from the upstream release disk (`habib256/pom2games` commit `8140d9ffca77`), is the
+  only content of the emulators' micro-SD card, with a `README.TXT` notice and the
+  licence (`codegen/tools/make-sd-card.mjs`; `emulator/Data/sd-card/README.md`). The
+  repository holds the converter and glue (`codegen/patches/dirtbike/`, MIT) and the
+  card; the modified game on it is distributed under the GPL v3.
   - **Loader contract:** the game reads files itself through RWTS, from track/sector
     tables in its binary, as raw sectors (DOS header included) at a page boundary.
     Each card file (`TITLE`, `T01`-`T30`, `DIRTHOF`) holds those raw data sectors.
@@ -701,7 +705,11 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   cycle budget. No ROM, VM, memory-map, platform-ref, or hardware-decoder changes are
   required.
 - **Disk & card images:** demo `.woz` (staged from `emulator/WozFileTestApp/testdata/`);
-  `emulator/Data/sd.zip` → `web/data/sd.sparse` FAT32 image (`WEB-CLIENT.md`).
+  `emulator/Data/sd.zip` → `web/data/sd.v2.sparse` FAT32 image (`WEB-CLIENT.md`). The card
+  (64 MB, one partition at LBA 2048, 512-byte clusters, 2 FATs) holds only `DIRTBIKE/`;
+  it replaced a 2 GB card of ~100 Apple II game `.PRG`s on 2026-10-22 (owner's decision).
+  The WinUI host copies `data\sd.001` into its local data folder once and keeps that copy:
+  delete it there to get the new card (`emulator/Data/sd-card/README.md`).
 
 ## Behaviour / Rules
 
@@ -793,7 +801,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Ultima II SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima2.test.mjs` drives the real loader and DOS 3.3 translator on the ROM DOS with synthetic disks (BLOAD/BRUN/BSAVE, folder switches, exact lengths, register preservation, fail-loud errors); with `U2_DISKS` it plays the original disks through title, character creation and save, the overworld and both patched space disk swaps, plus a D-pad move; SNES pads are covered on the emulated pads with the resident clocking VIA1 port B directly (12-button map on both pads, D-pad repeat after 10 ticks then every 4, pending keys kept, A/X/Y/flags preserved, 30 Hz at 2.1% CPU with no scan or paddle-timer NMIs, IRQs masked during ROM DOS commands, timer off at every error stop). Manual WASM play also covered movement, Z-stats, quit-save, dungeon entry, reloading a saved character and the demo slideshow. No physical-board trial yet; towns/dialogue, combat depth, space flight and the endgame were not played through; the game runs ~1.54x faster than on a 1.02 MHz Apple II. Known issue (shipped by owner decision): `OWRITE` gets the file length, so 4 KB map saves write one extra SD sector; saves need 512-byte clusters. |
 | Ultima III SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima3.test.mjs` reconstructs a synthetic boot image and drives the real loader/RWTS shim on the ROM DOS (whole-file loads, zero-page load, write and read-back, IOB/flag state); with `U3_DISKS` it plays the original disks through Mockingboard set-up, title, character creation, party, world, Lord British's castle, a dungeon and an autosave resume after reset, and checks the 61.5 Hz music IRQ; the gamepad tick is checked synthetically (buttons type keys, held directions repeat) and SNES Up walks the real party north. Talking, shops, Moongates, the endgame and the physical board (including pad scans alongside PS/2 typing) are open; ROM DOS command failures are not detected (card contents trusted); loads run ~2 KB/s in the emulator (boot ~30 s). |
 | Wizardry I SD-card port | Experimental / emulator-verified | `codegen/tools/port-wizardry1.test.mjs` drives the real loader/resident/shim on the ROM DOS with a synthetic volume on 1-, 8-(fragmented) and 64-sector-cluster cards (reads, writes, errors 8/9/16, NMIs and bank restore, loader refusals), and with `WIZ1_DISKS` plays the original disks from `BRUN` to the training grounds; `port-wizardry1.native.ps1` passes the native PS/2 harness. Manual WASM play reached the tavern (roster write) and the maze. No board trial; combat, deeper levels and a reload after reboot are unverified. Depends on fingerprinted ROM SD/FAT32 internals. |
-| Dirt Bike SD-card port | Experimental / emulator-verified | `codegen/tools/port-dirtbike.test.mjs` drives the real loader and resident on the ROM DOS with synthetic files: loads by T/S list, a missing file (carry set; a full RAM diff shows nothing written outside the destination), the hall-of-fame write/read-back, both pads, tone/`WAIT`/frame pacing against Apple-style references and the quit to `dos`. With `DIRTBIKE_DSK`, the original disk plays the title, a pad race at Apple II speed (300 frames within 0.5% of an unpaced build's Apple time), the menu's saved input setting across a re-run, and a staged record with initials. No board trial; pads, the no-Mockingboard fallback and a full race are unverified. |
+| Dirt Bike SD-card port | Experimental / emulator-verified | `codegen/tools/port-dirtbike.test.mjs` drives the real loader and resident on the ROM DOS with synthetic files: loads by T/S list, a missing file (carry set; a full RAM diff shows nothing written outside the destination), the hall-of-fame write/read-back, both pads, tone/`WAIT`/frame pacing against Apple-style references and the quit to `dos`. With `DIRTBIKE_DSK`, the original disk plays the title, a pad race at Apple II speed (300 frames within 0.5% of an unpaced build's Apple time), the menu's saved input setting across a re-run, and a staged record with initials. No board trial; pads, the no-Mockingboard fallback and a full race are unverified. The shipped card (`emulator/Data/sd.zip`) carries the port: `codegen/tools/make-sd-card.test.mjs` checks it is the upstream release plus exactly these patches, built by the committed loader and resident (and, with `DIRTBIKE_DSK`, rebuilds it byte for byte); `web/test_sd.cjs` boots it to the title; `?brun=DIRTBIKE/DIRTBIKE.PRG` plays it on the web page. |
 | ROM `BLOAD` stores one byte past EOF | Known gap (ROM) | Observed in `fat32_file_read`; programs loading below live data must use `FLOAD 0000 eof-1`. ROM source is not in this repository. |
 | Adventure disk-only compatibility adapter | Experimental / emulator-verified | Exact-image `.dsk`/`.woz` patcher (`patch-adventure.mjs`); relocates MSBASIC to LC `$D000-$F0FF`, patches DOS 3.3 + `CHAIN` + Applesoft dialect + KIM-1 `FMULT` `ROR RESULT+2` bug (`$E5C7`), retokenizes `ADVENTURE` and `ADVENTURE^Q PART TWO`, and boots through `CHAIN` into full above-ground and underground gameplay. Physical board confirmation and Disk II write support for `SAVE` remain open; see [`docs/porting-logs/adventure.md`](../docs/porting-logs/adventure.md). |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |

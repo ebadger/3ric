@@ -178,7 +178,7 @@ public:
     }
 
     // Load the micro-SD card image in the compact "SDSP" sparse format produced
-    // by web/make_sd_sparse.py (the raw image is a 2GB, mostly-zero FAT32 disk).
+    // by web/make_sd_sparse.py (the raw image is a mostly-zero FAT32 card).
     // Returns true on success. Safe to call before or after reset; the SD
     // handshake works without it, only sector reads need the image.
     bool loadSD(val bytes)
@@ -191,6 +191,11 @@ public:
     // Number of SD sector reads/writes the guest has issued. Proves the ROM's
     // FAT32 driver reached the card (used by test_sd.cjs).
     int sdReadCount() { return (int)_sd.GetSectorAccessCount(); }
+
+    // Power the card's SPI interface on again (its contents are kept). The
+    // page's power-on (loadRom) calls this: a CPU reset alone leaves a
+    // transfer the guest was in the middle of, as on the board.
+    void resetSD() { _sd.ResetInterface(); }
 
     // --- Disk II (5.25" floppy) emulation ----------------------------------
 
@@ -668,6 +673,7 @@ EMSCRIPTEN_BINDINGS(badger6502)
         .function("loadFont",     &WebVM::loadFont)
         .function("loadSD",       &WebVM::loadSD)
         .function("sdReadCount",  &WebVM::sdReadCount)
+        .function("resetSD",      &WebVM::resetSD)
         .function("insertDisk",   &WebVM::insertDisk)
         .function("removeDisk",   &WebVM::removeDisk)
         .function("diskPresent",  &WebVM::diskPresent)

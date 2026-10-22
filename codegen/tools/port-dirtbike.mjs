@@ -16,8 +16,9 @@
 // resident.s) turns the game's three disk routines into ROM DOS FLOAD /
 // OWRITE commands on them; the loader (loader.s) stands in for HELLO. An
 // existing DIRTHOF in the output folder is kept: it holds the records.
-// The disk and the generated folder contain the game; keep them local -
-// this repository holds only the tool and the glue code.
+// Dirt Bike is free software under the GNU GPL v3 (Arnaud Verhille,
+// github.com/habib256/pom2games); the emulators' micro-SD card ships this
+// folder (make-sd-card.mjs, emulator/Data/sd-card/README.md).
 
 import fs from "node:fs";
 import path from "node:path";
@@ -30,6 +31,7 @@ const patchDir = path.join(root, "codegen", "patches", "dirtbike");
 
 export const DSK_SIZE = 143360;
 export const GAME_ORG = 0x6000;
+export const GAME_SIZE = 0x357f;          // the release's DIRTBIKE body, $6000-$957E
 // SHA-256 of the DIRTBIKE and TITLE file bodies this port was written
 // against: every patch address below belongs to this release.
 export const GAME_SHA256 = "296fa338efabd5fa72402fcd3d9d500bfc26c5080880fbefdc654b057df3424f";
@@ -256,6 +258,14 @@ const find = (files, name) => {
   return f[0];
 };
 
+/** The game's own track/sector table, read from its body (patched or not):
+ *  [name, track, sector] for TITLE and T01-T30. */
+export function tsTable(game) {
+  const g = (a) => game[a - GAME_ORG];
+  return [["TITLE", g(TITLE_TSL), g(TITLE_TSL + 1)],
+    ...Array.from({ length: TRACKS }, (_, i) => ["T" + String(i + 1).padStart(2, "0"), g(TRACK_TSL_T + i), g(TRACK_TSL_S + i)])];
+}
+
 /** Convert the disk image. Returns { tree, notes, resident } (tree: card file
  *  name -> bytes). opts.timing = false omits the Apple II speed patches. */
 export function convert(dsk, opts = {}) {
@@ -280,11 +290,7 @@ export function convert(dsk, opts = {}) {
       notes.push(`${name}: catalog T/S list ${f.tsl.join("/")}, game table ${t}/${s} (the game's table is used)`);
     return { name, t, s, raw: f.raw };
   };
-  entries.push(want("TITLE", g(TITLE_TSL), g(TITLE_TSL + 1), LOAD_ADDR));
-  for (let i = 0; i < TRACKS; i++) {
-    const name = "T" + String(i + 1).padStart(2, "0");
-    entries.push(want(name, g(TRACK_TSL_T + i), g(TRACK_TSL_S + i), LOAD_ADDR));
-  }
+  for (const [name, t, s] of tsTable(game.body)) entries.push(want(name, t, s, LOAD_ADDR));
   for (const e of entries)
     if (LOAD_ADDR + e.raw.length > HOF_ADDR) throw new Error(`${e.name} would load over the hall of fame`);
   const hof = find(files, "DIRTHOF");

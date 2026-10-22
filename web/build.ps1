@@ -123,18 +123,21 @@ if (Test-Path $diskSrc) {
     Write-Warning "demo disk missing: $diskSrc (Boot Disk button will be unavailable)."
 }
 
-# Generate the compact sparse micro-SD image (data\sd.sparse) straight from
-# emulator\Data\sd.zip. The raw image is a 2GB, mostly-zero FAT32 disk; the
-# sparse form keeps only the ~11.5MB of non-zero sectors. Skipped if already
-# present (regeneration takes ~20s). Gitignored like the other data copies.
-$sparse = Join-Path $webData "sd.sparse"
-if (-not (Test-Path $sparse)) {
+# Generate the compact sparse micro-SD image (data\sd.v2.sparse) straight from
+# emulator\Data\sd.zip: a 64 MB, mostly-zero FAT32 card holding Dirt Bike
+# (emulator\Data\sd-card\README.md); the sparse form keeps only its ~130KB of
+# non-zero sectors. Regenerated whenever sd.zip is newer. The file name changes
+# with the card's contents (web\Caddyfile caches data\ for a year). Gitignored
+# like the other data copies.
+$sparse = Join-Path $webData "sd.v2.sparse"
+$sdZip  = Join-Path $data "sd.zip"
+if (-not (Test-Path $sparse) -or ((Test-Path $sdZip) -and
+        (Get-Item $sdZip).LastWriteTimeUtc -gt (Get-Item $sparse).LastWriteTimeUtc)) {
     $sdScript = Join-Path $web "make_sd_sparse.py"
-    $sdZip    = Join-Path $data "sd.zip"
     if (Test-Path $sdZip) {
         $py = Get-Command python -ErrorAction SilentlyContinue
         if ($py) {
-            Write-Host "Generating $sparse from sd.zip (~20s)..." -ForegroundColor Cyan
+            Write-Host "Generating $sparse from sd.zip..." -ForegroundColor Cyan
             & $py.Source $sdScript $sdZip $sparse
             if ($LASTEXITCODE -ne 0) { Write-Warning "sd.sparse generation failed ($LASTEXITCODE); SD card will be unavailable." }
         } else {

@@ -55,7 +55,9 @@ client-side so GitHub Pages can host it as static files.
   `setGamepadState(index, pressedMask)`,
   `enableAudio(sampleRate)`, `disableAudio()`, `drainAudio()` (interleaved Float32 stereo PCM:
   centered system speaker summed with hard-panned Mockingboard AY channels),
-  `renderFrame()` (RGBA framebuffer), `pc/sp/regA/regX/regY/status`, `sdReadCount()`.
+  `renderFrame()` (RGBA framebuffer), `pc/sp/regA/regX/regY/status`, `sdReadCount()`,
+  `resetSD()` (power-on state of the SD card's SPI interface, contents kept; see
+  `EMULATOR.md`).
   `MAX_WOZ_FILE_SIZE` exports the shared parser's 8 MiB image limit.
 - **Compat shims (`web_compat.h`):** map MSVC-isms (`OutputDebugString`, `sprintf_s`,
   `fopen_s`, `_ASSERT`, …) onto Emscripten so `WozLib`/`MockMicroSD` compile unchanged.
@@ -64,7 +66,7 @@ client-side so GitHub Pages can host it as static files.
   Mockingboard output), and the in-browser **Assembler** panel (imports
   `assemble()` from the staged
   `asm6502.mjs`). Honors optional `window.ASSET_BASE` / `?assets=` for CDN/R2 offload and
-  `?src=` / `?prg=` / `?code=` deep links, plus a **Share** button that builds a one-click
+  `?src=` / `?prg=` / `?code=` / `?brun=` deep links, plus a **Share** button that builds a one-click
   link to the current editor program. The sample-source loads (the **sample** dropdown and
   `?src=programs/<name>.s`) fetch with `{ cache: "no-cache" }` so the browser **revalidates**
   against Pages instead of serving a stale `max-age=600` copy — a freshly deployed program
@@ -83,9 +85,10 @@ client-side so GitHub Pages can host it as static files.
   An expanded touch keyboard can shrink and scroll in short frames so wrapped
   controls and error messages are not clipped below the viewport.
   The ordinary workbench remains the default when `embed=1` is absent.
-  An embed does not restore/save editor storage, load the default editor sample, warm
-  the SD image, or take keyboard focus from its host during automatic startup.
-  Existing explicit `?src=`, `?code=`, and `?prg=` launch links also work in player mode;
+  An embed does not restore/save editor storage, load the default editor sample, load
+  the SD card (unless `?brun=` asks for it), or take keyboard focus from its host during
+  automatic startup.
+  Existing explicit `?src=`, `?code=`, `?prg=` and `?brun=` launch links also work in player mode;
   `#ide` only reveals/focuses source in the ordinary workbench.
 - **Automatic WOZ boot (`?woz=<url>`):** an encoded HTTP(S) URL, or a path relative to
   the emulator page, fetches a visitor-supplied disk directly in the browser. This works
@@ -93,7 +96,8 @@ client-side so GitHub Pages can host it as static files.
   the ROM/font, the player lets ROM initialization finish, inserts drive 1, leaves
   the current ROM's DOS shell with `MON`, and boots through the existing `$C600`
   Disk II ROM and strobe-aware `C600G` keyboard path, without a Boot Disk click.
-  Only one launch target runs: `woz` takes precedence over `prg`, then `code`, then `src`.
+  Only one launch target runs: `woz` takes precedence over `prg`, then `brun`, then `code`,
+  then `src`.
   Failed downloads, invalid images, and unsupported URL schemes are visible errors,
   never a silent fallback to the bundled demo. Cross-origin disk servers must permit
   CORS; HTTPS pages need HTTPS disks. No upload service, proxy, parent-page scripting
@@ -112,6 +116,26 @@ client-side so GitHub Pages can host it as static files.
   downloads are aborted, reported visibly, and startup controls are released in
   cleanup so a failed launch can be reset or replaced without a page reload.
   An embedded **Restart** retries the configured WOZ URL when no disk has loaded.
+- **Micro-SD card at power-on, and Mount SD:** the ROM mounts a card only at reset, then
+  starts its DOS shell (`>`). The workbench therefore loads the card (`data/sd.v2.sparse`,
+  in parallel with the ROM) before its first power-on, so typing `DIR` or
+  `CD DIRTBIKE` at the first prompt works; a card that fails to load is not fatal. Every
+  page power-on (`loadRom`: re-seed memory, `resetSD()`, `reset()`) resets the card's SPI
+  interface too, so a restart during a file load still mounts the card; its contents,
+  including the game's writes, last until the page is reloaded. **Mount SD** loads the card
+  if needed (retrying a load that failed or was rejected), powers the machine on again with
+  it, and types `DIR`.
+- **SD-card launch (`?brun=FOLDER/FILE.PRG[&org=hex]`):** runs a program from the card
+  through the ROM's own DOS, typed as a user would. The page loads the card, powers on
+  with it, lets the ROM start, then types `CD <FOLDER>` for each folder and
+  `BRUN <FILE> <org>` (`org` defaults to `0800`, as for `?prg=`). Names are upper-cased
+  and must each be FAT 8.3 (`[A-Z0-9_~-]`, 1-8 + optional 1-3); anything else, including
+  an empty path, `..`, spaces or control characters, is a visible error and types nothing.
+  A card that fails to load is a visible error too. Works in the workbench and in
+  `?embed=1`; there an embedded **Restart** runs the launch again (retrying the card if
+  it had failed). The published link for the shipped card is
+  `https://ebadger.github.io/3ric/?brun=DIRTBIKE/DIRTBIKE.PRG`; there is no dedicated
+  button (owner's choice).
 - **Fullscreen:** the fullscreen button requests the entire player, including its
   controls, through the browser Fullscreen API. Entry requires a user gesture; it is
   not attempted automatically. Exit (button or browser Escape) restores the prior
@@ -170,8 +194,15 @@ client-side so GitHub Pages can host it as static files.
   not treated as ROM locations. The ROM source text is not shipped in this repository, so
   the browser identifies its listing coordinate rather than displaying the original ROM
   source line.
-- **SD image:** `make_sd_sparse.py` streams `emulator/Data/sd.zip` (2 GB, mostly-zero FAT32)
-  into `data/sd.sparse` (~11.5 MB `SDSP` container), fetched lazily.
+- **SD image:** `make_sd_sparse.py` streams `emulator/Data/sd.zip` (a 64 MB, mostly-zero
+  FAT32 card; see `emulator/Data/sd-card/README.md`) into `data/sd.v2.sparse` (~130 KB
+  `SDSP` container), regenerated by `build.ps1` whenever `sd.zip` is newer. The card holds
+  only **Dirt Bike** (Arnaud Verhille, GNU GPL v3, modified for 3RIC) in `DIRTBIKE/`, with
+  its `README.TXT` notice and `LICENSE.TXT`; `codegen/tools/make-sd-card.mjs` builds it
+  from the upstream release disk. The served name changes with the card's contents,
+  because `web/Caddyfile` caches `data/` for a year. The workbench footer credits the game
+  and links its licence and both sources (the upstream commit and the 3RIC changes); the
+  `?embed=1` player hides the footer, as for every embed.
 - **Gallery (`gallery.html` + `gallery.json`):** a lightweight, WASM-free showcase page that
   fetches the curated `gallery.json` manifest and renders one card per program, each opening
   `index.html?src=programs/<name>.s` (or an inline `?code=`) so the Share/Remix loader
@@ -346,7 +377,8 @@ client-side so GitHub Pages can host it as static files.
   the primary image unbinds source-line stops from the replaced bytes while retaining the
   selected lines; loading the next assembled program binds those selections again.
 - Assets are relative so the site works under `/<repo>/` on Pages; the mandatory first-load
-  payload is ~1.26 MB, with `disk.woz`/`sd.sparse` fetched only on demand.
+  payload is ~1.26 MB, plus the ~130 KB SD card in the workbench, with `disk.woz` fetched only
+  on demand.
 - **Share / Remix loop.** The editor's **Share** button copies a self-contained deep link
   that reproduces the exact program: an *unmodified* built-in sample links as the short
   `?src=programs/<name>.s`; any edited or hand-written source is embedded inline as URL-safe
@@ -402,8 +434,14 @@ SNES/VIA peripheral; elapsed-time budget→runCycles() per frame →
 renderFrame()→canvas, drainOutput()→log, `$C030` + AYs→VM mixer→drainAudio()→AudioWorklet→
 speakers; canvas keydown or
 virtual-keyboard button→shared input queue→strobe-clear frame→keyDown()→$C000;
-Boot Disk/Mount SD →
-insertDisk()/loadSD() → MON + C600G / EC5CG`.
+page load → loadSD() before the first reset (ROM mounts the card, DOS ">");
+Boot Disk → insertDisk() → MON + C600G; Mount SD → loadSD() if needed → resetSD() + reset →
+DIR`.
+
+SD-card launch: `?brun=FOLDER/FILE.PRG → 8.3 check → fetch data/sd.v2.sparse → loadSD() →
+re-seed + resetSD() + reset → ROM mounts the card, DOS ">" → queued CD FOLDER / BRUN FILE org
+→ strobe-aware keyboard → ROM DOS FLOAD → the program (Dirt Bike: its resident's FLOAD/OWRITE
+on the card)`.
 
 Embedding: `host iframe URL -> embed presentation + selected launch target -> browser
 fetch of WOZ (normal CORS) -> bootDisk/loadRom/insertDisk -> queued MON then C600G ->
@@ -456,7 +494,8 @@ on the emulator whether it succeeds, is blocked, or 404s.
 | Canvas video + keyboard | Shipped | text/lo-res/hi-res, `$C000` input. |
 | Mobile virtual keyboard | Shipped | Exact 1983 Apple IIe Figure 2-1 key order/widths below the canvas, minus Reset and both Apple keys; full emulator character set, one-shot Shift/Control, the same strobe-aware `$C000` queue as physical input, and viewport-fitting rows without phone-width horizontal scrolling. |
 | USB/Bluetooth gamepads | Shipped | Two stable player slots through the standard Gamepad API and shared SNES/VIA peripheral; covered by browser-mapping, serial-protocol, and ROM-table tests. |
-| Disk II WOZ boot + micro-SD DOS shell | Shipped | **Boot Disk** / **Mount SD** buttons. |
+| Disk II WOZ boot + micro-SD DOS shell | Shipped | **Boot Disk** / **Mount SD** buttons; the workbench powers on with the card mounted. |
+| Dirt Bike SD card + `?brun=` launch | Implemented | The shipped card holds only Dirt Bike (GPL v3, credited in the footer); `?brun=DIRTBIKE/DIRTBIKE.PRG` boots it through the ROM DOS; Mount SD powers on again with the card. `web/test_sd.cjs` (card listing, writes, `BRUN` to the title), `web/test_embed.cjs` (power-on mount, the link to the title, embedded launch/Restart, a restart mid-load, refused paths, failed loads) and `codegen/tools/make-sd-card.test.mjs` (the card against its sources) run in the Pages build. |
 | Embeddable/fullscreen player + automatic WOZ boot | Implemented | `?embed=1` minimal viewport-fitting player; `?woz=` direct disk fetch and real `MON`/`C600G` Disk II boot; shared WOZ2 validation, 8 MiB/30-second limits, cached restart/failed-download retry, and actual markup/CSS assertions alongside real-WASM page tests. |
 | In-browser assembler (Assemble & Run) | Shipped | dual-use `asm6502.mjs`; built-in games, demos, and tutorials; `?src=`. Sample sources fetched with `cache:"no-cache"` (revalidate) so a new deploy isn't masked by the browser cache. |
 | Source debugger | Shipped | Browser-assembled source listing with bank-qualified instruction breakpoints/highlighting, pause/continue, bank-aware step into/over, register and raw-memory inspection, plus lazy ca65 ROM symbol/file:line correlation; covered by `test_debugger.cjs`. |

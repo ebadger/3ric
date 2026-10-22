@@ -134,7 +134,7 @@ class Document extends Element {
 }
 
 function mountPage(Module, {
-  search = "?embed=1", disk, diskError, diskResponse, saved = null, fastTimeout = false,
+  search = "?embed=1", disk, diskError, diskResponse, saved = null, fastTimeout = false, sd,
 } = {}) {
   const document = new Document();
   const requests = [];
@@ -172,8 +172,10 @@ function mountPage(Module, {
       let bytes;
       if (url.pathname.endsWith("/data/badger6502.bin")) bytes = rom;
       else if (url.pathname.endsWith("/data/fontrom.dat")) bytes = font;
-      else if (url.pathname.endsWith("/data/sd.sparse")) {
-        throw new Error("SD is not needed for this player test");
+      else if (url.pathname.endsWith("/data/sd.v2.sparse")) {
+        // sd: the card's bytes, or a function returning them (it may throw).
+        if (!sd) throw new Error("SD is not needed for this player test");
+        bytes = typeof sd === "function" ? sd() : sd;
       } else if (url.pathname.endsWith("/programs/swarm.s")) {
         return new Response(".org $0800\nloop: jmp loop");
       } else if (url.pathname.endsWith("/programs/shared.s")) {
@@ -419,7 +421,7 @@ async function main() {
     assertBooted(source, 0x51);
     assert.deepEqual(source.storage, []);
     assert.deepEqual(source.document.focuses, [], "embedded source auto-run must not steal focus either");
-    assert(!source.requests.some(url => url.endsWith("/programs/swarm.s") || url.endsWith("/data/sd.sparse")));
+    assert(!source.requests.some(url => url.endsWith("/programs/swarm.s") || url.endsWith("/data/sd.v2.sparse")));
     source.dispose();
   }
 
@@ -445,6 +447,99 @@ async function main() {
   assert.deepEqual(empty.storage, []);
   empty.dispose();
   console.log("PASS: normal editor/Reset behavior, relative WOZ paths, existing source/PRG embeds, and ROM-only embeds");
+
+  // The micro-SD card (data/sd.v2.sparse, staged by build.ps1 from emulator/Data/sd.zip).
+  const sd = fs.readFileSync(path.join(__dirname, "data", "sd.v2.sparse"));
+  const press = async (page, text) => {
+    for (const ch of text) await page.document.getElementById("screen").dispatch("keydown", { key: ch === "\r" ? "Enter" : ch });
+  };
+  // Run frames until the serial output matches; returns what was read.
+  const runUntil = (page, pattern, frames) => {
+    let out = "";
+    for (let i = 0; i < frames && !pattern.test(out); i++) {
+      page.runFrames(1);
+      out += page.window.vm.drainOutput();
+    }
+    return out;
+  };
+  const typedLaunch = /CD DIRTBIKE\rOK\r[^]*BRUN DIRTBIKE\.PRG 0800\r/;
+
+  const powerOn = mountPage(Module, { search: "", sd });
+  await powerOn.ready;
+  assert(powerOn.requests.some(url => url.endsWith("/data/sd.v2.sparse")), "the workbench loads the card");
+  assert.match(runUntil(powerOn, /3RIC 6502 OS\/3[^]*>/, 240), /3RIC 6502 OS\/3/);
+  await press(powerOn, "DIR\r");
+  assert.match(runUntil(powerOn, /<DIR> DIRTBIKE/, 240), /<DIR> DIRTBIKE/, "DIR at the first prompt lists the card");
+  powerOn.dispose();
+  console.log("PASS: the workbench powers on with the SD card mounted");
+
+  const link = mountPage(Module, { search: "?brun=DIRTBIKE/DIRTBIKE.PRG", sd });
+  await link.ready;
+  assert.deepEqual(link.errors, []);
+  assert.equal(link.document.getElementById("status").textContent, "BRUN DIRTBIKE/DIRTBIKE.PRG from the SD card\u2026");
+  const launched = runUntil(link, /FLOAD TITLE 9600 0000 10FF\r/, 1200);
+  assert.match(launched, /CD DIRTBIKE\rOK\r[^]*BRUN DIRTBIKE\.PRG 0800\rFLOAD DIRTHOF B500 0000 01FF\rFLOAD TITLE 9600 0000 10FF\r/,
+    "the link types the ROM DOS commands, and Dirt Bike loads from the card");
+  link.runFrames(200);
+  assert(!link.window.vm.textMode(), "Dirt Bike's hi-res title");
+  await link.document.getElementById("mountsd").dispatch("click");
+  assert.match(runUntil(link, /<DIR> DIRTBIKE/, 300), /DIR\r[^]*<DIR> DIRTBIKE/, "Mount SD restarts into the DOS and lists the card");
+  assert(link.window.vm.textMode());
+  assert.equal(link.document.getElementById("status").textContent, "SD mounted \u2014 DOS shell");
+  link.dispose();
+  console.log("PASS: ?brun=DIRTBIKE/DIRTBIKE.PRG boots Dirt Bike through the ROM DOS; Mount SD restarts and lists the card");
+
+  let lateAttempts = 0;
+  const late = mountPage(Module, {   // the first response is not an SD image at all
+    search: "", sd: () => (++lateAttempts === 1 ? new Uint8Array(16) : sd),
+  });
+  await late.ready;
+  assert.equal(late.errors.length, 1, "a card that is rejected does not stop the boot");
+  runUntil(late, /3RIC 6502 OS\/3[^]*>/, 240);
+  await press(late, "DIR\r");
+  assert.doesNotMatch(runUntil(late, /DIRTBIKE/, 120), /DIRTBIKE/, "no card at power-on");
+  await late.document.getElementById("mountsd").dispatch("click");
+  assert.equal(lateAttempts, 2, "Mount SD fetches the card again");
+  assert.match(runUntil(late, /<DIR> DIRTBIKE/, 300), /<DIR> DIRTBIKE/, "...then restarts with it and lists it");
+  late.dispose();
+  console.log("PASS: Mount SD retries a card that was rejected at power-on");
+
+  const sdPlayer = mountPage(Module, { search: "?embed=1&brun=dirtbike/dirtbike.prg&org=800", sd });
+  await sdPlayer.ready;
+  assert.deepEqual(sdPlayer.errors, []);
+  assert.deepEqual(sdPlayer.document.focuses, [], "an embed does not take the host page's focus");
+  assert.deepEqual(sdPlayer.storage, []);
+  assert(!sdPlayer.requests.some(url => url.endsWith("/programs/swarm.s")), "no editor sample in the player");
+  assert.match(runUntil(sdPlayer, typedLaunch, 240), typedLaunch, "lower-case paths and a short org are accepted");
+  runUntil(sdPlayer, /FLOAD TITLE 9600 0000 10FF\r/, 900);
+  sdPlayer.runFrames(30);   // 0.5 s into the 2.2 s TITLE load: a sector transfer is under way
+  await sdPlayer.document.getElementById("reset").dispatch("click");
+  assert.match(runUntil(sdPlayer, typedLaunch, 240), typedLaunch,
+    "Restart mid-transfer: the power-on resets the card's interface, so the ROM mounts it and CD works");
+  assert.equal(sdPlayer.requests.filter(url => url.endsWith("/data/sd.v2.sparse")).length, 1, "...without downloading the card again");
+  sdPlayer.dispose();
+
+  for (const brun of ["", "../ETC/X.PRG", "DIRT%20BIKE/X.PRG", "TOOLONGNAME/X.PRG", "DIRTBIKE/DIRTBIKE.PRGX",
+    "DIRTBIKE//DIRTBIKE.PRG", "X.PRG%0DDEL%20Y"]) {
+    const bad = mountPage(Module, { search: "?embed=1&brun=" + brun, sd });
+    await bad.ready;
+    assert.match(bad.document.getElementById("status").textContent, /SD launch failed: \?brun= needs an 8\.3 path/, brun);
+    assert.equal(bad.errors.length, 1);
+    assert.doesNotMatch(runUntil(bad, /BRUN|CD /, 120), /BRUN|CD /, "nothing is typed");
+    bad.dispose();
+  }
+  let offlineAttempts = 0;
+  const offline = mountPage(Module, {
+    search: "?embed=1&brun=DIRTBIKE/DIRTBIKE.PRG", sd: () => { if (++offlineAttempts <= 2) throw new Error("offline"); return sd; },
+  });
+  await offline.ready;
+  assert.match(offline.document.getElementById("status").textContent, /SD launch failed: the SD card image did not load/);
+  assert.equal(offline.document.getElementById("reset").disabled, false);
+  await offline.document.getElementById("reset").dispatch("click");
+  assert.equal(offlineAttempts, 3, "Restart retries the card");
+  assert.match(runUntil(offline, typedLaunch, 240), typedLaunch, "...and the launch");
+  offline.dispose();
+  console.log("PASS: embedded ?brun= launch and Restart, invalid paths refused without typing, SD failures visible and retried");
 }
 
 main().catch(error => {
