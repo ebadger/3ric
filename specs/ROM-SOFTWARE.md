@@ -87,6 +87,150 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
     board or complete-playthrough certification. The implementation is an
     emulator-verified hardware-trial candidate; commands, fingerprints, coverage and
     remaining limits are recorded in [`docs/porting-logs/archon.md`](../docs/porting-logs/archon.md).
+- **MS-BASIC boot disk:** `codegen/tools/msbasic-woz.mjs` turns a ROM image into a
+  5.25″ WOZ2 that boots with `C600G` and runs that ROM's own Microsoft BASIC from the
+  12 KiB RAM under the `$9000–$BFFF` overlay. BASIC therefore starts even when that
+  RAM was never seeded, as at a physical power-on. The disk embeds the third-party
+  interpreter, so it is a generated local output, never a repository asset (`NOTICE`).
+  - **Image:** the generating ROM's `$9000–$BFFF` (48 pages) occupies T0 S1–15,
+    T1–T2 and T3 S0; the boot loader is T0 S0.
+  - **Loader:** select upper ROM (`$C082`) and compare a Fletcher-16 (mod 255)
+    checksum of `$D000–$FFFF` with the generating ROM. On mismatch, stop the drive,
+    print `BASIC DISK/ROM MISMATCH` and `BRK` before touching the overlay RAM: the RAM
+    interpreter and the ROM's OS/NMI code call each other at fixed addresses. Then
+    expose RAM (`$C007`), stream the pages straight to `$9000–$BFFF` with the PROM's
+    `ReadSector` (`$C65C`), stop the drive motor and jump to the image's start-up code.
+  - **Start-up (physical keyboard):** the picodisk Disk II emulator freezes the CPU
+    through READY while its drive model runs, which continues 1,023,000 cycles after
+    motor-off. Wait 8 × `WAIT($FF)` (~1.33M cycles) so no stall reaches BASIC's input.
+    Then, once the PS/2 clock (VIA1 PA6, read via `$C20F`) has stayed high for 512
+    samples, reset the ROM decoder's frame state and prefix, lock-toggle and modifier
+    flags (`$CE00`, `$CE03`, `$CE04`, `$CE18`, `$CE19`), the `$CB00` key-state page and
+    `$C000`. These are among the variables the ROM's reset handler clears. Repeat if
+    a frame overlapped the reset, then `JMP $E000` (`JMP COLD_START`). The generator
+    refuses a ROM whose reset handler does not clear them.
+  - **RAM-resident adaptation:** `MEMORY SIZE?` probes upward until a write fails,
+    which would overwrite a RAM interpreter. Two `JSR` hooks in the image's unused,
+    zero-filled top bytes stop the probe at `$9000` and clamp a typed size to `$9000`;
+    Return reports `34815 BYTES FREE`. The start-up code and the `+` key reader below
+    share those bytes (`$BF6B–$BFFF` for the shipped ROM). Apart from them, the message
+    bytes and the `RESTART` hook below, no interpreter byte changes. The generator
+    locates the generic probe code by its bytes and refuses unrecognized images. ROM,
+    VM, memory map and platform reference are unchanged.
+  - **Message line breaks:** in the shipped ROM, the `CR`/`LF` in BASIC's messages
+    assemble as `$62`/`$66`, the low bytes of the Apple monitor's `CR`/`LF` labels.
+    `OUTDO` special-cases `$62`: it calls the monitor's `CR` directly, then prints the
+    byte anyway. That byte is the `"` (`b` in the emulator) before every `]` prompt.
+    When that call scrolls, it also clobbers `Y` and garbles `BREAK`. The disk patches
+    the three strings BASIC prints: `QT_OK` `$62`→`$0D`, `QT_BREAK` `$62 $66`→`$0D $80`,
+    and the `$62` ending `QT_WRITTEN_BY` (the `A` credit at `MEMORY SIZE?`)→`$0D`. `$0D`
+    takes `OUTDO`'s control-character path, a newline through `COUT`, which preserves
+    `Y`. `$80` is the null `CRDO` sends after each newline (`CRLF_2`). The prompt is then
+    a bare `]` laid out as in Applesoft II: `RESTART` prints one newline first, so output
+    is followed by a blank line. The `$62` special case stays, so a printed lowercase `b`
+    still becomes a newline, as in ROM BASIC. The generator finds each string by its
+    exact bytes and refuses an image that lacks one.
+  - **`+` from a PS/2 keyboard:** the ROM's PS/2 decoder has no `+` (see Behaviour /
+    Rules). A `JSR` replaces `RESTART`'s first two instructions (`LSR Z14` /
+    `LDA #<QT_OK`), so before every prompt the disk points `KSW` (`$38`) at a resident
+    input routine. It does so only while `KSW` holds the monitor's `KEYIN`, which reset's
+    `SETKBD` installs, and leaves any other input routine alone. The routine calls
+    `KEYIN` and returns `+` (`$AB`) for an `=` (`$BD`) read while either Shift key is
+    down (the decoder's key states at `$CB12`/`$CB59`). Line input, `INPUT` and `GET`
+    read through `RDKEY`, so Shift+= types `+`; `PEEK(49152)` still sees `=`. An `=`
+    typed ahead while a program is busy becomes `+` only if Shift is still down when
+    BASIC reads it. Reset restores `KEYIN` until BASIC's next prompt. Known limitation:
+    between prompts `KSW` stays pointed into the overlay RAM, so selecting BASIC ROM
+    (`$C006`), for example `PEEK(49158)` in BASIC or `C006` in the monitor, sends the next
+    key read into zero-filled ROM and `BRK`s. In the emulator the monitor's own input
+    then `BRK`s in a loop until Reset; Reset restores `KEYIN`, and `MON` then `E000G`
+    restarts the loaded BASIC. The generator finds `RESTART` (by its bytes and `QT_OK`
+    operand) and `RDKEY`/`KEYIN` by their bytes, and refuses a ROM that lacks either.
+  - **Interrupts:** the ROM NMI proxy (`$F1BB`) still banks BASIC ROM in for its
+    handler and exposes RAM again on exit, so keyboard and gamepad NMIs return into
+    the RAM interpreter, which survives later resets until overwritten or power-off.
+  - **Limits:** a disk refuses to load unless the machine's upper ROM (`$D000–$FFFF`)
+    matches the ROM that generated it (`--rom` selects the board's image); the BASIC ROM
+    bank only runs the machine's own NMI handler and is not fingerprinted. `LOAD`/`SAVE`
+    behave as in ROM BASIC; there is no Disk II file system (`BASIC.PRG` below has SD
+    `LOAD`/`SAVE`). BASIC appears about one
+    second after loading ends. The first physical boot garbled keys at `MEMORY SIZE?`
+    (Return echoed `GG`); the start-up resync addresses the cause reproduced natively.
+    A fixed physical-board boot is not yet confirmed.
+- **MS-BASIC for 3RIC DOS (`BASIC.PRG`):** `codegen/tools/msbasic-prg.mjs` packages the
+  boot disk's interpreter as a `.PRG` that the DOS shell starts with
+  `BRUN BASIC.PRG 0800`, and gives its `LOAD "NAME"` and `SAVE "NAME"` the ROM DOS's
+  FAT32 file system in the DOS current directory. Like the disk, it embeds the
+  third-party interpreter and is a generated local output (`NOTICE`).
+  - **File:** a one-page loader at `$0800`, then the LOAD/SAVE glue (whole pages; three,
+    `$8D00–$8FFF`, for the shipped ROM), then the boot disk's 48-page interpreter image
+    with the changes below (13,312 bytes for the shipped ROM).
+  - **Loader:** the disk's upper-ROM Fletcher-16 guard. On mismatch it prints
+    `BASIC.PRG/ROM MISMATCH` through `COUT` (the running ROM's DOS just loaded the file)
+    and `RTS`s to the DOS prompt before touching `$8D00–$BFFF`. Otherwise it selects RAM
+    (`$C007`), copies the glue and interpreter to `$8D00–$BFFF` and `JMP $E000`. There
+    is no spin-down wait or PS/2 resync: the CPU bit-bangs the SD card, so nothing
+    stalls it. The shell runs with `$CAFE` at 0 and RAM at `$9000`, so NMIs return to
+    the RAM interpreter as for the disk.
+  - **Memory top:** the glue does not fit the image's 514 unused bytes, so it sits below
+    the interpreter and the disk's probe stop and size clamp move from `$9000` to the
+    glue's first page: Return at `MEMORY SIZE?` gives `34047 BYTES FREE` (768 fewer than
+    the disk). BASIC never writes at or above `MEMSIZ`; a `POKE` there can break
+    `LOAD`/`SAVE`.
+  - **`LOAD`/`SAVE`:** the cassette versions call the Apple monitor's tape routines
+    (`$FECD`/`$FEFD`); 3ric has no cassette port. The first three bytes of each become
+    a `JMP` to the glue; the generator finds them by their bytes. The argument is any
+    string expression (`SAVE "HELLO.BAS"`, `SAVE A$`) and must end the statement, else
+    `?SYNTAX ERR` before any file access. Letters are upper-cased. A name must be a FAT
+    short name: 1–8 characters, optionally `.` and 1–3 more, with no space, control
+    character or ``"*+,/:;<=>?[\]|``; otherwise `?BAD FILE NAME ERR`. A file is the raw
+    program text `TXTTAB`..`VARTAB`, line links included, with no header.
+    - `SAVE`: a directory of that name gives `?FILE TYPE MISMATCH ERR`. The file is
+      allocated, its directory entry written and its bytes written as the shell's
+      `BSAVE` does; the new entry is appended after any existing entries of that name.
+      Only then is each of those old entries deleted, oldest first, as the shell's
+      `DEL` does; an empty old file (start cluster 0) only has its entry marked
+      deleted (`fat32_markdeleted`), because the ROM's `fat32_deletefile` would walk
+      cluster 0 and clear reserved FAT entry 0. A directory-entry or write failure
+      reported by the library gives `?I/O ERR` and leaves the old file, which `LOAD`
+      still finds first. The statement then continues, in a running program too.
+    - `LOAD`: a missing name gives `?FILE NOT FOUND ERR`; a directory or a file under
+      2 bytes gives `?FILE TYPE MISMATCH ERR`; a file that would end at or above
+      `MEMSIZ` gives `?OUT OF MEMORY ERR`. None of these touch the program. Otherwise
+      the file's exact length is read to `TXTTAB` with `fat32_file_readbyte` and
+      `VARTAB` set after it. The lines are then walked as `FIX_LINKS` will walk them:
+      every link high byte non-zero, every line terminated within 255 bytes, ending
+      exactly on `00 00` at `VARTAB-2`. A short read (`?I/O ERR`) or failed walk
+      (`?FILE TYPE MISMATCH ERR`) does `NEW`. Success jumps to `FIX_LINKS`, which
+      clears variables, rebuilds the links and returns to the `]` prompt, from a
+      running program too, like the cassette version.
+    - Errors print as BASIC's own: `?<message> ERR`, plus ` IN <line>` while running
+      (`CRDO`, `OUTQUES`, `STROUT`, `STKINI`, `QT_ERROR`, `PRINT_ERROR_LINNUM`).
+  - **Zero page:** the FAT32 library's pointers live in `$B0–$BF`, inside BASIC's
+    `CHRGET` (`$B2–$CE`, `TXTPTR` `$B9`). The glue saves `$B0–$CF` after evaluating the
+    name and restores it before continuing or reporting an error. The name goes through
+    the DOS command line (`dos_command` `$CD00`) and `fat32_prep_fileparam`; the
+    library's other state is the DOS's `$C800–$CDFF`, which BASIC does not use.
+  - **Current directory:** each `LOAD`/`SAVE` opens the DOS current directory
+    (`fat32_open_cd`, cluster at `$CC20`), so `CD` before `BRUN` chooses it. The card is
+    not remounted, and BASIC has no `CD`, `DIR` or `DEL`; use the shell.
+  - **Addresses:** every ROM routine and variable comes from `badger6502.dbg` (`--dbg`,
+    default beside `--rom`). Each routine's first 4–14 bytes (some operands wildcarded)
+    are checked against what its source assembles to, and the generator refuses a ROM or
+    symbol file that differs there. Changes further inside a routine are not detected:
+    other ROM builds are unsupported unless re-verified. The run-time guard then pins
+    the upper-ROM bytes to the ROM the file was built from.
+  - **Limits:** the library's: files below 64 KiB, a full card is not detected, deleted
+    directory entries are not reused (the directory grows with each replacement), and
+    SD sector write errors are not reported. Writes need 512-byte clusters: on a 4 KB-
+    cluster card the shell's `BSAVE`, and so `SAVE`, does not return in the emulator
+    (reads work). A failed `SAVE` can leave a partial new entry after the old one; the
+    next successful `SAVE` of that name removes both. A directory-entry failure (an SD
+    read error) leaves the new file's clusters allocated with no entry: that space is
+    lost, as with the shell's `BSAVE`. Until the old file is deleted, a replacement
+    needs free space for the whole new program; on a card without it the library's
+    allocator does not return. Emulator-verified only; no physical-board
+    run yet.
 - **Ultima V SD-card port:** `codegen/tools/port-ultima5.mjs` converts the eight
   owner-supplied ProDOS disk sides into a `U5/` folder for the micro-SD card
   (`CD U5`, `BRUN U5.PRG 0800`). The game data stays local; the repository holds
@@ -709,6 +853,50 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   `MEMORY SIZE?`). Disks whose boot auto-runs an Applesoft greeting (DOS 3.3 / Quick-DOS
   System Masters and games chaining through them) load DOS but then trap. Self-booting
   machine-code disks run fine. Treat this as a documented gap, not a bug to paper over.
+- **Known gap — ROM BASIC startup relies on seeded RAM.** Reset exposes RAM at
+  `$9000–$BFFF` (`$C007`) and the NMI proxy re-exposes it after every interrupt, so
+  `E000G` runs `COLD_START` (`$B234`) from that RAM. The emulator's load recipe seeds it
+  from the ROM image; no ROM code copies BASIC there. With that RAM scrubbed, as at a
+  physical power-on, `E000G` executes garbage and `BRK`s. In the seeded emulator, pressing
+  Return at `MEMORY SIZE?` probes into `$9000+` and overwrites the interpreter; type
+  `36864` or less. The MS-BASIC boot disk loads a probe-safe RAM copy instead. Both
+  observations are emulator reproductions; the ROM is unchanged.
+- **Known gap — ROM BASIC message line breaks.** The shipped ROM's BASIC prints a stray
+  `"` (`b` in the emulator) before each `]` prompt, and its `BREAK` message is garbled
+  when the screen scrolls. In `message.s`/`init.s`, `CR`/`LF` resolve to the Apple
+  monitor's labels (`$FC62`/`$FC66`), and `OUTDO`'s `$62` workaround calls the
+  monitor's `CR`, then still prints the byte. The MS-BASIC boot disk corrects its own
+  copy. The source fix belongs in the msbasic repository, followed by a ROM rebuild:
+  emit the intended bytes in those strings and drop the workaround.
+- **Known gap — no `+` from a PS/2 keyboard.** The ROM decoder's `ps2_ascii_shifted`
+  table maps Shift+= (scan code `$55`) to `=` (`$BD`), keypad `+` (`$79`) is unmapped,
+  and Ctrl+= stores `+` without bit 7, which `KEYIN` ignores. This affects the board and
+  the Windows emulator app, which feeds host keys through that decoder; the browser
+  build's `keyDown` bypasses PS/2. The MS-BASIC boot disk reads Shift+= as `+`.
+  Everywhere else needs the ROM fix, `$AB` at `ps2_ascii_shifted+$55` (`$B5FE`) in
+  `badger6502_extra.s`, then a reflash. No published msbasic branch matches the shipped
+  ROM's sources, so the edit belongs in the tree that ROM was built from.
+- **Known gap — disk activity can desynchronise physical PS/2 input.** The ROM decodes
+  each PS/2 clock edge in an NMI that must sample VIA1 PA7 within about 70 cycles. The
+  picodisk freezes the CPU through READY on disk accesses and, while its drive model
+  runs, whenever 500 cycles pass without one. That lasts until 1,023,000 cycles after
+  motor-off. A stalled edge can be misread or lost, and nothing in the decoder
+  resynchronises: every later key decodes shifted until reset (Return becomes `GG`).
+  Keys pressed or released during any disk boot are exposed; the Spy vs Spy keyboard
+  wedge may be another instance. The VM does not model READY stalls, and browser
+  `keyDown` bypasses PS/2; `codegen/tools/msbasic-woz.native.cpp` models both.
+  Boot disks can wait out the spin-down and resync the decoder (MS-BASIC disk does).
+  A general fix belongs in the ROM decoder (resync after an inter-frame gap) or the
+  picodisk firmware.
+- **Known gap — fast PS/2 keyboards race the decoder's Shift/Ctrl handling.** At a
+  frame's parity edge the decoder compares the received code with `$12`, `$59` and `$14`
+  and flags a modifier in `$CE19`. When the stop-edge NMI nests before that store, the
+  key-down is handled unflagged: a Shift decodes as `$80`, a NUL that ends an input
+  line, and Ctrl stores `$00`. The late flag then swallows the next key-down. In the
+  `msbasic-woz.native.cpp` model, this happens at bit periods of 84–88 CPU cycles for
+  left Shift, 84–94 for right Shift and 84–96 for Ctrl; at 80 or fewer, even typing
+  `MON` fails. It has not been observed on the board. A fix belongs in the ROM decoder:
+  flag modifiers when the key is processed, not at the parity edge.
 - **The ROM defines the memory-map contract in practice.** ROM routines assume the `MM_*`
   layout in `vm.h`; a memory-map change means rebuilding/re-verifying the ROM and
   regenerating `platform-ref.*`.
@@ -724,6 +912,18 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
 
 `badger6502.bin → mapped $D000–$FFFF + banks; reset → monitor → (Disk II C600G | DOS EC5CG |
 BRUN) → user program runs → COUT/screen/serial output`.
+
+For the MS-BASIC boot disk:
+`ROM $9000–$BFFF + probe and prompt hooks + message line breaks → msbasic-woz.mjs → local WOZ → C600G →
+PROM loads T0 S0 → upper-ROM guard → $C007 → 48 ReadSector pages into $9000–$BFFF → motor off →
+spin-down wait → PS/2 decoder resync → JMP $E000 → COLD_START in RAM → MEMORY SIZE? (capped at
+$9000) → BASIC prompt`; NMIs bank the ROM handler in and return to RAM.
+
+For `BASIC.PRG`:
+`ROM BASIC + the disk's hooks + SAVE/LOAD JMPs, glue → msbasic-prg.mjs → BASIC.PRG on the SD card →
+CD + BRUN BASIC.PRG 0800 → upper-ROM guard → $C007 → copy $8D00–$BFFF → JMP $E000 → COLD_START in
+RAM → MEMORY SIZE? (capped at $8D00) → prompt`; `LOAD`/`SAVE "NAME"` → glue → save `$B0–$CF` →
+ROM FAT32 in the DOS current directory → restore → `FIX_LINKS` / next statement.
 
 For Matrix Rain:
 `gallery/sample source → assembler → $0800 program → $C000/$C010 pause/quit input +
@@ -786,6 +986,8 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Microsoft BASIC | Shipped | `$9000–$BFFF`; not Applesoft (known gap). |
 | Font ROM | Shipped | `fontrom.dat`. |
 | Disk II boot PROM | Shipped | `$C600`; boots self-booting WOZ images. |
+| MS-BASIC boot disk | Implemented / emulator-verified | `msbasic-woz.mjs` local generator. `msbasic-woz.test.mjs` round-trips the WOZ sectors and boots with scrubbed overlay RAM, even with BASIC ROM left selected. `COLD_START` runs only from RAM, at least 1,023,000 cycles after motor-off and with a poisoned PS/2 decoder reset. Return gives `34815 BYTES FREE`, the image survives the probe, programs and a gamepad NMI work, reset then `MON`/`E000G` restarts it, sizes clamp, and a mismatched ROM stops before loading. Every prompt is a bare `]` at the start of a line. `BREAK IN 10` survives a scroll, and the `A` credit line has no stray byte. Shift+= types `+` through the real PS/2 decoder (native, left Shift) and with either Shift simulated (WASM), plain `=` stays `=`, the reader returns after reset and `E000G`, and another `KSW` routine is left alone. `msbasic-woz.test.ps1` (native, MSVC) types through the real PS/2 decoder across 18 bit-period/READY-stall/Enter-release cases. The first physical boot garbled keys; the fixed disk is not yet confirmed on the board. |
+| MS-BASIC for 3RIC DOS (`BASIC.PRG`) | Implemented / emulator-verified | `msbasic-prg.mjs` local generator. `msbasic-prg.test.mjs` checks the file is the loader, glue and the disk's interpreter with only `SAVE`/`LOAD` and the memory top changed, and that unrecognized ROMs and symbol files are refused. On the WASM build with the ROM DOS, SD emulation and scrubbed RAM: `CD` then `BRUN BASIC.PRG 0800` gives `34047 BYTES FREE`; `SAVE`, `NEW`, `LOAD`, `LIST` and `RUN` round-trip a program; `SAVE` replaces a file; `SAVE A$` and `LOAD` work inside a running program; every error (missing, directory, bad names, a non-program, oversized, junk after the name) leaves BASIC working; `SAVE` over an empty (cluster 0) file never calls `fat32_deletefile`; a 5,174-byte program loads, saves over two duplicate entries made by the shell's `BSAVE` and reloads byte-identical on a 512-byte-cluster card with fragmented input, and loads on a 4 KB-cluster card; after reset the shell's `DIR` shows each program once, only in that directory; a mismatched ROM returns to the DOS prompt before loading. No physical-board run. |
 | Archon disk-only compatibility adapter | Experimental / emulator-verified | Exact-image patcher; actual disk boot, options, keyboard and two-pad board/combat input, runtime mismatch guards, and native PS/2/LED/register/bank checks. Physical board and full-playthrough approval remain open; see the porting log. |
 | Ultima V SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima5.test.mjs` drives the real loader/resident/shim on the ROM DOS with synthetic volumes (and boots the original disks to the title with `U5_DISKS`); `port-ultima5.native.ps1` decodes real PS/2 frames at 94-160-cycle periods with language-card RAM mapped, including Caps Lock LED exchanges and a `$C010` strobe on a stop-bit edge. The suite also plays a synthetic two-region song end to end (on-demand `SONG01` load, timer-IRQ ticks in bank 2, pause/load/resume, reload after a block read), tests the song packer (phrase subroutines, two-region layout, replay check) and the stale-folder check, and checks the 46 music-site patches; a session-only py65 harness matched the player to the reverse-engineered driver per tick for all 15 songs. Manual WASM play covered creation, save, overworld, combat, towne entry, pad-only menu/walking/Ztats, and music (title theme at the title, huts song on *Journey Onward*, on-demand song switches). Board: running after the PS/2 fix; pads and music not yet tried on the board. Dialogue, dungeons and endgame are open; block reads cost ~1.7 M cycles. |
 | Seven Cities of Gold SD-card port | Experimental / emulator-verified | `codegen/tools/port-sevencities.test.mjs` runs the real loader, resident and both shim copies on the ROM DOS/SD emulation with synthetic disks at 512-byte and 4 KB clusters, plus missing/fragmented/ROM refusals (`SEVENCITIES_DISKS` adds an original-disk boot to the title); `port-ultima5.native.ps1 -Resident codegen\patches\sevencities\resident.s` passes the native PS/2 checks. Scripted WASM play: menus, sailing, landing, natives; World Maker created a world that then played. A save at the Pub, resume, and the physical board are open; requires contiguous files and the current ROM's SD routines. |

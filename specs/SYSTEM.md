@@ -81,6 +81,10 @@ them headlessly on the same WASM core. The "why" lives in `docs/MISSION.md`.
 | Two SNES pads via VIA1 + browser Gamepad API | Shipped |
 | System speaker (`$C030`) | Shipped |
 | Disk II 5.25″ WOZ boot (self-booting machine-code disks) | Shipped |
+| Disk-booted MS-BASIC (locally generated WOZ, RAM under `$9000–$BFFF`) | Implemented / emulator-verified |
+| MS-BASIC from the DOS shell (`BRUN BASIC.PRG 0800`, locally generated) with SD-card `LOAD`/`SAVE "NAME"` | Implemented / emulator-verified |
+| Physical PS/2 input during picodisk activity | Known gap: READY stalls can misalign the ROM decoder until reset (see `ROM-SOFTWARE.md`) |
+| Physical PS/2 `+`, fast-keyboard Shift/Ctrl | Known gaps: no ROM key gives `+` (disk BASIC reads Shift+= as `+`); bit periods under 98 cycles race modifier handling in the model (see `ROM-SOFTWARE.md`) |
 | Micro-SD FAT32 + ROM DOS shell | Shipped |
 | Slot-4 dual-AY Mockingboard | Shipped |
 | WebAssembly browser build + in-browser assembler | Shipped |

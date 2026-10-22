@@ -72,6 +72,11 @@ licenses above.
       The 512 KB ROM image includes a Microsoft 6502 BASIC interpreter. Its
       copyright is held by Microsoft; its redistribution status is unsettled.
       The 3ric MIT/CC-BY-SA licenses do NOT grant any rights to it.
+      Disk images written by codegen/tools/msbasic-woz.mjs contain that same
+      interpreter. They are local outputs with the same status, not repository
+      assets.
+      codegen/tools/msbasic-prg.mjs writes BASIC.PRG files containing it too,
+      with the same status.
 
   - Apple II disk images and program binaries used as test/demo data
       (e.g. emulator/Data/loderun.bin and the .woz images under

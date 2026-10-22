@@ -36,6 +36,9 @@ graphics / registers → produce a `.PRG` that also `BRUN`s on real hardware.
 | `patch-adventure.mjs` | Exact-image local `.dsk` / `.woz` compatibility patcher for the 1980 A Bit Better Associates *Adventure* disk; see `ROM-SOFTWARE.md`. Relocates 3ric's ROM MSBASIC to Language Card RAM (`$D000-$F0FF`), patches DOS 3.3 + `CHAIN` (`$0208`) + Applesoft hooks, retokenizes both BASIC programs (`ADVENTURE` and `ADVENTURE^Q PART TWO`), and emits a bootable WOZ2 image without bundling copyrighted game assets. |
 >>>>>>> f21715b (Add Adventure (1980) DSK/WOZ compatibility patcher and tests)
 | `wozedit.mjs` | Node-only checked WOZ2 sector reading/editing, reusing the dual-use `wozgen.mjs` CRC and 6-and-2 codec. Preserves non-edited bitstream and metadata bytes. |
+| `msbasic-woz.mjs` | Node-only generator of a local WOZ that boots a ROM image's Microsoft BASIC into the RAM under `$9000–$BFFF`; see `ROM-SOFTWARE.md`. Reuses `wozgen.mjs` (`buildWozFromDsk`, `placeSector` interleave) and `asm6502.mjs`; refuses unrecognized ROM layouts and existing outputs. |
+| `msbasic-prg.mjs` | Node-only generator of a local `BASIC.PRG` (`BRUN BASIC.PRG 0800` from the DOS shell) carrying the same interpreter plus `LOAD`/`SAVE "NAME"` glue over the ROM's FAT32 routines in the DOS current directory; see `ROM-SOFTWARE.md`. Reuses `msbasic-woz.mjs` (`buildMsBasicImage` with a lower memory top and guarded extra patches); takes ROM addresses from `badger6502.dbg` and checks each against its assembled bytes; refuses existing outputs. |
+| `msbasic-woz.test.ps1` + `msbasic-woz.native.cpp` | Windows/MSVC native check of that disk through the ROM's real PS/2 NMI decoder, with a model of the picodisk's READY stalls (`-Node` selects the Node used to write the disk). |
 
 **Platform reference (`codegen/platform/`)** — the generator's machine/human contract:
 `prompt-system.md` (assembler dialect, entry/exit conventions), `platform-ref.md` +
@@ -128,6 +131,8 @@ breakpoints and current-PC highlighting.
 | `harness` + `run6502` validation loop | Shipped | serial/text/gfx/register checks + `.PRG`. |
 | `gen_platform_ref` platform reference | Shipped | from `vm.h` + `badger6502.dbg`. |
 | Archon local WOZ patching | Experimental / emulator-verified | `patch-archon.test.mjs` covers synthetic editor fixtures and optional owner-supplied-disk gameplay; `patch-archon.test.ps1` covers native PS/2 timing and LED commands. Both game images stay outside the repository. |
+| MS-BASIC boot-disk generator | Implemented / emulator-verified | `msbasic-woz.test.mjs` (needs the WASM build) and `msbasic-woz.test.ps1` (native PS/2 + READY stalls); generated disks stay outside the repository. |
+| MS-BASIC for 3RIC DOS generator | Implemented / emulator-verified | `msbasic-prg.test.mjs` (needs the WASM build) runs `BASIC.PRG` through the ROM DOS and SD emulation, including `SAVE`/`LOAD` and their errors; generated files stay outside the repository. |
 | Ultima V SD-card converter | Experimental / emulator-verified | `port-ultima5.test.mjs` covers the ProDOS reader, the guarded patches (keyboard and 46 music sites), the full shim on the ROM FAT32 routines with synthetic volumes, SNES pads, a synthetic two-region song played end to end, the song packer and the stale-folder check;
  `U5_DISKS` adds an original-disk title boot with the music timer running.
  `port-ultima5.native.ps1` builds the VM with MSVC and checks the resident's PS/2 fast path against real keyboard frames, Caps Lock LED exchanges and a stop-bit strobe collision. |

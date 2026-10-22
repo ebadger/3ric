@@ -45,6 +45,50 @@ only when the program halted cleanly and every check passed.
 | `tools/harness.cjs` | Boots the WASM emulator, loads a program, runs it, captures serial/text/registers, detects halt. |
 | `tools/run6502.mjs` | CLI: assemble/load → run → apply checks → emit `.PRG` + verdict. |
 | `tools/gen_platform_ref.mjs` | Regenerates `platform/platform-ref.{md,json}` from `vm.h` + `badger6502.dbg`. |
+| `tools/msbasic-woz.mjs` | Writes a local WOZ that boots the ROM's Microsoft BASIC into the RAM under `$9000-$BFFF` (see below). |
+| `tools/msbasic-prg.mjs` | Writes a local `BASIC.PRG`: the same BASIC started from the DOS shell, with SD-card `LOAD`/`SAVE` (see below). |
+| `tools/msbasic-woz.test.ps1` | Native PS/2 + picodisk READY-stall check of that disk (Windows, MSVC). |
+
+## MS-BASIC boot disk
+
+```sh
+node codegen/tools/msbasic-woz.mjs codegen/out/basic.woz   # from emulator/Data/badger6502.bin
+node codegen/tools/msbasic-woz.mjs codegen/out/basic.woz --rom my-board.bin
+```
+
+Insert the disk, enter `MON` if the shell shows `>`, then `C600G`; press Return at
+`MEMORY SIZE?`. The disk refuses to load if the machine's upper ROM (`$D000-$FFFF`)
+differs from the ROM it was made from. It contains the ROM's third-party Microsoft
+BASIC, so keep it local (`codegen/out/` is git-ignored) rather than committing or
+sharing it (see `NOTICE`). BASIC appears about a second after loading: the disk waits
+out the picodisk's spin-down and resyncs the ROM's PS/2 decoder, which READY stalls
+during the boot can misalign. If keys are still garbled, Reset then `MON`/`E000G`
+restarts the loaded BASIC. Its prompt is a bare `]`. ROM BASIC shows `"]` because its
+message line breaks are mis-assembled; the disk repairs its own copy. Shift+= types `+`,
+which the ROM's PS/2 decoder never produces; `PEEK(49152)` still sees `=`. Don't select
+BASIC ROM (`$C006`, e.g. `PEEK(49158)`) from disk BASIC or the monitor: key input then
+`BRK`s until Reset (then `MON`/`E000G`).
+`node codegen/tools/msbasic-woz.test.mjs` verifies it on the WASM build;
+`pwsh codegen/tools/msbasic-woz.test.ps1 [-Node <node>]` (Windows, MSVC) types into it
+through the ROM's real PS/2 decoder while modelling the picodisk's READY stalls.
+
+## MS-BASIC for 3RIC DOS
+
+```sh
+node codegen/tools/msbasic-prg.mjs codegen/out/BASIC.PRG   # ROM + badger6502.dbg from emulator/Data
+node codegen/tools/msbasic-prg.mjs codegen/out/BASIC.PRG --rom my-board.bin --dbg my-board.dbg
+```
+
+Copy `BASIC.PRG` to the SD card. At the DOS `>` prompt, `CD` to the folder that should
+hold your programs, then `BRUN BASIC.PRG 0800` (with `BASIC.PRG` in that folder) and press
+Return at `MEMORY SIZE?` (`34047 BYTES FREE`). In BASIC, `SAVE "HELLO.BAS"` writes the
+program to that folder, replacing a file of the same name, and `LOAD "HELLO.BAS"` reads it
+back; any string expression works (`SAVE A$`). Names are FAT 8.3 and upper-cased. Errors:
+`?FILE NOT FOUND ERR`, `?FILE TYPE MISMATCH ERR` (a directory or not a BASIC program),
+`?BAD FILE NAME ERR`, `?OUT OF MEMORY ERR`, `?I/O ERR`. Use the shell for `DIR`, `CD` and
+`DEL`. `SAVE` needs a card with 512-byte clusters, as the shell's `BSAVE` does. Like the disk, the file refuses to start on a ROM other than the one it was built
+from and contains Microsoft's BASIC, so keep it local.
+`node codegen/tools/msbasic-prg.test.mjs` verifies it on the WASM build.
 
 ## Layout
 
