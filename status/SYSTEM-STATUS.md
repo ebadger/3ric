@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-18 — ebadger (via Copilot)_
+_Last updated: 2026-10-22 — ebadger (via Copilot)_
 
 ---
 
@@ -79,6 +79,7 @@ pwsh codegen\tools\port-ultima1.native.ps1  # Ultima I pad glue: real PS/2 frame
 & $node codegen\tools\port-ultima2.test.mjs # Ultima II DOS 3.3 translator on ROM DOS (set U2_DISKS to also play the real disks)
 & $node codegen\tools\port-wizardry1.test.mjs # Wizardry I block driver on ROM DOS + SD, 3 cluster layouts (WIZ1_DISKS = real disks)
 pwsh codegen\tools\port-wizardry1.native.ps1  # Wizardry I resident through the native PS/2 harness (MSVC)
+& $node codegen\tools\port-dirtbike.test.mjs  # Dirt Bike SD files, pads, Apple II speed on ROM DOS (DIRTBIKE_DSK = real disk)
 ```
 
 C++ CPU unit tests (`emulator/Badger6502VMTest`, MSTest): **Test → Run All Tests** in
@@ -292,9 +293,27 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
   checks. WASM play reached the castle, a tavern roster write and the maze; no board
   trial yet. Game data stays local. See
   [`docs/porting-logs/wizardry-i.md`](../docs/porting-logs/wizardry-i.md).
+- **Dirt Bike (SD-card port, experimental):** `node codegen\tools\port-dirtbike.mjs <DIRTBIKE.dsk> <out>`
+  turns the owner's DOS 3.3 disk (Verhille Arnaud's Apple II motocross time trial) into
+  a `DIRTBIKE\` folder. Copy it to the card, then `CD DIRTBIKE` and
+  `BRUN DIRTBIKE.PRG 0800`. Game data stays local. The game read its own raw sectors
+  through RWTS; each card file holds those sectors, and the resident turns its loads and
+  hall-of-fame saves into `FLOAD`/`OWRITE` (records and the input setting persist in
+  `DIRTHOF`; the converter keeps an existing one). It runs at Apple II speed: race frames
+  are paced on the slot-4 Mockingboard's Timer 1, and sound effects, music and pauses
+  are retimed (300 emulated frames within 0.5% of an Apple II). Without a Mockingboard,
+  frames run 1.54x fast. Either SNES pad plays (D-pad lean/menus, B/X gas, A/Y brake,
+  Start Esc, Select restart); the keyboard keeps its own keys. The menu's quit
+  returns to the DOS. WASM play covered the title, the menu, a race, the saved setting
+  and a staged record; no board trial yet. See
+  [`docs/porting-logs/dirt-bike.md`](../docs/porting-logs/dirt-bike.md).
 - **Disk II spin-up gap:** after the motor stops, the emulated drive gives no data for
   one second after motor-on, so Apple Pascal disks report error 9 between slow
   accesses (recorded in `EMULATOR.md`; not changed).
+- **Branch timing gap:** the emulated 65C02 counts a branch not taken as 3 cycles and
+  most taken backward branches as 4 (the chip: 2 and 3). Delay loops therefore run ~20%
+  long in the emulator, and emulator-measured cycle budgets include this (recorded in
+  `EMULATOR.md`; found while porting Dirt Bike; not changed).
 - **CI:** `deploy-pages.yml` rebuilds and publishes to GitHub Pages on every push to `main`
   that touches the emulator/web/codegen sources it lists.
 - **Usage analytics:** every staged page loads a privacy-first, cookieless **GoatCounter**
