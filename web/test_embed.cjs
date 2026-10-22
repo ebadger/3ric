@@ -47,6 +47,7 @@ assert.equal(styleFor("html.embedded body").get("overflow"), "hidden");
 assert.equal(styleFor("#emulator:fullscreen").get("height"), "100%");
 assert.equal(styleFor("#emulator:fullscreen").get("width"), "100%");
 assert.equal(styleFor("#ide").get("display"), "flex", "the ordinary editor must remain visible");
+assert.match(markup, /Swap \.woz&hellip;<input type="file" id="diskswap" accept="\.woz"/);
 console.log("PASS: real player markup, control placement, workbench visibility, and aspect-preserving CSS");
 const base = "https://player.example/3ric/index.html";
 const rom = fs.readFileSync(path.join(__dirname, "data", "badger6502.bin"));
@@ -216,6 +217,208 @@ function assertBooted(page, marker) {
     `the URL disk must execute through the real C600G/frame/keyboard path (PC=$${page.window.vm.pc().toString(16)}): ${text}`);
 }
 
+async function pickSwap(page, file) {
+  const target = { value: file ? file.name : "", files: file ? [file] : [] };
+  await page.document.getElementById("diskswap").dispatch("change", { target });
+  assert.equal(target.value, "", "the same disk must be selectable again");
+}
+
+function localDisk(bytes, name = "map.woz") {
+  return { name, size: bytes.length, arrayBuffer: async () => Uint8Array.from(bytes).buffer };
+}
+
+async function testDiskSwaps(Module, disk, replacement, maximum, malformed, woz1, marker) {
+  const page = mountPage(Module, { search: "?woz=boot.woz", disk });
+  try {
+    await page.ready;
+    assertBooted(page, marker);
+    const vm = page.window.vm;
+    const control = page.document.getElementById("diskswap");
+    assert.equal(control.disabled, false);
+    await page.document.getElementById("debugpause").dispatch("click");
+    page.document.getElementById("speed").value = "2";
+    await page.document.getElementById("speed").dispatch("change");
+    await page.document.getElementById("screen").dispatch("keydown", { key: "x" });
+    await page.document.getElementById("screen").dispatch("keydown", { key: "y" });
+    vm.readBus(0xc007);
+    vm.readBus(0xc08b); vm.readBus(0xc08b);
+    vm.writeBus(0xd000, 0x5a);
+    assert(vm.enableAudio(48000));
+    vm.runCycles(10000);
+    assert(vm.addBreakpoint(vm.pc()));
+    vm.runCycles(100);
+    assert(vm.breakpointHit());
+    const snapshot = () => ({
+      registers: [vm.pc(), vm.regA(), vm.regX(), vm.regY(), vm.sp(), vm.status()],
+      memory: Buffer.from(Array.from({ length: 65536 }, (_, address) => vm.peekMapped(address))),
+      mappings: [vm.memoryMapping(0x9000), vm.memoryMapping(0xd000), vm.memoryMapping(0xe000)],
+      breakpoint: [vm.breakpointHit(), vm.hasBreakpoint(vm.pc())],
+      debugger: page.document.getElementById("debugstate").textContent,
+      speed: page.document.getElementById("speed").value,
+      sound: page.document.getElementById("sound").getAttribute("aria-pressed"),
+    });
+    const before = snapshot();
+    await pickSwap(page, localDisk(replacement));
+    assert(vm.diskPresent(0));
+    assert.equal(page.document.getElementById("status").textContent, "inserted map.woz without reset");
+    assert.deepEqual(snapshot(), before, "swapping must preserve live machine and UI state");
+    assert(vm.drainAudio().length > 0, "swapping must not discard queued VM audio");
+    assert.equal(page.document.focuses.at(-1), "screen");
+    await pickSwap(page, localDisk(replacement));
+    assert.deepEqual(snapshot(), before, "reselecting must not reset or run the CPU");
+    const focuses = page.document.focuses.length;
+    await pickSwap(page, null);
+    assert.equal(page.document.focuses.length, focuses, "cancelling must not change focus");
+    assert.equal(page.document.getElementById("status").textContent, "inserted map.woz without reset");
+    await pickSwap(page, localDisk(maximum, "maximum.woz"));
+    assert(vm.diskPresent(0), "an exactly 8 MiB disk must be accepted for swapping");
+
+    let readOversized = false;
+    const failures = [
+      [{ name: "huge.woz", size: Module.MAX_WOZ_FILE_SIZE + 1, arrayBuffer: async () => { readOversized = true; } }, /8 MiB limit/, true],
+      [{ name: "unreadable.woz", size: 1, arrayBuffer: async () => { throw new Error("read denied"); } }, /read denied/, true],
+      [localDisk(new Uint8Array(8), "bad.woz"), /not a valid .woz/, true],
+      [localDisk(woz1, "old.woz"), /WOZ1 is not supported/, true],
+      [localDisk(malformed, "malformed.woz"), /invalid or unsupported WOZ2.*reinsert the previous disk/, false],
+    ];
+    for (const [file, message, present] of failures) {
+      const errors = page.errors.length;
+      await pickSwap(page, file);
+      assert.match(page.document.getElementById("status").textContent, /^Disk swap failed:/);
+      assert.match(page.document.getElementById("status").textContent, message);
+      assert.equal(page.errors.length, errors + 1);
+      assert.equal(vm.diskPresent(0), present);
+      assert.deepEqual(snapshot(), before, "failed swaps must not reset or mutate machine state");
+    }
+    assert.equal(readOversized, false, "reject oversized files before reading them");
+    await pickSwap(page, localDisk(replacement));
+    assert(vm.diskPresent(0), "a failed insertion must allow a successful retry");
+    assert.deepEqual(snapshot(), before);
+    vm.clearBreakpoints();
+    vm.readBus(0xc082);
+    await page.document.getElementById("debugcontinue").dispatch("click");
+    page.runFrames(1);
+    assert.equal(vm.peek(0xc000), 0xd8, "swap must preserve the first queued key");
+    vm.poke(0xc000, 0);
+    page.runFrames(1);
+    assert.equal(vm.peek(0xc000), 0xd9, "swap must preserve subsequent queued keys in order");
+
+    // The replacement becomes readable media, but is never executed by the swap.
+    vm.setPC(0xc600);
+    assertBooted(page, 0xd6);
+  } finally {
+    page.dispose();
+  }
+  console.log("PASS: disk swap preserves CPU/RAM/banks/input/audio/debugger; replacement media, cancellation, limits, errors and retry");
+}
+
+async function testOverlappingActions(Module, disk, replacement, marker) {
+  const controls = ["reset", "bootdisk", "diskfile", "diskswap", "mountsd", "prgfile", "assemble"];
+  const assertDisabled = (page, disabled) => {
+    for (const id of controls) assert.equal(page.document.getElementById(id).disabled, disabled, id);
+  };
+  const machineState = vm => ({
+    pc: vm.pc(), sp: vm.sp(), a: vm.regA(), x: vm.regX(), y: vm.regY(), p: vm.status(),
+    memory: Buffer.from(Array.from({ length: 65536 }, (_, address) => vm.peekMapped(address))),
+  });
+  for (const kind of ["diskswap", "diskfile", "prgfile", "bootdisk"]) {
+    let release, reads = 0;
+    const gate = new Promise(resolve => { release = resolve; });
+    const page = mountPage(Module, {
+      search: "?woz=boot.woz", disk,
+      diskResponse: url => {
+        if (kind === "bootdisk" && url.pathname.endsWith("/data/disk.woz")) {
+          reads++;
+          return gate;
+        }
+        return new Response(disk);
+      },
+    });
+    const bytes = kind === "prgfile"
+      ? Uint8Array.of(0xa9, 0xd6, 0x8d, 0x00, 0x04, 0x4c, 0x05, 0x08) : replacement;
+    const result = kind === "bootdisk" ? new Response(bytes) : Uint8Array.from(bytes).buffer;
+    let pending;
+    try {
+      await page.ready;
+      assertBooted(page, marker);
+      const vm = page.window.vm;
+      const before = machineState(vm);
+      const target = {
+        value: "pending",
+        files: [{ name: "pending", size: bytes.length, arrayBuffer: () => { reads++; return gate; } }],
+      };
+      pending = kind === "bootdisk"
+        ? page.document.getElementById(kind).dispatch("click")
+        : page.document.getElementById(kind).dispatch("change", { target });
+      assert.equal(reads, 1, `${kind} must reach its deferred read`);
+      assertDisabled(page, true);
+      const requestCount = page.requests.length;
+      let rejectedReads = 0;
+      const rejectedTarget = () => ({
+        value: "rejected",
+        files: [{ name: "rejected", size: disk.length, arrayBuffer: async () => {
+          rejectedReads++;
+          return Uint8Array.from(disk).buffer;
+        } }],
+      });
+      for (const [id, event, detail] of [
+        ["reset", "click", {}], ["bootdisk", "click", {}],
+        ["diskfile", "change", { target: rejectedTarget() }],
+        ["diskswap", "change", { target: rejectedTarget() }],
+        ["prgfile", "change", { target: rejectedTarget() }],
+        ["mountsd", "click", {}], ["assemble", "click", {}],
+        ["src", "keydown", { ctrlKey: true, key: "Enter" }],
+        ["src", "keydown", { metaKey: true, key: "Enter" }],
+      ]) {
+        const errors = page.errors.length;
+        await page.document.getElementById(id).dispatch(event, detail);
+        assert.match(page.document.getElementById("status").textContent, /Another machine action is in progress/);
+        assert.equal(page.errors.length, errors + 1, "rejected actions must be reported");
+        assertDisabled(page, true);
+        assert.equal(page.requests.length, requestCount, "a rejected action started a download");
+        assert.equal(rejectedReads, 0, "a rejected action read a file");
+        assert.deepEqual(machineState(vm), before, "an overlapping action changed the VM");
+      }
+      release(result);
+      await pending;
+      assertDisabled(page, false);
+      if (kind === "diskswap") {
+        assert.deepEqual(machineState(vm), before);
+        assert.equal(page.document.getElementById("status").textContent, "inserted pending without reset");
+      } else {
+        assertBooted(page, 0xd6);
+      }
+      await pickSwap(page, localDisk(disk));
+      assert.equal(page.document.getElementById("status").textContent, "inserted map.woz without reset");
+    } finally {
+      release(result);
+      await pending;
+      page.dispose();
+    }
+  }
+
+  const editor = mountPage(Module, { search: "?woz=boot.woz", disk });
+  try {
+    await editor.ready;
+    assertBooted(editor, marker);
+    editor.document.getElementById("src").value = ".org $0800\nlda #$D6\nsta $0400\nloop: jmp loop";
+    const assembling = editor.document.getElementById("assemble").dispatch("click");
+    const errors = editor.errors.length;
+    await pickSwap(editor, localDisk(replacement));
+    assert.equal(editor.errors.length, errors + 1, "assembly must also guard its asynchronous module/program load");
+    await assembling;
+    assertDisabled(editor, false);
+    assertBooted(editor, 0xd6);
+    await pickSwap(editor, { name: "bad-read.woz", size: 1, arrayBuffer: async () => { throw new Error("read failed"); } });
+    assertDisabled(editor, false);
+    await pickSwap(editor, localDisk(disk));
+    assert.equal(editor.document.getElementById("status").textContent, "inserted map.woz without reset");
+  } finally {
+    editor.dispose();
+  }
+  console.log("PASS: deferred swap/insert/PRG/download actions exclude reset, disk, SD and assembly races; completion/failure releases the guard");
+}
+
 async function main() {
   const Module = await createBadgerVM({ print() {}, printErr() {} });
   const { buildBootableWoz } = await import(pathToFileURL(
@@ -223,6 +426,7 @@ async function main() {
   const marker = 0xc5;
   const program = Uint8Array.of(0xa9, marker, 0x8d, 0x00, 0x04, 0x4c, 0x05, 0x08);
   const disk = buildBootableWoz(program, 0x0800);
+  const replacement = buildBootableWoz(Uint8Array.of(0xa9, 0xd6, ...program.subarray(2)), 0x0800);
   const limit = Module.MAX_WOZ_FILE_SIZE;
   assert.equal(limit, 8 * 1024 * 1024);
   const diskUrl = "https://disks.example/My Game.woz?revision=2&download=1";
@@ -231,6 +435,7 @@ async function main() {
   const player = mountPage(Module, { search: query, disk, saved: ".org $0800\nbrk" });
   assert.equal(player.document.getElementById("reset").disabled, true,
     "machine-changing controls wait for automatic startup");
+  assert.equal(player.document.getElementById("diskswap").disabled, true);
   await player.ready;
   assert.deepEqual(player.errors, []);
   assert(player.document.documentElement.classList.contains("embedded"));
@@ -244,6 +449,7 @@ async function main() {
     new URL(diskUrl).href,
   ].sort(), "only the requested disk and mandatory assets load; no SD, default sample, or competing target");
   assert.equal(player.document.getElementById("reset").disabled, false);
+  assert.equal(player.document.getElementById("diskswap").disabled, false);
   assert.equal(player.document.getElementById("reset").textContent, "Restart");
   assertBooted(player, marker);
   assert.equal(player.window.vm.diskPresent(0), true);
@@ -271,9 +477,18 @@ async function main() {
   assert.match(fullscreen.textContent, /unavailable/);
 
   const requestCount = player.requests.length;
+  await pickSwap(player, localDisk(replacement));
+  assert.equal(player.window.vm.peek(0x0400), marker, "swapping must not execute the replacement");
   player.window.vm.poke(0x0400, 0);
-  await player.document.getElementById("reset").dispatch("click");
+  const restarting = player.document.getElementById("reset").dispatch("click");
+  assert.equal(player.document.getElementById("diskswap").disabled, true);
+  const errorsBeforeOverlap = player.errors.length;
+  await pickSwap(player, localDisk(replacement));
+  assert.equal(player.errors.length, errorsBeforeOverlap + 1, "a swap cannot interrupt Restart");
+  await restarting;
+  assert.equal(player.document.getElementById("diskswap").disabled, false);
   assertBooted(player, marker);
+  assert.notEqual(player.window.vm.peek(0x0400), 0xd6, "Restart must retain the original boot disk after a swap");
   assert.equal(player.requests.length, requestCount, "Restart reuses the disk, ROM, and font bytes");
   const screen = player.document.getElementById("screen");
   await screen.dispatch("keydown", { key: "x" });
@@ -387,6 +602,9 @@ async function main() {
   fragmented.dispose();
   assert.doesNotMatch(mainScript, /chunks\.push\(/, "download memory must not grow per network fragment");
   console.log("PASS: one-byte network fragments reconstruct the exact bootable disk without retaining a chunk list");
+
+  await testDiskSwaps(Module, disk, replacement, maximum, malformed, woz1, marker);
+  await testOverlappingActions(Module, disk, replacement, marker);
 
   const workbench = mountPage(Module, { search: "?woz=games/own.woz&src=ignored.s#ide", disk });
   await workbench.ready;

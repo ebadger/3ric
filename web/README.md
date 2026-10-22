@@ -29,7 +29,8 @@ identically. Browser-only presentation code stays in the bridge and JavaScript.
   card; from there `DIR`, `CAT`, `CD <dir>`, `BLOAD`/`BRUN <file>` all work.
 - **Disk II 5.25″ floppy** emulation (WozLib) through the standard boot ROM at
   `$C600`. A **Boot Disk** button boots the bundled `.woz`, and **Insert .woz…**
-  boots any WOZ image you pick. Self-booting machine-code game disks run into
+  boots a supported WOZ2 image you pick. **Swap .woz…** changes drive 1's disk
+  without resetting the running program. Self-booting machine-code game disks run into
   their hi-res title; DOS 3.3 / Quick-DOS disks don't (this clone has no
   Applesoft for their auto-run greeting — see below).
 - **Adjustable CPU clock** (**Speed** selector): 0.5× / 1× (≈1.57 MHz, native) /
@@ -159,6 +160,19 @@ autoplay rules delay it until the first pointer or keyboard interaction; press
 
 > Port 8011 is used because 8000 is taken on this machine.
 
+At a game's disk-change prompt, use the workbench's **Swap .woz…**, select the
+requested disk, then confirm in the game. **Insert .woz…** deliberately reboots;
+do not use it to load a second disk into a running game. Swapping preserves the
+CPU/RAM/banks, queued input, debugger pause/breakpoints, speed and sound settings.
+It accepts the same single-sided 5.25-inch WOZ2 images and 8 MiB limit as booting.
+If an invalid container ejects the old disk, reinsert it with **Swap .woz…**.
+This adds neither floppy writing nor save/export support. Ordinary **Reset**
+still returns to the ROM; embedded **Restart** retains its original boot disk.
+Reset, disk, SD, PRG-load and Assemble & Run controls wait for any active machine
+action to finish. Overlapping requests, including the assembly keyboard shortcut,
+report that the machine is busy rather than queueing a delayed reset or disk swap.
+Controls become available again on success or failure.
+
 ## Embed a player and auto-boot your own WOZ
 
 Host a bootable `.woz` at a public URL, then point an iframe at the existing player.
@@ -238,7 +252,8 @@ No new build or SDK is required to embed the hosted player. For a self-hosted
 copy, build/serve this folder normally and change the iframe's player URL.
 After building locally, `node web\test_embed.cjs` exercises the actual page
 markup/CSS, startup and Disk II boot, restart/retry, fullscreen state, download
-limits/timeouts, errors, and existing program links against the real WASM core.
+limits/timeouts, non-resetting disk swaps, errors, and existing program links
+against the real WASM core.
 `node web\test_woz_validation.cjs` covers malformed containers, checksums, formats,
 and the exact size boundary directly through the shared parser. Native equivalents
 are in `Badger6502VMTest`'s `WozFileTests` class.
@@ -508,10 +523,11 @@ image), and the data registers at `$C0E0-$C0EF` route to `DriveEmulator` via
 
 `insertDisk(drive, bytes)` writes the WOZ bytes to Emscripten's in-memory
 filesystem and calls `WozDisk::InsertDisk(path)` (the loader reads through a
-`FILE*`, which MEMFS provides) — no changes to WozLib were needed. **Boot Disk**
+`FILE*`, which MEMFS provides). **Boot Disk**
 and **Insert .woz…** re-seed a clean machine, insert the image into drive 1, and
-type `C600G` (the monitor "Go" command) to jump to the boot ROM, just like
-booting on real hardware.
+queue `MON` followed by `C600G` after ROM initialization to leave DOS and enter
+the boot ROM. **Swap .woz…** uses only the insertion path, without resetting or
+sending a boot command, so the running game reads the replacement disk itself.
 
 This clone's `$E000` BASIC is a generic Microsoft BASIC (it prompts
 `MEMORY SIZE?`), **not** Applesoft, so disks whose boot auto-runs an Applesoft
