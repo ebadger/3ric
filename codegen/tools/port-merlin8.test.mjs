@@ -9,11 +9,12 @@
 // Merlin: catalog, load, assemble, compare the objects with the disk's own
 // utilities, save, ED's full-screen editor (Ctrl-A for Open-Apple) and quit.
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import { assemble } from "./asm6502.mjs";
 import harness from "./harness.cjs";
 import { buildSparseFat32 } from "./ultima5/fat32.mjs";
-import { ED_ORG, LAYOUT, ROM_RANGES, applyPatches, buildLoader, buildTree, edPatches, parmsPatches, readProdosVolume, romSums, systemPatches, to83 } from "./port-merlin8.mjs";
+import { ED_ORG, LAYOUT, ROM_RANGES, applyPatches, buildLoader, buildTree, edPatches, parmsPatches, readProdosVolume, romSums, systemPatches, to83, uppercaseAsciiRange } from "./port-merlin8.mjs";
 
 const HZ = 1573437;
 
@@ -48,9 +49,20 @@ assert.equal(to83("WHATSIT.A.Q"), "WHATSITA.Q");
     for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++)
       assert.ok(list[i].at + list[i].before.length <= list[j].at || list[j].at + list[j].before.length <= list[i].at, `${what} patches overlap`);
   }
+  {
+    const before = Uint8Array.of(0x60, 0x42, 0x61, 0xa0, 0xe9);
+    const after = Uint8Array.of(0x60, 0x42, 0x41, 0xa0, 0xc9);
+    const hash = (bytes) => crypto.createHash("sha256").update(bytes).digest("hex");
+    const range = { at: 0x1000, length: before.length, beforeSha256: hash(before), afterSha256: hash(after) };
+    const upper = uppercaseAsciiRange(before, 0x1000, range, "test text");
+    assert.deepEqual(upper, after, "lowercase text is uppercased without changing Apple II bit 7");
+    assert.deepEqual(uppercaseAsciiRange(upper, 0x1000, range, "test text"), upper, "uppercase range is idempotent");
+    const bad = Uint8Array.from(before); bad[2] ^= 1;
+    assert.throws(() => uppercaseAsciiRange(bad, 0x1000, range, "test text"), /unexpected text bytes/);
+  }
   const rom = fs.readFileSync(new URL("../../emulator/Data/badger6502.bin", import.meta.url));
   assert.equal(romSums(rom).length, ROM_RANGES.length);
-  console.log("PASS converter: 8.3 names, guarded patches, layout, ROM sums");
+  console.log("PASS converter: 8.3 names, guarded patches, uppercase text, layout, ROM sums");
 }
 
 // ---------------------------------------------------------------------------
@@ -1463,15 +1475,27 @@ if (process.env.MERLIN_DISKS) {
   const [d1, d2] = process.env.MERLIN_DISKS.split(/[;,]/).map((p) => new Uint8Array(fs.readFileSync(p.trim())));
   const tree = buildTree(d1, d2 || null);
   const ref = readProdosVolume(d1).files;
+  for (const f of ref) {
+    const [dir, name, child] = f.path.split("/");
+    if (!child && ["SOURCE", "LIBRARY", "PI"].includes(dir))
+      assert.deepEqual(tree[to83(dir)][to83(name)], f.data, `${f.path} is copied without text conversion`);
+  }
   const { s, vm } = await bootMerlin(tree);
   const run = (sec) => { for (let c = 0; c < sec * HZ; c += 50000) vm.run(50000); };
   const type = (str, gap = 0.08) => { for (const ch of str) { vm.keyDown(ch === "~" ? 13 : ch.charCodeAt(0)); run(gap); } };
   const screen = () => screenText(s);
+  const assertUppercaseUi = (label) => {
+    const text = screen();
+    assert.doesNotMatch(text, /[a-z]/, `${label} contains lowercase display text:\n${text}`);
+  };
   run(12);
-  assert.match(screen(), /Prefix: \/SD\/MERLIN8\//, `main menu\n${screen()}`);
+  assert.match(screen(), /PREFIX: \/SD\/MERLIN8\//, `main menu\n${screen()}`);
+  assertUppercaseUi("main menu");
   type("C"); type("~"); run(6);
   assert.match(screen(), /MERLIN\.SYS\s+BIN/); assert.match(screen(), /SOURCE\s+DIR/);
+  assertUppercaseUi("catalog");
   type("~"); run(1);
+  assertUppercaseUi("main menu after catalog");
   // Assemble two of the disk's own sources; their SAVE writes the objects.
   for (const [src, answer, out, refPath] of [["SOURCE/EDMAC", "1", "EDMAC", "UTILITIES/EDMAC"]]) {
     type("L"); type(src + "~"); run(8);
@@ -1483,25 +1507,35 @@ if (process.env.MERLIN_DISKS) {
     type("D"); type(`BLOAD ${out},A$3000~`); run(6); type("~"); run(1);
     for (let i = 0; i < want.data.length; i++) assert.equal(vm.peek(0x3000 + i), want.data[i], `${out} byte ${i} matches ${refPath}`);
   }
-  console.log("PASS real Merlin: catalog, load + assemble EDMAC.S into a byte-identical object, BLOAD");
+  console.log("PASS real Merlin: uppercase menu/catalog, load + assemble EDMAC.S into a byte-identical object, BLOAD");
+  type("E"); run(2); type("NEW~"); run(1); assertUppercaseUi("ED new-buffer prompt");
+  type("A~"); run(2); assertUppercaseUi("empty ED editor");
+  type(" ORG $0900~ WUT~");
+  type("\x01Q"); run(2); type("ASM~"); run(20);
+  assert.match(screen(), /BAD OPCODE IN LINE: 2/, `uppercase assembler diagnostic\n${screen()}`);
+  assertUppercaseUi("assembler diagnostic");
+  type("Q~"); run(2);
   // Write a program in ED (Ctrl-A Q leaves it), assemble, save source and object, run it.
   type("E"); run(2); type("NEW~"); run(1); type("A~"); run(2);
+  assertUppercaseUi("ED editor");
   type(" ORG $0900~ LDA #$C8~ JSR $FDED~ LDA #$C9~ JMP $FDED~");
   type("\x01Q"); run(2);
-  type("ASM~"); run(20); type("Q~"); run(2);
+  type("ASM~"); run(20); assertUppercaseUi("assembler success"); type("Q~"); run(2);
   type("S"); type("HI~"); run(8);
   type("O"); type("HI~"); run(8);
   type("D"); type("BRUN HI~"); run(3);
-  assert.ok(s.textScreen().some((r) => r.startsWith("HIDisk command:")), `the program ran\n${screen()}`);
+  assert.ok(s.textScreen().some((r) => r.startsWith("HIDISK COMMAND:")), `the program ran\n${screen()}`);
+  assertUppercaseUi("disk-command prompt after BRUN");
   type("~"); run(1);
   type("L"); type("HI~"); run(8); type("L~"); run(3);
   assert.match(screen(), /LDA\s+#\$C8/, "the saved source loads back");
   type("Q~"); run(2); type("Q"); type("Y"); run(4);
+  assertUppercaseUi("DOS prompt after QUIT");
   type("DIR~"); run(5);
   assert.match(screen(), /HI\s+S\s+\$/); assert.match(screen(), /HI\s+\$0000000A/);
   const fat = checkFat(stub(vm));
   assert.ok(fat.files.has("MERLIN8/HI.S") && fat.files.has("MERLIN8/HI"));
-  console.log("PASS real Merlin: ED full-screen editor with Ctrl-A, assemble, save source/object, BRUN, reload, quit to DOS, FAT intact");
+  console.log("PASS real Merlin: uppercase ED/ASM UI, error diagnostics, ED editing with Ctrl-A, assemble, save source/object, BRUN, reload, quit to DOS, FAT intact");
 } else {
   console.log("SKIP real Merlin-8 (set MERLIN_DISKS=<disk1.dsk>;<disk2.dsk>)");
 }

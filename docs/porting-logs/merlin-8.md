@@ -61,6 +61,11 @@ assembler to both language-card banks, and loads `ED` (the full-screen editor) a
    Open-Apple tests read instead.
 6. **The ED load check.** Merlin's `BLOAD` refuses loads above the source limit; ED
    itself loads above it by design, so that one address is allowed.
+7. **Uppercase-only display.** 3RIC's text display does not render lowercase, so the
+   generated `MERLIN.SYS` and `ED` images use release-guarded, bit-7-preserving patches
+   for fixed menus, catalog headings, prompts, status labels and diagnostics. The
+   assembler's error-text table is separately SHA-guarded. Source files (including
+   source-authored prompts), samples and saved file contents are not case-transformed.
 
 ## Review fixes
 
@@ -85,8 +90,10 @@ except the write ordering, which is by construction (no write-fault injection).
   Loader refusals (missing `MERLIN.SYS`, different ROM).
 - With `MERLIN_DISKS=<disk1>;<disk2>`: the real Merlin catalogs, assembles
   `SOURCE/EDMAC.S` to an `EDMAC` object byte-identical to the disk's `UTILITIES/EDMAC`,
-  BLOADs it back, edits a program in ED with Ctrl-A, assembles, saves source and object,
+  BLOADs it back, checks uppercase menu/catalog/editor, assembler error/success and DOS
+  prompt screens, edits a program in ED with Ctrl-A, assembles, saves source and object,
   BRUNs it, reloads the source and quits to the ROM DOS, whose `DIR` lists the files.
+  Original sample sources are checked byte-for-byte against the disk.
   During development `KEYMAC.S` also assembled byte-identical (under a host-side MLI), and `CLOCK.S` assembled on the real stand-in
   with no stray stores into the stand-in, caches, global page or resident (traced).
 - `pwsh codegen/tools/port-merlin8.native.ps1`: the resident through the MSVC native PS/2

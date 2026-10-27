@@ -129,6 +129,18 @@ const BANK2 = (a) => a - 0xd000 + 0x40c4;
 const NOP = 0xea;
 const lo = (v) => v & 255, hi = (v) => v >> 8;
 
+const uppercaseUiTextPatch = (at, text, why, spacesHighBit = true) => {
+  const before = Array.from(text, (char) => {
+    const code = char.charCodeAt(0);
+    return code === 0x20 && !spacesHighBit ? code : code | 0x80;
+  });
+  const after = before.map((byte) => {
+    const code = byte & 0x7f;
+    return code >= 0x61 && code <= 0x7a ? byte - 0x20 : byte;
+  });
+  return { at, before, after, why };
+};
+
 /** Byte patches to the MERLIN.SYSTEM image; glue = the stand-in's symbols. */
 export function systemPatches(glue) {
   const { SRC_LIMIT, SYM, OBJ, TOP } = LAYOUT;
@@ -159,6 +171,70 @@ export function systemPatches(glue) {
     { at: BANK2(0xf7ef), before: [0xa9, 0x0f], after: [0xa9, SYM - 1], why: "Linker entry-point list base." },
     { at: BANK1(0xd280), before: [0x20, 0x11, 0xc3], after: jsr(glue.AMOVE), why: "AUXMOVE ($C311, IIe firmware) is a plain MOVE when aux memory is main memory." },
     { at: BANK2(0xd592), before: [0x20, 0x11, 0xc3], after: jsr(glue.AMOVE), why: "AUXMOVE, as above." },
+    uppercaseUiTextPatch(0x2347, "version", "Startup version label."),
+    uppercaseUiTextPatch(0x235c, "by Glen E. Bredon", "Startup author credit."),
+    uppercaseUiTextPatch(0x2375, "Copyright (C)  1987", "Startup copyright line."),
+    uppercaseUiTextPatch(0x238a, "Roger Wagner Publishing, Inc.", "Startup publisher credit."),
+    uppercaseUiTextPatch(0x244f, "Insert", "Insert prompt."),
+    uppercaseUiTextPatch(0x255d, "Name", "Catalog heading."),
+    uppercaseUiTextPatch(0x2567, "Type", "Catalog heading."),
+    uppercaseUiTextPatch(0x256d, "Blocks", "Catalog heading."),
+    uppercaseUiTextPatch(0x2575, "Modified", "Catalog heading."),
+    uppercaseUiTextPatch(0x2585, "Created", "Catalog heading."),
+    uppercaseUiTextPatch(0x2592, "Length Subtype", "Catalog heading."),
+    uppercaseUiTextPatch(0x26aa, "Blocks free:", "Catalog summary."),
+    uppercaseUiTextPatch(0x26cb, "Blocks used:", "Catalog summary."),
+    uppercaseUiTextPatch(0x26e8, "Total blocks:", "Catalog summary."),
+    uppercaseUiTextPatch(0x278c, "[no date]", "Catalog date placeholder."),
+    uppercaseUiTextPatch(0x304b, "Copyright (C) 1984 by Glen E. Bredon & RWP, Santee, CA", "Parameter-module copyright line."),
+    uppercaseUiTextPatch(0x3086, "Copyright (C) 1984  by Glen E. Bredon & RWP, Santee, Calif.", "Parameter-module copyright line."),
+    uppercaseUiTextPatch(0x3255, "Constraint error:", "Linker diagnostic."),
+    uppercaseUiTextPatch(0x3360, "Externals:", "Linker output heading."),
+    uppercaseUiTextPatch(0x3421, "duplicate", "Linker diagnostic."),
+    uppercaseUiTextPatch(0x34c0, "resolved", "Linker diagnostic."),
+    uppercaseUiTextPatch(0x3b9f, "in line:", "Assembler diagnostic."),
+    uppercaseUiTextPatch(0x3cc3, "Give value for", "Assembler prompt."),
+    uppercaseUiTextPatch(0x4d80, "Extra command characters", "Assembler diagnostic."),
+    uppercaseUiTextPatch(0x4d9b, "Format", "Assembler diagnostic."),
+    uppercaseUiTextPatch(0x4da4, "Overflow", "Assembler diagnostic."),
+    uppercaseUiTextPatch(0x4daf, "Memory full", "Assembler diagnostic."),
+    uppercaseUiTextPatch(0x4dbd, "Range", "Assembler diagnostic."),
+    uppercaseUiTextPatch(0x4dc3, "Bytes used", "Assembler summary.", false),
+    uppercaseUiTextPatch(0x4dce, "Bytes left", "Assembler summary.", false),
+    uppercaseUiTextPatch(0x4dd9, "All or some (A/S)?", "Assembler prompt."),
+    uppercaseUiTextPatch(0x4dec, "Update source (Y/N)?", "Assembler prompt."),
+    uppercaseUiTextPatch(0x4e01, "Assembling", "Assembler status."),
+    uppercaseUiTextPatch(0x4e7a, "By Glen Bredon", "Main-menu author credit."),
+    uppercaseUiTextPatch(0x4e8b, "C :Catalog", "Main-menu option."),
+    uppercaseUiTextPatch(0x4e96, "L :Load source", "Main-menu option."),
+    uppercaseUiTextPatch(0x4ea5, "S :Save source", "Main-menu option."),
+    uppercaseUiTextPatch(0x4eb4, "A :Append file", "Main-menu option."),
+    uppercaseUiTextPatch(0x4ec3, "D :Disk command", "Main-menu option."),
+    uppercaseUiTextPatch(0x4ed3, "E :Enter ED/ASM", "Main-menu option."),
+    uppercaseUiTextPatch(0x4ee3, "O :Save object code", "Main-menu option."),
+    uppercaseUiTextPatch(0x4ef7, "@ :Set date", "Main-menu option."),
+    uppercaseUiTextPatch(0x4f03, "Q :Quit", "Main-menu option."),
+    uppercaseUiTextPatch(0x4f12, "Source:", "Main-menu source label."),
+    uppercaseUiTextPatch(0x4f46, "Object:", "Main-menu object label."),
+    uppercaseUiTextPatch(0x4f58, "Prefix:", "Main-menu prefix label."),
+    uppercaseUiTextPatch(0x52e2, "Disk command:", "Disk-command prompt."),
+    uppercaseUiTextPatch(0x5308, "Pathname:", "Disk-command prompt."),
+    uppercaseUiTextPatch(0x534e, "Load:", "Load prompt."),
+    uppercaseUiTextPatch(0x53d2, "Editor", "Editor prompt."),
+    uppercaseUiTextPatch(0x53e3, "Append:", "Append prompt."),
+    uppercaseUiTextPatch(0x5406, "Save:", "Save prompt."),
+    uppercaseUiTextPatch(0x542b, "Quit?", "Quit prompt."),
+    uppercaseUiTextPatch(0x5451, "Object saved as", "Object-save message."),
+    uppercaseUiTextPatch(0x5493, "Object:", "Object prompt."),
+    uppercaseUiTextPatch(0x5567, "Hit a key", "Key prompt."),
+    uppercaseUiTextPatch(0x55c6, "Date:", "Date prompt."),
+    uppercaseUiTextPatch(0x6673, "bytes, Errors:", "Assembler summary."),
+    uppercaseUiTextPatch(0x6693, "--End assembly,", "Assembler summary."),
+    uppercaseUiTextPatch(0x66e8, "alphabet", "Symbol-table sort label."),
+    uppercaseUiTextPatch(0x66f4, "ical order:", "Symbol-table sort label."),
+    uppercaseUiTextPatch(0x672f, "numer", "Symbol-table sort label."),
+    uppercaseUiTextPatch(0x67cd, "Symbol table -", "Symbol-table heading."),
+    uppercaseUiTextPatch(0x689c, "Entry addresses:", "Symbol-table heading."),
   ];
 }
 
@@ -169,6 +245,14 @@ export function edPatches(glue) {
     { at: 0x9ee3, before: [0x2c, 0x61, 0xc0], after: [0x2c, lo(glue.OAFLAG), hi(glue.OAFLAG)], why: "ED's Open-Apple test reads the Ctrl-A flag." },
     { at: 0xa389, before: [0x2c, 0x61, 0xc0], after: [0x2c, lo(glue.OAFLAG), hi(glue.OAFLAG)], why: "ED's Open-Apple command dispatch reads the Ctrl-A flag." },
     { at: 0xa429, before: [0xad, 0x61, 0xc0], after: [0xad, lo(glue.OAFLAG), hi(glue.OAFLAG)], why: "ED's type-ahead pauses while the Ctrl-A flag is set." },
+    uppercaseUiTextPatch(0xa0b2, "Hit a key", "ED key prompt."),
+    uppercaseUiTextPatch(0xa523, "Out of memory!", "ED diagnostic."),
+    uppercaseUiTextPatch(0xa6d6, "Change:", "ED prompt."),
+    uppercaseUiTextPatch(0xa6e2, "To:", "ED prompt."),
+    uppercaseUiTextPatch(0xa799, "Text to FIND", "ED prompt."),
+    uppercaseUiTextPatch(0xa7d1, "LABEL to go to", "ED prompt."),
+    uppercaseUiTextPatch(0xa9c9, "Free:", "ED status label."),
+    uppercaseUiTextPatch(0xa9e4, "Used:", "ED status label."),
   ];
 }
 
@@ -249,6 +333,35 @@ export function buildLoader(rom = fs.readFileSync(path.join(root, "emulator", "D
 
 const sha = (d) => crypto.createHash("sha256").update(d).digest("hex");
 
+const SYSTEM_ERROR_TEXT_RANGE = {
+  at: 0x60a4,
+  length: 0x12b,
+  beforeSha256: "ab25bc072fa621777b4c2032cd32ca2fdbae367eb37dad2e046eb79c2de0da1a",
+  afterSha256: "c6e45153baa9afae37474420fc0c0115b437527080cdf274b82ac07b92554e4a",
+};
+
+/** Uppercase a release-guarded range of text while preserving Apple II bit 7. */
+export function uppercaseAsciiRange(data, base, range, what) {
+  const offset = range.at - base;
+  const end = offset + range.length;
+  if (!Number.isInteger(offset) || !Number.isInteger(range.length) || offset < 0 || range.length < 0 || end > data.length)
+    throw new Error(`${what}: text range is outside the image`);
+
+  const digest = sha(data.subarray(offset, end));
+  if (digest === range.afterSha256) return Uint8Array.from(data);
+  if (digest !== range.beforeSha256)
+    throw new Error(`${what} at $${range.at.toString(16)}: unexpected text bytes (different release?)`);
+
+  const out = Uint8Array.from(data);
+  for (let i = offset; i < end; i++) {
+    const byte = out[i], code = byte & 0x7f;
+    if (code >= 0x61 && code <= 0x7a) out[i] = (byte & 0x80) | (code - 0x20);
+  }
+  if (sha(out.subarray(offset, end)) !== range.afterSha256)
+    throw new Error(`${what} at $${range.at.toString(16)}: uppercase patch did not match the release`);
+  return out;
+}
+
 /** The folder tree for the card: { NAME: Uint8Array | subtree }. */
 export function buildTree(disk1, disk2 = null, opts = {}) {
   const vol = readProdosVolume(disk1);
@@ -266,9 +379,11 @@ export function buildTree(disk1, disk2 = null, opts = {}) {
   if (ed.aux !== ED_ORG) throw new Error("ED does not load at $9DB6");
   const { prg, standin } = buildLoader(opts.rom);
   const glue = standin.symbols;
+  const patchedSystem = applyPatches(system.data, 0x2000, systemPatches(glue), "MERLIN.SYSTEM");
+  const uppercaseSystem = uppercaseAsciiRange(patchedSystem, 0x2000, SYSTEM_ERROR_TEXT_RANGE, "MERLIN.SYSTEM error table");
   const tree = {
     "MERLIN.PRG": prg,
-    "MERLIN.SYS": applyPatches(system.data, 0x2000, systemPatches(glue), "MERLIN.SYSTEM"),
+    "MERLIN.SYS": uppercaseSystem,
     PARMS: applyPatches(parms.data, 0, parmsPatches(), "PARMS"),
     ED: applyPatches(ed.data, ED_ORG, edPatches(glue), "ED"),
   };
