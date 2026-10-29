@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-22 — ebadger (via Copilot): Dirt Bike is the SD card; `?brun=` link_
+_Last updated: 2026-10-29 — Copilot: BDF04 D-pad patcher verified through emulator BRUN_
 
 ---
 
@@ -111,6 +111,7 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 | `web/build.ps1` | Compile the VM core + WozLib + MockMicroSD + bridge to WASM; stage data. |
 | `web/serve.ps1` | Local static server for the browser build (port 8011). |
 | `codegen/tools/run6502.mjs` | Assemble → run → check a 6502 program; emit a card-ready `.PRG`. |
+| `codegen/tools/patch-bdf04.mjs` | Exact-image local patcher for the user-supplied BDF04 game; keep input/output outside the repository and run the patched image with `BRUN BDF04.PRG 0F04`. |
 | `codegen/tools/gen_platform_ref.mjs` | Regenerate `codegen/platform/platform-ref.*` from `vm.h` + `badger6502.dbg`. |
 
 ## Current state / known gaps
