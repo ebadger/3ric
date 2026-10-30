@@ -17,36 +17,119 @@ export const DECODER_ADDR = 0x2284;
 export const DECODER_RUNTIME_ADDR = 0x0284;
 export const DECODER_SIZE = 0x1e;
 export const DECODER_OFFSET = DECODER_ADDR - LOAD_ADDR;
+export const MAPPER_RUNTIME_ADDR = 0x0290;
+export const SWEEP_HELPER_RUNTIME_ADDR = DECODER_RUNTIME_ADDR;
 export const DECODER_BEFORE = Object.freeze([
   0xa5, 0x3e, 0xf0, 0x0a, 0x10, 0x04, 0xa9, 0x01, 0xd0, 0x12,
   0xa9, 0x02, 0xd0, 0x0e, 0xa5, 0x3f, 0xf0, 0x0a, 0x10, 0x04,
   0xa9, 0x03, 0xd0, 0x04, 0xa9, 0x04, 0xd0, 0x00, 0x85, 0x0f,
 ]);
+export const FRAME_DELAY_ADDR = 0x219a;
+export const FRAME_DELAY_BEFORE = 0x1b;
+export const FRAME_DELAY_AFTER = 0xa4;
+export const FRAME_DELAY_RUNTIME_ADDR = FRAME_DELAY_ADDR - 0x2000;
+export const FIXED_TONE_DELAY_ADDR = 0x218c;
+export const FIXED_TONE_DELAY_BEFORE = 0x0a;
+export const FIXED_TONE_DELAY_AFTER = 0x0d;
+export const FIXED_TONE_DELAY_RUNTIME_ADDR = FIXED_TONE_DELAY_ADDR - 0x2000;
+export const SWEEP_BRANCH_OPERAND_ADDR = 0x2273;
+export const SWEEP_BRANCH_OPERAND_BEFORE = 0x10;
+export const SWEEP_BRANCH_OPERAND_AFTER = 0x1c;
+export const SWEEP_BRANCH_RUNTIME_ADDR = SWEEP_BRANCH_OPERAND_ADDR - 0x2000;
+export const SWEEP_DELAY_CALL_ADDR = 0x227a;
+export const SWEEP_DELAY_CALL_BEFORE = Object.freeze([0x20, 0xbf, 0x03]);
+export const SWEEP_DELAY_CALL_AFTER = Object.freeze([0x20, 0x84, 0x02]);
+export const SWEEP_DELAY_CALL_RUNTIME_ADDR = SWEEP_DELAY_CALL_ADDR - 0x2000;
+
+const TIMING_PATCHES = [
+  {
+    address: FRAME_DELAY_ADDR,
+    offset: FRAME_DELAY_ADDR - LOAD_ADDR,
+    before: [FRAME_DELAY_BEFORE],
+    after: [FRAME_DELAY_AFTER],
+    label: "frame delay",
+  },
+  {
+    address: FIXED_TONE_DELAY_ADDR,
+    offset: FIXED_TONE_DELAY_ADDR - LOAD_ADDR,
+    before: [FIXED_TONE_DELAY_BEFORE],
+    after: [FIXED_TONE_DELAY_AFTER],
+    label: "fixed speaker delay",
+  },
+  {
+    address: SWEEP_BRANCH_OPERAND_ADDR,
+    offset: SWEEP_BRANCH_OPERAND_ADDR - LOAD_ADDR,
+    before: [SWEEP_BRANCH_OPERAND_BEFORE],
+    after: [SWEEP_BRANCH_OPERAND_AFTER],
+    label: "speaker-sweep branch",
+  },
+  {
+    address: SWEEP_DELAY_CALL_ADDR,
+    offset: SWEEP_DELAY_CALL_ADDR - LOAD_ADDR,
+    before: SWEEP_DELAY_CALL_BEFORE,
+    after: SWEEP_DELAY_CALL_AFTER,
+    label: "speaker-sweep delay call",
+  },
+];
 
 const sha256 = (bytes) => crypto.createHash("sha256").update(bytes).digest("hex");
 
 export function buildControllerPatch() {
   const assembled = assemble(fs.readFileSync(patchSource, "utf8"));
   if (assembled.org !== DECODER_RUNTIME_ADDR || assembled.bytes.length !== DECODER_SIZE)
-    throw new Error(`BDF04 controller patch must be ${DECODER_SIZE} bytes at $${DECODER_RUNTIME_ADDR.toString(16)}`);
+    throw new Error(`BDF04 in-place code patch must be ${DECODER_SIZE} bytes at $${DECODER_RUNTIME_ADDR.toString(16)}`);
   return Uint8Array.from(assembled.bytes);
 }
 
-/** Replace the decoder in a fixture or verified image, checking its exact site bytes. */
-export function replaceDecoder(image, replacement = buildControllerPatch()) {
+function assertImage(image) {
   if (!(image instanceof Uint8Array)) throw new TypeError("BDF04 image must be a Uint8Array");
   if (image.length !== PRG_SIZE) throw new Error(`unexpected BDF04 image size (${image.length} bytes)`);
+}
+
+function assertReplacement(replacement) {
   if (!(replacement instanceof Uint8Array) || replacement.length !== DECODER_SIZE)
     throw new Error(`BDF04 replacement must be ${DECODER_SIZE} bytes`);
+}
 
-  const offset = DECODER_OFFSET;
-  for (let i = 0; i < DECODER_BEFORE.length; i++) {
-    if (image[offset + i] !== DECODER_BEFORE[i])
-      throw new Error(`unexpected bytes at $${DECODER_ADDR.toString(16).toUpperCase()} (BDF04 direction decoder): different release?`);
+function assertSiteBytes(image, site) {
+  for (let i = 0; i < site.before.length; i++) {
+    if (image[site.offset + i] !== site.before[i]) {
+      throw new Error(`unexpected bytes at $${site.address.toString(16).toUpperCase()} (BDF04 ${site.label}): different release?`);
+    }
   }
+}
+
+/** Replace only the decoder in a fixture or verified image. */
+export function replaceDecoder(image, replacement = buildControllerPatch()) {
+  assertImage(image);
+  assertReplacement(replacement);
+  assertSiteBytes(image, {
+    address: DECODER_ADDR,
+    offset: DECODER_OFFSET,
+    before: DECODER_BEFORE,
+    label: "direction decoder",
+  });
 
   const out = Uint8Array.from(image);
-  out.set(replacement, offset);
+  out.set(replacement, DECODER_OFFSET);
+  return out;
+}
+
+/** Apply all guarded BDF04 controller and timing edits to a fixture or verified image. */
+export function replaceBdf04Sites(image, replacement = buildControllerPatch()) {
+  assertImage(image);
+  assertReplacement(replacement);
+  assertSiteBytes(image, {
+    address: DECODER_ADDR,
+    offset: DECODER_OFFSET,
+    before: DECODER_BEFORE,
+    label: "direction decoder",
+  });
+  for (const site of TIMING_PATCHES) assertSiteBytes(image, site);
+
+  const out = Uint8Array.from(image);
+  out.set(replacement, DECODER_OFFSET);
+  for (const site of TIMING_PATCHES) out.set(site.after, site.offset);
   return out;
 }
 
@@ -57,7 +140,7 @@ export function patchBdf04(image) {
   const actual = sha256(image);
   if (actual !== PRG_SHA256)
     throw new Error(`unsupported BDF04 image (SHA-256 ${actual}); expected the verified release`);
-  return replaceDecoder(image);
+  return replaceBdf04Sites(image);
 }
 
 function isWithinRepository(candidate) {

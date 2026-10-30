@@ -5,7 +5,7 @@
 > no status. Move historical detail to `status/CHANGELOG.md` and deep runbooks to
 > `docs/runbooks/`.
 
-_Last updated: 2026-10-29 — Copilot: BDF04 D-pad patcher verified through emulator BRUN_
+_Last updated: 2026-10-30 — Copilot: BDF04 controller and timing patch verified through real ROM DOS BRUN_
 
 ---
 
@@ -111,11 +111,17 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 | `web/build.ps1` | Compile the VM core + WozLib + MockMicroSD + bridge to WASM; stage data. |
 | `web/serve.ps1` | Local static server for the browser build (port 8011). |
 | `codegen/tools/run6502.mjs` | Assemble → run → check a 6502 program; emit a card-ready `.PRG`. |
-| `codegen/tools/patch-bdf04.mjs` | Exact-image local patcher for the user-supplied BDF04 game; keep input/output outside the repository and run the patched image with `BRUN BDF04.PRG 0F04`. |
+| `codegen/tools/patch-bdf04.mjs` | Exact-image local controller/timing patcher for the user-supplied BDF04 game; keep input/output outside the repository and run the timed build with `BRUN BDF04-TIMED.PRG 0F04`. |
 | `codegen/tools/gen_platform_ref.mjs` | Regenerate `codegen/platform/platform-ref.*` from `vm.h` + `badger6502.dbg`. |
 
 ## Current state / known gaps
 
+- **BDF04 native controller and timing:** `codegen/tools/patch-bdf04.mjs` patches the
+  user-supplied game by exact-image fingerprint. Real ROM DOS `BRUN` tests cover the
+  `GAMEPAD1` D-pad mapping and preservation, plus a 1.53980x frame cadence and 1.54255x
+  complete speaker sweep against the 1.53847x Apple II clock ratio. The timed PRG stays
+  outside the repository; the fixed-delay tone duration, physical-board confirmation, and
+  full playthrough remain open.
 - **Model challenges:** `challenges.html` introduces the series; `challenges/tts/` and
   `challenges/tts/v1/` publish the complete original-TTS brief, baseline SHA and PR
   submission guide. No engines, speech-quality results, hardware tests or ballot exist

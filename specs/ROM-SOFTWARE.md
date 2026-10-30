@@ -47,17 +47,33 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
   `codegen/platform/platform-ref.*`. The ROM scan also reloads VIA1 Timer 1 and
   Timer 2; a guest borrowing either timer must account for that reload and for
   the ROM NMI handler acknowledging timer flags.
-- **Boulder Dash BDF04 controller adapter:** `codegen/tools/patch-bdf04.mjs` accepts only
-  the user-supplied 31,228-byte raw `.PRG` (SHA-256
+- **Boulder Dash BDF04 controller and timing adapter:** `codegen/tools/patch-bdf04.mjs`
+  accepts only the user-supplied 31,228-byte raw `.PRG` (SHA-256
   `bca7fa26bded86753165d5ca435277553d38faeb5d88f45d28fa70b4ea2ac0d0`; load/entry `$0F04`)
-  and replaces only its 30-byte paddle-timing direction decoder at file offset `$1380`
-  (loaded `$2284`, copied to runtime `$0284`). The mapper reads controller 1's `GAMEPAD1`
-  directions after the game's existing `$C070` scan and returns the game's existing codes:
-  left=1, right=2, up=3, down=4, neutral=0. Horizontal input retains priority over vertical;
-  the `$C061` button path is unchanged. The real ROM DOS `BRUN` test covers every direction,
-  neutral, priority, and Y/stack/carry preservation. Keep both game images outside the
-  repository. Run the separate output with `BRUN BDF04.PRG 0F04`. Physical-board and full
-  playthrough evidence remain open; see
+  and applies byte-guarded edits to its 30-byte paddle-timing decoder and four timing sites.
+  The decoder at file offset `$1380` (loaded `$2284`, copied to runtime `$0284`) holds a
+  speaker-delay helper at `$0284` and the controller mapper at `$0290`. The mapper reads
+  controller 1's `GAMEPAD1` directions after the game's `$C070` scan and returns the game's
+  existing codes: left=1, right=2, up=3, down=4, neutral=0. Horizontal input retains
+  priority over vertical; the `$C061` button path is unchanged.
+
+  The frame wait at `$219A` changes from `$1B` to `$A4`, targeting the original Apple II's
+  approximately 1.023 MHz cadence on 3RIC's approximately 1.57 MHz CPU. The fixed speaker
+  delay at `$218C` changes from `$0A` to `$0D`. The variable `$D2` speaker sweep routes its
+  delay call at `$227A` through the in-place helper, which scales each sweep step `X` to
+  `X + ceil(X/4)`; the `$2273` branch is retargeted to skip the helper during controller
+  polling. Through real ROM DOS `BRUN`, corrected 65C02 cycle counts measured the same-image
+  frame poll at 124,634 cycles before retiming and 191,911.5 afterward (1.53980x, against a
+  1.53847 clock ratio). The quadratic delay makes individual sweep-note ratios nonuniform;
+  measured speaker intervals scale by 1.54170x and the complete sweep by 1.54255x. The
+  delay routine itself is unchanged. The fixed speaker-delay operand is verified in live
+  memory, but its complete tone duration has not been measured separately.
+
+  The real ROM DOS `BRUN` test covers every direction, neutral, priority, Y/stack/carry
+  preservation, and timing against corrected 65C02 branch-cycle counts. Keep the original
+  and all generated game images outside the repository. Run the timed output with
+  `BRUN BDF04-TIMED.PRG 0F04`.
+  Physical-board and full-playthrough evidence remain open; see
   [`docs/porting-logs/bdf04.md`](../docs/porting-logs/bdf04.md).
 - **`.PRG` programs:** assembled by the codegen toolchain (`CODEGEN.md`). Sources: tracked
   `.s` files (`codegen/programs/hello.s`, `emulator/AICodeGen/<name>/<name>.s`); assembled
@@ -814,7 +830,7 @@ audio`; the program separately writes its editor and playhead into text video RA
 | Ultima III SD-card port | Experimental / emulator-verified | `codegen/tools/port-ultima3.test.mjs` reconstructs a synthetic boot image and drives the real loader/RWTS shim on the ROM DOS (whole-file loads, zero-page load, write and read-back, IOB/flag state); with `U3_DISKS` it plays the original disks through Mockingboard set-up, title, character creation, party, world, Lord British's castle, a dungeon and an autosave resume after reset, and checks the 61.5 Hz music IRQ; the gamepad tick is checked synthetically (buttons type keys, held directions repeat) and SNES Up walks the real party north. Talking, shops, Moongates, the endgame and the physical board (including pad scans alongside PS/2 typing) are open; ROM DOS command failures are not detected (card contents trusted); loads run ~2 KB/s in the emulator (boot ~30 s). |
 | Wizardry I SD-card port | Experimental / emulator-verified | `codegen/tools/port-wizardry1.test.mjs` drives the real loader/resident/shim on the ROM DOS with a synthetic volume on 1-, 8-(fragmented) and 64-sector-cluster cards (reads, writes, errors 8/9/16, NMIs and bank restore, loader refusals), and with `WIZ1_DISKS` plays the original disks from `BRUN` to the training grounds; `port-wizardry1.native.ps1` passes the native PS/2 harness. Manual WASM play reached the tavern (roster write) and the maze. No board trial; combat, deeper levels and a reload after reboot are unverified. Depends on fingerprinted ROM SD/FAT32 internals. |
 | Dirt Bike SD-card port | Experimental / emulator-verified | `codegen/tools/port-dirtbike.test.mjs` drives the real loader and resident on the ROM DOS with synthetic files: loads by T/S list, a missing file (carry set; a full RAM diff shows nothing written outside the destination), the hall-of-fame write/read-back, both pads, tone/`WAIT`/frame pacing against Apple-style references and the quit to `dos`. With `DIRTBIKE_DSK`, the original disk plays the title, a pad race at Apple II speed (300 frames within 0.5% of an unpaced build's Apple time), the menu's saved input setting across a re-run, and a staged record with initials. No board trial; pads, the no-Mockingboard fallback and a full race are unverified. The shipped card (`emulator/Data/sd.zip`) carries the port: `codegen/tools/make-sd-card.test.mjs` checks it is the upstream release plus exactly these patches, built by the committed loader and resident (and, with `DIRTBIKE_DSK`, rebuilds it byte for byte); `web/test_sd.cjs` boots it to the title; `?brun=DIRTBIKE/DIRTBIKE.PRG` plays it on the web page. |
-| Boulder Dash BDF04 controller patch | Experimental / emulator-verified | `codegen/tools/patch-bdf04.test.mjs` verifies the exact-image and byte guards, then runs the user-supplied image through ROM DOS `BRUN` and checks the live `GAMEPAD1` scan, neutral/four-direction mapping, horizontal priority, and Y/stack/carry preservation. Source and patched game images stay outside the repository. No physical-board or full-playthrough evidence yet; see [`docs/porting-logs/bdf04.md`](../docs/porting-logs/bdf04.md). |
+| Boulder Dash BDF04 controller and timing patch | Experimental / emulator-verified | `codegen/tools/patch-bdf04.test.mjs` verifies the exact-image and all modified-site byte guards, then runs the user-supplied image through ROM DOS `BRUN` and checks the live `GAMEPAD1` scan, neutral/four-direction mapping, horizontal priority, Y/stack/carry preservation, frame-poll ratio, and speaker sweep timing with corrected 65C02 branch-cycle counts. Source and patched game images stay outside the repository. No physical-board or full-playthrough evidence yet; see [`docs/porting-logs/bdf04.md`](../docs/porting-logs/bdf04.md). |
 | ROM `BLOAD` stores one byte past EOF | Known gap (ROM) | Observed in `fat32_file_read`; programs loading below live data must use `FLOAD 0000 eof-1`. ROM source is not in this repository. |
 | Adventure disk-only compatibility adapter | Experimental / emulator-verified | Exact-image `.dsk`/`.woz` patcher (`patch-adventure.mjs`); relocates MSBASIC to LC `$D000-$F0FF`, patches DOS 3.3 + `CHAIN` + Applesoft dialect + KIM-1 `FMULT` `ROR RESULT+2` bug (`$E5C7`), retokenizes `ADVENTURE` and `ADVENTURE^Q PART TWO`, and boots through `CHAIN` into full above-ground and underground gameplay. Physical board confirmation and Disk II write support for `SAVE` remain open; see [`docs/porting-logs/adventure.md`](../docs/porting-logs/adventure.md). |
 | 6502 program library | Ongoing | `codegen/programs/`, `emulator/AICodeGen/` (games/demos). |

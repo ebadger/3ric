@@ -1,23 +1,27 @@
-; BDF04 copies this routine to $0284. Keep its original direction codes:
-; 1=left, 2=right, 3=up, 4=down.
+; BDF04 copies this 30-byte block to $0284. The speaker loop calls the first
+; routine; after its last delay, A=0 falls through to the D-pad mapper.
         .org $0284
-        phy
-        ldx #$07
-        ldy #$04
+sweep_delay:
+        beq mapper
+        ; The final LSR carry rounds X/4 up before ADC adds the saved X.
+        sta $D2
+        inc a
+        lsr a
+        lsr a
+        adc $D2
+        jmp $03BF
+
+mapper:
+        ldx #$83
 scan:
-        lda $CEE0,x
-        bne found
-        dex
-        dey
-        bne scan
-        beq done
-found:
+        lda $CE64,x
+        beq next
         txa
-        and #$03
-        eor #$02
-        sta $0F
-        inc $0F
-        lda $0F
+        eor #$82
+        inc a
+        bne done
+next:
+        dex
+        bmi scan
 done:
-        ply
         sta $0F
