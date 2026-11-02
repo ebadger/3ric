@@ -11,6 +11,10 @@ import {
   DECODER_OFFSET,
   DECODER_RUNTIME_ADDR,
   DECODER_SIZE,
+  DELAY_ROUTINE_ADDR,
+  DELAY_ROUTINE_AFTER,
+  DELAY_ROUTINE_BEFORE,
+  DELAY_ROUTINE_RUNTIME_ADDR,
   FIXED_TONE_DELAY_ADDR,
   FIXED_TONE_DELAY_AFTER,
   FIXED_TONE_DELAY_BEFORE,
@@ -32,6 +36,24 @@ import {
   SWEEP_DELAY_CALL_BEFORE,
   SWEEP_DELAY_CALL_RUNTIME_ADDR,
   SWEEP_HELPER_RUNTIME_ADDR,
+  TITLE_MUSIC_DELAY_HELPER_BYTES,
+  TITLE_MUSIC_DELAY_HELPER_RUNTIME_ADDR,
+  TITLE_MUSIC_E4_BRIDGE_ADDR,
+  TITLE_MUSIC_E4_BRIDGE_AFTER,
+  TITLE_MUSIC_E4_BRIDGE_BEFORE,
+  TITLE_MUSIC_E4_BRIDGE_RUNTIME_ADDR,
+  TITLE_MUSIC_E4_LOOP_ADDR,
+  TITLE_MUSIC_E4_LOOP_AFTER,
+  TITLE_MUSIC_E4_LOOP_BEFORE,
+  TITLE_MUSIC_E4_LOOP_RUNTIME_ADDR,
+  TITLE_MUSIC_E5_BRIDGE_ADDR,
+  TITLE_MUSIC_E5_BRIDGE_AFTER,
+  TITLE_MUSIC_E5_BRIDGE_BEFORE,
+  TITLE_MUSIC_E5_BRIDGE_RUNTIME_ADDR,
+  TITLE_MUSIC_E5_LOOP_ADDR,
+  TITLE_MUSIC_E5_LOOP_AFTER,
+  TITLE_MUSIC_E5_LOOP_BEFORE,
+  TITLE_MUSIC_E5_LOOP_RUNTIME_ADDR,
   buildControllerPatch,
   patchBdf04,
   replaceBdf04Sites,
@@ -39,16 +61,23 @@ import {
 } from "./patch-bdf04.mjs";
 
 const hex = (n) => n.toString(16).toUpperCase().padStart(4, "0");
-const CLOCK_RATIO = (25_175_000 / 16) / (14_318_180 / 14);
+const TARGET_CLOCK_RATIO = 1_573_437.5 / 1_000_000;
+const FIXED_TONE_ENTRY_RUNTIME_ADDR = 0x0186;
+const FIXED_TONE_STORE_RUNTIME_ADDR = 0x0188;
+const DELAY_TEST_RUNTIME_ADDR = 0x0a00;
 const SPEAKER_SWEEP_RUNTIME_ADDR = 0x0270;
 const SPEAKER_STORE_RUNTIME_ADDR = 0x0277;
-const DELAY_ROUTINE_RUNTIME_ADDR = 0x03bf;
 
 const TIMING_SITES = [
   { address: FRAME_DELAY_ADDR, before: [FRAME_DELAY_BEFORE], after: [FRAME_DELAY_AFTER] },
   { address: FIXED_TONE_DELAY_ADDR, before: [FIXED_TONE_DELAY_BEFORE], after: [FIXED_TONE_DELAY_AFTER] },
+  { address: DELAY_ROUTINE_ADDR, before: DELAY_ROUTINE_BEFORE, after: DELAY_ROUTINE_AFTER },
   { address: SWEEP_BRANCH_OPERAND_ADDR, before: [SWEEP_BRANCH_OPERAND_BEFORE], after: [SWEEP_BRANCH_OPERAND_AFTER] },
   { address: SWEEP_DELAY_CALL_ADDR, before: SWEEP_DELAY_CALL_BEFORE, after: SWEEP_DELAY_CALL_AFTER },
+  { address: TITLE_MUSIC_E5_LOOP_ADDR, before: TITLE_MUSIC_E5_LOOP_BEFORE, after: TITLE_MUSIC_E5_LOOP_AFTER },
+  { address: TITLE_MUSIC_E4_LOOP_ADDR, before: TITLE_MUSIC_E4_LOOP_BEFORE, after: TITLE_MUSIC_E4_LOOP_AFTER },
+  { address: TITLE_MUSIC_E5_BRIDGE_ADDR, before: TITLE_MUSIC_E5_BRIDGE_BEFORE, after: TITLE_MUSIC_E5_BRIDGE_AFTER },
+  { address: TITLE_MUSIC_E4_BRIDGE_ADDR, before: TITLE_MUSIC_E4_BRIDGE_BEFORE, after: TITLE_MUSIC_E4_BRIDGE_AFTER },
 ];
 
 function syntheticImage() {
@@ -62,8 +91,8 @@ function testPatchConstruction() {
   const patch = buildControllerPatch();
   assert.equal(patch.length, DECODER_SIZE);
   assert.deepEqual(Array.from(patch), [
-    0xf0, 0x0a, 0x85, 0xd2, 0x1a, 0x4a, 0x4a, 0x65, 0xd2, 0x4c,
-    0xbf, 0x03, 0xa2, 0x83, 0xbd, 0x64, 0xce, 0xf0, 0x06, 0x8a,
+    0xf0, 0x0a, 0xc9, 0x11, 0x90, 0x01, 0x1a, 0x4c, 0xbf, 0x03, 0xea, 0x60,
+    0xa2, 0x83, 0xbd, 0x64, 0xce, 0xf0, 0x06, 0x8a,
     0x49, 0x82, 0x1a, 0xd0, 0x03, 0xca, 0x30, 0xf2, 0x85, 0x0f,
   ]);
 
@@ -145,6 +174,7 @@ function correctedStep65C02(vm) {
   const pc = vm.pc();
   const opcode = vm.peek(pc) & 0xff;
   const condition = FLAG_BRANCHES.get(opcode);
+  if (opcode === 0x44) return vm.step() + 1; // 65C02 zero-page NOP is three cycles.
   if (opcode === 0x80 || condition) {
     const status = vm.status() & 0xff;
     const rawOffset = vm.peek((pc + 1) & 0xffff) & 0xff;
@@ -160,6 +190,10 @@ function correctedStep65C02(vm) {
 
   if ((opcode & 0x0f) === 0x0f) return vm.step(); // BBR/BBS are five cycles in this VM.
   return vm.step();
+}
+
+function writeDelayRoutine(vm, bytes) {
+  bytes.forEach((value, i) => vm.poke(DELAY_ROUTINE_RUNTIME_ADDR + i, value));
 }
 
 function stopAtPC(vm, addr, run, budget, label) {
@@ -204,18 +238,21 @@ function testFrameCadence(vm, run) {
   const baseline = [];
   const retimed = [];
   for (let i = 0; i < 4; i++) {
+    writeDelayRoutine(vm, DELAY_ROUTINE_BEFORE);
     vm.poke(FRAME_DELAY_RUNTIME_ADDR, FRAME_DELAY_BEFORE);
     baseline.push(...measureIntervals(vm, MAPPER_RUNTIME_ADDR, 1, "original frame cadence"));
+    writeDelayRoutine(vm, DELAY_ROUTINE_AFTER);
     vm.poke(FRAME_DELAY_RUNTIME_ADDR, FRAME_DELAY_AFTER);
     retimed.push(...measureIntervals(vm, MAPPER_RUNTIME_ADDR, 1, "retimed frame cadence"));
   }
+  writeDelayRoutine(vm, DELAY_ROUTINE_AFTER);
   vm.poke(FRAME_DELAY_RUNTIME_ADDR, FRAME_DELAY_AFTER);
 
   const ratio = mean(retimed) / mean(baseline);
-  assertRatioNear(ratio, CLOCK_RATIO, 0.01, "BDF04 frame-poll cadence");
+  assertRatioNear(ratio, TARGET_CLOCK_RATIO, 0.01, "BDF04 frame-poll cadence");
   console.log(
     `PASS BDF04 frame cadence: ${mean(baseline).toFixed(2)} -> ${mean(retimed).toFixed(2)} cycles, ` +
-      `${ratio.toFixed(5)}x (Apple II target ${CLOCK_RATIO.toFixed(5)}x)`,
+      `${ratio.toFixed(5)}x (1 MHz target ${TARGET_CLOCK_RATIO.toFixed(5)}x)`,
   );
 }
 
@@ -233,7 +270,7 @@ function measureSpeakerSweep(vm, delayTarget, scaled, label) {
     if (pc === SPEAKER_STORE_RUNTIME_ADDR) clicks.push(cycles);
     if (pc === DELAY_ROUTINE_RUNTIME_ADDR) {
       const step = vm.regX() & 0xff;
-      const expected = scaled ? step + Math.ceil(step / 4) : step;
+      const expected = scaled && step >= 0x11 ? step + 1 : step;
       assert.equal(vm.regA() & 0xff, expected, `${label}: delay argument for sweep step ${step}`);
       delayArguments.push(vm.regA() & 0xff);
     }
@@ -252,7 +289,9 @@ function measureSpeakerSweep(vm, delayTarget, scaled, label) {
 }
 
 function testSpeakerTiming(vm) {
+  writeDelayRoutine(vm, DELAY_ROUTINE_BEFORE);
   const baseline = measureSpeakerSweep(vm, DELAY_ROUTINE_RUNTIME_ADDR, false, "original speaker sweep");
+  writeDelayRoutine(vm, DELAY_ROUTINE_AFTER);
   const retimed = measureSpeakerSweep(vm, SWEEP_HELPER_RUNTIME_ADDR, true, "retimed speaker sweep");
   vm.poke(SWEEP_DELAY_CALL_RUNTIME_ADDR + 1, SWEEP_DELAY_CALL_AFTER[1]);
   vm.poke(SWEEP_DELAY_CALL_RUNTIME_ADDR + 2, SWEEP_DELAY_CALL_AFTER[2]);
@@ -260,17 +299,206 @@ function testSpeakerTiming(vm) {
   assert.deepEqual(baseline.delayArguments, Array.from({ length: 26 }, (_, i) => i + 1));
   assert.deepEqual(
     retimed.delayArguments,
-    Array.from({ length: 26 }, (_, i) => i + 1 + Math.ceil((i + 1) / 4)),
+    Array.from({ length: 26 }, (_, i) => i + 1 + Number(i + 1 >= 0x11)),
   );
   const intervalRatio = retimed.intervals.reduce((sum, value) => sum + value, 0) /
     baseline.intervals.reduce((sum, value) => sum + value, 0);
   const completeSweepRatio = retimed.totalCycles / baseline.totalCycles;
-  assertRatioNear(intervalRatio, CLOCK_RATIO, 0.02, "BDF04 speaker-sweep intervals");
-  assertRatioNear(completeSweepRatio, CLOCK_RATIO, 0.02, "BDF04 complete speaker sweep");
+  assertRatioNear(intervalRatio, TARGET_CLOCK_RATIO, 0.01, "BDF04 speaker-sweep intervals");
+  assertRatioNear(completeSweepRatio, TARGET_CLOCK_RATIO, 0.01, "BDF04 complete speaker sweep");
   console.log(
     `PASS BDF04 speaker sweep: ${baseline.totalCycles} -> ${retimed.totalCycles} cycles, ` +
-      `intervals ${intervalRatio.toFixed(5)}x, complete sweep ${completeSweepRatio.toFixed(5)}x`,
+      `intervals ${intervalRatio.toFixed(5)}x, complete sweep ${completeSweepRatio.toFixed(5)}x ` +
+      `(1 MHz target ${TARGET_CLOCK_RATIO.toFixed(5)}x)`,
   );
+}
+
+function measureFixedTone(vm, delayRoutine, operand, label) {
+  writeDelayRoutine(vm, delayRoutine);
+  vm.poke(FIXED_TONE_DELAY_RUNTIME_ADDR, operand);
+  vm.setPC(FIXED_TONE_ENTRY_RUNTIME_ADDR);
+
+  const toggles = [];
+  let cycles = 0;
+  for (let instructions = 0; instructions < 500_000; instructions++) {
+    if (vm.pc() === FIXED_TONE_STORE_RUNTIME_ADDR) {
+      toggles.push(cycles);
+      if (toggles.length === 6) return toggles.slice(1).map((cycle, i) => cycle - toggles[i]);
+    }
+    cycles += correctedStep65C02(vm);
+  }
+  assert.fail(`${label}: fixed speaker tone did not finish (pc $${hex(vm.pc())})`);
+}
+
+function testFixedToneTiming(vm) {
+  const baseline = measureFixedTone(
+    vm,
+    DELAY_ROUTINE_BEFORE,
+    FIXED_TONE_DELAY_BEFORE,
+    "original fixed speaker tone",
+  );
+  const retimed = measureFixedTone(
+    vm,
+    DELAY_ROUTINE_AFTER,
+    FIXED_TONE_DELAY_AFTER,
+    "retimed fixed speaker tone",
+  );
+  const ratio = mean(retimed) / mean(baseline);
+  assertRatioNear(ratio, TARGET_CLOCK_RATIO, 0.05, "BDF04 fixed speaker-tone intervals");
+  console.log(
+    `PASS BDF04 fixed speaker tone: ${mean(baseline).toFixed(2)} -> ${mean(retimed).toFixed(2)} cycles, ` +
+      `${ratio.toFixed(5)}x (1 MHz target ${TARGET_CLOCK_RATIO.toFixed(5)}x)`,
+  );
+}
+
+function measureDelayCall(vm, delayValue, delayRoutine, label) {
+  writeDelayRoutine(vm, delayRoutine);
+  const code = [
+    0xa2, 0xff, 0x9a, 0xd8, 0xa9, delayValue,
+    0x20, DELAY_ROUTINE_RUNTIME_ADDR & 0xff, DELAY_ROUTINE_RUNTIME_ADDR >> 8,
+    0xea,
+  ];
+  code.forEach((value, i) => vm.poke(DELAY_TEST_RUNTIME_ADDR + i, value));
+  vm.setPC(DELAY_TEST_RUNTIME_ADDR);
+
+  let cycles = 0;
+  for (let instructions = 0; instructions < 300_000; instructions++) {
+    if (vm.pc() === DELAY_TEST_RUNTIME_ADDR + 9) {
+      return {
+        cycles,
+        accumulator: vm.regA() & 0xff,
+        stack: vm.sp(),
+        status: vm.status() & 0xff,
+      };
+    }
+    cycles += correctedStep65C02(vm);
+  }
+  assert.fail(`${label}: shared delay call did not finish (pc $${hex(vm.pc())})`);
+}
+
+function testSharedDelayTiming(vm) {
+  for (const delayValue of [0x00, 0xf0]) {
+    const baseline = measureDelayCall(
+      vm,
+      delayValue,
+      DELAY_ROUTINE_BEFORE,
+      `original shared delay $${hex(delayValue)}`,
+    );
+    const retimed = measureDelayCall(
+      vm,
+      delayValue,
+      DELAY_ROUTINE_AFTER,
+      `retimed shared delay $${hex(delayValue)}`,
+    );
+    assert.equal(retimed.accumulator, 0, `delay $${hex(delayValue)}: preserve the zero result`);
+    assert.equal(retimed.stack, 0xff, `delay $${hex(delayValue)}: balance the stack`);
+    assert.equal(retimed.status & 0x01, 0x01, `delay $${hex(delayValue)}: leave carry set`);
+    assert.equal(retimed.status & 0x02, 0x02, `delay $${hex(delayValue)}: leave zero set`);
+    assert.equal(retimed.status & 0x80, 0, `delay $${hex(delayValue)}: leave negative clear`);
+    const ratio = retimed.cycles / baseline.cycles;
+    assertRatioNear(ratio, TARGET_CLOCK_RATIO, 0.02, `BDF04 shared delay $${hex(delayValue)}`);
+    console.log(
+      `PASS BDF04 shared delay $${hex(delayValue)}: ${baseline.cycles} -> ${retimed.cycles} cycles, ` +
+        `${ratio.toFixed(5)}x`,
+    );
+  }
+}
+
+function measureTitleMusicIntervals(vm, count, label) {
+  vm.setPC(0x9234);
+  const intervals = [];
+  let cycles = 0;
+  let previousSpeakerCycle = null;
+  for (let instructions = 0; instructions < 1_000_000; instructions++) {
+    const pc = vm.pc();
+    if (pc === 0x9236 || pc === 0x9250) {
+      if (previousSpeakerCycle !== null) intervals.push(cycles - previousSpeakerCycle);
+      previousSpeakerCycle = cycles;
+      if (intervals.length === count) return intervals;
+    }
+    cycles += correctedStep65C02(vm);
+  }
+  assert.fail(`${label}: measured ${intervals.length}/${count} title-music intervals (pc $${hex(vm.pc())})`);
+}
+
+function testTitleMusicTiming(vm, run) {
+  stopAtPC(vm, 0x9236, run, 20_000_000, "title-music speaker loop");
+  assert.deepEqual(
+    Array.from({ length: TITLE_MUSIC_E5_LOOP_AFTER.length }, (_, i) =>
+      vm.peek(TITLE_MUSIC_E5_LOOP_RUNTIME_ADDR + i)),
+    Array.from(TITLE_MUSIC_E5_LOOP_AFTER),
+    "the relocated E5 title-music loop contains the retiming call",
+  );
+  assert.deepEqual(
+    Array.from({ length: TITLE_MUSIC_E4_LOOP_AFTER.length }, (_, i) =>
+      vm.peek(TITLE_MUSIC_E4_LOOP_RUNTIME_ADDR + i)),
+    Array.from(TITLE_MUSIC_E4_LOOP_AFTER),
+    "the relocated E4 title-music loop contains the retiming call",
+  );
+  assert.deepEqual(
+    Array.from({ length: TITLE_MUSIC_E5_BRIDGE_AFTER.length }, (_, i) =>
+      vm.peek(TITLE_MUSIC_E5_BRIDGE_RUNTIME_ADDR + i)),
+    Array.from(TITLE_MUSIC_E5_BRIDGE_AFTER),
+    "the relocated E5 title-music bridge adds the delay cycles",
+  );
+  assert.deepEqual(
+    Array.from({ length: TITLE_MUSIC_E4_BRIDGE_AFTER.length }, (_, i) =>
+      vm.peek(TITLE_MUSIC_E4_BRIDGE_RUNTIME_ADDR + i)),
+    Array.from(TITLE_MUSIC_E4_BRIDGE_AFTER),
+    "the relocated E4 title-music bridge adds the delay cycles",
+  );
+  assert.deepEqual(
+    Array.from({ length: TITLE_MUSIC_DELAY_HELPER_BYTES.length }, (_, i) =>
+      vm.peek(TITLE_MUSIC_DELAY_HELPER_RUNTIME_ADDR + i)),
+    Array.from(TITLE_MUSIC_DELAY_HELPER_BYTES),
+    "the copied title-music helper is present at $028E",
+  );
+
+  const saved = [0xe4, 0xe5, 0xe6, 0xe7].map((addr) => vm.peek(addr));
+  const note = { e4: saved[0], e5: saved[1] };
+  assert.ok(note.e4 > 0 && note.e5 > 0, "title music has nonzero E4/E5 periods");
+  const baselineLoops = [
+    { address: TITLE_MUSIC_E5_LOOP_RUNTIME_ADDR, bytes: TITLE_MUSIC_E5_LOOP_BEFORE },
+    { address: TITLE_MUSIC_E4_LOOP_RUNTIME_ADDR, bytes: TITLE_MUSIC_E4_LOOP_BEFORE },
+    { address: TITLE_MUSIC_E5_BRIDGE_RUNTIME_ADDR, bytes: TITLE_MUSIC_E5_BRIDGE_BEFORE },
+    { address: TITLE_MUSIC_E4_BRIDGE_RUNTIME_ADDR, bytes: TITLE_MUSIC_E4_BRIDGE_BEFORE },
+  ];
+  const retimedLoops = [
+    { address: TITLE_MUSIC_E5_LOOP_RUNTIME_ADDR, bytes: TITLE_MUSIC_E5_LOOP_AFTER },
+    { address: TITLE_MUSIC_E4_LOOP_RUNTIME_ADDR, bytes: TITLE_MUSIC_E4_LOOP_AFTER },
+    { address: TITLE_MUSIC_E5_BRIDGE_RUNTIME_ADDR, bytes: TITLE_MUSIC_E5_BRIDGE_AFTER },
+    { address: TITLE_MUSIC_E4_BRIDGE_RUNTIME_ADDR, bytes: TITLE_MUSIC_E4_BRIDGE_AFTER },
+  ];
+  const writeLoops = (loops) => {
+    for (const { address, bytes } of loops)
+      bytes.forEach((value, i) => vm.poke(address + i, value));
+  };
+  const resetMusicCounters = () => {
+    vm.poke(0xe4, note.e4);
+    vm.poke(0xe5, note.e5);
+    vm.poke(0xe6, 0);
+    vm.poke(0xe7, 0);
+  };
+
+  try {
+    writeLoops(baselineLoops);
+    resetMusicCounters();
+    const baseline = measureTitleMusicIntervals(vm, 40, "original title music");
+    writeLoops(retimedLoops);
+    resetMusicCounters();
+    const retimed = measureTitleMusicIntervals(vm, 40, "retimed title music");
+    const ratio = retimed.reduce((sum, value) => sum + value, 0) /
+      baseline.reduce((sum, value) => sum + value, 0);
+    assertRatioNear(ratio, TARGET_CLOCK_RATIO, 0.01, "BDF04 title-music speaker intervals");
+    console.log(
+      `PASS BDF04 title music ($E4=${note.e4}, $E5=${note.e5}): ` +
+        `${ratio.toFixed(5)}x (1 MHz target ${TARGET_CLOCK_RATIO.toFixed(5)}x)`,
+    );
+  } finally {
+    writeLoops(retimedLoops);
+    saved.forEach((value, i) => vm.poke(0xe4 + i, value));
+    vm.setPC(0x9234);
+  }
 }
 
 async function testRealBrun(original) {
@@ -295,6 +523,7 @@ async function testRealBrun(original) {
     vm.step();
     assert.equal(vm.pc(), 0x6000, "BRUN enters the game's $6000 body");
 
+    testTitleMusicTiming(vm, run);
     run(10_000_000);
     key(0x20);                         // leave the credits screen
     run(5_000_000);
@@ -308,10 +537,16 @@ async function testRealBrun(original) {
     assert.deepEqual(
       Array.from({ length: DECODER_SIZE }, (_, i) => vm.peek(DECODER_RUNTIME_ADDR + i)),
       Array.from(buildControllerPatch()),
-      "the live poll must execute the patched timing helper and mapper copied to $0284",
+      "the live poll must execute the patched sweep helper and mapper copied to $0284",
     );
     assert.equal(vm.peek(FRAME_DELAY_RUNTIME_ADDR), FRAME_DELAY_AFTER, "retime the frame wait");
     assert.equal(vm.peek(FIXED_TONE_DELAY_RUNTIME_ADDR), FIXED_TONE_DELAY_AFTER, "retime the fixed speaker delay");
+    assert.deepEqual(
+      Array.from({ length: DELAY_ROUTINE_AFTER.length }, (_, i) =>
+        vm.peek(DELAY_ROUTINE_RUNTIME_ADDR + i)),
+      Array.from(DELAY_ROUTINE_AFTER),
+      "retime the shared delay routine copied to $03BF",
+    );
     assert.equal(vm.peek(SWEEP_BRANCH_RUNTIME_ADDR), SWEEP_BRANCH_OPERAND_AFTER, "skip the helper on the pad path");
     assert.deepEqual(
       Array.from({ length: SWEEP_DELAY_CALL_AFTER.length }, (_, i) =>
@@ -361,6 +596,8 @@ async function testRealBrun(original) {
 
     testFrameCadence(vm, run);
     testSpeakerTiming(vm);
+    testSharedDelayTiming(vm);
+    testFixedToneTiming(vm);
     console.log("PASS BDF04 ROM DOS BRUN, live GAMEPAD1 scan, all directions, neutral, priority, Y/SP/carry");
   } finally {
     vm.delete();

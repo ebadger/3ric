@@ -2,8 +2,9 @@
 
 **2026-10-30. Experimental / emulator-verified through real ROM DOS `BRUN`; physical-board confirmation and a full game playthrough remain open.**
 
-The user supplied the raw BDF04 program and asked for the 3RIC controller to work natively,
-launched as `BRUN BDF04-TIMED.PRG 0F04`. The original game and patched outputs are local
+The user supplied the raw BDF04 program and asked for native 3RIC controller support and
+timing closer to the game's 1 MHz design target. Launch the current build as
+`BRUN BDF04-1MHZ-TITLE-MUSIC.PRG 0F04`. The original game and patched outputs are local
 artifacts; the repository contains only the exact-image patcher, its 30-byte assembly
 replacement, tests, and this record.
 
@@ -13,18 +14,23 @@ replacement, tests, and this record.
 |----------|-----:|---------|
 | User-supplied `bdf04.prg` | 31,228 bytes | `bca7fa26bded86753165d5ca435277553d38faeb5d88f45d28fa70b4ea2ac0d0` |
 | Earlier controller-only `BDF04.PRG` | 31,228 bytes | `2437c92dd64ff2d720328987d910faf23f374804cebec228c8c9973193046dc2` |
-| Timed controller build `BDF04-TIMED.PRG` | 31,228 bytes | `21343268558d1e7ea6509052d7e96db9087318eebee7592cce5467a2a20d759d` |
+| Earlier timed build `BDF04-TIMED.PRG` (Apple II clock target) | 31,228 bytes | `21343268558d1e7ea6509052d7e96db9087318eebee7592cce5467a2a20d759d` |
+| Earlier 1 MHz-target build `BDF04-1MHZ.PRG` (title music not retimed) | 31,228 bytes | `ae7e2a9f59d78f1b9a38fb60ea53750b4145d4db5a3f90cb5f4e80fd5a2d223a` |
+| Current 1 MHz-target build `BDF04-1MHZ-TITLE-MUSIC.PRG` | 31,228 bytes | `a3221285fee7e6ade55acdf9291a1e6c575e4ae74ceebdea22df854206e5c3a0` |
 | Repository `badger6502.bin` | 512 KiB | `fcea03683b77b7f113e6d8f0064ea8edbd6c75b04b472ec5c84de1c3a9f86435` |
 
 The `.PRG` loads at `$0F04` and jumps to its game body at `$6000`. The original 30-byte
 direction decoder at image address `$2284` (file offset `$1380`) is copied by the game to
-runtime `$0284`. The timed output replaces that block with a speaker-delay helper at `$0284`
-and the D-pad mapper at `$0290`, then patches four guarded timing sites in the game body.
-Compared with the original, the output remains the same length and 33 bytes differ: the
+runtime `$0284`. The output replaces that block with a speaker-sweep helper at `$0284`, a
+music-loop helper at `$028E`, and the D-pad mapper at `$0290`, then patches nine guarded
+timing sites in the game body. Compared with the original, the output remains the same length
+and 58 bytes differ: the
 30-byte block at file offsets `$1380-$139D`, plus the frame delay at `$1296`, fixed speaker
-delay at `$1288`, sweep branch operand at `$136F`, and sweep call at `$1376-$1378`. The
-patcher verifies the full original-image fingerprint and the original bytes at every modified
-site.
+delay at `$1288`, the shared delay routine at `$14BB-$14C6` (loaded `$23BF-$23CA`, copied
+to runtime `$03BF`), the sweep branch operand at `$136F`, and the sweep call at
+`$1376-$1378`, plus title-music loop/bridge code at source `$3243-$324D` and `$325D-$3267`.
+The patcher verifies the full original-image fingerprint and the original bytes at every
+modified site.
 
 ## Controller adaptation
 
@@ -47,22 +53,29 @@ Y, stack depth, and carry; the game's following `TAX` consumes the result. The e
 
 ## Timing adaptation
 
-3RIC's 1.5734375 MHz CPU is about 1.53847 times the Apple II's 1.022727 MHz clock. The
-frame-wait immediate at `$219A` changes from `$1B` to `$A4`; the fixed speaker delay at
-`$218C` changes from `$0A` to `$0D`. The variable sweep at `$2270` calls the new helper at
-`$0284`, which changes each `X` delay argument to `X + ceil(X/4)` before jumping to the
-unchanged delay routine at `$03BF`. The helper uses `$D2` as temporary storage; the existing
-loop clears it after the sweep. The branch at `$2273` skips the helper during normal pad
-polling, and the sweep-call operand at `$227A` points to the helper.
+The timing target is the game's 1.000 MHz design clock, a 1.5734375x slowdown on 3RIC's
+1.5734375 MHz CPU. The shared nested delay routine at source `$23BF` changes its inner
+`SBC #1` to `DEC A; NOP $00` and its outer `SBC #1` to `DEC A`; the 12-byte routine keeps
+its stack depth, A=0 return, carry, and N/Z result, but does not preserve V. The frame-wait
+immediate at `$219A` changes from `$1B` to `$86`, and the fixed speaker delay at `$218C`
+changes from `$0A` to `$0B`. The helper at `$0284` retains the zero-count exit to the mapper,
+adds one to sweep arguments 17-26 before jumping to `$03BF`, and is skipped during normal pad
+polling by the `$2273` branch; the `$227A` call points to the helper. Title-music loops at
+source `$3246` and `$3260` (runtime `$9246` and `$9260`) call the flag-preserving NOP/RTS
+helper at `$028E`. The bridges at `$3243` and `$325D` change from a 3-cycle absolute jump to
+`BRA +0; NOP`, adding two cycles on the normal loop path; together with the helper call this
+adds 13 cycles to a continuing iteration and 16 to the terminal iteration.
 
-Through the real ROM DOS `BRUN` test, the frame poll measured 124,634 cycles with the
-original `$1B` operand and 191,911.5 cycles with `$A4` (1.53980x). The same cycle-corrected
-trace measured the speaker sweep at 20,929 cycles before and 32,284 cycles after retiming:
-1.54170x for the measured speaker intervals and 1.54255x for the complete sweep. The
-individual note intervals are not uniform because the original delay routine is quadratic.
-The test corrects the VM's relative-branch cycle accounting to real 65C02 costs when
-computing these ratios. The fixed speaker-delay operand is verified in live memory, but its
-complete tone duration has not been measured separately.
+Through the real ROM DOS `BRUN` test, the frame poll measures 124,638.75 cycles with the
+original `$1B` operand and 196,333.5 with the retimed shared delay and `$86` operand
+(1.57522x). The complete speaker sweep measures 20,929 cycles before and 32,937 afterward
+(1.57375x); its measured speaker intervals scale by 1.56854x. Direct shared-delay calls at
+A=`$00` and A=`$F0` scale by 1.58992x and 1.58916x. Fixed-tone speaker intervals measure
+409 cycles before and 673 afterward (1.64548x); `$0B` is the closest one-count choice
+because `$0A` gives only 1.40342x. The retimed/original ratio for 40 title-music `$C030`
+intervals with live `$E4=98` and `$E5=77` is 1.56564x, 0.50% below the 1 MHz target. The test
+corrects the VM's relative-branch cycle accounting and its one-cycle undercount for the
+65C02 zero-page NOP.
 
 ## Generate and run
 
@@ -70,13 +83,13 @@ Use the exact original image at a path outside the repository; the patcher also 
 output path to be outside the repository and refuses to overwrite an existing file:
 
 ```powershell
-node codegen\tools\patch-bdf04.mjs C:\games\bdf04.prg C:\3ric-card\BDF04-TIMED.PRG
+node codegen\tools\patch-bdf04.mjs C:\games\bdf04.prg C:\3ric-card\BDF04-1MHZ-TITLE-MUSIC.PRG
 ```
 
-Copy `BDF04-TIMED.PRG` to the root of the 3RIC FAT32 card and run:
+Copy `BDF04-1MHZ-TITLE-MUSIC.PRG` to the root of the 3RIC FAT32 card and run:
 
 ```text
-BRUN BDF04-TIMED.PRG 0F04
+BRUN BDF04-1MHZ-TITLE-MUSIC.PRG 0F04
 ```
 
 The emulator test's startup sequence leaves the credits screen with Space, selects the Joyport
@@ -95,8 +108,9 @@ immutability, and fingerprint rejection. With `BDF04_PRG`, the test boots the re
 issues `BRUN BDF04.PRG 0F04` from a sparse FAT32 card, and checks the copied helper and
 mapper at the live game poll. It verifies neutral and all four directions, horizontal
 priority, the returned code in A and `$0F`, and preservation of Y, stack depth, and carry. It
-then measures the frame poll and speaker sweep with corrected branch-cycle counts. The
-separate timed output was generated and checked: exactly 33 bytes differ, all at the decoder
+then measures the title-music intervals, frame poll, shared delays, fixed-tone intervals,
+and speaker sweep with corrected branch and zero-page-NOP cycle counts. The current
+1 MHz-target output was generated and checked: exactly 58 bytes differ, all at the decoder
 and guarded timing sites.
 
 This establishes the mapping through the emulator's real ROM scan and DOS loader; it does not

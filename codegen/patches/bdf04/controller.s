@@ -1,15 +1,18 @@
-; BDF04 copies this 30-byte block to $0284. The speaker loop calls the first
-; routine; after its last delay, A=0 falls through to the D-pad mapper.
+; BDF04 copies this 30-byte block to $0284. Keep the zero-count sweep exit routed
+; to the mapper; the title-music loop calls the flag-preserving helper at $028E.
         .org $0284
 sweep_delay:
         beq mapper
-        ; The final LSR carry rounds X/4 up before ADC adds the saved X.
-        sta $D2
+        ; Only the upper half of the 1-26 sweep needs one extra count.
+        cmp #$11
+        bcc delay
         inc a
-        lsr a
-        lsr a
-        adc $D2
+delay:
         jmp $03BF
+
+music_delay:
+        nop
+        rts
 
 mapper:
         ldx #$83

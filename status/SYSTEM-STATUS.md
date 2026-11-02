@@ -111,17 +111,19 @@ secrets. Nothing to configure and nothing to commit. (The only "secret" is the s
 | `web/build.ps1` | Compile the VM core + WozLib + MockMicroSD + bridge to WASM; stage data. |
 | `web/serve.ps1` | Local static server for the browser build (port 8011). |
 | `codegen/tools/run6502.mjs` | Assemble → run → check a 6502 program; emit a card-ready `.PRG`. |
-| `codegen/tools/patch-bdf04.mjs` | Exact-image local controller/timing patcher for the user-supplied BDF04 game; keep input/output outside the repository and run the timed build with `BRUN BDF04-TIMED.PRG 0F04`. |
+| `codegen/tools/patch-bdf04.mjs` | Exact-image local controller/timing patcher for the user-supplied BDF04 game; keep input/output outside the repository and run the 1 MHz-target build with `BRUN BDF04-1MHZ-TITLE-MUSIC.PRG 0F04`. |
 | `codegen/tools/gen_platform_ref.mjs` | Regenerate `codegen/platform/platform-ref.*` from `vm.h` + `badger6502.dbg`. |
 
 ## Current state / known gaps
 
 - **BDF04 native controller and timing:** `codegen/tools/patch-bdf04.mjs` patches the
-  user-supplied game by exact-image fingerprint. Real ROM DOS `BRUN` tests cover the
-  `GAMEPAD1` D-pad mapping and preservation, plus a 1.53980x frame cadence and 1.54255x
-  complete speaker sweep against the 1.53847x Apple II clock ratio. The timed PRG stays
-  outside the repository; the fixed-delay tone duration, physical-board confirmation, and
-  full playthrough remain open.
+  user-supplied game by exact-image fingerprint, replacing the paddle decoder and retiming
+  nine guarded sites including the shared delay routine and title-music loops. Real ROM DOS
+  `BRUN` tests cover the `GAMEPAD1` D-pad mapping and preservation, a 1.57522x frame cadence,
+  1.57375x complete speaker sweep, and 1.56564x title-music intervals against the 1.57344x
+  1 MHz target, plus shared-delay calls and fixed-tone intervals (1.64548x, within the coarse
+  delay count's 5% tolerance). The `BDF04-1MHZ-TITLE-MUSIC.PRG` stays outside the repository;
+  physical-board confirmation and a full playthrough remain open.
 - **Model challenges:** `challenges.html` introduces the series; `challenges/tts/` and
   `challenges/tts/v1/` publish the complete original-TTS brief, baseline SHA and PR
   submission guide. No engines, speech-quality results, hardware tests or ballot exist

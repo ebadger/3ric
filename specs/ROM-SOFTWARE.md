@@ -50,29 +50,52 @@ from a micro-SD card, a Disk II floppy, or the in-browser assembler.
 - **Boulder Dash BDF04 controller and timing adapter:** `codegen/tools/patch-bdf04.mjs`
   accepts only the user-supplied 31,228-byte raw `.PRG` (SHA-256
   `bca7fa26bded86753165d5ca435277553d38faeb5d88f45d28fa70b4ea2ac0d0`; load/entry `$0F04`)
-  and applies byte-guarded edits to its 30-byte paddle-timing decoder and four timing sites.
+  and applies byte-guarded edits to its 30-byte controller/timing block and nine timing
+  sites.
   The decoder at file offset `$1380` (loaded `$2284`, copied to runtime `$0284`) holds a
-  speaker-delay helper at `$0284` and the controller mapper at `$0290`. The mapper reads
-  controller 1's `GAMEPAD1` directions after the game's `$C070` scan and returns the game's
-  existing codes: left=1, right=2, up=3, down=4, neutral=0. Horizontal input retains
-  priority over vertical; the `$C061` button path is unchanged.
+  speaker-delay helper at `$0284`, a flag-preserving music-loop helper at `$028E`, and the
+  controller mapper at `$0290`. The sweep's zero-count exit still branches through `$0284`
+  to the mapper, and the game's `$2273` poll branch also targets the mapper directly. The
+  mapper reads controller 1's `GAMEPAD1` directions after the game's `$C070` scan and returns
+  the game's existing codes: left=1, right=2, up=3, down=4, neutral=0. Horizontal input
+  retains priority over vertical; the `$C061` button path is unchanged.
 
-  The frame wait at `$219A` changes from `$1B` to `$A4`, targeting the original Apple II's
-  approximately 1.023 MHz cadence on 3RIC's approximately 1.57 MHz CPU. The fixed speaker
-  delay at `$218C` changes from `$0A` to `$0D`. The variable `$D2` speaker sweep routes its
-  delay call at `$227A` through the in-place helper, which scales each sweep step `X` to
-  `X + ceil(X/4)`; the `$2273` branch is retargeted to skip the helper during controller
-  polling. Through real ROM DOS `BRUN`, corrected 65C02 cycle counts measured the same-image
-  frame poll at 124,634 cycles before retiming and 191,911.5 afterward (1.53980x, against a
-  1.53847 clock ratio). The quadratic delay makes individual sweep-note ratios nonuniform;
-  measured speaker intervals scale by 1.54170x and the complete sweep by 1.54255x. The
-  delay routine itself is unchanged. The fixed speaker-delay operand is verified in live
-  memory, but its complete tone duration has not been measured separately.
+  The timing target is the game's stated 1.000 MHz design clock, a 1.5734375x slowdown on
+  3RIC's 1.5734375 MHz CPU. The shared nested delay routine at source `$23BF` is changed
+  in-place: its inner `SBC #1` becomes `DEC A; NOP $00`, and its outer `SBC #1` becomes
+  `DEC A`. This keeps the 12-byte routine, stack depth, return A=0, carry, and N/Z result;
+  V is not preserved. The fixed speaker operand at `$218C` changes from `$0A` to `$0B`,
+  while the frame wait at `$219A` changes from `$1B` to `$86`. The speaker sweep routes its
+  delay call at `$227A` through the in-place helper; steps 17-26 add one to the delay
+  argument. The `$2273` poll branch still targets the mapper when no sweep is active; a
+  sweep's zero-count exit branches through `$0284` to the mapper.
 
-  The real ROM DOS `BRUN` test covers every direction, neutral, priority, Y/stack/carry
-  preservation, and timing against corrected 65C02 branch-cycle counts. Keep the original
-  and all generated game images outside the repository. Run the timed output with
-  `BRUN BDF04-TIMED.PRG 0F04`.
+  The title-music loops at source `$3246` and `$3260` (copied to runtime `$9246` and `$9260`)
+  call the helper at `$028E` once per counter decrement. The helper's NOP and RTS add 11
+  cycles compared with the original 3-cycle jump; the adjacent source bridges at `$3243` and
+  `$325D` add two more cycles on the normal loop path. Together these add 13 cycles to each
+  continuing iteration and 16 to the terminal iteration. This lengthens the existing
+  8-bit `$E4/$E5` periods without scaling table entries or risking counter overflow, while
+  preserving the original note ratios and the loop's zero/negative flags.
+
+  Through real ROM DOS `BRUN`, corrected 65C02 cycle counts measured the live frame poll
+  at 124,638.75 cycles before and 196,333.5 after retiming (1.57522x). The complete speaker
+  sweep measures 20,929 cycles before and 32,937 afterward (1.57375x); the sum of its
+  measured speaker intervals scales by 1.56854x. Long shared-delay calls at `$00` and
+  `$F0` scale by 1.58992x and 1.58916x, respectively. The fixed-tone speaker intervals
+  measure 409 cycles before and 673 afterward (1.64548x); because the delay count is an
+  integer, `$0B` is the closest choice (leaving `$0A` produces only 1.40342x). Tests
+  correct both the emulator's relative-branch cycle counts and its one-cycle undercount
+  for the 65C02 zero-page NOP used by the patch. The retimed/original ratio for 40
+  title-music `$C030` intervals at the live note periods `$E4=98` and `$E5=77` is 1.56564x,
+  0.50% below the 1 MHz target.
+
+  The real ROM DOS `BRUN` test measures the title-music `$C030` intervals against the
+  original loops and bridges at representative live `$E4/$E5` values, alongside every
+  direction, neutral, priority, Y/stack/carry preservation, and the other timing paths.
+  Timing uses corrected 65C02 branch-cycle counts. Keep the original and all generated game
+  images outside the repository. Run the timed output with
+  `BRUN BDF04-1MHZ-TITLE-MUSIC.PRG 0F04`.
   Physical-board and full-playthrough evidence remain open; see
   [`docs/porting-logs/bdf04.md`](../docs/porting-logs/bdf04.md).
 - **`.PRG` programs:** assembled by the codegen toolchain (`CODEGEN.md`). Sources: tracked

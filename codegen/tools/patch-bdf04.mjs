@@ -26,12 +26,20 @@ export const DECODER_BEFORE = Object.freeze([
 ]);
 export const FRAME_DELAY_ADDR = 0x219a;
 export const FRAME_DELAY_BEFORE = 0x1b;
-export const FRAME_DELAY_AFTER = 0xa4;
+export const FRAME_DELAY_AFTER = 0x86;
 export const FRAME_DELAY_RUNTIME_ADDR = FRAME_DELAY_ADDR - 0x2000;
 export const FIXED_TONE_DELAY_ADDR = 0x218c;
 export const FIXED_TONE_DELAY_BEFORE = 0x0a;
-export const FIXED_TONE_DELAY_AFTER = 0x0d;
+export const FIXED_TONE_DELAY_AFTER = 0x0b;
 export const FIXED_TONE_DELAY_RUNTIME_ADDR = FIXED_TONE_DELAY_ADDR - 0x2000;
+export const DELAY_ROUTINE_ADDR = 0x23bf;
+export const DELAY_ROUTINE_BEFORE = Object.freeze([
+  0x38, 0x48, 0xe9, 0x01, 0xd0, 0xfc, 0x68, 0xe9, 0x01, 0xd0, 0xf6, 0x60,
+]);
+export const DELAY_ROUTINE_AFTER = Object.freeze([
+  0x38, 0x48, 0x3a, 0x44, 0x00, 0xd0, 0xfb, 0x68, 0x3a, 0xd0, 0xf6, 0x60,
+]);
+export const DELAY_ROUTINE_RUNTIME_ADDR = DELAY_ROUTINE_ADDR - 0x2000;
 export const SWEEP_BRANCH_OPERAND_ADDR = 0x2273;
 export const SWEEP_BRANCH_OPERAND_BEFORE = 0x10;
 export const SWEEP_BRANCH_OPERAND_AFTER = 0x1c;
@@ -40,6 +48,32 @@ export const SWEEP_DELAY_CALL_ADDR = 0x227a;
 export const SWEEP_DELAY_CALL_BEFORE = Object.freeze([0x20, 0xbf, 0x03]);
 export const SWEEP_DELAY_CALL_AFTER = Object.freeze([0x20, 0x84, 0x02]);
 export const SWEEP_DELAY_CALL_RUNTIME_ADDR = SWEEP_DELAY_CALL_ADDR - 0x2000;
+export const TITLE_MUSIC_E5_LOOP_ADDR = 0x3246;
+export const TITLE_MUSIC_E5_LOOP_BEFORE = Object.freeze([
+  0x88, 0xf0, 0x05, 0x4c, 0x4c, 0x92, 0xd0, 0xeb,
+]);
+export const TITLE_MUSIC_E5_LOOP_AFTER = Object.freeze([
+  0x20, 0x8e, 0x02, 0x88, 0xf0, 0x02, 0xd0, 0xeb,
+]);
+export const TITLE_MUSIC_E5_LOOP_RUNTIME_ADDR = TITLE_MUSIC_E5_LOOP_ADDR + 0x6000;
+export const TITLE_MUSIC_E5_BRIDGE_ADDR = 0x3243;
+export const TITLE_MUSIC_E5_BRIDGE_BEFORE = Object.freeze([0x4c, 0x46, 0x92]);
+export const TITLE_MUSIC_E5_BRIDGE_AFTER = Object.freeze([0x80, 0x00, 0xea]);
+export const TITLE_MUSIC_E5_BRIDGE_RUNTIME_ADDR = TITLE_MUSIC_E5_BRIDGE_ADDR + 0x6000;
+export const TITLE_MUSIC_E4_LOOP_ADDR = 0x3260;
+export const TITLE_MUSIC_E4_LOOP_BEFORE = Object.freeze([
+  0x88, 0xf0, 0xd1, 0x4c, 0x66, 0x92, 0xd0, 0xeb,
+]);
+export const TITLE_MUSIC_E4_LOOP_AFTER = Object.freeze([
+  0x20, 0x8e, 0x02, 0x88, 0xf0, 0xce, 0xd0, 0xeb,
+]);
+export const TITLE_MUSIC_E4_LOOP_RUNTIME_ADDR = TITLE_MUSIC_E4_LOOP_ADDR + 0x6000;
+export const TITLE_MUSIC_E4_BRIDGE_ADDR = 0x325d;
+export const TITLE_MUSIC_E4_BRIDGE_BEFORE = Object.freeze([0x4c, 0x60, 0x92]);
+export const TITLE_MUSIC_E4_BRIDGE_AFTER = Object.freeze([0x80, 0x00, 0xea]);
+export const TITLE_MUSIC_E4_BRIDGE_RUNTIME_ADDR = TITLE_MUSIC_E4_BRIDGE_ADDR + 0x6000;
+export const TITLE_MUSIC_DELAY_HELPER_RUNTIME_ADDR = 0x028e;
+export const TITLE_MUSIC_DELAY_HELPER_BYTES = Object.freeze([0xea, 0x60]);
 
 const TIMING_PATCHES = [
   {
@@ -57,6 +91,13 @@ const TIMING_PATCHES = [
     label: "fixed speaker delay",
   },
   {
+    address: DELAY_ROUTINE_ADDR,
+    offset: DELAY_ROUTINE_ADDR - LOAD_ADDR,
+    before: DELAY_ROUTINE_BEFORE,
+    after: DELAY_ROUTINE_AFTER,
+    label: "shared delay routine",
+  },
+  {
     address: SWEEP_BRANCH_OPERAND_ADDR,
     offset: SWEEP_BRANCH_OPERAND_ADDR - LOAD_ADDR,
     before: [SWEEP_BRANCH_OPERAND_BEFORE],
@@ -69,6 +110,34 @@ const TIMING_PATCHES = [
     before: SWEEP_DELAY_CALL_BEFORE,
     after: SWEEP_DELAY_CALL_AFTER,
     label: "speaker-sweep delay call",
+  },
+  {
+    address: TITLE_MUSIC_E5_LOOP_ADDR,
+    offset: TITLE_MUSIC_E5_LOOP_ADDR - LOAD_ADDR,
+    before: TITLE_MUSIC_E5_LOOP_BEFORE,
+    after: TITLE_MUSIC_E5_LOOP_AFTER,
+    label: "title-music E5 delay loop",
+  },
+  {
+    address: TITLE_MUSIC_E4_LOOP_ADDR,
+    offset: TITLE_MUSIC_E4_LOOP_ADDR - LOAD_ADDR,
+    before: TITLE_MUSIC_E4_LOOP_BEFORE,
+    after: TITLE_MUSIC_E4_LOOP_AFTER,
+    label: "title-music E4 delay loop",
+  },
+  {
+    address: TITLE_MUSIC_E5_BRIDGE_ADDR,
+    offset: TITLE_MUSIC_E5_BRIDGE_ADDR - LOAD_ADDR,
+    before: TITLE_MUSIC_E5_BRIDGE_BEFORE,
+    after: TITLE_MUSIC_E5_BRIDGE_AFTER,
+    label: "title-music E5 delay bridge",
+  },
+  {
+    address: TITLE_MUSIC_E4_BRIDGE_ADDR,
+    offset: TITLE_MUSIC_E4_BRIDGE_ADDR - LOAD_ADDR,
+    before: TITLE_MUSIC_E4_BRIDGE_BEFORE,
+    after: TITLE_MUSIC_E4_BRIDGE_AFTER,
+    label: "title-music E4 delay bridge",
   },
 ];
 
